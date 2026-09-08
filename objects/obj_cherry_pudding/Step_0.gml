@@ -7,7 +7,7 @@ if is_slowdown{
 	current_flash_speed *= 2
 }
 
-if is_frozen || !is_cookbook_equipped("pineapple_pudding"){
+if is_frozen || _net_cookbook_equipped!="pineapple_pudding"{
 	exit
 }
 

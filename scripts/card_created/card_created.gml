@@ -79,7 +79,16 @@ function card_created(plant_inst, col, row) {
 				  _meta[$ "platform_offset"]  = _plat.current_offset;
 			  }
 		}
+
 		_meta[$ "_net_card_equipped_attire_id"]  = card_equipped_attire_id(plant_inst.plant_id);
+		_meta[$ "cycle"] = plant_inst.cycle
+		_meta[$ "hp"] = plant_inst.hp
+		if(object_get_name(plant_inst.object_index)=="obj_goblet_lamp"&&is_cookbook_equipped("grape_wine")){
+			_meta[$ "grow_time"] =  60 * 60
+		}
+		if(object_get_name(plant_inst.object_index)=="obj_cherry_pudding"&&is_cookbook_equipped("pineapple_pudding")){
+			_meta[$ "_net_cookbook_equipped"] = "pineapple_pudding"
+		}
 		_meta = json_stringify(_meta);
 		send_message(global.network.server_socket, MSG_UNIT_REQUEST, level, col, row, skill, shape, object_get_name(plant_inst.object_index), _meta, _sprite_name);
 		return;

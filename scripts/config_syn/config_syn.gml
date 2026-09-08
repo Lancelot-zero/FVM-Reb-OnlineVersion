@@ -1,7 +1,7 @@
 // ==========================================
 // 网络同步配置 — 白名单 & 规则
 // ==========================================
-global.network_game_version = "2.3.2.0826";
+global.network_game_version = "2.3.2.0908";
 
 // ---- 普通属性白名单 ----
 // 帧末通过 MSG_EVENT_ACTIONS / modify 自动采集同步
@@ -185,5 +185,13 @@ global.boss_spawn_sync_list = [
 	// 护甲飞片
 	obj_enemy_armor,
 	// 战斗进度条
-	obj_level_progress_bar
+	obj_level_progress_bar,
+	// 遗迹boss产物
+	obj_war_god_duck,
+	obj_war_god_gear,
+	obj_war_god_soldier,
+	obj_war_god_summon,
+	obj_war_god_wood,
+	obj_hercules_laser,
+	obj_thor_body,
 ];

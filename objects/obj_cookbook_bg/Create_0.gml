@@ -41,3 +41,6 @@ function refresh_cookbook_list(){
 		}
 	}
 }
+
+
+global.room_battle_front = true
