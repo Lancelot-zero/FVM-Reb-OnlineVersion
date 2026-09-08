@@ -335,13 +335,9 @@ switch state{
 			}
 			else{
 				if skill_count >= array_length(skill_group){
-					if hp > 0.5 * maxhp{
-						skill_group = skill_group_list[1]
-					}
-					else{
-						skill_group = skill_group_list[0]
-					}
+					skill_group = skill_group_list[0]
 					skill_group = boss_array_shuffle(self,skill_group)
+
 					skill_count = 0
 				}
 				skill_choose = skill_group[skill_count]

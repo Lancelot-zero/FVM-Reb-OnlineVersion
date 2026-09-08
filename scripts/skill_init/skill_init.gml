@@ -62,7 +62,7 @@ function skill_init(){
 	register_card_skill("bull_firework","atk",[900,950,1000,1050,1100,1150,1200,1250,1300])
 	register_card_skill("magic_chicken","atk",[0,0,0,0,0,0,0,0,0])
 	register_card_skill("xinjiang_fried_noodles","cycle",[1*60,0.95*60,0.9*60,0.85*60,0.8*60,0.75*60,0.7*60,0.65*60,0.6*60])
-	register_card_skill("king_long_bao","cycle",[1.3*60,1.25*60,1.2*60,1.15*60,1.1*60,1.05*60,1*60,0.95*60,0.9*60])
+	register_card_skill("king_long_bao","cycle",[1.3*60,1.25*60,1.2*60,1.15*60,1.1*60,1.05*60,1*60,0.9*60,0.8*60])
 	register_card_skill("king_triple_long_bao","cycle",[1.3*60,1.25*60,1.2*60,1.15*60,1.1*60,1.05*60,1*60,0.95*60,0.9*60])
 	register_card_skill("chili_powder","cooldown",[30*60,28*60,26*60,24*60,22*60,20*60,18*60,16*60,14*60])
 	register_card_skill("tang_hu_lu","cycle",[3*60,2.8*60,2.6*60,2.4*60,2.2*60,2*60,1.8*60,1.6*60,1.4*60])
@@ -73,4 +73,7 @@ function skill_init(){
 	register_card_skill("curry_lobster_cannon","cycle",[6*60,5.8*60,5.6*60,5.4*60,5.2*60,5*60,4.8*60,4.6*60,4.35*60])
 	register_card_skill("soda_bubble","cooldown",[10*60,9*60,8*60,7*60,6*60,5*60,4*60,3*60,2*60])
 	register_card_skill("horseshoe_crab_bread","cooldown",[30*60,28*60,26*60,24*60,22*60,20*60,18*60,15*60,12*60])
+	register_card_skill("sugar_ball_pult","cycle",[3.2*60,3.1*60,3*60,2.9*60,2.8*60,2.6*60,2.4*60,2.2*60,2*60])
+	register_card_skill("pizza_oven","cycle",[3.8*60,3.7*60,3.6*60,3.5*60,3.3*60,3.1*60,2.9*60,2.7*60,2.5*60])
+	register_card_skill("fruit_tart","hp",[50,100,150,200,250,300,350,400,450])
 }

@@ -15,12 +15,43 @@ if(global.network.mode == "client"){
 }
 
 if obj_battle.level_stage == "boss"{
+	draw_set_colour(c_white)
+	draw_set_font(font_yuan)
+	draw_set_valign(fa_middle)
+	draw_set_halign(fa_left)
+
+	var level_text = global.level_data.name
+	draw_text(x-250,y-42,level_text)
+
+	var diff_text = "美味"
+	if global.difficulty == 0{
+		diff_text = "美味"
+		draw_set_colour(c_lime)
+	}
+	else if global.difficulty == 1{
+		diff_text = "火山"
+		draw_set_colour(c_aqua)
+	}
+	else if global.difficulty == 2{
+		diff_text = "浮空"
+		draw_set_colour(c_red)
+	}
+	else if global.difficulty == 3{
+		diff_text = "星际"
+		draw_set_colour(c_purple)
+	}
+	draw_text(x-230+string_width(level_text),y-42,diff_text)
 	exit
 }
 
+draw_set_colour(c_white)
+draw_set_font(font_yuan)
+draw_set_valign(fa_middle)
+draw_set_halign(fa_left)
+
 draw_sprite_ext(spr_level_progress_bg_right,0,x,y,1.8,1.8,0,c_white,1)
-draw_sprite_ext(spr_level_progress_bg_middle,0,x,y,130,1.8,0,c_white,1)
-draw_sprite_ext(spr_level_progress_bg_left,0,x-260,y,1.8,1.8,0,c_white,1)
+draw_sprite_ext(spr_level_progress_bg_middle, 0, x, y, 65, 0.9, 0, c_white, 1)
+draw_sprite_ext(spr_level_progress_bg_left, 0, x-260, y, 0.9, 0.9, 0, c_white, 1)
 
 draw_sprite_ext(spr_level_wave_text,0,x-340,y-40,1.8,1.8,0,c_white,1)
 
@@ -57,10 +88,10 @@ if level_stage == "pre"{
 	for(var i = 0; i < elite_wave;i++){
 		var interval = 260 / elite_wave
 		if i <= obj_battle.current_wave - 1{
-			draw_sprite_ext(spr_level_progress_flag,0,x-(i+1)*interval,y,1.8,1.8,0,c_white,1)
+			draw_sprite_ext(spr_level_progress_flag, 0, x-(i+1)*interval, y, 0.45, 0.45, 0, c_white, 1)
 		}
 		else{
-			draw_sprite_ext(spr_level_progress_flag,0,x-(i+1)*interval,y+15,1.8,1.8,0,c_white,1)
+			draw_sprite_ext(spr_level_progress_flag, 0, x-(i+1)*interval, y+15, 0.45, 0.45, 0, c_white, 1)
 		}
 	}
 }
@@ -70,15 +101,15 @@ else if level_stage == "elite"{
 	for(var i = 0; i < (total_wave-elite_wave);i++){
 		var interval = 260 / (total_wave-elite_wave)
 		if i <= obj_battle.current_wave -elite_wave- 1{
-			draw_sprite_ext(spr_level_progress_flag,0,x-(i+1)*interval,y,1.8,1.8,0,c_white,1)
+			draw_sprite_ext(spr_level_progress_flag, 0, x-(i+1)*interval, y, 0.45, 0.45, 0, c_white, 1)
 		}
 		else{
-			draw_sprite_ext(spr_level_progress_flag,0,x-(i+1)*interval,y+15,1.8,1.8,0,c_white,1)
+			draw_sprite_ext(spr_level_progress_flag, 0, x-(i+1)*interval, y+15, 0.45, 0.45, 0, c_white, 1)
 		}
 	}
 }
 
-draw_sprite_ext(spr_level_progress_icon,0,x-260*level_progress,y,1.8,1.8,0,c_white,1)
+draw_sprite_ext(spr_level_progress_icon, 0, x-260*level_progress, y, 0.9, 0.9, 0, c_white, 1)
 
 draw_set_colour(c_white)
 draw_set_font(font_yuan)

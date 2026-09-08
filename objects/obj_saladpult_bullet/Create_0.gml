@@ -13,3 +13,5 @@ target_type = "throw"
 image_angle = 45
 image_xscale = 1.4
 image_yscale = 1.4
+
+atk_modified = false

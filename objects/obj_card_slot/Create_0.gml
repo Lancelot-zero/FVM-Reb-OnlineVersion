@@ -61,6 +61,7 @@ function try_place_once(){
 				card_data = deck_get_card_data(global.prev_place_id,card_shape)
 			}
 		}
+        
         var found_plat = noone;
         var platform_shift_x = 0;
         var platform_shift_y = 0;

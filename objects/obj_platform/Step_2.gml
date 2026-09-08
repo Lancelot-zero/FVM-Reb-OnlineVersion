@@ -358,6 +358,15 @@ with (obj_card_parent) {
     }
 }
 
+var weapons = [obj_bubble_gun,obj_cat_gun,obj_double_water_gun,obj_enhanced_howitzer,obj_howitzer,obj_ice_gun,obj_ice_spoon_crossbow,obj_long_bao_gun,obj_mighty_gun,obj_player_shield,obj_poseidon_dart_gun,obj_star_gun,obj_steel_claw_gun];
+for(var i=0;i<array_length(weapons);i++){
+with (weapons[i]) {
+    if (variable_instance_exists(id, "parent_player")&&instance_exists(parent_player)) {
+        depth = calculate_plant_depth(parent_player.grid_col, parent_player.grid_row, "normal")-1
+    }
+}
+}
+
 with (obj_melon_shield_inner) {
     if (instance_exists(parent_plant)) {
         depth = parent_plant.depth + 2
@@ -370,7 +379,6 @@ with (obj_stars) {
     }
 }
 
-
 var weapons = [obj_bubble_gun,obj_cat_gun,obj_double_water_gun,obj_enhanced_howitzer,obj_howitzer,obj_ice_gun,obj_ice_spoon_crossbow,obj_long_bao_gun,obj_mighty_gun,obj_player_shield,obj_poseidon_dart_gun,obj_star_gun,obj_steel_claw_gun];
 for(var i=0;i<array_length(weapons);i++){
 with (weapons[i]) {
@@ -379,9 +387,6 @@ with (weapons[i]) {
     }
 }
 }
-
-
-
 
 }
 frame_count++;
