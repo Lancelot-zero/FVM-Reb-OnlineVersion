@@ -167,8 +167,9 @@ function network_broadcast_enemy_steal(col, row, net_id) {
 /// @param {real} skill        技能分支
 /// @param {real} shape        形态
 /// @description 用网络同步的星级/技能/形态重新初始化植物属性，覆盖本地存档 
-/// !!!!!!!!!!!!!该方案可废弃!!!!!!!!!!!!!
+/// !!!!!!!!!!!!!该方案可废弃!!!!!!!!!!!!!  已废弃
 function network_apply_plant_level(_plant) {
+	exit;
 	if(_plant.object_index == obj_player_character){
 		exit;
 	}
@@ -188,7 +189,7 @@ function network_apply_plant_level(_plant) {
     // 3. 重新计算属性
     var upgrade_data = get_plant_data_with_skill(_plant.plant_id, shape, level, skill);
     if (upgrade_data != undefined) {
-        _plant.hp = upgrade_data[? "hp"];
+        //_plant.hp = upgrade_data[? "hp"];
         _plant.max_hp = _plant.hp;
         _plant.atk = upgrade_data[? "atk"];
         _plant.range = upgrade_data[? "range"];

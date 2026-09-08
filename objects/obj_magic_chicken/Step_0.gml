@@ -95,6 +95,20 @@ if attack_timer == 15 * current_flash_speed - 1&& global.network.mode != "client
 			if (variable_struct_exists(target_card_info, "sprite_index") && target_card_info[$ "sprite_index"] != "") {
 				new_card.sprite_index = get_load_sprite(target_card_info[$ "sprite_index"]);
 			}
+			if (variable_struct_exists(target_card_info, "cycle")) {
+				new_card.cycle = target_card_info[$ "cycle"];
+			}
+			if (variable_struct_exists(target_card_info, "hp")) {
+				new_card.max_hp = target_card_info[$ "hp"];
+				new_card.hp = target_card_info[$ "hp"];
+			}
+			if (variable_struct_exists(target_card_info, "grow_time")) {
+				new_card.grow_time = target_card_info[$ "grow_time"];
+			}
+			if (variable_struct_exists(target_card_info, "_net_cookbook_equipped")) {
+				new_card._net_cookbook_equipped = target_card_info[$ "_net_cookbook_equipped"];
+			}
+			
 		}
 		network_apply_plant_level(new_card);
 		card_created(new_card, logical_col, logical_row)

@@ -18,6 +18,8 @@ if (global.enemy_hpbar && hp > 0) {
     
     // 计算血量比例
     var hp_ratio = hp / maxhp;
+	hp_ratio = (hp*100) / maxhp ;
+	hp_ratio = hp_ratio*0.01
     hp_ratio = clamp(hp_ratio, 0, 1);
     
     // 绘制血条主体（绿色）

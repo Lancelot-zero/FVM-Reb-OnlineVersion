@@ -32,6 +32,19 @@ function card_created(plant_inst, col, row) {
 				var new_card = instance_create_depth(0, 0, 0, card_slot_data[? "obj"])
 				target_card_info[$ "sprite_index"] = ds_map_exists(global._pid_reverse, new_card.sprite_index) ? global._pid_reverse[? new_card.sprite_index] : sprite_get_name(new_card.sprite_index);
 				target_card_info[$ "_net_card_equipped_attire_id"] = card_equipped_attire_id(new_card.plant_id)
+				target_card_info[$ "cycle"] = new_card.cycle
+				target_card_info[$ "hp"] = new_card.hp
+				if(object_get_name(new_card.object_index)=="obj_goblet_lamp"&&is_cookbook_equipped("grape_wine")){
+					target_card_info[$ "grow_time"] =  60 * 60
+				}
+				if(object_get_name(new_card.object_index)=="obj_cherry_pudding"){
+					if(is_cookbook_equipped("pineapple_pudding")){
+						target_card_info[$ "_net_cookbook_equipped"] = "pineapple_pudding"
+					}else{
+						target_card_info[$ "_net_cookbook_equipped"] = ""
+					}
+				}
+		
 				if (variable_instance_exists(new_card, "sprite_list")) {
 				    var _sl = new_card.sprite_list;
 				    var _sl_names = [];
@@ -86,9 +99,14 @@ function card_created(plant_inst, col, row) {
 		if(object_get_name(plant_inst.object_index)=="obj_goblet_lamp"&&is_cookbook_equipped("grape_wine")){
 			_meta[$ "grow_time"] =  60 * 60
 		}
-		if(object_get_name(plant_inst.object_index)=="obj_cherry_pudding"&&is_cookbook_equipped("pineapple_pudding")){
-			_meta[$ "_net_cookbook_equipped"] = "pineapple_pudding"
+		if(object_get_name(plant_inst.object_index)=="obj_cherry_pudding"){
+			if(is_cookbook_equipped("pineapple_pudding")){
+				_meta[$ "_net_cookbook_equipped"] = "pineapple_pudding"
+			}else{
+				_meta[$ "_net_cookbook_equipped"] = ""
+			}
 		}
+		
 		_meta = json_stringify(_meta);
 		send_message(global.network.server_socket, MSG_UNIT_REQUEST, level, col, row, skill, shape, object_get_name(plant_inst.object_index), _meta, _sprite_name);
 		return;
@@ -144,7 +162,18 @@ function card_created(plant_inst, col, row) {
 			_meta = package_character(plant_inst);
 		}
 		_meta[$ "_net_card_equipped_attire_id"]  = _equipped_attire;
-		
+		_meta[$ "cycle"] = plant_inst.cycle
+		_meta[$ "hp"] = plant_inst.hp
+		if(object_get_name(plant_inst.object_index)=="obj_goblet_lamp"&&is_cookbook_equipped("grape_wine")){
+			_meta[$ "grow_time"] =  60 * 60
+		}
+		if(object_get_name(plant_inst.object_index)=="obj_cherry_pudding"){
+			if(is_cookbook_equipped("pineapple_pudding")){
+				_meta[$ "_net_cookbook_equipped"] = "pineapple_pudding"
+			}else{
+				_meta[$ "_net_cookbook_equipped"] = ""
+			}
+		}
 		
 		var _plat = get_platform_at_grid(col, row)
 		if (_plat != noone) {

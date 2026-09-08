@@ -24,6 +24,7 @@ current_hp = 0
 bleed_damage = 0
 
 _net_cookbook_equipped = ""
+
 if(is_cookbook_equipped("pineapple_pudding")){
 	_net_cookbook_equipped= "pineapple_pudding"
 }

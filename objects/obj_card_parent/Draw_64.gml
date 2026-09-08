@@ -27,6 +27,8 @@ if (global.card_hpbar && hp > 0 && plant_type != "coffee") {
     
     // 计算血量比例
     var hp_ratio = hp / max_hp;
+	hp_ratio = (hp*100) / max_hp ;
+	hp_ratio = hp_ratio*0.01
     hp_ratio = clamp(hp_ratio, 0, 1);
     
     // 绘制血条主体（绿色）

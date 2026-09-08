@@ -1516,6 +1516,8 @@ function VM_SpawnPlantsRandom(x_addr, y_addr, w_addr, h_addr,
 			if (_level != -1) _props[$ "current_level"] = _level;
 			if (_skill != -1) _props[$ "skill"] = _skill;
 			if (_shape != -1) _props[$ "shape"] = _shape;
+			
+			
 			var _plant = spawn_plant(_c, _r, _card_data[? "obj"], _props);
 			if (_plant >= 0) {
 				network_apply_plant_level(_plant);
