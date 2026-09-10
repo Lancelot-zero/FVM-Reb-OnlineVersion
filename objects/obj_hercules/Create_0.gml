@@ -1,3 +1,4 @@
+sprite_index = get_load_sprite("spr_hercules_idle");  //转化额外添加保证触发
 // Inherit the parent event
 event_inherited();
 
@@ -9,9 +10,10 @@ maxhp = 400000
 immune_to_ash = true
 wait_time = 18 * 60
 move_speed = 0.072
-sprite_index = spr_hercules_idle
+sprite_index = get_load_sprite("spr_hercules_idle")
 is_boss = true
 skill_count = 0
+step_ready = false;	frame_count = 0;
 
 appear = false
 image_alpha = 0

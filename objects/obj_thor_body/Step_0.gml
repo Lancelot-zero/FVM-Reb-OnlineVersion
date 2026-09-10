@@ -2,6 +2,8 @@ if global.is_paused{
 	exit
 }
 
+if (global.network.mode == "client" && !step_ready) exit;
+
 if flash_value > 0 {
 	flash_value -= 10
 }
@@ -211,6 +213,7 @@ switch state{
 
 timer ++
 
+frame_count++;
 // 透明度处理
 if (image_alpha <= 0 && state == BOSS_STATE.DEATH) {
     instance_destroy();

@@ -62,6 +62,8 @@ global._sync_keys = [
 	"map_spr_index",
 	"damage",
 	"bomb_col",
+	"timer",
+	"wait_time",
 ];
 
 // ---- 实例引用属性白名单 ----
@@ -194,4 +196,6 @@ global.boss_spawn_sync_list = [
 	obj_war_god_wood,
 	obj_hercules_laser,
 	obj_thor_body,
+	obj_wrestler_mouse,
+	obj_coke_bomb_explode,
 ];

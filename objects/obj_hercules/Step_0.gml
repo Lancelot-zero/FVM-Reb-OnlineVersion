@@ -2,6 +2,8 @@ if global.is_paused{
 	exit
 }
 
+if (global.network.mode == "client" && !step_ready) exit;
+
 if flash_value > 0 {
 	flash_value -= 10
 }
@@ -30,7 +32,7 @@ if (hp <= 0 && state != BOSS_STATE.DEATH) {
 switch state{
 	case BOSS_STATE.IDLE:
 		x -= move_speed
-		sprite_index = spr_hercules_idle
+		sprite_index = get_load_sprite("spr_hercules_idle")
 		if hp > maxhp * hurt_rate{
 			image_index = floor(timer/5) mod 4
 		}
@@ -64,7 +66,7 @@ switch state{
 		break
 		
 	case BOSS_STATE.APPEAR:
-		sprite_index = spr_mario_mouse_appear
+		sprite_index = get_load_sprite("spr_mario_mouse_appear")
 		if hp > maxhp * hurt_rate{
 			image_index = floor(timer/5) mod 13
 		}
@@ -79,7 +81,7 @@ switch state{
 		break
 	
 	case BOSS_STATE.SKILL1:
-		sprite_index = spr_hercules_skill_1
+		sprite_index = get_load_sprite("spr_hercules_skill_1")
 		if hp > maxhp * hurt_rate{
 			image_index = floor(timer/5) mod 20
 		}
@@ -117,7 +119,7 @@ switch state{
 		
 		if timer >= 6 * 5 - 1 && timer <= 16 * 5 - 1 && (timer-30) mod 5 == 1 && jump_times < 9{
 			var missle = instance_create_depth(x+120,y-90,-800,obj_rumble_missile)
-			missle.sprite_index = spr_hercules_missle
+			missle.sprite_index = get_load_sprite("spr_hercules_missle")
 			missle.target_col = target_coord[jump_times][0]
 			missle.target_row = target_coord[jump_times][1]
 			jump_times ++
@@ -131,7 +133,7 @@ switch state{
 		break
 		
 	case BOSS_STATE.SKILL2:
-		sprite_index = spr_hercules_skill_2
+		sprite_index = get_load_sprite("spr_hercules_skill_2")
 		if hp > maxhp * hurt_rate{
 			image_index = floor(timer/5) mod 5
 		}
@@ -143,12 +145,12 @@ switch state{
 			var laser1 = instance_create_depth(x-90,y-90,-800,obj_hercules_laser)
 			laser1.target_row = grid_row
 			laser1.l_type = 0
-			laser1.sprite_index = spr_hercules_laser_left
+			laser1.sprite_index = get_load_sprite("spr_hercules_laser_left")
 			laser1.move_speed = -8
 			var laser2 = instance_create_depth(x+220,y-90,-800,obj_hercules_laser)
 			laser2.target_row = grid_row
 			laser2.l_type = 0
-			laser2.sprite_index = spr_hercules_laser_right
+			laser2.sprite_index = get_load_sprite("spr_hercules_laser_right")
 			laser2.move_speed = 8
 		}
 		
@@ -160,7 +162,7 @@ switch state{
 		break
 		
 	case BOSS_STATE.SKILL3:
-		sprite_index = spr_hercules_skill_3
+		sprite_index = get_load_sprite("spr_hercules_skill_3")
 		if hp > maxhp * hurt_rate{
 			image_index = floor(timer/5) mod 5
 		}
@@ -172,12 +174,12 @@ switch state{
 			var laser1 = instance_create_depth(x+90,y,-800,obj_hercules_laser)
 			laser1.target_col = grid_col + 1
 			laser1.l_type = 1
-			laser1.sprite_index = spr_hercules_laser_down
+			laser1.sprite_index = get_load_sprite("spr_hercules_laser_down")
 			laser1.move_speed = 8
 			var laser2 = instance_create_depth(x+90,y-110,-800,obj_hercules_laser)
 			laser2.target_col = grid_col + 1
 			laser2.l_type = 1
-			laser2.sprite_index = spr_hercules_laser_up
+			laser2.sprite_index = get_load_sprite("spr_hercules_laser_up")
 			laser2.move_speed = -8
 		}
 		
@@ -189,7 +191,7 @@ switch state{
 		break
 		
 	case BOSS_STATE.DISAPPEAR:
-		sprite_index = spr_mario_mouse_dig_down
+		sprite_index = get_load_sprite("spr_mario_mouse_dig_down")
 		if hp > maxhp * hurt_rate{
 			image_index = floor(timer/5) mod 18
 		}
@@ -212,7 +214,7 @@ switch state{
 		break
 	
 	case BOSS_STATE.DEATH:
-		sprite_index = spr_hercules_death
+		sprite_index = get_load_sprite("spr_hercules_death")
 		image_index = floor(timer/5) mod image_number
 		if timer >= image_number * 5{
 			image_alpha -= 0.1
@@ -223,6 +225,7 @@ switch state{
 
 
 timer ++
+frame_count++;
 
 // 透明度处理
 if (image_alpha <= 0 && state == BOSS_STATE.DEATH) {

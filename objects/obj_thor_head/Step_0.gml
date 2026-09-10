@@ -2,6 +2,8 @@ if global.is_paused{
 	exit
 }
 
+if (global.network.mode == "client" && !step_ready) exit;
+
 if flash_value > 0 {
 	flash_value -= 10
 }
@@ -56,7 +58,7 @@ switch state{
 		else{
 			y += move_speed
 		}
-		sprite_index = spr_thor_head_idle
+		sprite_index = get_load_sprite("spr_thor_head_idle")
 		if hp > maxhp * hurt_rate{
 			image_index = floor(timer/5) mod 10
 		}
@@ -91,7 +93,7 @@ switch state{
 		break
 		
 	case BOSS_STATE.APPEAR:
-		sprite_index = spr_mario_mouse_appear
+		sprite_index = get_load_sprite("spr_mario_mouse_appear")
 		if hp > maxhp * hurt_rate{
 			image_index = floor(timer/5) mod 13
 		}
@@ -106,7 +108,7 @@ switch state{
 		break
 	
 	case BOSS_STATE.SKILL1:
-		sprite_index = spr_thor_head_skill_1
+		sprite_index = get_load_sprite("spr_thor_head_skill_1")
 		if hp > maxhp * hurt_rate{
 			image_index = floor(timer/5) mod 14
 		}
@@ -128,7 +130,7 @@ switch state{
 		
 	case BOSS_STATE.SKILL2:
 		if timer <= 13 * 5 - 1{
-			sprite_index = spr_thor_head_skill_2
+			sprite_index = get_load_sprite("spr_thor_head_skill_2")
 			if hp > maxhp * hurt_rate{
 				image_index = floor(timer/5) mod 13
 			}
@@ -137,7 +139,7 @@ switch state{
 			}
 		}
 		else{
-			sprite_index = spr_thor_head_idle
+			sprite_index = get_load_sprite("spr_thor_head_idle")
 			if hp > maxhp * hurt_rate{
 				image_index = floor((timer-65)/5) mod 10
 			}
@@ -148,7 +150,7 @@ switch state{
 		
 		if timer == 12 * 5 + 2{
 			var laser = instance_create_depth(x-45,y-120,-800,obj_coke_bomb_explode)
-			laser.sprite_index = spr_thor_laser_left
+			laser.sprite_index = get_load_sprite("spr_thor_laser_left")
 			with obj_card_parent{
 				if grid_row == other.grid_row - 1 &&
 				plant_id != "player" && plant_type != "coffee" && !invincible && plant_id != "cotton_candy"{
@@ -168,7 +170,7 @@ switch state{
 		break
 		
 	case BOSS_STATE.SKILL3:
-		sprite_index = spr_thor_head_skill_3
+		sprite_index = get_load_sprite("spr_thor_head_skill_3")
 		if hp > maxhp * hurt_rate{
 			image_index = floor(timer/5) mod 22
 		}
@@ -178,9 +180,9 @@ switch state{
 		
 		if timer == 16 * 5 + 2{
 			var laser1 = instance_create_depth(x+5,y-15,-800,obj_coke_bomb_explode)
-			laser1.sprite_index = spr_thor_laser_down
+			laser1.sprite_index = get_load_sprite("spr_thor_laser_down")
 			var laser2 = instance_create_depth(x+5,y-120,-800,obj_coke_bomb_explode)
-			laser2.sprite_index = spr_thor_laser_up
+			laser2.sprite_index = get_load_sprite("spr_thor_laser_up")
 			with obj_card_parent{
 				if grid_col== other.grid_col &&
 				plant_id != "player" && plant_type != "coffee" && !invincible && plant_id != "cotton_candy"{
@@ -200,7 +202,7 @@ switch state{
 		break
 		
 	case BOSS_STATE.DISAPPEAR:
-		sprite_index = spr_mario_mouse_dig_down
+		sprite_index = get_load_sprite("spr_mario_mouse_dig_down")
 		if hp > maxhp * hurt_rate{
 			image_index = floor(timer/5) mod 18
 		}
@@ -223,7 +225,7 @@ switch state{
 		break
 	
 	case BOSS_STATE.DEATH:
-		sprite_index = spr_thor_head_death
+		sprite_index = get_load_sprite("spr_thor_head_death")
 		image_index = floor(timer/5) mod image_number
 		if timer >= image_number * 5{
 			image_alpha -= 0.1
@@ -234,6 +236,7 @@ switch state{
 
 
 timer ++
+frame_count++;
 
 // 透明度处理
 if (image_alpha <= 0 && state == BOSS_STATE.DEATH) {
@@ -254,8 +257,18 @@ grid_col = zombie_grid.col;
 grid_row = zombie_grid.row;
 
 if x < global.grid_offset_x-150 && hp > 0{
-	global.is_paused = true
-	global.game_over = true
-	instance_create_depth(room_width/2,room_height/2,-3001,obj_game_over)
-	audio_play_sound(snd_lose,0,0)
+	if (global.network.mode == "server") {
+		var _clients = global.network.connected_clients;
+		for (var i = 0; i < array_length(_clients); i++) {
+			send_message(_clients[i], MSG_GAME_OVER, 0);
+		}
+	}
+	if (global.network.mode != "client") {
+		global.is_paused = true
+		global.game_over = true
+		instance_create_depth(room_width/2,room_height/2,-3001,obj_game_over)
+		audio_play_sound(snd_lose,0,0)
+	}
 }
+
+

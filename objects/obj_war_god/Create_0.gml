@@ -12,6 +12,7 @@ move_speed = 0.072
 sprite_index = spr_war_god_idle
 is_boss = true
 skill_count = 0
+step_ready = false;	frame_count = 0;
 
 appear = false
 image_alpha = 0

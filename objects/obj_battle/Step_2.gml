@@ -162,7 +162,7 @@ if (global.network.mode == "server" && !global.is_paused) {
 	}
 	with (obj_enemy_parent) {
 		if (!is_boss) continue;
-		_nid = ds_map_exists(global.network.map_instance_id_net_id, id) ? global.network.map_instance_id_net_id[? id] : -1;
+		var _nid = ds_map_exists(global.network.map_instance_id_net_id, id) ? global.network.map_instance_id_net_id[? id] : -1;
 		if (_nid != -1) array_push(_arr, {n: _nid, fc: frame_count});
 	}
 	if (array_length(_arr) > 0) {

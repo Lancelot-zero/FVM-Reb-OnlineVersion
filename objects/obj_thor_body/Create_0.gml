@@ -12,6 +12,7 @@ move_speed = 0.3
 sprite_index = spr_thor_body_idle
 is_boss = true
 skill_count = 0
+step_ready = false;	frame_count = 0;
 
 move_stage = 0
 

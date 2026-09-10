@@ -1,3 +1,4 @@
+sprite_index = get_load_sprite("spr_thor_head_idle");  //转化额外添加保证触发
 // Inherit the parent event
 event_inherited();
 
@@ -9,9 +10,10 @@ maxhp = 800000
 immune_to_ash = true
 wait_time = 40 * 60
 move_speed = 0.3
-sprite_index = spr_thor_head_idle
+sprite_index = get_load_sprite("spr_thor_head_idle")
 is_boss = true
 skill_count = 0
+step_ready = false;	frame_count = 0;
 
 move_stage = 0
 body_count = 0
