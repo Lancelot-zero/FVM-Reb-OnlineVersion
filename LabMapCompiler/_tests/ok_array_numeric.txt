@@ -1,0 +1,88 @@
+// ============================================================
+// VM 数组（数值）测试地图
+// 覆盖：ArrayADD / ArrayGet / ArraySet / ArrayDel / ArraySize
+//       自动创建、越界写补 0 扩容、越界读返回 0、删除后前移、
+//       while 循环填充与遍历求和、浮点元素、跨块共享
+// ============================================================
+
+// ---------- 战斗开始：数组基础操作 ----------
+_VM_BATTLE_START {
+    // ① 追加 + 取值
+    VM_ArrayADD("arr", 10)
+    VM_ArrayADD("arr", 20)
+    VM_ArrayADD("arr", 30)
+    VM_ShellPrint("① 追加后 size=", VM_ArraySize("arr"),
+                  " [0]=", VM_ArrayGet("arr", 0),
+                  " [1]=", VM_ArrayGet("arr", 1),
+                  " [2]=", VM_ArrayGet("arr", 2))
+
+    // ② 覆盖写
+    VM_ArraySet("arr", 1, 99)
+    VM_ShellPrint("② 覆盖后 [1]=", VM_ArrayGet("arr", 1), " size=", VM_ArraySize("arr"))
+
+    // ③ 越界读 → 0，负数下标 → 0
+    VM_ShellPrint("③ 越界[5]=", VM_ArrayGet("arr", 5), " 负下标[-1]=", VM_ArrayGet("arr", -1))
+
+    // ④ 不存在的数组 → size 0 / 读 0
+    VM_ShellPrint("④ 未创建 size=", VM_ArraySize("nope"), " 读=", VM_ArrayGet("nope", 0))
+
+    // ⑤ 越界写：自动创建 + 补 0 扩容
+    VM_ArraySet("auto", 5, 42)
+    VM_ShellPrint("⑤ 扩容后 size=", VM_ArraySize("auto"),
+                  " [0]=", VM_ArrayGet("auto", 0),
+                  " [3]=", VM_ArrayGet("auto", 3),
+                  " [5]=", VM_ArrayGet("auto", 5))
+
+    // ⑥ while 循环填充平方数 0²..9²，再遍历求和（应=285）
+    i = 0
+    while (i < 10) {
+        VM_ArrayADD("sq", i * i)
+        i = i + 1
+    }
+    sum = 0
+    i = 0
+    while (i < VM_ArraySize("sq")) {
+        sum = sum + VM_ArrayGet("sq", i)
+        i = i + 1
+    }
+    VM_ShellPrint("⑥ 平方和(应=285): ", sum)
+
+    // ⑦ 删除中间元素（后面前移）→ 删尾元素 → 越界删无操作
+    VM_ArrayDel("sq", 0)
+    VM_ShellPrint("⑦ 删[0]后 size=", VM_ArraySize("sq"), " 新[0]=", VM_ArrayGet("sq", 0))
+    VM_ArrayDel("sq", VM_ArraySize("sq") - 1)
+    VM_ShellPrint("   删尾后 size=", VM_ArraySize("sq"))
+    VM_ArrayDel("sq", 999)
+    VM_ShellPrint("   越界删后 size=", VM_ArraySize("sq"))
+
+    // ⑧ 浮点元素
+    VM_ArrayADD("farr", 1.5)
+    VM_ArrayADD("farr", 2.5)
+    VM_ShellPrint("⑧ 浮点和(应=4.0): ", VM_ArrayGet("farr", 0) + VM_ArrayGet("farr", 1))
+
+    // ⑨ 断言：全部符合 → 通知（语言无 &&，用嵌套 if）
+    if (VM_ArraySize("arr") == 3) {
+        if (VM_ArrayGet("arr", 1) == 99) {
+            if (VM_ArraySize("auto") == 6) {
+                if (VM_ArrayGet("auto", 5) == 42) {
+                    if (sum == 285) {
+                        VM_ShowNotice("数组测试全部通过")
+                    }
+                }
+            }
+        }
+    }
+
+    // ⑩ 清空：单个清空 → 全部清空
+    VM_ArrayClear("arr")
+    VM_ShellPrint("⑩ 清空 arr 后 size=", VM_ArraySize("arr"), " 读[0]=", VM_ArrayGet("arr", 0))
+    VM_ArrayClearAll()
+    VM_ShellPrint("   清空全部后 sq size=", VM_ArraySize("sq"), " auto size=", VM_ArraySize("auto"))
+}
+
+// ---------- 波次：跨块共享（数组在块之间保持） ----------
+_VM_WAVE_START {
+    VM_ArrayADD("history", VM_GetWave())
+    VM_ShellPrint("跨块 history size=", VM_ArraySize("history"),
+                  " 最新=", VM_ArrayGet("history", VM_ArraySize("history") - 1))
+}

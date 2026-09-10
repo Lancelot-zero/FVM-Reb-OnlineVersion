@@ -38,7 +38,8 @@ function VM_Create(mem_size = 32768) {
         functions: [],
         func_ret_types: [],
         strings: [],
-        str_map: ds_map_create()
+        str_map: ds_map_create(),
+        arrays: ds_map_create()   // 命名数组: 数组名 → GML 数组
     };
     return vm;
 }
@@ -1931,6 +1932,93 @@ function VM_SpawnBoss(type_addr, row_addr, hp_override_addr) {
 }
 
 // ============================================================
+// VM 数组（脚本语言内命名数组，按名存取，跨块共享）
+// ============================================================
+
+/// @function VM_ArrayGet(ArrayName, Index)
+/// @param ArrayName 数组名（字符串）
+/// @param Index     下标（0 开始）
+/// @return 元素值；数组不存在或下标越界返回 0
+function VM_ArrayGet(name_addr, index_addr) {
+    var _name = vm_read_mem(global.__vm, name_addr);
+    var _index = vm_read_mem(global.__vm, index_addr);
+    var _vm = global.__vm;
+    if (!ds_map_exists(_vm.arrays, _name)) return 0;
+    var _arr = _vm.arrays[? _name];
+    if (_index < 0 || _index >= array_length(_arr)) return 0;
+    return _arr[_index];
+}
+
+/// @function VM_ArraySet(ArrayName, Index, val)
+/// @param ArrayName 数组名（字符串，不存在时自动创建）
+/// @param Index     下标（0 开始，超出当前长度时自动补 0 扩容）
+/// @param val       要写入的值（int / float / string）
+function VM_ArraySet(name_addr, index_addr, val_addr) {
+    var _name = vm_read_mem(global.__vm, name_addr);
+    var _index = vm_read_mem(global.__vm, index_addr);
+    var _val = vm_read_mem(global.__vm, val_addr);
+    if (_index < 0) return;
+    var _vm = global.__vm;
+    if (!ds_map_exists(_vm.arrays, _name)) ds_map_add(_vm.arrays, _name, []);
+    var _arr = _vm.arrays[? _name];
+    while (array_length(_arr) <= _index) array_push(_arr, 0);   // 自动扩容，空位补 0
+    _arr[_index] = _val;
+}
+
+/// @function VM_ArrayDel(ArrayName, Index)
+/// @param ArrayName 数组名
+/// @param Index     要删除的下标（越界无操作）
+/// @desc 删除后后面的元素前移，长度减 1
+function VM_ArrayDel(name_addr, index_addr) {
+    var _name = vm_read_mem(global.__vm, name_addr);
+    var _index = vm_read_mem(global.__vm, index_addr);
+    var _vm = global.__vm;
+    if (!ds_map_exists(_vm.arrays, _name)) return;
+    var _arr = _vm.arrays[? _name];
+    if (_index < 0 || _index >= array_length(_arr)) return;
+    array_delete(_arr, _index, 1);
+}
+
+/// @function VM_ArrayADD(ArrayName, val)
+/// @param ArrayName 数组名（不存在时自动创建）
+/// @param val       要追加的值（int / float / string）
+/// @desc 在数组末尾追加一个元素
+function VM_ArrayADD(name_addr, val_addr) {
+    var _name = vm_read_mem(global.__vm, name_addr);
+    var _val = vm_read_mem(global.__vm, val_addr);
+    var _vm = global.__vm;
+    if (!ds_map_exists(_vm.arrays, _name)) ds_map_add(_vm.arrays, _name, []);
+    var _arr = _vm.arrays[? _name];
+    array_push(_arr, _val);
+}
+
+/// @function VM_ArraySize(ArrayName)
+/// @param ArrayName 数组名
+/// @return 数组长度；数组不存在返回 0
+function VM_ArraySize(name_addr) {
+    var _name = vm_read_mem(global.__vm, name_addr);
+    var _vm = global.__vm;
+    if (!ds_map_exists(_vm.arrays, _name)) return 0;
+    return array_length(_vm.arrays[? _name]);
+}
+
+/// @function VM_ArrayClear(ArrayName)
+/// @param ArrayName 数组名
+/// @desc 清空数组，长度归 0；数组不存在时无操作
+function VM_ArrayClear(name_addr) {
+    var _name = vm_read_mem(global.__vm, name_addr);
+    var _vm = global.__vm;
+    if (!ds_map_exists(_vm.arrays, _name)) return;
+    array_resize(_vm.arrays[? _name], 0);
+}
+
+/// @function VM_ArrayClearAll()
+/// @desc 清空所有数组
+function VM_ArrayClearAll() {
+    ds_map_clear(global.__vm.arrays);
+}
+
+// ============================================================
 // 辅助：从内存地址读取值（按类型转换）
 // ============================================================
 function vm_read_mem(vm, addr) {
@@ -3013,6 +3101,13 @@ VM_RegisterFunction(global.__vm, VM_LoadSpriteFrames_Ex); // 75
 VM_RegisterFunction(global.__vm, VM_GetLastBossStateChangeId); // 76
 VM_RegisterFunction(global.__vm, VM_GetLastBossOldState);      // 77
 VM_RegisterFunction(global.__vm, VM_GetLastBossNewState);      // 78
+VM_RegisterFunction(global.__vm, VM_ArrayGet);   // 79
+VM_RegisterFunction(global.__vm, VM_ArraySet);   // 80
+VM_RegisterFunction(global.__vm, VM_ArrayDel);   // 81
+VM_RegisterFunction(global.__vm, VM_ArrayADD);   // 82
+VM_RegisterFunction(global.__vm, VM_ArraySize);  // 83
+VM_RegisterFunction(global.__vm, VM_ArrayClear);     // 84
+VM_RegisterFunction(global.__vm, VM_ArrayClearAll);  // 85
 ds_map_add(global._VM_remote_funcs, "VM_SwapPlants", VM_SwapPlants);
 ds_map_add(global._VM_remote_funcs, "VM_SwapPlantRects", VM_SwapPlantRects);
 ds_map_add(global._VM_remote_funcs, "VM_CompactColumn", VM_CompactColumn);
@@ -3092,6 +3187,7 @@ function VM_InitRoomEntry(buf) {
     ds_map_clear(global._VM_id_to_real);
     ds_map_clear(global._VM_real_to_vm_id);
     ds_map_clear(global.__vm.str_map);
+    ds_map_clear(global.__vm.arrays);
 	
     if (!buffer_exists(buf)) return;
 

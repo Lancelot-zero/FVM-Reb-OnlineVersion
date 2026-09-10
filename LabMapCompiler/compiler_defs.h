@@ -245,6 +245,13 @@ static std::vector<FuncDef> FUNC_DEFS = {
     {"VM_GetLastBossStateChangeId", 0},                                                 // 76
     {"VM_GetLastBossOldState",      0},                                                 // 77
     {"VM_GetLastBossNewState",      0},                                                 // 78
+    {"VM_ArrayGet",                 2,  {PT_STRING, PT_INT}},                           // 79
+    {"VM_ArraySet",                 3,  {PT_STRING, PT_INT, PT_ANY}},                   // 80
+    {"VM_ArrayDel",                 2,  {PT_STRING, PT_INT}},                           // 81
+    {"VM_ArrayADD",                 2,  {PT_STRING, PT_ANY}},                           // 82
+    {"VM_ArraySize",                1,  {PT_STRING},                       PT_INT},     // 83
+    {"VM_ArrayClear",               1,  {PT_STRING}},                                   // 84
+    {"VM_ArrayClearAll",            0},                                                 // 85
 };
 
 // ============================================================
