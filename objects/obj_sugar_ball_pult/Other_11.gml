@@ -28,6 +28,9 @@ if (target_instance != noone && instance_exists(target_instance)) {
     
     // 预测敌人未来位置（考虑敌人速度）
     var predicted_x = enemy_x - enemy_speed * flight_time - 50
+	if target_instance.grid_row == grid_row + 1{
+		predicted_x = enemy_x - enemy_speed * flight_time * 1.1 - 50
+	}
 	if predicted_x < x predicted_x = x
     
     // 计算子弹所需的速度向量

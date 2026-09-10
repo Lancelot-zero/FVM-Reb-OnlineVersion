@@ -390,8 +390,8 @@ function cookbook_init(){
 		{
 			"rank":2,
 			"title":"面包家族",
-			"tiny_desc":"增强雷电长棍面包",
-			"desc":"雷电长棍面包冷却时间减少5秒，攻击间隔减少1秒",
+			"tiny_desc":"减少雷电长棍面包冷却",
+			"desc":"雷电长棍面包冷却时间减少5秒",
 			"icon":19,
 			"modif":[
 				{
@@ -399,12 +399,6 @@ function cookbook_init(){
 					"modif_type":"cooldown",
 					"modif_calc":"plus",
 					"amount":-5*60
-				},
-				{
-					"card_id":["lightning_baguette"],
-					"modif_type":"cycle",
-					"modif_calc":"plus",
-					"amount":-1*60
 				}
 			]
 		}

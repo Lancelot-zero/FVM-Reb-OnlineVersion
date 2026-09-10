@@ -99,6 +99,7 @@ for(var i = 0 ; i < array_length(cookbook_list) ; i++){
 		}
 	}
 }
+origin_cycle = cycle
 
 var grid_pos = get_grid_position_from_world(x, y);
 var col = grid_pos.col;

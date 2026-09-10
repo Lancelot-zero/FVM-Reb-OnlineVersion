@@ -34,8 +34,8 @@ switch (button_select) {
 		//draw_text(x - 380, y + 60, "失去焦点时暂停");
 		//draw_set_halign(fa_left);
 		//draw_set_valign(fa_top);
-		draw_sprite(spr_option_menu_text,2,x-120,y+30)
-		draw_sprite_ext(spr_option_menu_difficulty,global.difficulty,x+15,y+72,0.2,0.2,0,c_white,1)
+		draw_sprite(spr_option_menu_text,2,x-120,y+60)
+		draw_sprite_ext(spr_option_menu_difficulty,global.difficulty,x+15,y+102,0.2,0.2,0,c_white,1)
 		break
     
     // 可以添加其他设置页面

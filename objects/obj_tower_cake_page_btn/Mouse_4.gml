@@ -22,6 +22,8 @@ if not obj_tower_cake_bg.is_submenu_opened{
 	audio_play_sound(snd_button,0,0)
 	instance_destroy(obj_tower_cake_card_reward)
 	with obj_tower_cake_bg{
+		global.tower_cake_page = current_page
 		refresh_level_button()
 	}
+	
 }

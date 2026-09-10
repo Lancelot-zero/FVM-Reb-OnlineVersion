@@ -1941,6 +1941,35 @@ function task_init(){
 				]
 			}
 		)
+		register_task("ruins_level_0",
+			{
+				"type":"side_task",
+				"title":"挑战火山遗迹",
+				"desc":"击败战神，开始你的火山遗迹之旅。",
+				"single_game":false,//非单局完成
+				"oneshot":false,//非一命完成
+				"task_unlock":"none",
+				"requirements":[
+					{
+						"type":"level_complete",
+						"target_level":"kernel_waterfall",
+						"desc":"通关一次果仁瀑布",
+						"require":1,
+					}
+				],
+				"rewards":[
+					{
+						"type":"item",
+						"item_id":"secret_spices",
+						"amount":50
+					},
+					{
+						"type":"gold",
+						"amount":5000
+					}
+				]
+			}
+		)
 	}
 	{//注册所有挑战任务
 		register_task("flame_save_1",

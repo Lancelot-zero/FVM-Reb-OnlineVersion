@@ -108,16 +108,8 @@ if is_slowdown{
 	current_flash_speed *= 2
 }
 
-var upgrade_data = get_plant_data_with_skill(plant_id, shape,current_level,skill);
+if(attack_cycle==-1)attack_cycle =  origin_cycle
 
-if(attack_cycle==-1)attack_cycle =  upgrade_data[? "cycle"]
-/*
-if is_slowdown {
-    cycle = upgrade_data[? "cycle"] * 2;    
-}
-else{
-	cycle = upgrade_data[? "cycle"]
-}*/
 if is_slowdown {
     cycle = attack_cycle * 2;    
 }

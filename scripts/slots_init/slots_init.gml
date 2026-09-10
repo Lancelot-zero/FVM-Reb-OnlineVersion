@@ -102,9 +102,9 @@ function slots_init(){
 		{"shape":2, "sprite":spr_large_fire_2, "cost":150, "cooldown":50*60, "description":"超能燃气炉：一次生产三朵火苗","plant_type":"normal","feature_type":"normal","target_card":"none"}
 	])
 	register_card("iron_fishbone",obj_iron_fishbone,[
-	    {"shape":0, "sprite":spr_iron_fishbone, "cost":125, "cooldown":50*60, "description":"钢鱼刺：攻击踩上它的老鼠，卡坏四次车辆","plant_type":"normal","feature_type":"upgrade","target_card":"fishbone"},
-	    {"shape":1, "sprite":spr_iron_fishbone_1, "cost":125, "cooldown":50*60, "description":"无座钢鱼刺：攻击踩上它的老鼠，卡坏四次车辆","plant_type":"normal","feature_type":"dwarf","target_card":"none"},
-		{"shape":2, "sprite":spr_iron_fishbone_2, "cost":125, "cooldown":50*60, "description":"海贼王鱼刺：攻击并减速踩上它的老鼠，卡坏四次车辆","plant_type":"normal","feature_type":"dwarf","target_card":"none"}
+	    {"shape":0, "sprite":spr_iron_fishbone, "cost":125, "cooldown":50*60, "description":"钢鱼刺：攻击踩上它的老鼠，卡坏六次车辆","plant_type":"normal","feature_type":"upgrade","target_card":"fishbone"},
+	    {"shape":1, "sprite":spr_iron_fishbone_1, "cost":125, "cooldown":50*60, "description":"无座钢鱼刺：攻击踩上它的老鼠，卡坏六次车辆","plant_type":"normal","feature_type":"dwarf","target_card":"none"},
+		{"shape":2, "sprite":spr_iron_fishbone_2, "cost":125, "cooldown":50*60, "description":"海贼王鱼刺：攻击并减速踩上它的老鼠，卡坏六次车辆","plant_type":"normal","feature_type":"dwarf","target_card":"none"}
 	])
 	register_card("gatlin_long_bao",obj_gatlin_long_bao,[
 	    {"shape":0, "sprite":spr_gatlin_long_bao, "cost":250, "cooldown":50*60, "description":"机枪小笼包：发射四发包子","plant_type":"normal","feature_type":"upgrade","target_card":"double_long_bao"},
@@ -323,8 +323,8 @@ function slots_init(){
 	    {"shape":1, "sprite":spr_soda_bubble_1_icon, "cost":0, "cooldown":10*60, "description":"五彩香皂泡泡：保护卡片免受窒息","plant_type":"coffee","feature_type":"normal","target_card":"none","place_preview":spr_soda_bubble_1_0},
 	])
 	register_card("coal_starfish", obj_coal_starfish, [
-	    {"shape":0, "sprite":spr_coal_starfish, "cost":225, "cooldown":7*60, "description":"炭烧海星：向五个方向发射星星，陆地窒息","plant_type":"normal","feature_type":"amphi","target_card":"none"},
-		{"shape":1, "sprite":spr_coal_starfish_1, "cost":225, "cooldown":7*60, "description":"芝士焗海星：向五个方向发射星星","plant_type":"normal","feature_type":"amphi","target_card":"none"},
+	    {"shape":0, "sprite":spr_coal_starfish, "cost":175, "cooldown":7*60, "description":"炭烧海星：向五个方向发射星星，陆地窒息","plant_type":"normal","feature_type":"amphi","target_card":"none"},
+		{"shape":1, "sprite":spr_coal_starfish_1, "cost":175, "cooldown":7*60, "description":"芝士焗海星：向五个方向发射星星","plant_type":"normal","feature_type":"amphi","target_card":"none"},
 		{"shape":2, "sprite":spr_coal_starfish_2_icon, "cost":225, "cooldown":7*60, "description":"芥末海星刺身：向五个方向发射两颗星星","plant_type":"normal","feature_type":"amphi","target_card":"none","place_preview":spr_coal_starfish_2}
 	]);
 	register_card("horseshoe_crab_bread",obj_horseshoe_crab_bread,[

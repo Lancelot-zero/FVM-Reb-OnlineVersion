@@ -17,6 +17,6 @@ if array_length(mouse_preview_inst) == 0{
 		array_push(mouse_preview_inst,inst)
 	}
 }
-if keyboard_check_pressed(vk_escape){
+if keyboard_check_pressed(vk_escape) || mouse_check_button_pressed(mb_right){
 	instance_destroy()
 }

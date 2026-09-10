@@ -52,6 +52,7 @@ global.laboretory_room = false
 global.game_version = "2.4.0"
 global.tower_level_click = false
 global.sudo_authed = false
+global.tower_cake_page = 1
 Music_Init()
 
 global.laboratory_manager = new LaboratoryManager()
@@ -134,6 +135,11 @@ global.difficulty = ini_read_real("settings", "difficulty", 1)
 global.borderless_window = ini_read_bool("settings", "borderless_window", true);
 global.save_slot = ini_read_real("settings", "save_slot", 0)
 global.lose_focus_pause = ini_read_bool("settings", "lose_focus_pause", true);
+global.ime_block = ini_read_bool("settings", "ime_block", true); // 输入法屏蔽开关（个别输入法环境异常时可关）
+// 兼容旧配置：键缺失时补写，玩家可手改 %LOCALAPPDATA%\FVM_Reborn\config.ini 关闭
+if (ini_read_string("settings", "ime_block", "") == "") {
+    ini_write_bool("settings", "ime_block", true);
+}
 for (var i = 0; i < array_length(global.keybind_config); i++) {
 	    var kb = global.keybind_config[i];
 	    var key_val = ini_read_real("keybinds", kb.name, kb.default1);
@@ -156,6 +162,6 @@ global.sound_volume_before_mute = global.sound_volume > 0 ? global.sound_volume 
 show_debug_message(working_directory)
 
 // 屏蔽输入法（IME）：游戏内全程中文候选框不弹出
-if (native_disable_ime != undefined) {
-    native_disable_ime();
+if (global.ime_block && native_disable_ime != undefined) {
+    native_disable_ime(window_handle());
 }

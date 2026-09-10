@@ -35,3 +35,9 @@ if global.save_data.player.level >= 20{
 		unlock_task("undersea_level_0")
 	}
 }
+//如果玩家达到36级，且未解锁也未完成火山遗迹任务，则解锁该任务
+if global.save_data.player.level >= 36{
+	if !is_task_unlocked("ruins_level_0") && !is_task_complete("ruins_level_0"){
+		unlock_task("ruins_level_0")
+	}
+}

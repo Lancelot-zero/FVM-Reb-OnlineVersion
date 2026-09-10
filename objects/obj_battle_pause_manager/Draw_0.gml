@@ -40,10 +40,10 @@ if (global.is_paused)
 		}
 		else{
 			if !settlement{
-				draw_text(room_width / 2, room_height / 2 + 150, "按空格键继续……");
+				draw_text(room_width / 2, room_height / 2 + 150, "左键点击或按空格键继续……");
 			}
 			else{
-				draw_text(room_width / 2, room_height / 2 + 450, "按空格键继续……");
+				draw_text(room_width / 2, room_height / 2 + 450, "左键点击或按空格键继续……");
 				//绘制结算界面
 				draw_set_halign(fa_left);
 				draw_set_valign(fa_top);

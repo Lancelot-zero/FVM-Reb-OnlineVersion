@@ -5,7 +5,7 @@
         // 从头开始播放新实例
         audio_play_sound(readyroom_music, 0, 0);
     }
-if keyboard_check_pressed(vk_escape){
+if keyboard_check_pressed(vk_escape) || mouse_check_button_pressed(mb_right){
 	if instance_exists(obj_quit_confirm){
 		instance_destroy(obj_quit_confirm)
 	}
