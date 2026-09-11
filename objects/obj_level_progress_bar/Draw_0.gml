@@ -55,6 +55,7 @@ draw_sprite_ext(spr_level_progress_bg_left, 0, x-260, y, 0.9, 0.9, 0, c_white, 1
 
 draw_sprite_ext(spr_level_wave_text,0,x-340,y-40,1.8,1.8,0,c_white,1)
 
+/*
 var level_progress = 0
 var current_total_subwaves = 0
 if obj_battle.current_wave < obj_battle.total_wave{
@@ -62,7 +63,22 @@ if obj_battle.current_wave < obj_battle.total_wave{
 }
 else{
 	current_total_subwaves = array_length(global.level_file.waves[obj_battle.current_wave-1].subwaves)
+}*/
+
+var level_progress = 0
+var _wave_count = 0;
+if (variable_global_exists("level_file")
+    && variable_struct_exists(global.level_file, "waves")
+    && is_array(global.level_file.waves)) {
+    _wave_count = array_length(global.level_file.waves);
 }
+if (_wave_count > 0) {
+    var _idx = obj_battle.current_wave;
+    if (_idx >= obj_battle.total_wave) _idx -= 1;
+    _idx = clamp(_idx, 0, _wave_count - 1);
+    current_total_subwaves = array_length(global.level_file.waves[_idx].subwaves);
+}
+
 if obj_battle.current_wave == total_wave - 1 && obj_battle.current_subwave == current_total_subwaves{
 	last_wave = true
 	if total_wave < 10{

@@ -4,8 +4,10 @@
   1. 管理客户端 - 房间、房主/客户端角色、加入/离开
   2. 转发消息   - 房主→广播给房间所有客户端，客户端→只转给房主
   3. CHAT命令   - 解析 MSG_CHAT 中 /connectroom、/list 等命令
+  4. 首包查询   - /listroom 返回房间列表后断开（不入房）
+  5. 超时防护   - 握手超时、drain 超时（卡死客户端强断）、闲置清理
 
-包格式与 GM 端一致: [u16 body_len][i32 msg_id][payload]
+包格式与 GM 端一致: [u32 body_len][i32 msg_id][payload]
 """
 
 import asyncio
@@ -26,6 +28,11 @@ def print(*args, **kwargs):
 HOST = "0.0.0.0"
 PORT = 27085
 MAX_MEMBERS = 8
+
+# 防护与超时
+MAX_PACKET        = 32 * 1024 * 1024  # 包长上限，防恶意长度字段
+HANDSHAKE_TIMEOUT = 120.0   # 首包超时（秒），不发首包的僵尸连接会被断开
+FLUSH_TIMEOUT     = 10.0    # drain 超时（秒），超时视为客户端卡死，强制断开
 
 # 消息ID (与 GM 端 #macro 一致)
 MSG_CHAT          = 3
@@ -55,6 +62,7 @@ class Room:
         self.state = "lobby"      # "lobby" / "battle"
         self.data = ""
         self.created_at = time.time()
+        self.last_active = time.time()  # 最后活动时间，闲置清理按此起算
         self.battle_started_at = 0.0
         self.file_cache = {}       # filename → bytes
         self.file_pending = {}     # filename → [(writer, purpose), ...]
@@ -77,27 +85,28 @@ class Relay:
         # sessions: writer_id → (room, role, cid, name)
 
         self.commands = {
-            "\\list":        ("列出房间成员", ""),
-            "\\who":         ("显示自己是谁", ""),
-            "\\rename":      ("修改昵称", " <新名字>"),
-            "\\kick":        ("房主踢人", " <玩家名>"),
-            "\\listcommand": ("列出所有命令", ""),
-            "\\listroom":    ("列出所有房间", ""),
+            "/list":        ("列出房间成员", ""),
+            "/who":         ("显示自己是谁", ""),
+            "/kick":        ("房主踢人", " <玩家名>"),
+            "/listcommand": ("列出所有命令", ""),
+            "/listroom":    ("列出所有房间", ""),
         }
 
     # ================================================================
     #  包读写 - GM buffer_string 需要 \\0 终止符
     # ================================================================
     async def read_pkt(self, reader):
-        """读 [u32 len][i32 msg_id][payload]"""
+        """读 [u32 len][i32 msg_id][payload]；超长/坏包一律返回 None（视为断开）"""
         try:
             raw = await reader.readexactly(4)
             body_len = struct.unpack("<I", raw)[0]
+            if body_len > MAX_PACKET:
+                return None
             raw = await reader.readexactly(body_len)
             msg_id  = struct.unpack_from("<i", raw, 0)[0]
             payload = raw[4:]
             return msg_id, payload
-        except asyncio.IncompleteReadError:
+        except (asyncio.IncompleteReadError, struct.error, ValueError):
             return None
 
     def write_pkt(self, writer, msg_id: int, payload: bytes = b""):
@@ -111,11 +120,14 @@ class Relay:
         """发字符串消息，自动加 \\0"""
         self.write_pkt(writer, msg_id, text.encode() + NUL)
 
-    async def flush(self, writer):
+    async def flush(self, writer, timeout: float = FLUSH_TIMEOUT):
+        """带超时的 drain；超时视为客户端卡死（不收数据），强制断开它"""
         try:
-            await writer.drain()
+            await asyncio.wait_for(writer.drain(), timeout)
+            return True
         except Exception:
-            pass
+            self._close(writer)
+            return False
 
     # ================================================================
     #  1. 管理客户端
@@ -297,7 +309,7 @@ class Relay:
     #  3. CHAT 命令处理
     # ================================================================
     def _handle_cmd(self, writer, room: Room, role: int, cid: int, text: str) -> bool:
-        if not text.startswith("\\"):
+        if not text.startswith("/"):
             return False
 
         parts = text.split()
@@ -305,17 +317,17 @@ class Relay:
         key = id(writer)
         name = room.nicks.get(key, "???")
 
-        if cmd == "\\connectroom":
+        if cmd == "/connectroom":
             return False
 
-        # ---- \\syncroom <json> — 房主同步房间数据 ----
-        if cmd == "\\syncroom" and role == 0:
+        # ---- /syncroom <json> — 房主同步房间数据 ----
+        if cmd == "/syncroom" and role == 0:
             room.data = text.split(" ", 1)[1] if " " in text else ""
             room.state = "lobby"
             return True
 
-        # ---- \\list ----
-        if cmd == "\\list":
+        # ---- /list ----
+        if cmd == "/list":
             lines = [f"=== 房间 {room.id} ==="]
             host_name = room.nicks.get(id(room.host), "???") if room.host else "(无)"
             lines.append(f"  [房主] {host_name}")
@@ -325,40 +337,15 @@ class Relay:
             self.write_str(writer, MSG_CHAT, "\n".join(lines))
             return True
 
-        # ---- \\who ----
-        if cmd == "\\who":
+        # ---- /who ----
+        if cmd == "/who":
             role_name = "房主" if role == 0 else "客户端"
             self.write_str(writer, MSG_CHAT,
                            f"[系统] 你是 {name} ({role_name})，房间 {room.id}")
             return True
 
-        # ---- \\rename <新名字> ----
-        if cmd == "\\rename":
-            if len(parts) < 2 or parts[1].strip() == "":
-                self.write_str(writer, MSG_CHAT, "[系统] 用法: /rename <新名字>")
-                return True
-            new_name = parts[1].strip()
-            used = room.used_names()
-            used.discard(name)
-            if new_name in used:
-                n = 2
-                while f"{new_name}{n}" in used:
-                    n += 1
-                new_name = f"{new_name}{n}"
-            room.nicks[key] = new_name
-            self.write_str(writer, MSG_CHAT, f"[系统] 你已改名为 {new_name}")
-            notice = f"[系统] {name} 改名为 {new_name}"
-            if role == 0:
-                for c in room.clients.values():
-                    self.write_str(c, MSG_CHAT, notice)
-            else:
-                if room.host:
-                    self.write_str(room.host, MSG_CHAT, notice)
-            asyncio.ensure_future(self._sync_room_info(room))
-            return True
-
-        # ---- \\kick <玩家名> ----
-        if cmd == "\\kick":
+        # ---- /kick <玩家名> ----
+        if cmd == "/kick":
             if role != 0:
                 self.write_str(writer, MSG_CHAT, "[系统] 只有房主可以踢人")
                 return True
@@ -389,19 +376,13 @@ class Relay:
             asyncio.ensure_future(self._sync_room_info(room))
             return True
 
-        # ---- \\listroom ----
-        if cmd == "\\listroom":
-            if not self.rooms:
-                self.write_str(writer, MSG_CHAT, "[系统] 当前没有房间")
-            else:
-                lines = ["=== 房间列表 ==="]
-                for rid, r in self.rooms.items():
-                    lines.append(f"  {rid} - {r.member_count} 人")
-                self.write_str(writer, MSG_CHAT, "\n".join(lines))
+        # ---- /listroom ----
+        if cmd == "/listroom":
+            self.write_str(writer, MSG_CHAT, self._build_listroom())
             return True
 
-        # ---- \\listcommand ----
-        if cmd == "\\listcommand":
+        # ---- /listcommand ----
+        if cmd == "/listcommand":
             lines = ["=== 可用命令 ==="]
             for cname, (desc, usage) in self.commands.items():
                 lines.append(f"  {cname}{usage} - {desc}")
@@ -411,14 +392,23 @@ class Relay:
         self.write_str(writer, MSG_CHAT, f"[系统] 未知命令: {cmd}")
         return True
 
+    def _build_listroom(self) -> str:
+        """/listroom 的返回文本（首包查询与房内命令共用，保证一致）"""
+        if not self.rooms:
+            return "[系统] 当前没有房间"
+        lines = ["=== 房间列表 ==="]
+        for rid, r in self.rooms.items():
+            lines.append(f"  {rid} - {r.member_count} 人")
+        return "\n".join(lines)
+
     # ================================================================
     #  4. 定时清理过期房间
     # ================================================================
     async def cleanup_loop(self):
-        """每 30 分钟检查一次，清理超时房间"""
-        MAX_IDLE_HOURS  = 2.0   # 创建后超过此时间未开战 → 清理
-        MAX_BATTLE_HOURS = 2.0  # 战斗持续超过此时间 → 清理
-        INTERVAL = 30 * 60      # 检查间隔 30 分钟
+        """每分钟检查一次，清理超时房间"""
+        MAX_IDLE_HOURS   = 2.0   # 最后活动超过此时间 → 清理
+        MAX_BATTLE_HOURS = 2.0   # 战斗持续超过此时间 → 清理
+        INTERVAL = 60            # 检查间隔 1 分钟
 
         while True:
             await asyncio.sleep(INTERVAL)
@@ -426,16 +416,22 @@ class Relay:
             to_remove = []
 
             for rid, room in self.rooms.items():
-                idle_hours = (now - room.created_at) / 3600.0
+                idle_hours = (now - room.last_active) / 3600.0
 
-                if room.state == "battle" and room.battle_started_at > 0:
-                    battle_hours = (now - room.battle_started_at) / 3600.0
-                    if battle_hours > MAX_BATTLE_HOURS:
-                        print(f"[清理] 房间 {rid} 战斗持续 {battle_hours:.1f}h，强制关闭")
-                        to_remove.append(rid)
-                elif room.state != "battle":
+                if room.state == "battle":
+                    if room.battle_started_at > 0:
+                        battle_hours = (now - room.battle_started_at) / 3600.0
+                        if battle_hours > MAX_BATTLE_HOURS:
+                            print(f"[清理] 房间 {rid} 战斗持续 {battle_hours:.1f}h，强制关闭")
+                            to_remove.append(rid)
+                    else:
+                        # 兜底：battle 但没有开战时间（正常不会发生），按闲置清理
+                        if idle_hours > MAX_IDLE_HOURS:
+                            print(f"[清理] 房间 {rid} 战斗状态异常且闲置 {idle_hours:.1f}h，强制关闭")
+                            to_remove.append(rid)
+                else:
                     if idle_hours > MAX_IDLE_HOURS:
-                        print(f"[清理] 房间 {rid} 闲置 {idle_hours:.1f}h 未开战，强制关闭")
+                        print(f"[清理] 房间 {rid} 闲置 {idle_hours:.1f}h，强制关闭")
                         to_remove.append(rid)
 
             for rid in to_remove:
@@ -465,8 +461,13 @@ class Relay:
         addr = writer.get_extra_info("peername")
         print(f"[连接] {addr[0]}:{addr[1]}")
 
-        # 首包: MSG_CHAT + /connectroom <房间ID>
-        pkt = await self.read_pkt(reader)
+        # 首包: MSG_CHAT + /connectroom <房间ID>（或 /listroom 查询）
+        try:
+            pkt = await asyncio.wait_for(self.read_pkt(reader), HANDSHAKE_TIMEOUT)
+        except asyncio.TimeoutError:
+            print(f"  首包超时 {HANDSHAKE_TIMEOUT:.0f}s，断开")
+            self._close(writer)
+            return
         if pkt is None:
             self._close(writer)
             return
@@ -480,6 +481,15 @@ class Relay:
         except UnicodeDecodeError:
             self._close(writer)
             return
+
+        # 首包 /listroom：返回房间列表后断开（查询房间用，不入房）
+        if text.split(" ", 1)[0] == "/listroom":
+            self.write_str(writer, MSG_CHAT, self._build_listroom())
+            print("  首包 /listroom 查询，返回后断开")
+            await self.flush(writer)
+            self._close(writer)
+            return
+
         # 首包: MSG_CHAT + /connectroom <版本> <房间ID> [名字]
         if not text.startswith("/connectroom "):
             print(f"  首包不是 /connectroom: {text}")
@@ -493,11 +503,11 @@ class Relay:
         if len(parts) >= 2 and "." in parts[0]:
             client_version = parts[0]
             room_id        = parts[1]
-            preferred_name = parts[2] if len(parts) > 2 else ""
+            preferred_name = " ".join(parts[2:])   # 名字可含空格
         else:
             client_version = ""
             room_id        = parts[0] if len(parts) > 0 else ""
-            preferred_name = parts[1] if len(parts) > 1 else ""
+            preferred_name = " ".join(parts[1:])
 
         if not room_id:
             print(f"  缺少房间ID")
@@ -541,6 +551,7 @@ class Relay:
 
         role, cid, name = self._add_to_room(room, writer, preferred_name)
         self.sessions[id(writer)] = (room, role, cid, name)
+        room.last_active = time.time()   # 入房也算活动
 
         role_str = "\\modserver" if role == 0 else "\\modclient"
         self.write_pkt(writer, MSG_PUB_INFO, role_str.encode() + NUL)
@@ -549,11 +560,11 @@ class Relay:
         if role == 0:
             self.write_str(writer, MSG_CHAT,
                 f"[系统] 你已创建房间 {room.id}\n"
-                f"[系统] 你的名字是 {name}，可使用 \\listcommand 查看命令")
+                f"[系统] 你的名字是 {name}，可使用 /listcommand 查看命令")
         else:
             self.write_str(writer, MSG_CHAT,
                 f"[系统] 你已加入房间 {room.id}\n"
-                f"[系统] 你的名字是 {name}，可使用 \\listcommand 查看命令，或等待房主操作")
+                f"[系统] 你的名字是 {name}，可使用 /listcommand 查看命令，或等待房主操作")
             # 同步房间状态给新客户端（保留原始二进制数据）
             if hasattr(room, "raw_payload") and room.raw_payload:
                 msg_id = 13  # MSG_ENTER_ROOM_READY
@@ -577,6 +588,7 @@ class Relay:
                 pkt = await self.read_pkt(reader)
                 if pkt is None:
                     break
+                room.last_active = time.time()   # 收到任何包都算活动
                 msg_id, payload = pkt
                 body = struct.pack("<i", msg_id) + payload
 

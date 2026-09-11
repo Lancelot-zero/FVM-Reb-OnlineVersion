@@ -264,6 +264,46 @@ function sh_say(args){
     }
 }
 
+function sh_queryroom(args) {
+    if (global.network.mode != "offline") {
+        return "[网络] 请先断开当前连接，再查询房间";
+    }
+
+    // 用法: queryroom <IP>[:端口]  或  queryroom <IP> [端口]
+    if (array_length(args) < 2) {
+        return "[网络] 用法: queryroom <IP>[:端口] 或 queryroom <IP> [端口]";
+    }
+
+    var _ip   = args[1];
+    var _port = 27085;
+    if (array_length(args) >= 3) {
+        _port = real(args[2]);
+    }
+
+    var _colon = string_pos(":", _ip);
+    if (_colon > 0) {
+        var _host = string_copy(_ip, 1, _colon - 1);
+        var _port_str = string_copy(_ip, _colon + 1, string_length(_ip) - _colon);
+        _ip   = _host;
+        _port = real(_port_str);  // 转成整数
+    }
+
+    if (_port <= 0 || _port > 65535) {
+        return "[网络] 端口号无效";
+    }
+    var _sock = network_create_socket(network_socket_tcp);
+    if (_sock < 0) return "[网络] 创建 socket 失败";
+
+    var _result = network_connect_raw(_sock, _ip, _port);
+    if (_result >= 0) {
+        send_message(_sock, MSG_CHAT, "/listroom");
+        return "[网络] 已向 " + _ip + ":" + string(_port) + " 发送房间查询";
+    } else {
+        network_destroy(_sock);
+        return "[网络] 连接失败";
+    }
+}
+
 function sh_connectpubserver(args) {
     // 如果在 room_ready 界面，先清理再退出（对齐 obj_quit_confirm 逻辑）
     if (global.gui_stack.get_top() == room_ready) {
@@ -306,7 +346,7 @@ function sh_connectpubserver(args) {
         args[2] = "test";
     }
     if (array_length(args) < 3) {
-        return "[网络] 用法: connectpubserver <IP> <房间ID> [端口]";
+        return "[网络] 用法: connectpubserver <IP>[:端口] <房间ID> 或 connectpubserver <IP> <房间ID> [端口]";
     }
 
     var _ip   = args[1];
@@ -315,11 +355,18 @@ function sh_connectpubserver(args) {
     if (array_length(args) >= 4) {
         _port = real(args[3]);
     }
+	
+	var _colon = string_pos(":", _ip);
+	if (_colon > 0) {
+	    var _host = string_copy(_ip, 1, _colon - 1);
+	    var _port_str = string_copy(_ip, _colon + 1, string_length(_ip) - _colon);
+	    _ip   = _host;
+	    _port = real(_port_str);  // 转成整数
+	}
 
     if (_port <= 0 || _port > 65535) {
         return "[网络] 端口号无效";
     }
-
     var _sock = network_create_socket(network_socket_tcp);
     if (_sock < 0) return "[网络] 创建 socket 失败";
 
@@ -414,6 +461,20 @@ function meta_status() {
         arguments: [],
         suggestions: [],
         argumentDescriptions: [],
+        hidden: false,
+        deferred: false
+    };
+}
+
+function meta_queryroom() {
+    return {
+        description: "查询指定服务器的房间列表（仅离线状态可用）",
+        arguments: ["IP地址", "端口号（可选）"],
+        suggestions: ["27085", "6500", "6501"],
+        argumentDescriptions: [
+            "要查询的服务器 IP，可带端口如 127.0.0.1:27085",
+            "要查询的端口，默认 27085"
+        ],
         hidden: false,
         deferred: false
     };
