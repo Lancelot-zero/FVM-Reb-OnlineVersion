@@ -120,6 +120,17 @@ function VM_ShowNoticeDur(a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p) {
     }
     show_notice(_msg, _dur);
 }
+/// @function VM_SetNoticeStyle(scale, r, g, b)
+/// @param scale 公告缩放比例，-1=默认
+/// @param r     公告颜色 R，-1=默认
+/// @param g     公告颜色 G，-1=默认
+/// @param b     公告颜色 B，-1=默认
+function VM_SetNoticeStyle(scale_addr, r_addr, g_addr, b_addr) {
+    global._VM_notice_scale   = vm_read_mem(global.__vm, scale_addr);
+    global._VM_notice_color_r = vm_read_mem(global.__vm, r_addr);
+    global._VM_notice_color_g = vm_read_mem(global.__vm, g_addr);
+    global._VM_notice_color_b = vm_read_mem(global.__vm, b_addr);
+}
 function VM_CreatePlatform(col_addr, row_addr, width_addr, length_addr, axis_addr, distance_addr, idle_addr, spr_addr) {
     var col = vm_read_mem(global.__vm, col_addr);
     var row = vm_read_mem(global.__vm, row_addr);
@@ -3019,6 +3030,10 @@ global._VM_id_to_real      = ds_map_create();  // VM_id → 真实 instance id
 global._VM_real_to_vm_id   = ds_map_create();  // 真实 instance id → VM_id (客户端反向)
 global._VM_spawn_cats = true;
 global._VM_remote_funcs = ds_map_create();
+global._VM_notice_scale		 = -1;
+global._VM_notice_color_r	 = -1;
+global._VM_notice_color_g	 = -1;
+global._VM_notice_color_b	 = -1;
 
 global.__vm = VM_Create();
 global.__vm.rng_state = 0x9E3779B9;   // VM随机种子：服务器生成并随bin同步，客户端收到后覆盖
@@ -3108,6 +3123,7 @@ VM_RegisterFunction(global.__vm, VM_ArrayADD);   // 82
 VM_RegisterFunction(global.__vm, VM_ArraySize);  // 83
 VM_RegisterFunction(global.__vm, VM_ArrayClear);     // 84
 VM_RegisterFunction(global.__vm, VM_ArrayClearAll);  // 85
+VM_RegisterFunction(global.__vm, VM_SetNoticeStyle);  // 86
 ds_map_add(global._VM_remote_funcs, "VM_SwapPlants", VM_SwapPlants);
 ds_map_add(global._VM_remote_funcs, "VM_SwapPlantRects", VM_SwapPlantRects);
 ds_map_add(global._VM_remote_funcs, "VM_CompactColumn", VM_CompactColumn);
@@ -3157,6 +3173,11 @@ function VM_InitRoomEntry(buf) {
     global._VM_prev_wave         = -1;
     global._VM_prev_subwave      = -1;
     global._VM_event_enabled     = true;
+	global._VM_notice_scale		 = -1;
+	global._VM_notice_color_r	 = -1;
+	global._VM_notice_color_g	 = -1;
+	global._VM_notice_color_b	 = -1;
+	
     global._sync_vm_bin_buf = undefined;
     global._VM_strings = [];
     global.__vm.strings = global._VM_strings;

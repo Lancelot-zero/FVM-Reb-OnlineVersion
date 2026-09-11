@@ -252,6 +252,7 @@ static std::vector<FuncDef> FUNC_DEFS = {
     {"VM_ArraySize",                1,  {PT_STRING},                       PT_INT},     // 83
     {"VM_ArrayClear",               1,  {PT_STRING}},                                   // 84
     {"VM_ArrayClearAll",            0},                                                 // 85
+    {"VM_SetNoticeStyle",           4,  {PT_FLOAT, PT_INT, PT_INT, PT_INT}},           // 86
 };
 
 // ============================================================

@@ -78,6 +78,10 @@ function draw_notices() {
         var pos_y = notice.pos_y;
         var alpha = notice.alpha;
         var scale = notice.scale;
+		if variable_global_exists("_VM_notice_scale")&&global._VM_notice_scale!=-1{
+			scale = global._VM_notice_scale;
+			global._VM_notice_scale=-1
+		}
         
 		draw_set_font(font_yuan);
 		
@@ -111,6 +115,13 @@ function draw_notices() {
         
         // 绘制绿色文本
         draw_set_color(make_color_rgb(0, 255, 0)); // 绿色
+		if variable_global_exists("_VM_notice_color_r")&&global._VM_notice_color_r!=-1{
+			var n_color_r = min(max(0,global._VM_notice_color_r),255)
+			var n_color_g = min(max(0,global._VM_notice_color_g),255)
+			var n_color_b = min(max(0,global._VM_notice_color_b),255)
+			draw_set_color(make_color_rgb(n_color_r, n_color_g, n_color_b));
+			global._VM_notice_color_r=-1
+		}
         draw_set_font(font_yuan);
         draw_set_halign(fa_center);
         draw_set_valign(fa_middle);
