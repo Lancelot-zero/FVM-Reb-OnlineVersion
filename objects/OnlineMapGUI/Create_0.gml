@@ -20,6 +20,8 @@ self.state = {
     /// @type {Struct}
     detail_requests: {},
     busy: false,
+    bootstrapped: false,
+    skip_first_step: true,
 }
 
 function set_on_close(_on_close) {
@@ -508,11 +510,19 @@ function create_widgets() {
 function on_create() {
     self.state.manager = new MapDownloadManager()
     create_widgets()
-    apply_cached_list()
-    request_list()
 }
 
 function on_step() {
+    if (self.state.bootstrapped) {
+        return
+    }
+    if (self.state.skip_first_step) {
+        self.state.skip_first_step = false
+        return
+    }
+    self.state.bootstrapped = true
+    apply_cached_list()
+    request_list()
 }
 
 function on_draw() {
