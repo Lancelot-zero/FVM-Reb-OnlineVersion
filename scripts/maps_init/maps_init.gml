@@ -383,7 +383,8 @@ function maps_init(){
 					"boss_music":mus_volcanic_tower_boss,
 					"pre_level":"tower_cake_12_2",
 					"rewards":[
-						{"card_id":"flour_sack","target_shape":1}
+						{"card_id":"flour_sack","target_shape":1},
+						{"card_id":"rabbit_lantern","target_shape":1},
 					]
 				},
 				{
@@ -503,7 +504,8 @@ function maps_init(){
 					"boss_music":mus_volcanic_tower_boss,
 					"pre_level":"tower_cake_16_2",
 					"rewards":[
-						{"card_id":"lightning_baguette","target_shape":1}
+						{"card_id":"lightning_baguette","target_shape":1},
+						{"card_id":"delicacy_firework","target_shape":1}
 					]
 				},
 				{
@@ -786,7 +788,8 @@ function maps_init(){
 					"pre_level":"tower_cake_26_1",
 					"rewards":[
 						{"card_id":"coke_bomb","target_shape":2},
-						{"card_id":"pineapple_explosive_bread","target_shape":2}
+						{"card_id":"pineapple_explosive_bread","target_shape":2},
+						{"card_id":"delicacy_firework","target_shape":2}
 					]
 				},
 				{
@@ -814,7 +817,8 @@ function maps_init(){
 					"boss_music":mus_floating_island_night_boss,
 					"pre_level":"tower_cake_27_1",
 					"rewards":[
-						{"card_id":"wine_bottle_bomb","target_shape":2}
+						{"card_id":"wine_bottle_bomb","target_shape":2},
+						{"card_id":"rabbit_lantern","target_shape":2}
 					]
 				},
 				{

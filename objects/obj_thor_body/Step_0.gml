@@ -128,7 +128,7 @@ switch state{
 			var laser = instance_create_depth(x-45,y-120,-800,obj_coke_bomb_explode)
 			laser.sprite_index = spr_thor_laser_left
 			with obj_card_parent{
-				if grid_row == other.grid_row - 1 &&
+				if grid_row == other.grid_row - 1 && grid_col <= other.grid_col &&
 				plant_id != "player" && plant_type != "coffee" && !invincible && plant_id != "cotton_candy"{
 					if hp >= max_hp{
 						obj_task_manager.card_loss++

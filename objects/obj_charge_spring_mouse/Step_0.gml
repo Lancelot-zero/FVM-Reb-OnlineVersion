@@ -22,11 +22,15 @@ event_inherited();
 if global.is_paused or is_frozen or is_stun or scare_timer > 0{
 	exit
 }
-if state == ENEMY_STATE.ATTACK && (array_get_index(can_place_list,target_plant.plant_id) != -1) && !placed && shield_hp > 0{
-	sprite_index = spr_charge_spring_mouse_place
-	timer = 0
-	state = ENEMY_STATE.ACTING
+
+if state == ENEMY_STATE.ATTACK && instance_exists(target_plant) && !placed && shield_hp > 0{
+	if (array_get_index(can_place_list,target_plant.plant_id) != -1){
+		sprite_index = spr_charge_spring_mouse_place
+		timer = 0
+		state = ENEMY_STATE.ACTING
+	}
 }
+
 if not placed && state = ENEMY_STATE.ACTING{
 	if hp <= 0{
 		timer = 0

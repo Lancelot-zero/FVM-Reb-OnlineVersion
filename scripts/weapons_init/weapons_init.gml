@@ -100,6 +100,26 @@ function weapons_init(){
 										"name":"海神镖枪",
 										"atk_impact":[24,28,32,36,40,44,52,64,80,110,140,170,200,230,260,290]
 										})
+		register_weapon("ice_mighty_gun",{"sprite":spr_ice_mighty_gun,
+									"icon":spr_ice_mighty_gun_icon,
+									"obj":obj_ice_mighty_gun,
+									"slot":"main_weapon",
+									"atk":15,
+									"cycle":78,
+									"description":"冰威武枪：发射四颗冰弹攻击敌人",
+									"name":"冰威武枪",
+									"atk_impact":[18, 21, 24, 27, 30, 33, 39, 48, 60, 80, 100, 120, 140, 160, 180, 200]
+									})
+		register_weapon("double_ice_crossbow",{"sprite":spr_double_ice_crossbow,
+									"icon":spr_double_ice_crossbow_icon,
+									"obj":obj_double_ice_crossbow,
+									"slot":"main_weapon",
+									"atk":60,
+									"cycle":180,
+									"description":"冰霜连弩：投掷两个减速冰鸡蛋",
+									"name":"冰霜连弩",
+									"atk_impact":[72, 84, 96, 118, 140, 162, 196, 232, 270, 335, 430, 535, 650, 775, 910, 1045]
+									})
 	}
 	{//注册所有副武器
 		register_weapon("cookie_shield",{"sprite":spr_cookie_shield_icon,
@@ -150,6 +170,18 @@ function weapons_init(){
 									"atk_impact":[220,240,260,280,320,360,400,440,480,540,600,640,680,720,760,800],
 									"cycle_impact":[19.8*60,19.4*60,19*60,18.6*60,17.8*60,17*60,16.2*60,15*60,13.8*60,12.6*60,11*60,10*60,9*60,8*60,7*60,6*60]
 									})
+		register_weapon("rotating_water_gun",{"sprite":spr_rotating_water_gun_icon,
+									"icon":spr_rotating_water_gun_icon,
+									"obj":obj_rotating_water_gun,
+									"slot":"super_weapon",
+									"atk":120,
+									"cycle":15*60,
+									"description":"旋转水枪：每隔一段时间伤害5*5范围敌人",
+									"name":"旋转水枪",
+									"atk_impact":[132,144,156,168,192,216,240,264,288,324,360,384,408,432,456,480],
+									"cycle_impact":[14.5*60,14*60,13.5*60,13*60,12.5*60,12*60,11.5*60,11*60,10.5*60,10*60,9*60,8*60,7*60,6*60,5*60,4*60]
+									})
+				
 	}
 	{//注册所有宝石
 		register_gem("attack_gem",{"name":"攻击宝石",

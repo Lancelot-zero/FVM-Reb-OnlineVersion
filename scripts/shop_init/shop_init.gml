@@ -14,6 +14,8 @@ function shop_init(){
 	register_goods("dragon_fruit",{"type":"card","cost":"50000","unlock_item_id":"dragon_fruit","description":"火龙果：伤害3*3范围敌人","display_name":"火龙果"})
 	register_goods("magic_chicken",{"type":"card","cost":"80000","unlock_item_id":"magic_chicken","description":"幻幻鸡：复制成上一张放置的卡片","display_name":"幻幻鸡"})
 	register_goods("bull_firework",{"type":"card","cost":"50000","unlock_item_id":"bull_firework","description":"金牛烟花：召唤1只烟花牛冲撞敌人","display_name":"金牛烟花"})
+	register_goods("rabbit_lantern",{"type":"card","cost":"50000","unlock_item_id":"rabbit_lantern","description":"玉兔灯笼：准备完成后造成3*3范围高伤害爆炸并留下火焰","display_name":"玉兔灯笼"})
+	register_goods("delicacy_firework",{"type":"card","cost":"80000","unlock_item_id":"delicacy_firework","description":"美食烟花：3*4范围爆炸，命中老鼠产生火苗","display_name":"美食烟花"})
 	
 	register_goods("card_slot_plus",{"type":"item","cost":"20000","unlock_item_id":"card_slot","description":"增加一格卡槽，仅可在卡槽数小于18时使用","display_name":"卡槽+1","spr":spr_slot_plus})
 	register_goods("card_slot_19",{"type":"item","cost":"50000","unlock_item_id":"card_slot_19","description":"解锁第19格卡槽","display_name":"卡槽第19格","spr":spr_slot_19})
@@ -35,6 +37,9 @@ function shop_init(){
 	register_goods("strength_gem",{"type":"gem","cost":"50000","unlock_item_id":"strength_gem","description":"蓄力宝石：增加周围卡片伤害","display_name":"蓄力宝石"})
 	register_goods("ice_spoon_crossbow",{"type":"weapon","cost":"20000","unlock_item_id":"ice_spoon_crossbow","description":"冰勺弩枪：投掷减速冰鸡蛋","display_name":"冰勺弩枪"})
 	register_goods("poseidon_dart_gun",{"type":"weapon","cost":"80000","unlock_item_id":"poseidon_dart_gun","description":"海神镖枪：发射两个追踪飞镖攻击敌人","display_name":"海神镖枪"})
+	register_goods("double_ice_crossbow",{"type":"weapon","cost":"50000","unlock_item_id":"double_ice_crossbow","description":"冰霜连弩：投掷两个减速冰鸡蛋","display_name":"冰霜连弩"})
+	register_goods("ice_mighty_gun",{"type":"weapon","cost":"20000","unlock_item_id":"ice_mighty_gun","description":"冰威武枪：发射四发冰弹","display_name":"冰威武枪"})
+	register_goods("rotating_water_gun",{"type":"weapon","cost":"50000","unlock_item_id":"rotating_water_gun","description":"旋转水枪：每隔一段时间伤害5*5范围敌人","display_name":"旋转水枪"})
 	
 	register_goods("ice_egg_pisces",{"type":"card_attire","cost":"50000","unlock_item_id":"ice_egg_pisces","description":"冰煮蛋器投手的双鱼座精灵时装","display_name":"冰蛋星座时装"})
 	register_goods("water_pipe_libra",{"type":"card_attire","cost":"50000","unlock_item_id":"water_pipe_libra","description":"双向水管的天秤座精灵时装","display_name":"水管星座时装"})

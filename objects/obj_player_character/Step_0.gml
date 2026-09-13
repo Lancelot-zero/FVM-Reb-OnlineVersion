@@ -73,7 +73,7 @@ if hurt_time <= 0 and hp < max_hp{
 //检测自身右方是否有敌人
 var has_enemy = false
 with(obj_enemy_parent){
-	if (grid_row == other.grid_row && grid_col >= other.grid_col && grid_col <= (global.grid_cols + 1) && health > 0){
+	if (grid_row == other.grid_row && grid_col >= other.grid_col && grid_col <= (global.grid_cols + 1) && hp > 0){
 		has_enemy = true
 		break
 	}

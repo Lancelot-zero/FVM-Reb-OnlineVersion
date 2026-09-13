@@ -96,7 +96,7 @@ load_file(global.save_slot)
 //	unlock_card("triple_long_bao",13,0,8)
 //	unlock_card("triple_ice_long_bao",13,0,8)
 //	unlock_card("whisky_bomb",13,2,8)
-//	unlock_card("oden_pot",13,1,8)
+//	unlock_card("oden_pot",13,2,8)
 //	unlock_card("cotton_candy",13,2,8)
 //	unlock_card("dragon_fruit",13,2,8)
 //	unlock_card("durian",13,2,8)
@@ -119,7 +119,8 @@ load_file(global.save_slot)
 //	unlock_card("horseshoe_crab_bread",13,1,8)
 //	unlock_card("sugar_ball_pult",13,2,8)
 //	unlock_card("pizza_oven",13,2,8)
-//	unlock_card("fruit_tart",13,2,8)
+//	unlock_card("rabbit_lantern",13,2,8)
+//	unlock_card("delicacy_firework",13,2,8)
 	
 //	global.save_data.player.gold = 99000000
 //	global.save_data.player.level = 55

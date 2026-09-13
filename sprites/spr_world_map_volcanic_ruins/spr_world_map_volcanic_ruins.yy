@@ -3,7 +3,7 @@
   "%Name":"spr_world_map_volcanic_ruins",
   "bboxMode":2,
   "bbox_bottom":114,
-  "bbox_left":24,
+  "bbox_left":14,
   "bbox_right":75,
   "bbox_top":0,
   "collisionKind":5,

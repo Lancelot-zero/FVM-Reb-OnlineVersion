@@ -212,7 +212,7 @@ function slots_init(){
 	register_card("aquarius_elve",obj_aquarius_elve,[
 	    {"shape":0, "sprite":spr_aquarius_elve, "cost":150, "cooldown":30*60, "description":"水瓶座精灵：本行5格和本列5格范围爆炸","plant_type":"normal","feature_type":"normal","target_card":"none"},
 	    {"shape":1, "sprite":spr_aquarius_elve_1, "cost":200, "cooldown":30*60, "description":"水瓶座战将：本行5格和本列5格范围爆炸","plant_type":"normal","feature_type":"normal","target_card":"none"},
-		{"shape":2, "sprite":spr_aquarius_elve_2, "cost":250, "cooldown":30*60, "description":"水瓶座星宿：一列和本行5格范围爆炸","plant_type":"normal","feature_type":"normal","target_card":"none"}
+		{"shape":2, "sprite":spr_aquarius_elve_2, "cost":250, "cooldown":30*60, "description":"水瓶座星宿：本行5格和本列5格范围爆炸","plant_type":"normal","feature_type":"normal","target_card":"none"}
 	])
 	register_card("tar_sprayer", obj_tar_sprayer, [
 	    {"shape":0, "sprite":spr_tar_sprayer, "cost":150, "cooldown":7*60, "description":"焦油喷壶：穿透攻击四格内敌人","plant_type":"normal","feature_type":"normal","target_card":"none"},
@@ -345,6 +345,16 @@ function slots_init(){
 	    {"shape":0, "sprite":spr_pizza_oven, "cost":250, "cooldown":7*60, "description":"迷你披萨炉：发射披萨攻击最后一个敌人","plant_type":"normal","feature_type":"normal","target_card":"none","place_preview":spr_pizza_oven},
 	    {"shape":1, "sprite":spr_pizza_oven_1, "cost":250, "cooldown":7*60, "description":"香脆披萨炉：发射披萨攻击最后一个敌人","plant_type":"normal","feature_type":"normal","target_card":"none","place_preview":spr_pizza_oven_1},
 		{"shape":2, "sprite":spr_pizza_oven_2, "cost":250, "cooldown":7*60, "description":"拉丝披萨炉：发射两个披萨攻击最后一个敌人","plant_type":"normal","feature_type":"normal","target_card":"none","place_preview":spr_pizza_oven_2}
+	]);
+	register_card("rabbit_lantern", obj_rabbit_lantern, [
+	    {"shape":0, "sprite":spr_rabbit_lantern, "cost":225, "cooldown":50*60, "description":"玉兔灯笼：准备完成后造成3*3范围高伤害爆炸并留下火焰","plant_type":"normal","feature_type":"normal","target_card":"none","place_preview":spr_rabbit_lantern},
+	    {"shape":1, "sprite":spr_rabbit_lantern_1, "cost":225, "cooldown":50*60, "description":"广寒玉兔灯笼：准备完成后造成3*3范围高伤害爆炸并留下火焰","plant_type":"normal","feature_type":"normal","target_card":"none","place_preview":spr_rabbit_lantern_1},
+		{"shape":2, "sprite":spr_rabbit_lantern_2, "cost":225, "cooldown":50*60, "description":"莲花玉兔灯笼：准备完成后造成3*3范围高伤害爆炸并留下火焰","plant_type":"normal","feature_type":"normal","target_card":"none","place_preview":spr_rabbit_lantern_2}
+	]);
+	register_card("delicacy_firework", obj_delicacy_firework, [
+	    {"shape":0, "sprite":spr_delicacy_firework, "cost":175, "cooldown":60*60, "description":"美食烟花：3*4范围爆炸，命中老鼠产生火苗","plant_type":"normal","feature_type":"normal","target_card":"none","place_preview":spr_delicacy_firework},
+	    {"shape":1, "sprite":spr_delicacy_firework_1, "cost":200, "cooldown":60*60, "description":"美食爆竹：3*4范围爆炸，命中老鼠产生火苗","plant_type":"normal","feature_type":"normal","target_card":"none","place_preview":spr_delicacy_firework_1},
+		{"shape":2, "sprite":spr_delicacy_firework_2, "cost":250, "cooldown":60*60, "description":"美食礼花：5*5范围爆炸，命中老鼠产生火苗","plant_type":"normal","feature_type":"normal","target_card":"none","place_preview":spr_delicacy_firework_2}
 	]);
 	//register_card("fruit_tart", obj_fruit_tart, [
 	//    {"shape":0, "sprite":spr_fruit_tart, "cost":150, "cooldown":14*60, "description":"美味水果塔：为本行左侧的投掷类卡片增加伤害","plant_type":"normal","feature_type":"normal","target_card":"none","place_preview":spr_fruit_tart},

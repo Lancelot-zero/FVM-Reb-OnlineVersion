@@ -547,7 +547,7 @@ function cookbook_init(){
 			"rank":2,
 			"title":"太阳饼",
 			"tiny_desc":"减少大火炉冷却",
-			"desc":"大火炉冷却时间减20秒",
+			"desc":"大火炉冷却时间减少20秒",
 			"icon":31,
 			"modif":[
 				{

@@ -35,7 +35,7 @@
 		        }
 		    }
 		}
-		if (abs(x - other.x) <= 100) && ((abs(grid_row-other.grid_row) <= 2)||(other.shape>=2)) {
+		if (abs(x - other.x) <= 100) && ((abs(grid_row-other.grid_row) <= 2)||(other.shape>=3)) {
 				if array_get_index(other.can_mouse_list,mouse_id) != -1 && !can_dropped{
 					into_act()
 				}
@@ -85,7 +85,7 @@ effect_inst1.col = grid_col
 effect_inst1.row = grid_row
 effect_inst1.is_parent = true
 effect_inst1.type = 1
-if shape < 2{
+if shape < 3{
 	effect_inst1.interval = 3
 }
 

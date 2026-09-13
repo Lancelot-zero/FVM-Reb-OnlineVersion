@@ -17,7 +17,7 @@ if (active) {
     
     // 检查回车键（确认输入）
     if (keyboard_check_pressed(vk_enter)) {
-        active = false;
+        active = false;   // 失焦后的输入法恢复由 obj_file_manager 统一处理
     }
 	
 }

@@ -68,6 +68,10 @@ if state == CARD_STATE.IDLE{
 	else if shape == 2{
 		effect_inst.sprite_index = spr_kettle_bomb_explode_2
 	}
+	if shape >= 2{
+		var inst = instance_create_depth(x,y,0,obj_kettle_slowdown_effect)
+		inst.grid_row = grid_row
+	}
 
 }
 	event_inherited()
