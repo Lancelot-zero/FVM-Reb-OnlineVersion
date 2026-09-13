@@ -429,7 +429,8 @@ function parse_network_message(buf, _sock) {
             var _inst = global.network.map_net_id_instance_id[? _net_id];
 			// 炸弹类/幻幻鸡：立即销毁，动画与服务端同步（不进延迟队列）
 			if (instance_exists(_inst)) {
-				if array_contains([obj_wine_bottle_bomb,obj_aquarius_elve,obj_whisky_bomb,obj_kettle_bomb,obj_coke_bomb,obj_bull_firework,obj_magic_chicken,obj_coffee_grounds,obj_firework_dragon,obj_chili_powder,obj_ice_cream],_inst.object_index){
+				if array_contains([obj_wine_bottle_bomb,obj_aquarius_elve,obj_whisky_bomb,obj_kettle_bomb,obj_coke_bomb,obj_bull_firework,obj_magic_chicken,
+				obj_coffee_grounds,obj_firework_dragon,obj_chili_powder,obj_ice_cream,obj_delicacy_firework,obj_rabbit_lantern],_inst.object_index){
 					global.network.client_able = true;
 					instance_destroy(_inst);
 					global.network.client_able = false;

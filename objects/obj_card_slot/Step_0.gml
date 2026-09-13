@@ -238,7 +238,8 @@ if (is_selected) {
 			new_plant_sprite_index  = new_plant.sprite_index
 			if(global.network.mode=="client"){
 				// 炸弹类预测实例跳过Destroy事件，避免客户端提前引爆
-				if array_contains([obj_wine_bottle_bomb,obj_aquarius_elve,obj_whisky_bomb,obj_kettle_bomb,obj_coke_bomb,obj_bull_firework,obj_magic_chicken,obj_coffee_grounds,obj_firework_dragon,obj_chili_powder,obj_pineapple_explosive_bread],new_plant.object_index){
+				if array_contains([obj_wine_bottle_bomb,obj_aquarius_elve,obj_whisky_bomb,obj_kettle_bomb,obj_coke_bomb,obj_bull_firework,obj_magic_chicken,obj_coffee_grounds,
+				obj_firework_dragon,obj_chili_powder,obj_pineapple_explosive_bread,obj_delicacy_firework,obj_rabbit_lantern],new_plant.object_index){
 					instance_destroy(new_plant, false);
 				}
 				else{
