@@ -7,6 +7,7 @@ self.state = {
     text: "",
     placeholder: "搜索名称或作者",
     focused: false,
+    hovered: false,
     cursor_visible: true,
     cursor_timer: 0,
     /// @type {function}
@@ -89,7 +90,31 @@ function contains_point(_mx, _my) {
         self.state.top + self.state.height)
 }
 
+function is_hovered() {
+    return self.state.hovered
+}
+
+function update_hover() {
+    var _was_hovered = self.state.hovered
+    var _over = false
+    if (visible && self.state.should_correspond()) {
+        var _mx = device_mouse_x_to_gui(0)
+        var _my = device_mouse_y_to_gui(0)
+        _over = contains_point(_mx, _my)
+    }
+    self.state.hovered = _over
+    if (_over) {
+        window_set_cursor(cr_beam)
+    } else if (_was_hovered) {
+        window_set_cursor(cr_arrow)
+    }
+}
+
 function on_create() {
+}
+
+function on_begin_step() {
+    update_hover()
 }
 
 function on_step() {
@@ -101,6 +126,9 @@ function on_step() {
             blur()
         }
         exit
+    }
+    if (self.state.hovered) {
+        window_set_cursor(cr_beam)
     }
 
     if (mouse_check_button_pressed(mb_left)) {
