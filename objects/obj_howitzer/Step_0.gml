@@ -28,7 +28,11 @@ if global.is_paused{
 //var depth_value = -((y + depth_offset) * 10 + x);
 //depth = depth_value - depth_group * 100;
 depth = parent_player.depth-1
+x = parent_player.x -10
+y = parent_player.y -100
 grid_row = parent_player.grid_row
+grid_col = parent_player.grid_col
+
 
 //检测自身右方是否有敌人
 var has_enemy = false

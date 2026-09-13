@@ -3,6 +3,9 @@ if global.is_paused{
 	exit
 }
 
+
+x = parent_player.x -10
+y = parent_player.y -100
 grid_row = parent_player.grid_row
 grid_col = parent_player.grid_col
 depth = parent_player.depth-1

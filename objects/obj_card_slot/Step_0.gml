@@ -3,6 +3,24 @@ if global.is_paused{
 	exit
 }
 
+var conveyor_belt_index = -1
+if(global._VM_conveyor_belt){
+	var conveyor_belt_arr_len = array_length(global._VM_conveyor_belt_arr)
+	cooldown_timer = cooldown;
+	cost = 0;
+	var start_x = 535;
+    var x_spacing = 90;
+	for(var i=0;i<conveyor_belt_arr_len;i++){
+		if(global._VM_conveyor_belt_arr[i]==id){
+			conveyor_belt_index = i;
+			var target_x = start_x+i*x_spacing;
+			if(x>target_x)
+				x-=1;
+		}
+	}
+}
+
+
 if card_id != "magic_chicken"{
 	current_cost = cost
 	if ds_map_find_value(global.plus_card_map,card_id) != undefined{
@@ -262,7 +280,12 @@ if (is_selected) {
             
             // 扣除阳光
             global.flame -= current_cost;
-			
+			if(global._VM_conveyor_belt){
+				if(conveyor_belt_index!=-1){
+					array_delete(global._VM_conveyor_belt_arr,conveyor_belt_index,1);
+					instance_destroy();
+				}
+			}
             
             // 重置冷却计时器
             cooldown_timer = 0;

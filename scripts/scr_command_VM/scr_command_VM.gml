@@ -1095,8 +1095,18 @@ function VM_SwapPlants(col1_addr, row1_addr, col2_addr, row2_addr) {
 	var _r1 = vm_arg(row1_addr);
 	var _c2 = vm_arg(col2_addr);
 	var _r2 = vm_arg(row2_addr);
-	if (_c1 < 0 || _c1 >= global.grid_cols || _r1 < 0 || _r1 >= global.grid_rows) return;
-	if (_c2 < 0 || _c2 >= global.grid_cols || _r2 < 0 || _r2 >= global.grid_rows) return;
+	//if (_c1 < 0 || _c1 >= global.grid_cols || _r1 < 0 || _r1 >= global.grid_rows) return;
+	//if (_c2 < 0 || _c2 >= global.grid_cols || _r2 < 0 || _r2 >= global.grid_rows) return;
+	
+	if (_c1 < 0) _c1 += global.grid_cols + 64;
+	if (_c1 >= global.grid_cols + 64) _c1 -= global.grid_cols + 64;
+	if (_r1 < 0) _r1 += global.grid_rows + 64;
+	if (_r1 >= global.grid_rows + 64) _r1 -= global.grid_rows + 64;
+	if (_c2 < 0) _c2 += global.grid_cols + 64;
+	if (_c2 >= global.grid_cols + 64) _c2 -= global.grid_cols + 64;
+	if (_r2 < 0) _r2 += global.grid_rows + 64;
+	if (_r2 >= global.grid_rows + 64) _r2 -= global.grid_rows + 64;
+	
 	if (_c1 == _c2 && _r1 == _r2) return;
 	if (global.network.mode == "client" && global._VM_sync_exec) return;
 	var _list1 = ds_grid_get(global.grid_plants, _c1, _r1);
@@ -2848,6 +2858,42 @@ function VM_ShowTerrain() {
     return "已输出到控制台";
 }
 
+
+/// @function VM_conveyor_belt_able(enable)
+/// @desc 启用/关闭传送带模式
+/// @param enable 1=开启传送带 0=关闭
+function VM_conveyor_belt_able(enable_addr) {
+	var enable = vm_read_mem(global.__vm, enable_addr);
+	global._VM_conveyor_belt = (enable != 0);
+}
+
+/// @function VM_Slot_add(card_id)
+/// @desc 向传送带添加一张卡片：按 card_id 创建卡槽实例并加入传送带队列
+/// @param card_id 卡片 ID（字符串），玩家拥有的任意卡片
+/// @return 卡槽实例 ID，失败返回 -1
+function VM_Slot_add(card_id_addr) {
+	var card_id = vm_read_mem(global.__vm, card_id_addr);
+	// 直接从玩家卡池取卡牌数据，不限于出战卡组
+	var card_data = deck_get_card_data(card_id, 0);
+	if (card_data == noone) return -1;
+	var n = array_length(global._VM_conveyor_belt_arr);
+	if(n>14)return noone;
+	var inst = instance_create_depth(535 + 15 * 90, 90, -5, obj_card_slot);
+	inst.cost = 0;
+	inst.cooldown = 0;
+	inst.card_obj = card_data[? "obj"];
+	inst.card_spr = card_data[? "sprite"];
+	inst.place_preview = card_data[? "place_preview"]
+	inst.description = card_data[? "description"];
+	inst.slot_index = n + 1;
+	inst.card_id = card_id;
+	inst.shape = card_data[? "shape"]; // 存储形态信息
+	inst.depth = -2000
+	//show_debug_message("植物卡槽已生成，id：" + inst.card_id)
+	array_push(global._VM_conveyor_belt_arr,inst);
+	return real(inst.id);
+}
+
 // ============================================================
 // 全局初始化和块管理
 // ============================================================
@@ -3034,6 +3080,8 @@ global._VM_notice_scale		 = -1;
 global._VM_notice_color_r	 = -1;
 global._VM_notice_color_g	 = -1;
 global._VM_notice_color_b	 = -1;
+global._VM_conveyor_belt	 = false;
+global._VM_conveyor_belt_arr = [];
 
 global.__vm = VM_Create();
 global.__vm.rng_state = 0x9E3779B9;   // VM随机种子：服务器生成并随bin同步，客户端收到后覆盖
@@ -3124,6 +3172,8 @@ VM_RegisterFunction(global.__vm, VM_ArraySize);  // 83
 VM_RegisterFunction(global.__vm, VM_ArrayClear);     // 84
 VM_RegisterFunction(global.__vm, VM_ArrayClearAll);  // 85
 VM_RegisterFunction(global.__vm, VM_SetNoticeStyle);  // 86
+VM_RegisterFunction(global.__vm, VM_conveyor_belt_able); // 87
+VM_RegisterFunction(global.__vm, VM_Slot_add);           // 88
 ds_map_add(global._VM_remote_funcs, "VM_SwapPlants", VM_SwapPlants);
 ds_map_add(global._VM_remote_funcs, "VM_SwapPlantRects", VM_SwapPlantRects);
 ds_map_add(global._VM_remote_funcs, "VM_CompactColumn", VM_CompactColumn);
@@ -3134,6 +3184,7 @@ ds_map_add(global._VM_remote_funcs, "VM_SetCardProp", VM_SetCardProp);
 ds_map_add(global._VM_remote_funcs, "VM_SetEnemyProp", VM_SetEnemyProp);
 ds_map_add(global._VM_remote_funcs, "VM_ApplyPlantLevel", VM_ApplyPlantLevel);
 global._sync_vm_bin_buf = undefined;
+
 
 /// @function VM_InitRoomEntry(buf)
 function VM_InitRoomEntry(buf) {
@@ -3177,7 +3228,8 @@ function VM_InitRoomEntry(buf) {
 	global._VM_notice_color_r	 = -1;
 	global._VM_notice_color_g	 = -1;
 	global._VM_notice_color_b	 = -1;
-	
+	global._VM_conveyor_belt	 = false;
+
     global._sync_vm_bin_buf = undefined;
     global._VM_strings = [];
     global.__vm.strings = global._VM_strings;
@@ -3205,6 +3257,7 @@ function VM_InitRoomEntry(buf) {
     global._VM_last_boss_new_state = -1;
     global._VM_create_counter = 100000;
     global._VM_spawn_cats = true;
+	global._VM_conveyor_belt_arr = []
     ds_map_clear(global._VM_id_to_real);
     ds_map_clear(global._VM_real_to_vm_id);
     ds_map_clear(global.__vm.str_map);

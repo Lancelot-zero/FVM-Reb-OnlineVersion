@@ -152,8 +152,25 @@ static const std::vector<const char*> VALID_CARD_IDS = {
 
 // 物件名（VM_SpawnObject / VM_ClearMapObjects）
 static const std::vector<const char*> VALID_OBJECT_NAMES = {
+    // 基础物件
     "obstacle","lava","seawater","wind_tunnel","mouse_hole",
-    "pharaoh_hole","buzz_wind","cloud","ladder","barrier",
+    "pharaoh_hole","buzz_wind","cloud","ladder","barrier","fog",
+    // boss 产物 — 子弹/弹道
+    "arno_bullet","arno_bullet_effect","arson_bullet","blonde_mary_bullet",
+    "electric_jellyfish_bullet","hercules_laser","ice_residue_ball","ice_residue_bullet",
+    "iron_man_bullet","lobster_knight_bullet","mermaid_mary_bullet","paul_bullet",
+    "rumble_laser","rumble_missile","shark_1_bullet","mouse_train_1_bullet",
+    "mouse_train_2_bullet","julie_missile","pete_missile","pete_claw","pete_spike",
+    "baron_bats","baron_blade","baron_needle","messenger_ignis_fatuus","messenger_mace",
+    "messenger_poop","machine_shark_2_wind",
+    // boss 产物 — 召唤物/技能
+    "angelababy_star","angelababy_summon","angelababy_target","arson_mouse",
+    "captain_rainbow","captain_shield","iron_man",
+    "irritable_jack_fire","irritable_jack_rock_skill_3","irritable_jack_rock_skill_4",
+    "mario_cave","mario_pipeline","mermaid_mary_music","mermaid_mary_wave",
+    "mouse_train_3_butter","mouse_train_3_explode","pharaoh_bandage","pharaoh_coffin",
+    "spider_man_mouse_web","vajra_lava","vajra_lightning","vajra_spike",
+    "war_god_duck","war_god_summon","war_god_wood","xiaoming_text",
 };
 
 /// 检查字符串是否在集合中
@@ -253,6 +270,8 @@ static std::vector<FuncDef> FUNC_DEFS = {
     {"VM_ArrayClear",               1,  {PT_STRING}},                                   // 84
     {"VM_ArrayClearAll",            0},                                                 // 85
     {"VM_SetNoticeStyle",           4,  {PT_FLOAT, PT_INT, PT_INT, PT_INT}},           // 86
+    {"VM_conveyor_belt_able",       1,  {PT_INT}},                                      // 87
+    {"VM_Slot_add",                 1,  {PT_STRING}},                                   // 88
 };
 
 // ============================================================
