@@ -188,17 +188,19 @@ function on_draw() {
 
     var _label = _s.text
     var _color_name = "font_hei_outline_4dir_black"
-    if (_label == "") {
+    if (_label == "" && !_s.focused) {
         scribble(_s.placeholder)
             .align(fa_left, fa_middle)
             .starting_format(_color_name)
             .blend(c_gray, 1)
             .draw(_s.left + 12, _s.top + _s.height * 0.5)
     } else {
-        scribble(_label)
-            .align(fa_left, fa_middle)
-            .starting_format(_color_name)
-            .draw(_s.left + 12, _s.top + _s.height * 0.5)
+        if (_label != "") {
+            scribble(_label)
+                .align(fa_left, fa_middle)
+                .starting_format(_color_name)
+                .draw(_s.left + 12, _s.top + _s.height * 0.5)
+        }
         if (_s.focused && _s.cursor_visible) {
             var _tw = string_width(_label)
             draw_set_color(c_black)
