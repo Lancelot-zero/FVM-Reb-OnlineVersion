@@ -237,8 +237,10 @@ if current_wave < total_wave{
 	wave_data = global.level_file.waves[current_wave]
 }
 else{
-	current_total_subwaves = array_length(global.level_file.waves[current_wave-1].subwaves)
-	wave_data = global.level_file.waves[current_wave-1]
+	if(current_wave>0){
+		current_total_subwaves = array_length(global.level_file.waves[current_wave-1].subwaves)
+		wave_data = global.level_file.waves[current_wave-1]
+	}
 }
 
 if wave_data.boss_wave && level_stage != "boss" && global.save_data.unlocked_items.elite_unlocked && wave_timer == 1{

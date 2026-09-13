@@ -239,7 +239,7 @@ private:
     int  get_type(int slot) { auto it = slot_type_.find(slot); return (it != slot_type_.end()) ? it->second : MEM_INT; }
     void set_str(int slot, const string& s) { slot_str_[slot] = s; }
     bool get_str(int slot, string& out) { auto it = slot_str_.find(slot); if (it != slot_str_.end()) { out = it->second; return true; } return false; }
-    bool is_num(int t) { return t == MEM_INT || t == MEM_FLOAT; }
+    bool is_num(int t) { return t == MEM_INT || t == MEM_FLOAT || t == PT_ANY; }
     int  infer_bin_type(int ta, int tb) {
         if (!is_num(ta) || !is_num(tb)) {
             error(cur_.line, "strings cannot participate in arithmetic");
@@ -446,8 +446,8 @@ private:
         auto& ptypes = def.param_types;
         for (int i = 0; i < expected; i++) {
             int expect_t = (i < (int)ptypes.size()) ? ptypes[i] : PT_INT;
-            if (expect_t == PT_ANY) continue;
             int actual_t = get_type(args[i]);
+            if (expect_t == PT_ANY || actual_t == PT_ANY) continue;  // 参数接受任意 / 实参类型未知（GetProp、ArrayGet 返回值）
             if (actual_t != expect_t) {
                 // int 实参可自动提升为 float
                 if (!(expect_t == PT_FLOAT && actual_t == MEM_INT)) {

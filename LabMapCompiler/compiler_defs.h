@@ -180,7 +180,7 @@ static std::vector<FuncDef> FUNC_DEFS = {
     {"VM_SetProp",       3,  {PT_INT,PT_STRING,PT_ANY}},                             // 11
     {"VM_GetWave",             0},                                                   // 12
     {"VM_GetSubwave",          0},                                                   // 13
-    {"VM_GetProp",             2,  {PT_INT,PT_STRING}},                              // 14
+    {"VM_GetProp",             2,  {PT_INT,PT_STRING},                     PT_ANY},  // 14 — 返回类型取决于属性名
     {"VM_GetLastBoss",         0},                                                   // 15
     {"VM_GetLastCreatedEnemy", 0},                                                   // 16
     {"VM_GetLastKilledEnemy",  0},                                                   // 17
@@ -245,7 +245,7 @@ static std::vector<FuncDef> FUNC_DEFS = {
     {"VM_GetLastBossStateChangeId", 0},                                                 // 76
     {"VM_GetLastBossOldState",      0},                                                 // 77
     {"VM_GetLastBossNewState",      0},                                                 // 78
-    {"VM_ArrayGet",                 2,  {PT_STRING, PT_INT}},                           // 79
+    {"VM_ArrayGet",                 2,  {PT_STRING, PT_INT},                 PT_ANY},  // 79 — 返回类型取决于存的元素
     {"VM_ArraySet",                 3,  {PT_STRING, PT_INT, PT_ANY}},                   // 80
     {"VM_ArrayDel",                 2,  {PT_STRING, PT_INT}},                           // 81
     {"VM_ArrayADD",                 2,  {PT_STRING, PT_ANY}},                           // 82
