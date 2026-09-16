@@ -17,13 +17,16 @@ function load_custom_deck(deck_index) {
     // 添加新卡牌（保留存档槽位；旧紧凑档顺次填前 N 槽自动兼容）
     var card_ids = global.save_data.saved_decks[deck_index].card_id;
     var len = array_length(card_ids);
+	var _k = 0;
     for(var i = 0; i < len; i++) {
 		if(deck_slot_count()>=_max_slot)break;
         var cid = card_ids[i];
         if (cid == "" || is_undefined(cid) || cid == noone) continue; // 跳过空槽
         var info = get_card_info(cid);
         if (info != false) {
-            add_to_deck(cid, info.shape, i);
+			if(ds_map_exists(global.banned_cards_online, info.id)&& ds_map_find_value(global.banned_cards_online, info.id) == true) continue;
+            add_to_deck(cid, info.shape, _k);
+			_k=_k+1;
         }
     }
 

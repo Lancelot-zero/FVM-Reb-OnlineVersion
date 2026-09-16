@@ -463,7 +463,8 @@ private:
                 const vector<const char*>* pset = nullptr;
                 switch (func_id) {
                     case 0:                    // VM_BanCard → 卡片ID
-                    case 6:  pset = &VALID_CARD_IDS; break;   // VM_SpawnPlant
+                    case 6:                    // VM_SpawnPlant
+                    case 90: pset = &VALID_CARD_IDS; break;   // VM_CannelBanCard
                     case 7:                     // VM_SpawnEnemy
                     case 8:  pset = &VALID_ENEMY_IDS; break;  // VM_SpawnBoss
                     case 10: pset = &VALID_OBJECT_NAMES; break; // VM_SpawnObject

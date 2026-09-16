@@ -168,11 +168,9 @@ function network_broadcast_enemy_steal(col, row, net_id) {
 /// @param {real} shape        形态
 /// @description 用网络同步的星级/技能/形态重新初始化植物属性，覆盖本地存档 
 /// !!!!!!!!!!!!!该方案可废弃!!!!!!!!!!!!!  已废弃
-function network_apply_plant_level(_plant) {
-	exit;
-	if(_plant.object_index == obj_player_character){
-		exit;
-	}
+function network_apply_plant_level(_plant,use=false) {
+	if(use==false)exit;
+	if(_plant.object_index == obj_player_character){exit;}
     // 1. 清理本地存档创建的星标
     if (variable_instance_exists(_plant, "banding_star_obj")) {
         if (instance_exists(_plant.banding_star_obj)) {

@@ -6,6 +6,7 @@ place_preview = spr_small_fire
 card_id = ""
 cost = 50
 current_cost = 0
+vm_current_cost = -1 // 修改当前的卡片的价格
 night = false
 cooldown_timer = 30000
 description = "小火炉:生产火苗"

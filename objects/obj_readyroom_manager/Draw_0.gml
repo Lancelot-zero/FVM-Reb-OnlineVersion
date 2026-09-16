@@ -51,6 +51,10 @@ for(var i = 0 ; i < slot_rows ; i++){
 					break
 				}
 			}
+			if( ds_map_find_value(global.banned_cards_online,card_id)==true){
+				is_unlocked = false;
+			}
+			
             
             // 绘制卡片
             if (is_unlocked) {

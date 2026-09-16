@@ -31,6 +31,9 @@ if card_id != "magic_chicken"{
 			}
 		}
 	}
+	if vm_current_cost!=-1{
+		current_cost = vm_current_cost
+	}
 }
 if global.debug{
 	cooldown_timer = cooldown

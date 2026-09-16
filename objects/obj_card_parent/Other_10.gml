@@ -16,8 +16,18 @@ if (plant_data != undefined) {
 		} else {
 		    current_level = card_save_data.level;
 		}
-		skill = card_save_data.skill
-		shape = card_save_data.shape
+		
+		if (global._VM_card_shape_cap >= 0 && card_save_data.shape > global._VM_card_shape_cap) {
+		    shape = global._VM_card_shape_cap;
+		} else {
+			shape = card_save_data.shape
+		}
+		
+		if (global._VM_card_skill_cap >= 0 && card_save_data.skill > global._VM_card_skill_cap) {
+		    skill = global._VM_card_skill_cap;
+		} else {
+			skill = card_save_data.skill
+		}
 	}
     
 	_net_card_equipped_attire_id=noone;

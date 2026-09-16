@@ -100,54 +100,73 @@ static const std::vector<const char*> BLOCK_NAMES = {
 
 // 敌人 ID（VM_SpawnEnemy / VM_SpawnBoss）
 static const std::vector<const char*> VALID_ENEMY_IDS = {
-    "normal_mouse","football_fan_mouse","iron_pan_mouse","skateboard_mouse",
-    "landlady_mouse","zombie_with_flower_pot","machine_mouse","ninja_mouse",
-    "minion_mouse","kangaroo","repairman_mouse","diver_mouse","paper_boat_mouse",
-    "duck_mouse","tropical_fish_mouse","lambo_mouse","butterfly_mouse",
-    "taro_toho_mouse","water_taro_toho_mouse","assault_mouse","frog_prince_mouse",
-    "roller_skating_mouse","giant_mouse","mario_mouse","arno","temple_pharaoh",
-    "engineering_vehicle_mouse","garbage_track_mouse","mole","glider_mouse",
-    "ice_residue","bat_mouse","rumble","abyss_pharaoh","cucumber_paper_boat_mouse",
-    "apple_duck_mouse","egg_tropical_fish_mouse","orange_prince_mouse",
-    "submarine_mouse","rowboat_mouse","water_penguin_mouse","pink_paul",
-    "cucumber_normal_mouse","apple_football_fan_mouse","egg_iron_pan_mouse",
-    "tangerine_skateboard_mouse","shy_landlady_mouse","zombie_with_wallnut",
-    "caribbean_mouse","penguin_mouse","arson_mouse","non_mainstream_mouse",
-    "flute_mouse","panda_mouse","can_mouse","blonde_mary","pete",
-    "dragon_boat_mouse","flagship_mouse","thug_submarine_mouse",
-    "kof_submarine_mouse","soar_mouse","jet_mouse","dentist_mouse",
-    "sawblade_mouse","warrior_mouse","naruto_mouse","hazelnut_cannon_mouse",
-    "landmine_vehicle_mouse","waste_flying_mouse","airbrone_explosive_mouse",
-    "priest_mouse","pope_mouse","wrestler_mouse","special_armour_mouse",
-    "magician_mouse","ghost_mouse","flight_barrier_mouse","hells_messenger",
-    "needle_baron","fog_julie","lieutenant_buzz","paratrooper_mouse",
-    "irritable_jack","hot_vajra","machine_normal_mouse","machine_football_fan_mouse",
-    "machine_iron_pan_mouse","machine_skateboard_mouse","machine_flag_mouse",
-    "mirror_mouse","trumpeter_mouse","huang_xiaoming","angelababy",
-    "mouse_train_1","soldier_mouse","machine_bomb_mouse","aircraft_carrier",
-    "kamikaze_glider_mouse","captain_america_mouse","iron_man_mouse",
-    "mouse_train_2","charge_spring_mouse","snail_mouse","machine_beehive_mouse",
-    "machine_bee","spider_man_mouse","hulk_mouse","mouse_train_3",
+    "abyss_pharaoh","airbrone_explosive_mouse","aircraft_carrier",
+    "angelababy","apple_duck_mouse","apple_football_fan_mouse","arno",
+    "arson_mouse","assault_mouse","bat_mouse","blonde_mary",
+    "butterfly_mouse","can_mouse","captain_america_mouse",
+    "caribbean_mouse","charge_spring_mouse","clownfish_mouse",
+    "conch_mouse","cucumber_normal_mouse","cucumber_paper_boat_mouse",
+    "dentist_mouse","diver_mouse","dragon_boat_mouse","duck_mouse",
+    "eel_mouse","egg_iron_pan_mouse","egg_tropical_fish_mouse",
+    "electric_jellyfish","engineering_vehicle_mouse","flagship_mouse",
+    "flight_barrier_mouse","flute_mouse","fog_julie",
+    "football_fan_mouse","frog_prince_mouse","garbage_track_mouse",
+    "ghost_mouse","giant_mouse","glider_mouse","hazelnut_cannon_mouse",
+    "hells_messenger","hercules","hot_vajra","huang_xiaoming",
+    "hulk_mouse","ice_residue","iron_diver_mouse","iron_man_mouse",
+    "iron_pan_mouse","irritable_jack","jet_mouse",
+    "kamikaze_glider_mouse","kangaroo","kof_submarine_mouse",
+    "lambo_mouse","landlady_mouse","landmine_vehicle_mouse",
+    "lieutenant_buzz","lobster_knight","machine_bee",
+    "machine_beehive_mouse","machine_bomb_mouse","machine_flag_mouse",
+    "machine_football_fan_mouse","machine_iron_pan_mouse",
+    "machine_mouse","machine_normal_mouse","machine_shark_1",
+    "machine_shark_2","machine_skateboard_mouse","magician_mouse",
+    "mario_mouse","mermaid_mary","minion_mouse","mirror_mouse","mole",
+    "mouse_train_1","mouse_train_2","mouse_train_3","naruto_mouse",
+    "needle_baron","ninja_mouse","non_mainstream_mouse","normal_mouse",
+    "orange_prince_mouse","oyster_mouse","panda_mouse",
+    "paper_boat_mouse","paratrooper_mouse","penguin_mouse","pete",
+    "pink_paul","pope_mouse","priest_mouse","repairman_mouse",
+    "roller_skating_mouse","rowboat_mouse","rumble","sardine_mouse",
+    "sawblade_mouse","seahorse_mouse","shy_landlady_mouse",
+    "skateboard_mouse","snail_mouse","soar_mouse","soldier_mouse",
+    "special_armour_mouse","spider_man_mouse","submarine_mouse",
+    "swordfish_mouse","tangerine_skateboard_mouse","taro_toho_mouse",
+    "temple_pharaoh","thor","thug_submarine_mouse",
+    "tropical_fish_mouse","trumpeter_mouse","undersea_can_mouse",
+    "undersea_captain_mouse","undersea_diver_mouse",
+    "undersea_panda_mouse","undersea_penguin_mouse",
+    "undersea_repairman_mouse","undersea_submarine_1",
+    "undersea_submarine_2","war_god","warrior_mouse",
+    "waste_flying_mouse","water_penguin_mouse","water_taro_toho_mouse",
+    "windmill_fish_mouse","wrestler_mouse","zombie_with_flower_pot",
+    "zombie_with_wallnut"
 };
 
 // 卡片 ID（VM_SpawnPlant / VM_BanCard）
 static const std::vector<const char*> VALID_CARD_IDS = {
-    "xiao_long_bao","small_fire","toast_bread","flour_sack","double_long_bao",
-    "mouse_clip","coke_bomb","wooden_plate","ice_long_bao","goblet_lamp",
-    "coffee_cup","salad_pult","coffee_pot","chocolate_bread","water_tea_cup",
-    "ice_bucket_bomb","stinky_tofu_pult","cat_box","kettle_bomb",
-    "triple_wine_rack","brazier","large_fire","iron_fishbone","gatlin_long_bao",
-    "rotating_coffee_pot","takoyaki","wooden_cork","coffee_grounds",
-    "wine_bottle_bomb","double_water_pipe","melon_shield","steel_wool","sausage",
-    "fishbone","hamburger","oil_lamp","ventilation_fan","egg_boiler_pult",
-    "ice_egg_boiler_pult","chocolate_pult","chocolate_cannon","firework_dragon",
-    "double_ice_long_bao","cat_chest","cherry_pudding","skewer_bomb",
-    "gatlin_ice_long_bao","aquarius_elve","tar_sprayer","triple_long_bao",
-    "triple_ice_long_bao","hotdog_cannon","oden_pot","whisky_bomb",
-    "cotton_candy","durian","dragon_fruit","pineapple_explosive_bread",
-    "ice_cream","lightning_baguette","bull_firework","magic_chicken",
-    "xinjiang_fried_noodles","king_long_bao","king_triple_long_bao",
-    "chili_powder","tang_hu_lu","beef_hotpot","spicy_pot","pan_fried_bun",
+    "aquarius_elve","beef_hotpot","brazier","bull_firework","cat_box",
+    "cat_chest","cherry_pudding","chili_powder","chocolate_bread",
+    "chocolate_cannon","chocolate_pult","coal_starfish","coffee_cup",
+    "coffee_grounds","coffee_pot","coke_bomb","cotton_candy",
+    "curry_lobster_cannon","delicacy_firework","double_ice_long_bao",
+    "double_long_bao","double_water_pipe","dragon_fruit","durian",
+    "egg_boiler_pult","firework_dragon","fishbone","flour_sack",
+    "fruit_tart","gatlin_ice_long_bao","gatlin_long_bao","goblet_lamp",
+    "hamburger","horseshoe_crab_bread","hotdog_cannon",
+    "ice_bucket_bomb","ice_cream","ice_egg_boiler_pult","ice_long_bao",
+    "iron_fishbone","kettle_bomb","king_long_bao",
+    "king_triple_long_bao","large_fire","lightning_baguette",
+    "magic_chicken","melon_shield","mouse_clip","oden_pot","oil_lamp",
+    "pan_fried_bun","pineapple_explosive_bread","pizza_oven",
+    "rabbit_lantern","rotating_coffee_pot","salad_pult","sausage",
+    "skewer_bomb","small_fire","soda_bubble","spicy_pot","steel_wool",
+    "stinky_tofu_pult","sugar_ball_pult","takoyaki","tang_hu_lu",
+    "tar_sprayer","toast_bread","triple_ice_long_bao","triple_long_bao",
+    "triple_wine_rack","ventilation_fan","water_tea_cup","whisky_bomb",
+    "wine_bottle_bomb","wooden_cork","wooden_plate","xiao_long_bao",
+    "xinjiang_fried_noodles"
 };
 
 // 物件名（VM_SpawnObject / VM_ClearMapObjects）
@@ -272,6 +291,13 @@ static std::vector<FuncDef> FUNC_DEFS = {
     {"VM_SetNoticeStyle",           4,  {PT_FLOAT, PT_INT, PT_INT, PT_INT}},           // 86
     {"VM_conveyor_belt_able",       1,  {PT_INT}},                                      // 87
     {"VM_Slot_add",                 1,  {PT_STRING}},                                   // 88
+    {"VM_BanAllCard",               0},                                                 // 89
+    {"VM_CannelBanCard",            1,  {PT_STRING}},                                   // 90
+    {"VM_BanWeapon",                0},                                                 // 91
+    {"VM_BanSuperWeapon",           0},                                                 // 92
+    {"VM_BanShield",                0},                                                 // 93
+    {"VM_SetCardShapeCap",          1},                                                 // 94
+    {"VM_SetCardSkillCap",          1},                                                 // 95
 };
 
 // ============================================================

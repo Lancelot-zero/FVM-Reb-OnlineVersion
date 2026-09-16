@@ -48,7 +48,7 @@ if not is_placed{
 			
 		}
 		var gem_index = 0
-		if global.save_data.equipped_items.main_weapon.id != ""{
+		if global.save_data.equipped_items.main_weapon.id != ""&&global._VM_ban_weapon==false{
 			var main_info = get_weapon_info(global.save_data.equipped_items.main_weapon.id)
 			var main_weapon_inst = instance_create_depth(x-10,y-100,depth-1,main_info.obj)
 			main_weapon_inst.parent_player = id
@@ -66,7 +66,7 @@ if not is_placed{
 				}
 			}
 		}
-		if global.save_data.equipped_items.secondary_weapon.id != ""{
+		if global.save_data.equipped_items.secondary_weapon.id != ""&&global._VM_ban_shield==false{
 			var s_inst = instance_create_depth(x,y,depth,obj_player_shield)
 			s_inst.parent_player = id
 			s_inst.grid_row = grid_row
@@ -79,7 +79,7 @@ if not is_placed{
 				max_hp += get_gem_info("health_gem").hp_increase * (get_gem_level("health_gem")+1)
 			}
 		}
-		if global.save_data.equipped_items.super_weapon.id != ""{
+		if global.save_data.equipped_items.super_weapon.id != ""&&global._VM_ban_super_weapon==false{
 			var main_info = get_weapon_info(global.save_data.equipped_items.super_weapon.id)
 			var main_weapon_inst = instance_create_depth(x-10,y-100,depth-1,main_info.obj)
 			main_weapon_inst.parent_player = id

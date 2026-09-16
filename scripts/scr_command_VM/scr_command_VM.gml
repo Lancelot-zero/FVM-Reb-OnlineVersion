@@ -62,11 +62,47 @@ function VM_BanCard(card_id_addr) {
     var card_id = vm_read_mem(global.__vm, card_id_addr);
     global.banned_cards_online[? card_id] = true;
 }
+
 function VM_BanGem(gem_name_addr) {
     var gem_name = vm_read_mem(global.__vm, gem_name_addr);
     if (array_get_index(global.banned_gems_online, gem_name) == -1) {
         array_push(global.banned_gems_online, gem_name);
     }
+}
+
+/// @function VM_BanAllCard()
+/// @desc 禁用全部卡片（遍历全游戏卡片注册表）
+function VM_BanAllCard() {
+    if (!variable_global_exists("plant_registry")) return;
+    var _keys = ds_map_keys_to_array(global.plant_registry);
+    for (var _i = 0; _i < array_length(_keys); _i++) {
+        global.banned_cards_online[? _keys[_i]] = true;
+    }
+}
+
+/// @function VM_CannelBanCard(card_id)
+/// @desc 解除指定卡片的禁用
+function VM_CannelBanCard(card_id_addr) {
+    var card_id = vm_read_mem(global.__vm, card_id_addr);
+    ds_map_delete(global.banned_cards_online, card_id);
+}
+
+/// @function VM_BanWeapon()
+/// @desc 禁止角色武器使用
+function VM_BanWeapon() {
+    global._VM_ban_weapon = true;
+}
+
+/// @function VM_BanSuperWeapon()
+/// @desc 禁止角色超级武器使用
+function VM_BanSuperWeapon() {
+    global._VM_ban_super_weapon = true;
+}
+
+/// @function VM_BanShield()
+/// @desc 禁止角色盾牌使用
+function VM_BanShield() {
+    global._VM_ban_shield = true;
 }
 /// @function VM_SetRowFeature(row, feature)
 /// @param row     行，-1=所有行
@@ -88,6 +124,16 @@ function VM_SetEventEnabled(val_addr) {
 }
 function VM_SetCardLevelCap(level_addr) {
     global._VM_card_level_cap = vm_read_mem(global.__vm, level_addr);
+}
+/// @function VM_SetCardShapeCap(shape)
+/// @desc 设置最大转职（shape）等级限制，-1=不限制
+function VM_SetCardShapeCap(shape_addr) {
+    global._VM_card_shape_cap = vm_read_mem(global.__vm, shape_addr);
+}
+/// @function VM_SetCardSkillCap(skill)
+/// @desc 设置最大技能等级限制，-1=不限制
+function VM_SetCardSkillCap(skill_addr) {
+    global._VM_card_skill_cap = vm_read_mem(global.__vm, skill_addr);
 }
 function VM_SetMaxSlots(n_addr) {
     global._VM_max_slots = vm_read_mem(global.__vm, n_addr);
@@ -1027,7 +1073,7 @@ function VM_GetPlantAt(col_addr, row_addr, layer_addr) {
 				var _p = ds_list_find_value(_list, _i);
 				if (!instance_exists(_p)) continue;
 				if (_layer == "all" || _p.plant_type == _layer) {
-					var _vmid = _p._VM_id;
+					var _vmid = _p.id;
 					if (is_undefined(_vmid)) _vmid = real(_p);
 					return VM_ClientWrapId(_vmid);
 				}
@@ -1636,7 +1682,10 @@ function VM_SetCardSlotProp(name_addr, prop_addr, value_addr) {
 	} else if (is_real(name)) {
 		with (obj_card_slot) { if (slot_index == name) variable_instance_set(id, prop, value); }
 	} else {
-		with (obj_card_slot) { if (card_id == name) variable_instance_set(id, prop, value); }
+		with (obj_card_slot) { 
+			if (card_id == name) 
+				variable_instance_set(id, prop, value);
+		}
 	}
 }
 
@@ -1711,6 +1760,14 @@ function VM_GetProp(inst_id_addr, prop_addr) {
         inst_id = _real;
     }
     if (!instance_exists(inst_id)) return undefined;
+    // 特殊属性：对象名（带 obj_ 前缀）
+    if (prop == "object_name") {
+        return object_get_name(inst_id.object_index);
+    }
+    // 特殊属性：没有 mouse_id 变量的实例（如植物卡片），用对象名去掉 obj_ 前缀兜底
+    if (prop == "mouse_id" && !variable_instance_exists(inst_id, prop)) {
+        return string_delete(object_get_name(inst_id.object_index), 1, 4);
+    }
     return variable_instance_get(inst_id, prop);
 }
 
@@ -1745,6 +1802,9 @@ function VM_SetProp(inst_id_addr, prop_addr, value_addr) {
 			var _list = ds_grid_get(global.grid_plants, instance_id.grid_col, instance_id.grid_row);
 			ds_list_add(_list,instance_id)
 		}
+	}
+	if(prop=="shape" || prop=="skill"|| prop=="current_level" ){
+		network_apply_plant_level(_plant,true)
 	}
     if (global.network.mode == "server") {
         var _nid = ds_map_exists(global.network.map_instance_id_net_id, inst_id) ? global.network.map_instance_id_net_id[? inst_id] : -1;
@@ -2869,7 +2929,7 @@ function VM_conveyor_belt_able(enable_addr) {
 
 /// @function VM_Slot_add(card_id)
 /// @desc 向传送带添加一张卡片：按 card_id 创建卡槽实例并加入传送带队列
-/// @param card_id 卡片 ID（字符串），玩家拥有的任意卡片
+/// @param card_id 卡片 ID（字符串），游戏内注册的任意卡片，与玩家是否解锁无关
 /// @return 卡槽实例 ID，失败返回 -1
 function VM_Slot_add(card_id_addr) {
 	var card_id = vm_read_mem(global.__vm, card_id_addr);
@@ -2900,6 +2960,8 @@ function VM_Slot_add(card_id_addr) {
 global.banned_cards_online = ds_map_create();
 global.banned_gems_online = [];
 global._VM_card_level_cap = -1;
+global._VM_card_shape_cap = -1;
+global._VM_card_skill_cap = -1;
 global._VM_max_slots = -1;
 global._VM_strings = [];
 
@@ -3082,6 +3144,9 @@ global._VM_notice_color_g	 = -1;
 global._VM_notice_color_b	 = -1;
 global._VM_conveyor_belt	 = false;
 global._VM_conveyor_belt_arr = [];
+global._VM_ban_weapon        = false;
+global._VM_ban_super_weapon  = false;
+global._VM_ban_shield        = false;
 
 global.__vm = VM_Create();
 global.__vm.rng_state = 0x9E3779B9;   // VM随机种子：服务器生成并随bin同步，客户端收到后覆盖
@@ -3174,6 +3239,13 @@ VM_RegisterFunction(global.__vm, VM_ArrayClearAll);  // 85
 VM_RegisterFunction(global.__vm, VM_SetNoticeStyle);  // 86
 VM_RegisterFunction(global.__vm, VM_conveyor_belt_able); // 87
 VM_RegisterFunction(global.__vm, VM_Slot_add);           // 88
+VM_RegisterFunction(global.__vm, VM_BanAllCard);         // 89
+VM_RegisterFunction(global.__vm, VM_CannelBanCard);      // 90
+VM_RegisterFunction(global.__vm, VM_BanWeapon);          // 91
+VM_RegisterFunction(global.__vm, VM_BanSuperWeapon);     // 92
+VM_RegisterFunction(global.__vm, VM_BanShield);          // 93
+VM_RegisterFunction(global.__vm, VM_SetCardShapeCap);    // 94
+VM_RegisterFunction(global.__vm, VM_SetCardSkillCap);    // 95
 ds_map_add(global._VM_remote_funcs, "VM_SwapPlants", VM_SwapPlants);
 ds_map_add(global._VM_remote_funcs, "VM_SwapPlantRects", VM_SwapPlantRects);
 ds_map_add(global._VM_remote_funcs, "VM_CompactColumn", VM_CompactColumn);
@@ -3192,6 +3264,8 @@ function VM_InitRoomEntry(buf) {
     ds_map_clear(global.banned_cards_online);
     global.banned_gems_online = [];
     global._VM_card_level_cap = -1;
+    global._VM_card_shape_cap = -1;
+    global._VM_card_skill_cap = -1;
     global._VM_max_slots = -1;
     global._VM_ROOM_READY_ENTRY = undefined;
     global._VM_room_ready_done   = false;
@@ -3229,6 +3303,9 @@ function VM_InitRoomEntry(buf) {
 	global._VM_notice_color_g	 = -1;
 	global._VM_notice_color_b	 = -1;
 	global._VM_conveyor_belt	 = false;
+	global._VM_ban_weapon        = false;
+	global._VM_ban_super_weapon  = false;
+	global._VM_ban_shield        = false;
 
     global._sync_vm_bin_buf = undefined;
     global._VM_strings = [];
