@@ -1771,6 +1771,21 @@ function VM_GetProp(inst_id_addr, prop_addr) {
     return variable_instance_get(inst_id, prop);
 }
 
+/// @function VM_GetKilledProp(prop)
+/// @return 当前销毁事件对象的属性值（仅销毁类 hook 执行期间有效）
+function VM_GetKilledProp(prop_addr) {
+    var _snap = global._VM_cur_dead_snap;
+    if (!is_struct(_snap)) return undefined;
+    var prop = vm_read_mem(global.__vm, prop_addr);
+    // 特殊属性：对象名（带 obj_ 前缀）
+    if (prop == "object_name") return _snap[$ "_object_name"];
+    var _v = _snap[$ prop];
+    if (!is_undefined(_v)) return _v;
+    // 特殊属性：没有 mouse_id 变量或值为空串的实例（如植物卡片、normal_mouse），用对象名去掉 obj_ 前缀兜底
+    if (prop == "mouse_id" && (is_undefined(_v) || _v == "")) return string_delete(_snap[$ "_object_name"], 1, 4);
+    return undefined;
+}
+
 /// @function VM_SetProp(inst_id, prop, value)
 function VM_SetProp(inst_id_addr, prop_addr, value_addr) {
     var inst_id = vm_read_mem(global.__vm, inst_id_addr);
@@ -3006,12 +3021,42 @@ global._VM_debug_mode = false;
 global._VM_debug_block = "";    // 非空时只打印指定块的调试日志
 global._VM_notify_call = false;  // VM_HandleNotify "call" 分发期间为 true，参数按值传入
 global._VM_loaded_sprite_indices = [];
-global._VM_hook_queue = [];       // 待执行 hook 队列，每个元素 {buf, id}
+global._VM_hook_queue = [];       // 待执行 hook 队列，每个元素 {buf, key, id, snap}
 global._VM_sprite_cache      = ds_map_create();  // VM 永久贴图 name→id
 global._VM_sprite_temp_cache = ds_map_create();  // VM 临时贴图 name→id，重载 bin 时清理
 
+/// @function VM_BuildDeadSnap(inst)
+/// @description 实例销毁瞬间做全量标量快照，供销毁类 hook 通过 VM_GetKilledProp 读取属性
+function VM_BuildDeadSnap(_inst) {
+    if (!instance_exists(_inst)) return undefined;
+    var _snap = {};
+    var _names = variable_instance_get_names(_inst);
+    for (var _i = 0; _i < array_length(_names); _i++) {
+        var _n = _names[_i];
+        var _v = variable_instance_get(_inst, _n);
+        if (is_real(_v) || is_string(_v) || is_bool(_v)) {
+            _snap[$ _n] = _v;
+        } else if (is_array(_v)) {
+            _snap[$ _n] = variable_clone(_v, true);
+        }
+    }
+    // 内置变量不会被 variable_instance_get_names 返回，需显式补记
+    var _builtins = ["x", "y", "xstart", "ystart", "depth", "image_index", "image_speed", "sprite_index", "object_index", "direction", "speed"];
+    for (var _b = 0; _b < array_length(_builtins); _b++) {
+        _snap[$ _builtins[_b]] = variable_instance_get(_inst, _builtins[_b]);
+    }
+    _snap[$ "_object_name"] = object_get_name(_inst.object_index);
+    return _snap;
+}
+
 function VM_QueueHook(buf, key, id) {
-    if (buffer_exists(buf)) array_push(global._VM_hook_queue, {buf: buf, key: key, id: id});
+    if (!buffer_exists(buf)) return;
+    var _snap = undefined;
+    if (key == "card_del" || key == "enemy_kill") {
+        _snap = VM_BuildDeadSnap(id);
+        if (_snap != undefined) ds_map_add(global._VM_dead_snaps, id, _snap);
+    }
+    array_push(global._VM_hook_queue, {buf: buf, key: key, id: id, snap: _snap});
 }
 
 /**
@@ -3036,9 +3081,12 @@ function VM_FlushHooks() {
                 case "enemy_kill":      _hook_name = "_VM_ENEMY_KILLED";      break;
                 case "platform_idle":   _hook_name = "_VM_PLATFORM_IDLE_END"; break;
             }
+            global._VM_cur_dead_snap = _e.snap;
             VM_Execute(global.__vm, _e.buf, _hook_name);
+            global._VM_cur_dead_snap = undefined;
         }
     }
+    ds_map_clear(global._VM_dead_snaps);   // 销毁逻辑处理完，释放快照
 }
 
 /// @function VM_HandleNotify(json)
@@ -3136,6 +3184,8 @@ global._VM_last_boss_new_state = -1;
 global._VM_create_counter = 100000;
 global._VM_id_to_real      = ds_map_create();  // VM_id → 真实 instance id
 global._VM_real_to_vm_id   = ds_map_create();  // 真实 instance id → VM_id (客户端反向)
+global._VM_dead_snaps      = ds_map_create();  // 销毁实例属性快照 real id → struct，flush 后清空
+global._VM_cur_dead_snap   = undefined;        // 当前 flush 中销毁事件的快照，VM_GetKilledProp 读取
 global._VM_spawn_cats = true;
 global._VM_remote_funcs = ds_map_create();
 global._VM_notice_scale		 = -1;
@@ -3246,6 +3296,7 @@ VM_RegisterFunction(global.__vm, VM_BanSuperWeapon);     // 92
 VM_RegisterFunction(global.__vm, VM_BanShield);          // 93
 VM_RegisterFunction(global.__vm, VM_SetCardShapeCap);    // 94
 VM_RegisterFunction(global.__vm, VM_SetCardSkillCap);    // 95
+VM_RegisterFunction(global.__vm, VM_GetKilledProp);      // 96
 ds_map_add(global._VM_remote_funcs, "VM_SwapPlants", VM_SwapPlants);
 ds_map_add(global._VM_remote_funcs, "VM_SwapPlantRects", VM_SwapPlantRects);
 ds_map_add(global._VM_remote_funcs, "VM_CompactColumn", VM_CompactColumn);
@@ -3322,6 +3373,8 @@ function VM_InitRoomEntry(buf) {
     ds_map_clear(global._VM_sprite_temp_cache);
     global._VM_loaded_sprite_indices = [];
     global._VM_hook_queue = [];
+    ds_map_clear(global._VM_dead_snaps);
+    global._VM_cur_dead_snap = undefined;
     global._VM_battle_start_done = false;
     global._VM_last_boss          = -1;
     global._VM_last_created_enemy = -1;

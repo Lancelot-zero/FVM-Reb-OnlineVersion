@@ -298,6 +298,7 @@ static std::vector<FuncDef> FUNC_DEFS = {
     {"VM_BanShield",                0},                                                 // 93
     {"VM_SetCardShapeCap",          1},                                                 // 94
     {"VM_SetCardSkillCap",          1},                                                 // 95
+    {"VM_GetKilledProp",            1,  {PT_STRING},                        PT_ANY},      // 96 — 当前销毁事件对象属性
 };
 
 // ============================================================

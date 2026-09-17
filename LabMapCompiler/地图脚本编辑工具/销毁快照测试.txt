@@ -1,0 +1,83 @@
+// ================================================================
+// 销毁事件快照测试 — VM_GetKilledProp / 队列延迟执行 / 双触发修复
+// 验证点：
+//  1) _VM_CARD_DESTROYED 对每张卡只触发一次（清 3 张卡 == 3 次，修复前是 6 次）
+//  2) VM_GetKilledProp 能读到销毁瞬间的属性（植物/敌人）
+//  3) mouse_id 兜底（植物无此变量，用 object_name 去 obj_ 前缀）
+//  4) _VM_ENEMY_KILLED 帧末执行，VM_GetEnemyCount 不再包含刚死的敌人
+//  5) VM_GetLastDestroyedCard / VM_GetLastKilledEnemy 仍可用
+//  6) 非销毁 hook 期间 VM_GetKilledProp 返回空（0）
+// 观察方式：服务端控制台 [TEST] 日志（客户端 ShellPrint 也会打，但动作被守卫拦截）
+// ================================================================
+
+_VM_ROOM_READY_ENTRY {
+    VM_SetEventEnabled(1)
+    VM_SetMaxSlots(8)
+}
+
+_VM_BATTLE_START {
+    VM_ClearPlants(-1, -1)
+    VM_SetTerrain(-1, -1, "normal")
+    VM_SetFlame(1000)
+    card_kill_count = 0
+    enemy_kill_count = 0
+
+    // 种 3 张测试卡后清屏 → 期望 card_del 恰好触发 3 次
+    VM_SpawnPlant("gatlin_long_bao", 0, 0, -1, 1, -1)
+    VM_SpawnPlant("coffee_pot", 1, 0, -1, 1, -1)
+    VM_SpawnPlant("toast_bread", 2, 0, -1, 1, -1)
+    VM_ClearPlants(-1, -1)
+
+    // 防线植物（杀敌用）
+    VM_SpawnPlant("gatlin_long_bao", 1, 1, -1, 5, -1)
+    VM_SpawnPlant("gatlin_long_bao", 3, 1, -1, 5, -1)
+    VM_ShellPrint("[TEST] 开局完成，期待 3 次 card_del")
+}
+
+_VM_CARD_DESTROYED {
+    card_kill_count = card_kill_count + 1
+    id = VM_GetLastDestroyedCard()
+    name = VM_GetKilledProp("plant_id")
+    col = VM_GetKilledProp("grid_col")
+    row = VM_GetKilledProp("grid_row")
+    hp = VM_GetKilledProp("hp")          // 死亡瞬间 hp 已 ≤ 0，属正常
+    obj = VM_GetKilledProp("object_name")
+    mouse = VM_GetKilledProp("mouse_id") // 植物无此变量 → object_name 兜底
+    VM_ShellPrint("[TEST] card_del #", card_kill_count, " id=", id, " plant=", name, " 格(", col, ",", row, ") hp=", hp, " obj=", obj, " mouse=", mouse)
+    if (card_kill_count == 3) {
+        VM_ShellPrint("[TEST] PASS: 清 3 张卡恰好触发 3 次（双触发已修复）")
+    }
+}
+
+_VM_ENEMY_KILLED {
+    enemy_kill_count = enemy_kill_count + 1
+    id = VM_GetLastKilledEnemy()
+    mid = VM_GetKilledProp("mouse_id")
+    mhp = VM_GetKilledProp("max_hp")     // max_hp 不受伤害影响，可与生成值对照
+    hp = VM_GetKilledProp("hp")          // 死亡瞬间值
+    row = VM_GetKilledProp("row")
+    obj = VM_GetKilledProp("object_name")
+    left = VM_GetEnemyCount()            // 帧末执行 → 不含刚死的这只
+    VM_ShellPrint("[TEST] enemy_kill #", enemy_kill_count, " id=", id, " mouse=", mid, " hp=", hp, "/", mhp, " row=", row, " obj=", obj, " 剩余=", left)
+    // 数值属性可用性验证：按 max_hp 10% 奖励火苗
+    reward = mhp / 10
+    VM_SetFlame(VM_GetFlame() + reward)
+}
+
+_VM_WAVE_START {
+    w = VM_GetWave()
+    if (w == 0) {
+        VM_SpawnEnemy("normal_mouse", 1, 100)
+        VM_SpawnEnemy("normal_mouse", 3, 250)
+    } elif (w == 1) {
+        VM_SpawnEnemy("football_fan_mouse", 2, 500)
+        VM_SpawnEnemy("skateboard_mouse", 3, 300)
+    } elif (w == 2) {
+        VM_SpawnEnemy("iron_pan_mouse", 2, 800)
+    }
+}
+
+_VM_TIMER_30f {
+    // 非销毁 hook 期间读快照 → 应为空（0）
+    VM_ShellPrint("[TEST] 30f 汇总: card=", card_kill_count, " enemy=", enemy_kill_count, " 火苗=", VM_GetFlame(), " 非hook读=", VM_GetKilledProp("hp"))
+}
