@@ -28,16 +28,16 @@ else{
 depth = calculate_plant_depth(grid_col,grid_row,"lilypad")
 
 var _changed = [];
-	with obj_cloud{
+with obj_cloud{
 	if is_hole && col > 1 &&
 	((other.shape <= 1 && row == other.grid_row && abs(col - other.grid_col) <= 1)||
 	(other.shape >= 2 && abs(row - other.grid_row) <= 1 && abs(col - other.grid_col) <= 1)){
 		is_hole = false
 		image_alpha = 1
 		other.hole_count --
-						if global.network.mode == "server" && ds_map_exists(global.network.map_instance_id_net_id, id){
-							array_push(_changed, {op:"modify", net_id:global.network.map_instance_id_net_id[? id], props:{is_hole:false, image_alpha:1}})
-						}
+		if global.network.mode == "server" && ds_map_exists(global.network.map_instance_id_net_id, id){
+			array_push(_changed, {op:"modify", net_id:global.network.map_instance_id_net_id[? id], props:{is_hole:false, image_alpha:1}})
+		}
 	}
 }
 if global.network.mode == "server" && array_length(_changed) > 0{
