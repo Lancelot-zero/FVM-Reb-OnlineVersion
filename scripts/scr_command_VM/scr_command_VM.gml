@@ -1653,10 +1653,10 @@ function VM_ApplyPlantLevel(inst_id_addr) {
 
 	if (!instance_exists(_inst)&&_inst!=-1) return;
 	if (global.network.mode == "client" && global._VM_sync_exec && ds_map_exists(global.network.map_instance_id_net_id, _inst)) return;
-	network_apply_plant_level(_inst);
+	network_apply_plant_level(_inst,true);
 	if(_inst==-1){
 		with(obj_card_parent){
-			network_apply_plant_level(id);
+			network_apply_plant_level(id,true);
 		}
 	}
 	if (global.network.mode == "server") {
