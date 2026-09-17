@@ -1175,8 +1175,8 @@ function VM_SwapPlants(col1_addr, row1_addr, col2_addr, row2_addr) {
 		var _p = _plants1[i];
 		_p.x = _pos2.x;
 		_p.y = _pos2.y;
-		_p.col = _c2;
-		_p.row = _r2;
+		_p.grid_col = _c2;
+		_p.grid_row = _r2;
 		_p.depth = calculate_plant_depth(_c2, _r2, _p.plant_type);
 		update_plant_bindings(_p);
 		ds_list_add(_list2, _p);
@@ -1185,8 +1185,8 @@ function VM_SwapPlants(col1_addr, row1_addr, col2_addr, row2_addr) {
 		var _p = _plants2[i];
 		_p.x = _pos1.x;
 		_p.y = _pos1.y;
-		_p.col = _c1;
-		_p.row = _r1;
+		_p.grid_col = _c1;
+		_p.grid_row = _r1;
 		_p.depth = calculate_plant_depth(_c1, _r1, _p.plant_type);
 		update_plant_bindings(_p);
 		ds_list_add(_list1, _p);
@@ -1297,8 +1297,8 @@ function VM_SwapPlantRects(x1_addr, y1_addr, w_addr, h_addr, x2_addr, y2_addr) {
 					var _p = _src[i];
 					_p.x = _pos.x;
 					_p.y = _pos.y;
-					_p.col = _c2;
-					_p.row = _r2;
+					_p.grid_col = _c2;
+					_p.grid_row = _r2;
 					_p.depth = calculate_plant_depth(_c2, _r2, _p.plant_type);
 					update_plant_bindings(_p);
 					ds_list_add(_list, _p);
@@ -1315,8 +1315,8 @@ function VM_SwapPlantRects(x1_addr, y1_addr, w_addr, h_addr, x2_addr, y2_addr) {
 					var _p = _src[i];
 					_p.x = _pos.x;
 					_p.y = _pos.y;
-					_p.col = _c1;
-					_p.row = _r1;
+					_p.grid_col = _c1;
+					_p.grid_row = _r1;
 					_p.depth = calculate_plant_depth(_c1, _r1, _p.plant_type);
 					update_plant_bindings(_p);
 					ds_list_add(_list, _p);
@@ -1369,7 +1369,7 @@ function VM_CompactColumn(col_addr) {
 				var _p = _src[j];
 				_p.x = _pos.x;
 				_p.y = _pos.y;
-				_p.row = _row;
+				_p.grid_row = _row;
 				_p.depth = calculate_plant_depth(_c, _row, _p.plant_type);
 				update_plant_bindings(_p);
 				ds_list_add(_list, _p);
@@ -1420,7 +1420,7 @@ function VM_CompactRow(row_addr) {
 				var _p = _src[j];
 				_p.x = _pos.x;
 				_p.y = _pos.y;
-				_p.col = _col;
+				_p.grid_col = _col;
 				_p.depth = calculate_plant_depth(_col, _r, _p.plant_type);
 				update_plant_bindings(_p);
 				ds_list_add(_list, _p);
@@ -1469,7 +1469,7 @@ function VM_CompactColumnRev(col_addr) {
 				var _p = _src[j];
 				_p.x = _pos.x;
 				_p.y = _pos.y;
-				_p.row = _row;
+				_p.grid_row = _row;
 				_p.depth = calculate_plant_depth(_c, _row, _p.plant_type);
 				update_plant_bindings(_p);
 				ds_list_add(_list, _p);
@@ -1524,7 +1524,7 @@ function VM_CompactRowRev(row_addr) {
 				var _p = _src[j];
 				_p.x = _pos.x;
 				_p.y = _pos.y;
-				_p.col = _col;
+				_p.grid_col = _col;
 				_p.depth = calculate_plant_depth(_col, _r, _p.plant_type);
 				update_plant_bindings(_p);
 				ds_list_add(_list, _p);

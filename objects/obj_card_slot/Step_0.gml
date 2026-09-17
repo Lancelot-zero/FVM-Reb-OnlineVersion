@@ -151,11 +151,17 @@ if (is_selected) {
         // 检查是否在可种植区域
 		
         var card_shape = get_card_info_simple(card_id).shape
+		if(global._VM_card_shape_cap>=0&&global._VM_card_shape_cap<card_shape){
+			card_shape = global._VM_card_shape_cap
+		}
 		var card_data = deck_get_card_data(card_id,card_shape)
 		
 		if card_id == "magic_chicken"{
 			if global.prev_place_id != ""{
 				card_shape = get_card_info_simple(global.prev_place_id).shape
+				if(global._VM_card_shape_cap>=0&&global._VM_card_shape_cap<card_shape){
+					card_shape = global._VM_card_shape_cap
+				}
 				card_data = deck_get_card_data(global.prev_place_id,card_shape)
 			}
 		}

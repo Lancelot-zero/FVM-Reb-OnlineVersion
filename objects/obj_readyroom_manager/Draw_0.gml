@@ -52,7 +52,7 @@ for(var i = 0 ; i < slot_rows ; i++){
 				}
 			}
 			if( ds_map_find_value(global.banned_cards_online,card_id)==true){
-				is_unlocked = false;
+				is_selected = true;
 			}
 			
             
