@@ -3,6 +3,7 @@ global._evt_destroyed = [];
 global._evt_log_enabled = false;
 global._destroy_queue = ds_list_create()  
 global._tanghulu_bullets = ds_list_create();
+global._eat_scratch = [noone,noone,noone,noone];
 global._server_destroy_queue = []
 global._boss_spawn_queue = []
 global._boss_client_cleanup = []

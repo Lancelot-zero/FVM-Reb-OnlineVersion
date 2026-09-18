@@ -11,10 +11,9 @@ if (hp <= 0 && state != ENEMY_STATE.DEAD) {
 	target_plant = noone;
 }
 
-// 保持网格位置更新
-var zombie_grid = get_grid_position_from_world(x, y, true);
-grid_col = zombie_grid.col;
-grid_row = zombie_grid.row;
+// 保持网格位置更新（内联计算，避免每帧结构体分配触发GC）
+grid_col = floor((x - global.grid_offset_x) / global.grid_cell_size_x);
+grid_row = floor((y - global.grid_offset_y) / global.grid_cell_size_y);
 
 if ice_timer > 0{
 	ice_timer--
@@ -151,7 +150,8 @@ switch(state) {
         // 检测前方植物
         var plant_in_range = noone;
 		
-		var plant_order_list = [noone,noone,noone,noone]
+		var plant_order_list = global._eat_scratch;
+		plant_order_list[0] = noone; plant_order_list[1] = noone; plant_order_list[2] = noone; plant_order_list[3] = noone;
         
 		
 		/*
@@ -302,7 +302,8 @@ switch(state) {
         // 检测前方植物
         var plant_in_range = noone;
         
-		var plant_order_list = [noone,noone,noone,noone]
+		var plant_order_list = global._eat_scratch;
+		plant_order_list[0] = noone; plant_order_list[1] = noone; plant_order_list[2] = noone; plant_order_list[3] = noone;
 		/*
         // 使用碰撞检测查找攻击范围内的植物
         with (obj_card_parent) {
@@ -465,7 +466,7 @@ if (image_alpha <= 0 && state == ENEMY_STATE.DEAD) {
 
 // 更新僵尸的网格位置和深度
 
-var base_depth = -10 - (zombie_grid.row * 45) - (9 * 5);
+var base_depth = -10 - (grid_row * 45) - (9 * 5);
 depth = base_depth; // 僵尸比植物稍微靠后一点（在护罩外侧和咖啡豆之间）
 
 if x < global.grid_offset_x-150 && hp > 0 && not place_meeting(x,y,obj_cat) && array_get_index(block_mouse_id_list,mouse_id) == -1{
