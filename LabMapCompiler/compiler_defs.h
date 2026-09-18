@@ -303,6 +303,10 @@ static std::vector<FuncDef> FUNC_DEFS = {
     {"VM_IsDestroyed",              1,  {PT_INT},                           PT_INT},      // 98 — 判断实例ID是否已被销毁
     {"VM_LoadSound",                1,  {PT_STRING},                        PT_INT},      // 99 — 加载本地音频文件，返回音频ID
     {"VM_Floor",                    1,  {PT_ANY},                           PT_ANY},      // 100 — 向下取整，非数字返回 undefined
+    {"VM_Ceil",                     1,  {PT_ANY},                           PT_ANY},      // 101 — 向上取整，非数字返回 undefined
+    {"VM_SpawnBatMouse",            2,  {PT_INT, PT_INT},                   PT_INT},      // 102 — 在指定格子生成蝙蝠鼠
+    {"VM_GetTimeLimit",             0,  {},                                  PT_ANY},      // 103 — 获取关卡倒计时（帧），无倒计时返回 undefined
+    {"VM_SetTimeLimit",             1,  {PT_INT},                            PT_ANY},      // 104 — 设置关卡倒计时（帧），无倒计时返回 undefined
 };
 
 // ============================================================

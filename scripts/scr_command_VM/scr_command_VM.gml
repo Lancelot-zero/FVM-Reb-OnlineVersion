@@ -1786,6 +1786,63 @@ function VM_Floor(value_addr) {
 	return floor(_v);
 }
 
+/// @function VM_Ceil(value)
+/// @param value 数字
+/// @return 向上取整后的整数；输入不是数字返回 undefined
+function VM_Ceil(value_addr) {
+	var _v = vm_arg(value_addr);
+	if (!is_real(_v)) return undefined;
+	return ceil(_v);
+}
+
+/// @function VM_SpawnBatMouse(col, row)
+/// @param col 目标格列
+/// @param row 目标格行
+/// @return 蝙蝠鼠实例 ID
+function VM_SpawnBatMouse(col_addr, row_addr) {
+	var b_col = vm_read_mem(global.__vm, col_addr);
+	var b_row = vm_read_mem(global.__vm, row_addr);
+	var _VM_id = ++global._VM_create_counter;
+	if (global.network.mode == "client") return -_VM_id;
+	var target_pos = get_world_position_from_grid(b_col, b_row);
+	var inst = instance_create_depth(target_pos.x + 10, target_pos.y - room_height, -500, obj_bat_mouse_target);
+	inst.target_col = b_col;
+	inst.target_row = b_row;
+	var bat = instance_create_depth(target_pos.x + 10, target_pos.y - room_height, -500, obj_bat_mouse);
+	bat.target_col = b_col;
+	bat.target_row = b_row;
+	bat.banding_target_inst = inst;
+	bat._VM_id = _VM_id;
+	return real(bat.id);
+}
+
+/// @function VM_GetTimeLimit()
+/// @return 关卡倒计时剩余时间（帧）；没有倒计时返回 undefined
+function VM_GetTimeLimit() {
+    if (!instance_exists(obj_battle)) return undefined;
+    if (obj_battle.time_limit == -1) return undefined;
+    return real(obj_battle.time_limit);
+}
+
+/// @function VM_SetTimeLimit(frames)
+/// @param frames 新的倒计时时间（帧）
+/// @return 设置成功返回新值；没有倒计时返回 undefined
+function VM_SetTimeLimit(frames_addr) {
+    if (global.network.mode == "client" && global._VM_sync_exec) return undefined;
+    var _frames = vm_arg(frames_addr);
+    if (!is_real(_frames) || _frames < 0) return undefined;
+    if (!instance_exists(obj_battle)) return undefined;
+    if (obj_battle.time_limit == -1) return undefined;   // 关卡无倒计时，不能设置
+    obj_battle.time_limit = _frames;
+    if (global.network.mode == "server") {
+        var _msg = json_stringify({hook: "call", func: "VM_SetTimeLimit", args: [_frames]});
+        var _cl = global.network.connected_clients;
+        for (var _i = 0; _i < array_length(_cl); _i++)
+            send_message(_cl[_i], MSG_VM_NOTIFY, _msg);
+    }
+    return _frames;
+}
+
 /// @function VM_GetProp(inst_id, prop)
 /// @return 属性值
 function VM_GetProp(inst_id_addr, prop_addr) {
@@ -3354,6 +3411,10 @@ VM_RegisterFunction(global.__vm, VM_IsUndefined);        // 97
 VM_RegisterFunction(global.__vm, VM_IsDestroyed);        // 98
 VM_RegisterFunction(global.__vm, VM_LoadSound);          // 99
 VM_RegisterFunction(global.__vm, VM_Floor);              // 100
+VM_RegisterFunction(global.__vm, VM_Ceil);              // 101
+VM_RegisterFunction(global.__vm, VM_SpawnBatMouse);     // 102
+VM_RegisterFunction(global.__vm, VM_GetTimeLimit);      // 103
+VM_RegisterFunction(global.__vm, VM_SetTimeLimit);      // 104
 ds_map_add(global._VM_remote_funcs, "VM_SwapPlants", VM_SwapPlants);
 ds_map_add(global._VM_remote_funcs, "VM_SwapPlantRects", VM_SwapPlantRects);
 ds_map_add(global._VM_remote_funcs, "VM_CompactColumn", VM_CompactColumn);
@@ -3363,6 +3424,7 @@ ds_map_add(global._VM_remote_funcs, "VM_CompactRowRev", VM_CompactRowRev);
 ds_map_add(global._VM_remote_funcs, "VM_SetCardProp", VM_SetCardProp);
 ds_map_add(global._VM_remote_funcs, "VM_SetEnemyProp", VM_SetEnemyProp);
 ds_map_add(global._VM_remote_funcs, "VM_ApplyPlantLevel", VM_ApplyPlantLevel);
+ds_map_add(global._VM_remote_funcs, "VM_SetTimeLimit", VM_SetTimeLimit);
 global._sync_vm_bin_buf = undefined;
 
 
