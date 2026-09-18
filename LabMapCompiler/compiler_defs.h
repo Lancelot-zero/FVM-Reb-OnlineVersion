@@ -299,6 +299,10 @@ static std::vector<FuncDef> FUNC_DEFS = {
     {"VM_SetCardShapeCap",          1},                                                 // 94
     {"VM_SetCardSkillCap",          1},                                                 // 95
     {"VM_GetKilledProp",            1,  {PT_STRING},                        PT_ANY},      // 96 — 当前销毁事件对象属性
+    {"VM_IsUndefined",              1,  {PT_ANY},                           PT_INT},      // 97 — 判断值是否为 undefined
+    {"VM_IsDestroyed",              1,  {PT_INT},                           PT_INT},      // 98 — 判断实例ID是否已被销毁
+    {"VM_LoadSound",                1,  {PT_STRING},                        PT_INT},      // 99 — 加载本地音频文件，返回音频ID
+    {"VM_Floor",                    1,  {PT_ANY},                           PT_ANY},      // 100 — 向下取整，非数字返回 undefined
 };
 
 // ============================================================

@@ -251,8 +251,6 @@ if wave_data.boss_wave && level_stage != "boss" && global.save_data.unlocked_ite
 	var boss_2_inst = undefined;
 	var enemy_row_2 = undefined;
 	var enemy_pos_2 = undefined;
-	global._VM_last_created_enemy = boss_inst.id;
-	if (buffer_exists(global._VM_ENEMY_SPAWNED)) VM_QueueHook(global._VM_ENEMY_SPAWNED, "enemy", boss_inst.id);
 	boss_count ++
 	if is_real(global.level_file.version){
 		boss_inst.hp *= wave_data.boss_1_hp_modify
@@ -264,8 +262,6 @@ if wave_data.boss_wave && level_stage != "boss" && global.save_data.unlocked_ite
 			boss_2_inst.hp *= wave_data.boss_2_hp_modify
 			boss_2_inst.maxhp *= wave_data.boss_2_hp_modify
 			boss_count ++
-			global._VM_last_created_enemy = boss_2_inst.id;
-			if (buffer_exists(global._VM_ENEMY_SPAWNED)) VM_QueueHook(global._VM_ENEMY_SPAWNED, "enemy", boss_2_inst.id);
 		}
 	}
 	

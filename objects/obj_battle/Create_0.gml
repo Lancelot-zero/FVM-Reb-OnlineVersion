@@ -366,8 +366,6 @@ function enemy_subwave_summon(){
 					send_message(_socket, MSG_SPAWN_ENEMY, _net_id, grid_pos.x+30, grid_pos.y + 3, object_get_name(enemy_obj));
 				}
 			}
-			global._VM_last_created_enemy = new_enemy.id;
-			if (buffer_exists(global._VM_ENEMY_SPAWNED)) VM_QueueHook(global._VM_ENEMY_SPAWNED, "enemy", new_enemy.id);
             // 更新统计信息
             current_total_hp += global.enemy_map[? enemy_list[i].type].hp;
             

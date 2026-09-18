@@ -1742,11 +1742,48 @@ function VM_GetCardSlotCount() {
 }
 
 /// @function VM_PlaySound(name)
-/// @param name 内置音效名 (如 "snd_place1")
+/// @param name 内置音效名 (如 "snd_place1")，也支持 VM_LoadSound 返回的音频 ID
 function VM_PlaySound(name_addr) {
-	var _name = vm_read_mem(global.__vm, name_addr);
+	var _name = vm_arg(name_addr);
 	var _snd = asset_get_index(_name);
+	if (_snd == -1 && is_real(_name)) _snd = _name;   // 本地加载的音频 ID
 	if (_snd != -1) audio_play_sound(_snd, 0, 0);
+}
+
+/// @function VM_LoadSound(path)
+/// @param path 本地音频文件路径，只支持 wav（相对地图 json 所在目录，如 "xxx.wav"）
+/// @return 音频 ID，加载失败返回 -1
+function VM_LoadSound(path_addr) {
+	var _path = vm_arg(path_addr);
+	if (ds_map_exists(global._audio_cache, _path)) return global._audio_cache[? _path];
+	// 与读贴图相同：优先 _file_cache_json_path/../ 下查找，回退原始相对路径
+	var _paths = [];
+	if (variable_global_exists("_file_cache_json_path")) {
+		var _prefix = global._file_cache_json_path;
+		if (!string_ends_with(_prefix, "/") && !string_ends_with(_prefix, "\\")) _prefix += "/";
+		array_push(_paths, _prefix + "../" + _path);
+	}
+	array_push(_paths, _path);
+	for (var _i = 0; _i < array_length(_paths); _i++) {
+		if (file_exists(_paths[_i])) {
+			var _aud = audio_create_stream(_paths[_i]);
+			if (_aud != -1) {
+				ds_map_add(global._audio_cache, _path, _aud);
+				global._audio_reverse[? _aud] = _path;   // 注册名称，音量钩子按 sound 处理
+				return _aud;
+			}
+		}
+	}
+	return -1;
+}
+
+/// @function VM_Floor(value)
+/// @param value 数字
+/// @return 向下取整后的整数；输入不是数字返回 undefined
+function VM_Floor(value_addr) {
+	var _v = vm_arg(value_addr);
+	if (!is_real(_v)) return undefined;
+	return floor(_v);
 }
 
 /// @function VM_GetProp(inst_id, prop)
@@ -1784,6 +1821,24 @@ function VM_GetKilledProp(prop_addr) {
     // 特殊属性：没有 mouse_id 变量或值为空串的实例（如植物卡片、normal_mouse），用对象名去掉 obj_ 前缀兜底
     if (prop == "mouse_id" && (is_undefined(_v) || _v == "")) return string_delete(_snap[$ "_object_name"], 1, 4);
     return undefined;
+}
+
+/// @function VM_IsUndefined(value)
+/// @return 1=值为 undefined，0=不是
+function VM_IsUndefined(value_addr) {
+    return is_undefined(vm_arg(value_addr)) ? 1 : 0;
+}
+
+/// @function VM_IsDestroyed(inst_id)
+/// @return 1=实例已被销毁（不存在），0=实例仍存在
+function VM_IsDestroyed(id_addr) {
+    var _id = vm_arg(id_addr);
+    if (_id < 0) {
+        var _real = ds_map_find_value(global._VM_id_to_real, -_id);
+        if (is_undefined(_real)) return 1;
+        _id = _real;
+    }
+    return instance_exists(_id) ? 0 : 1;
 }
 
 /// @function VM_SetProp(inst_id, prop, value)
@@ -1986,8 +2041,6 @@ function VM_SpawnEnemy(type_addr, row_addr, hp_override_addr) {
         for (var _i = 0; _i < array_length(_list); _i++)
             send_message(_list[_i], MSG_MODIFY_PROP, _nid, _vm_json);
     }
-    global._VM_last_created_enemy = _enemy.id;
-    if (buffer_exists(global._VM_ENEMY_SPAWNED)) VM_QueueHook(global._VM_ENEMY_SPAWNED, "enemy", _enemy.id);
     return real(_enemy.id);
 }
 
@@ -3297,6 +3350,10 @@ VM_RegisterFunction(global.__vm, VM_BanShield);          // 93
 VM_RegisterFunction(global.__vm, VM_SetCardShapeCap);    // 94
 VM_RegisterFunction(global.__vm, VM_SetCardSkillCap);    // 95
 VM_RegisterFunction(global.__vm, VM_GetKilledProp);      // 96
+VM_RegisterFunction(global.__vm, VM_IsUndefined);        // 97
+VM_RegisterFunction(global.__vm, VM_IsDestroyed);        // 98
+VM_RegisterFunction(global.__vm, VM_LoadSound);          // 99
+VM_RegisterFunction(global.__vm, VM_Floor);              // 100
 ds_map_add(global._VM_remote_funcs, "VM_SwapPlants", VM_SwapPlants);
 ds_map_add(global._VM_remote_funcs, "VM_SwapPlantRects", VM_SwapPlantRects);
 ds_map_add(global._VM_remote_funcs, "VM_CompactColumn", VM_CompactColumn);

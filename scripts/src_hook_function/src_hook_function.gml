@@ -58,6 +58,10 @@ function instance_create_depth_define(_x, _y, _depth, _obj) {
 	if (_inst >= 0 && _obj == obj_platform) {
 		global._last_platform = _inst;
 	}
+	if (_inst >= 0 && object_is_ancestor(_obj, obj_enemy_parent)) {
+		global._VM_last_created_enemy = _inst;
+		if (buffer_exists(global._VM_ENEMY_SPAWNED)) VM_QueueHook(global._VM_ENEMY_SPAWNED, "enemy", _inst);
+	}
 	if (_inst >= 0 && _is_boss && global.network.mode == "server") {
 		add_net_id(_inst.id);
 		array_push(global._boss_spawn_queue, _inst);
@@ -85,6 +89,11 @@ function instance_destroy_define() {
 		if (global.network.mode == "server" && ds_map_exists(global.network.map_instance_id_net_id, _id)) {
 			var _net_id = global.network.map_instance_id_net_id[? _id];
 			array_push(global._server_destroy_queue, _net_id);
+		}
+		// VM hook: 敌人销毁时触发（快照在 origfunc 之前取）
+		if (instance_exists(_id) && object_is_ancestor(_id.object_index, obj_enemy_parent)) {
+			global._VM_last_killed_enemy = _id;
+			if (buffer_exists(global._VM_ENEMY_KILLED)) VM_QueueHook(global._VM_ENEMY_KILLED, "enemy_kill", _id);
 		}
 		switch (argument_count) {
 			case 0:  return instance_destroy_origfunc();
