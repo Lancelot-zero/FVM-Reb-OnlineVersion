@@ -79,6 +79,8 @@ if (variable_global_exists("shovel_order") && ds_exists(global.shovel_order, ds_
 if (variable_global_exists("eat_order") && ds_exists(global.eat_order, ds_type_list)) {
 	ds_list_destroy(global.eat_order);
 }
+global._takoyaki_buttet_number = 0 
+
 
 // 植物层级定义
 global.plant_layers = ds_map_create();

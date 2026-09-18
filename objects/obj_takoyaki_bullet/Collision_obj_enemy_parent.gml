@@ -11,7 +11,9 @@
 	
 		}
 
-			instance_create_depth(x,y,depth,obj_takoyaki_bullet_effect)
+		instance_create_depth(x,y,depth,obj_takoyaki_bullet_effect)
 		
+		global._takoyaki_buttet_number-=1
 		instance_destroy()
+		
 	}

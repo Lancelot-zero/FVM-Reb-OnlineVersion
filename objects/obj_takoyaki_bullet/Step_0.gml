@@ -65,6 +65,19 @@ var _find_right_cell = function(_range) {
 
 // 子弹追踪逻辑
 if (instance_exists(target_enemy) && target_enemy.hp > 0  && can_hit(target_type,target_enemy.target_type)) {
+	if(global._takoyaki_buttet_number>100){
+
+		with(target_enemy){
+			audio_play_sound(hit_sound,0,0)
+			damage_amount = other.damage
+			damage_type = other.damage_type
+			event_user(0)
+		}
+		instance_create_depth(x,y,depth,obj_takoyaki_bullet_effect)
+		global._takoyaki_buttet_number-=1
+		instance_destroy()
+		exit
+	}
 	// 目标存在且存活，继续追踪
 	var target_x = target_enemy.x;
 	var target_y = target_enemy.y-75;
@@ -104,10 +117,13 @@ if (instance_exists(target_enemy) && target_enemy.hp > 0  && can_hit(target_type
 		x += lengthdir_x(move_speed, dir);
 		y += lengthdir_y(move_speed, dir);
 	}
+	
 }
 
 image_angle =- timer * 6
 
 if x > 2200 or y > 1200 or x < -200 or y < -200{
+	
+	global._takoyaki_buttet_number-=1
 	instance_destroy()
 }
