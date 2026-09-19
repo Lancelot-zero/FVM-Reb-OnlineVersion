@@ -221,7 +221,7 @@ if (global._VM_prev_wave != current_wave) {
 
 }
 
-if battle_time >= (global.level_file.first_wave_delay * 60) && level_stage == "ready" {
+if global._VM_wave_auto && battle_time >= (global.level_file.first_wave_delay * 60) && level_stage == "ready" {
 
 	level_stage = "pre"
 	audio_play_sound(snd_mouse_wave_attack, 0, 0)
@@ -300,7 +300,7 @@ if wave_data.boss_wave && level_stage != "boss" && global.save_data.unlocked_ite
 		}
 	}
 }
-if wave_timer <= 0 && level_stage == "pre"{
+if wave_timer <= 0 && level_stage == "pre" && global._VM_wave_auto{
 	if(global.save_data.unlocked_items.elite_unlocked) || !global.save_data.unlocked_items.elite_unlocked && current_wave < global.level_file.elite_wave{
 		if current_wave < total_wave{
 			enemy_subwave_summon()
@@ -316,7 +316,7 @@ if wave_timer <= 0 && level_stage == "pre"{
 		}
 	}
 }
-if wave_timer <= 0 && level_stage == "boss"{
+if wave_timer <= 0 && level_stage == "boss" && global._VM_wave_auto{
 	enemy_subwave_summon()
 	if current_subwave < current_total_subwaves-1{
 		current_subwave+=1

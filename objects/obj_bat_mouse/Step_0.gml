@@ -33,10 +33,19 @@ if hp > 0 && state != ENEMY_STATE.DEAD && banding_target_inst.state != "appear"{
 		if anim_timer >= 120{
 			if y < target_y{
 				y += 15
+				// 下降中：目标指向跟随自身位置
+				if carry_switch && instance_exists(carry_target){
+					carry_target.x = x
+					carry_target.y = y
+				}
 			}
 			else{
 				y = target_y
 				target_type = "normal"
+				// 落地：目标指向放到地面标准高度（target_y 比标准地面高 30+38 像素）
+				if carry_switch && instance_exists(carry_target){
+					carry_target.y = target_y + 68
+				}
 			}
 		}
 		image_index = floor(anim_timer/flash_speed) mod 8
@@ -63,7 +72,7 @@ if hp > 0 && state != ENEMY_STATE.DEAD && banding_target_inst.state != "appear"{
 		}
 		var plant_order_list = [noone,noone,noone,noone,noone]
 		var plant_in_range = noone
-		if anim_timer == flash_speed * 9{
+		if !carry_switch && anim_timer == flash_speed * 9{
 			with (obj_card_parent) {
 				var is_in_front = (grid_col == other.target_col && grid_row == other.target_row)
 				

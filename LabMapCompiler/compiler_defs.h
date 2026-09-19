@@ -92,6 +92,11 @@ static const std::vector<const char*> BLOCK_NAMES = {
     "_VM_BUTTON_CLICKED",
     "_VM_CARD_PREVIEW_PICKED",
     "_VM_BOSS_STATE_CHANGE",
+    "_OBJECT_CFG",
+    "_OBJECT_CREATE",
+    "_OBJECT_STEP",
+    "_OBJECT_DRAW",
+    "_OBJECT_DESTROY",
 };
 
 // ============================================================
@@ -307,6 +312,10 @@ static std::vector<FuncDef> FUNC_DEFS = {
     {"VM_SpawnBatMouse",            2,  {PT_INT, PT_INT},                   PT_INT},      // 102 — 在指定格子生成蝙蝠鼠
     {"VM_GetTimeLimit",             0,  {},                                  PT_ANY},      // 103 — 获取关卡倒计时（帧），无倒计时返回 undefined
     {"VM_SetTimeLimit",             1,  {PT_INT},                            PT_ANY},      // 104 — 设置关卡倒计时（帧），无倒计时返回 undefined
+    {"VM_SetDrawSlotEx",            8,  {PT_INT, PT_STRING, PT_INT, PT_INT, PT_FLOAT, PT_FLOAT, PT_FLOAT, PT_FLOAT}}, // 105
+    {"VM_SetDrawSlotEx_front",      8,  {PT_INT, PT_STRING, PT_INT, PT_INT, PT_FLOAT, PT_FLOAT, PT_FLOAT, PT_FLOAT}}, // 106
+    {"VM_SetWaveAuto",              1,  {PT_INT}},                                                        // 107
+    {"VM_SetWave",                  2,  {PT_INT, PT_INT}},                                                 // 108
 };
 
 // ============================================================

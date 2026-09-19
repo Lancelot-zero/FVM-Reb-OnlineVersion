@@ -24,15 +24,17 @@ instance_create_depth(room_width-200,room_height-25,0,obj_level_progress_bar)
 global.selected_slot = noone;
 global.current_seed = noone;
 global._VM_battle_start_done = false;
+// 波次自动推进开关：1=自动（默认）；0=关闭，由插件脚本用 VM_SetWave 完全控制波次
+global._VM_wave_auto = true;
 // VM_id 初始化：每次战斗开始前重置，保证两端占位 id 从同一值起跑
 global._VM_conveyor_belt_arr = []
 global._VM_create_counter = 100000;
 ds_map_clear(global._VM_id_to_real);
 ds_map_clear(global._VM_real_to_vm_id);
 global.map_draw_slots = [];
-repeat (64) { array_push(global.map_draw_slots, { sprite: noone, x: 0, y: 0, alpha: 1 }); }
+repeat (64) { array_push(global.map_draw_slots, { sprite: noone, x: 0, y: 0, alpha: 1, image_angle: 0, image_xscale: 1, image_yscale: 1 }); }
 global.map_draw_slots_front = [];
-repeat (64) { array_push(global.map_draw_slots_front, { sprite: noone, x: 0, y: 0, alpha: 1 }); }
+repeat (64) { array_push(global.map_draw_slots_front, { sprite: noone, x: 0, y: 0, alpha: 1, image_angle: 0, image_xscale: 1, image_yscale: 1 }); }
 global.map_sprite_current = global.level_data.level_sprite;
 global.map_sprite_target = global.level_data.level_sprite;
 global.map_fade_alpha = 0;

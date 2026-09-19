@@ -3,7 +3,7 @@
 for (var _i = 0; _i < 64; _i++) {
     var _slot = global.map_draw_slots_front[_i];
     if (_slot.sprite == noone || _slot.sprite == "" || _slot.sprite == -1) continue;
-    draw_sprite_ext(_slot.sprite, 0, _slot.x, _slot.y, 1, 1, 0, c_white, _slot.alpha);
+    draw_sprite_ext(_slot.sprite, 0, _slot.x, _slot.y, _slot.image_xscale, _slot.image_yscale, _slot.image_angle, c_white, _slot.alpha);
 }
 
 if(global._VM_conveyor_belt){

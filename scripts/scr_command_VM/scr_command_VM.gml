@@ -436,32 +436,38 @@ function VM_GetLoadedSpriteName(index_addr) {
 /// @param x      X 坐标
 /// @param y      Y 坐标
 /// @param alpha  透明度 0~1
+/// @desc 旋转/缩放使用默认值（angle=0, xscale=1, yscale=1），需要控制请用 VM_SetDrawSlotEx
 function VM_SetDrawSlot(slot_addr, sprite_addr, x_addr, y_addr, alpha_addr) {
     var slot = vm_read_mem(global.__vm, slot_addr);
     var sprite = vm_read_mem(global.__vm, sprite_addr);
     var _x = vm_read_mem(global.__vm, x_addr);
     var _y = vm_read_mem(global.__vm, y_addr);
     var alpha = vm_read_mem(global.__vm, alpha_addr);
-    if (slot < 0 || slot >= 64) return;
-    if (sprite == "" || sprite == -1 || sprite == noone) {
-        global.map_draw_slots[slot].sprite = noone;
-        global.map_draw_slots[slot].x = 0;
-        global.map_draw_slots[slot].y = 0;
-        global.map_draw_slots[slot].alpha = 1;
-        return;
-    }
-    var _spr;
-    if (is_string(sprite)) {
-        _spr = ds_map_exists(global._VM_sprite_temp_cache, sprite)
-            ? global._VM_sprite_temp_cache[? sprite]
-            : get_load_sprite(sprite);
-    } else {
-        _spr = sprite;
-    }
-    global.map_draw_slots[slot].sprite = _spr;
-    global.map_draw_slots[slot].x = _x;
-    global.map_draw_slots[slot].y = _y;
-    global.map_draw_slots[slot].alpha = alpha;
+    _vm_set_draw_slot(global.map_draw_slots, slot, sprite, _x, _y, alpha, 0, 1, 1);
+}
+
+/// @function VM_SetDrawSlotEx(slot, sprite, x, y, alpha, angle, xscale, yscale)
+/// @param slot   槽位索引 0~63
+/// @param sprite  贴图名(string)或精灵ID(int)，空/""/-1/noone 时清除
+/// @param x      X 坐标
+/// @param y      Y 坐标
+/// @param alpha  透明度 0~1
+/// @param angle  旋转角度（度），undefined/-1=默认0
+/// @param xscale 横向缩放，undefined/-1=默认1
+/// @param yscale 纵向缩放，undefined/-1=默认1
+function VM_SetDrawSlotEx(slot_addr, sprite_addr, x_addr, y_addr, alpha_addr, angle_addr, xscale_addr, yscale_addr) {
+    var slot = vm_read_mem(global.__vm, slot_addr);
+    var sprite = vm_read_mem(global.__vm, sprite_addr);
+    var _x = vm_read_mem(global.__vm, x_addr);
+    var _y = vm_read_mem(global.__vm, y_addr);
+    var alpha = vm_read_mem(global.__vm, alpha_addr);
+    var _angle = vm_read_mem(global.__vm, angle_addr);
+    var _xscale = vm_read_mem(global.__vm, xscale_addr);
+    var _yscale = vm_read_mem(global.__vm, yscale_addr);
+    if (is_undefined(_angle) || _angle == -1) _angle = 0;
+    if (is_undefined(_xscale) || _xscale == -1) _xscale = 1;
+    if (is_undefined(_yscale) || _yscale == -1) _yscale = 1;
+    _vm_set_draw_slot(global.map_draw_slots, slot, sprite, _x, _y, alpha, _angle, _xscale, _yscale);
 }
 
 /// @function VM_SetDrawSlot_front(slot, sprite, x, y, alpha)
@@ -470,19 +476,53 @@ function VM_SetDrawSlot(slot_addr, sprite_addr, x_addr, y_addr, alpha_addr) {
 /// @param x      X 坐标
 /// @param y      Y 坐标
 /// @param alpha  透明度 0~1
-/// @desc 和 VM_SetDrawSlot 一致，但绘制在 obj_flame_manager（depth=-900）上，显示在火焰UI后面
+/// @desc 和 VM_SetDrawSlot 一致，但绘制在 obj_flame_manager（depth=-900）上，显示在火焰UI后面；旋转/缩放用默认值，需要控制请用 VM_SetDrawSlotEx_front
 function VM_SetDrawSlot_front(slot_addr, sprite_addr, x_addr, y_addr, alpha_addr) {
     var slot = vm_read_mem(global.__vm, slot_addr);
     var sprite = vm_read_mem(global.__vm, sprite_addr);
     var _x = vm_read_mem(global.__vm, x_addr);
     var _y = vm_read_mem(global.__vm, y_addr);
     var alpha = vm_read_mem(global.__vm, alpha_addr);
+    _vm_set_draw_slot(global.map_draw_slots_front, slot, sprite, _x, _y, alpha, 0, 1, 1);
+}
+
+/// @function VM_SetDrawSlotEx_front(slot, sprite, x, y, alpha, angle, xscale, yscale)
+/// @param slot   槽位索引 0~63
+/// @param sprite  贴图名(string)或精灵ID(int)，空/""/-1/noone 时清除
+/// @param x      X 坐标
+/// @param y      Y 坐标
+/// @param alpha  透明度 0~1
+/// @param angle  旋转角度（度），undefined/-1=默认0
+/// @param xscale 横向缩放，undefined/-1=默认1
+/// @param yscale 纵向缩放，undefined/-1=默认1
+/// @desc 和 VM_SetDrawSlotEx 一致，但绘制在 obj_flame_manager（depth=-900）上，显示在火焰UI后面
+function VM_SetDrawSlotEx_front(slot_addr, sprite_addr, x_addr, y_addr, alpha_addr, angle_addr, xscale_addr, yscale_addr) {
+    var slot = vm_read_mem(global.__vm, slot_addr);
+    var sprite = vm_read_mem(global.__vm, sprite_addr);
+    var _x = vm_read_mem(global.__vm, x_addr);
+    var _y = vm_read_mem(global.__vm, y_addr);
+    var alpha = vm_read_mem(global.__vm, alpha_addr);
+    var _angle = vm_read_mem(global.__vm, angle_addr);
+    var _xscale = vm_read_mem(global.__vm, xscale_addr);
+    var _yscale = vm_read_mem(global.__vm, yscale_addr);
+    if (is_undefined(_angle) || _angle == -1) _angle = 0;
+    if (is_undefined(_xscale) || _xscale == -1) _xscale = 1;
+    if (is_undefined(_yscale) || _yscale == -1) _yscale = 1;
+    _vm_set_draw_slot(global.map_draw_slots_front, slot, sprite, _x, _y, alpha, _angle, _xscale, _yscale);
+}
+
+/// @function _vm_set_draw_slot(_slots, slot, sprite, x, y, alpha, angle, xscale, yscale)
+/// @desc 绘制槽写入的内部实现：设置/清除槽位，并写旋转缩放字段（清除时复位为默认）
+function _vm_set_draw_slot(_slots, slot, sprite, _x, _y, alpha, _angle, _xscale, _yscale) {
     if (slot < 0 || slot >= 64) return;
     if (sprite == "" || sprite == -1 || sprite == noone) {
-        global.map_draw_slots_front[slot].sprite = noone;
-        global.map_draw_slots_front[slot].x = 0;
-        global.map_draw_slots_front[slot].y = 0;
-        global.map_draw_slots_front[slot].alpha = 1;
+        _slots[slot].sprite = noone;
+        _slots[slot].x = 0;
+        _slots[slot].y = 0;
+        _slots[slot].alpha = 1;
+        _slots[slot].image_angle = 0;
+        _slots[slot].image_xscale = 1;
+        _slots[slot].image_yscale = 1;
         return;
     }
     var _spr;
@@ -493,10 +533,13 @@ function VM_SetDrawSlot_front(slot_addr, sprite_addr, x_addr, y_addr, alpha_addr
     } else {
         _spr = sprite;
     }
-    global.map_draw_slots_front[slot].sprite = _spr;
-    global.map_draw_slots_front[slot].x = _x;
-    global.map_draw_slots_front[slot].y = _y;
-    global.map_draw_slots_front[slot].alpha = alpha;
+    _slots[slot].sprite = _spr;
+    _slots[slot].x = _x;
+    _slots[slot].y = _y;
+    _slots[slot].alpha = alpha;
+    _slots[slot].image_angle = _angle;
+    _slots[slot].image_xscale = _xscale;
+    _slots[slot].image_yscale = _yscale;
 }
 
 /// @function VM_SetMapBackground(name, step)
@@ -1841,6 +1884,30 @@ function VM_SetTimeLimit(frames_addr) {
             send_message(_cl[_i], MSG_VM_NOTIFY, _msg);
     }
     return _frames;
+}
+
+/// @function VM_SetWaveAuto(enabled)
+/// @param enabled 1=波次自动推进（默认）；0=关闭自动推进，由插件脚本用 VM_SetWave 手动控制
+/// @return 开关设置后的值（1/0）
+/// @desc 关闭后 battle 完全不自动出怪（含开局第一波），波次推进与出怪完全交给插件脚本
+function VM_SetWaveAuto(enabled_addr) {
+    var _on = vm_arg(enabled_addr);
+    global._VM_wave_auto = _on != 0;
+    return global._VM_wave_auto ? 1 : 0;
+}
+
+/// @function VM_SetWave(wave, subwave)
+/// @param wave    要设置的波次索引（0 开始）
+/// @param subwave 要设置的子波次索引（0 开始）
+/// @return 1=成功，0=战斗不存在
+/// @desc 只修改 current_wave/current_subwave 计数，不召唤敌人；变化会被 battle 检测到并触发 _VM_WAVE_START 等钩子
+function VM_SetWave(wave_addr, subwave_addr) {
+    var _wave = vm_arg(wave_addr);
+    var _subwave = vm_arg(subwave_addr);
+    if (!instance_exists(obj_battle)) return 0;
+    obj_battle.current_wave = _wave;
+    obj_battle.current_subwave = _subwave;
+    return 1;
 }
 
 /// @function VM_GetProp(inst_id, prop)
@@ -3417,6 +3484,10 @@ VM_RegisterFunction(global.__vm, VM_Ceil);              // 101
 VM_RegisterFunction(global.__vm, VM_SpawnBatMouse);     // 102
 VM_RegisterFunction(global.__vm, VM_GetTimeLimit);      // 103
 VM_RegisterFunction(global.__vm, VM_SetTimeLimit);      // 104
+VM_RegisterFunction(global.__vm, VM_SetDrawSlotEx);        // 105
+VM_RegisterFunction(global.__vm, VM_SetDrawSlotEx_front);  // 106
+VM_RegisterFunction(global.__vm, VM_SetWaveAuto);    // 107
+VM_RegisterFunction(global.__vm, VM_SetWave);        // 108
 ds_map_add(global._VM_remote_funcs, "VM_SwapPlants", VM_SwapPlants);
 ds_map_add(global._VM_remote_funcs, "VM_SwapPlantRects", VM_SwapPlantRects);
 ds_map_add(global._VM_remote_funcs, "VM_CompactColumn", VM_CompactColumn);
