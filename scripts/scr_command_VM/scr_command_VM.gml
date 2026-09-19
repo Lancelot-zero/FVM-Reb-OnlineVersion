@@ -1629,7 +1629,7 @@ function VM_CreateButton(x_addr, y_addr, sprite_addr, scale_addr, idle_addr, hov
 	if (is_undefined(_hover) || _hover == -1) _hover = 1;
 	if (is_undefined(_press) || _press == -1) _press = 2;
 	var _spr = get_load_sprite(_spr_name);
-	var _btn = instance_create_layer(_x, _y, "Assets", Button);
+	var _btn = instance_create_depth(_x, _y, -5000, Button);
 	_btn.set_sprite(_spr).set_scale(_scale).set_position(_x, _y).set_frames(_idle, _hover, _press);
 	return real(_btn);
 }
@@ -1859,7 +1859,9 @@ function VM_GetProp(inst_id_addr, prop_addr) {
         return object_get_name(inst_id.object_index);
     }
     // 特殊属性：没有 mouse_id 变量的实例（如植物卡片），用对象名去掉 obj_ 前缀兜底
-    if (prop == "mouse_id" && !variable_instance_exists(inst_id, prop)) {
+    if (prop == "mouse_id" && (!variable_instance_exists(inst_id, prop)||
+		variable_instance_exists(inst_id, prop)&&variable_instance_get(inst_id, prop)=""
+	)) {
         return string_delete(object_get_name(inst_id.object_index), 1, 4);
     }
     return variable_instance_get(inst_id, prop);
