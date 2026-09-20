@@ -316,6 +316,13 @@ static std::vector<FuncDef> FUNC_DEFS = {
     {"VM_SetDrawSlotEx_front",      8,  {PT_INT, PT_STRING, PT_INT, PT_INT, PT_FLOAT, PT_FLOAT, PT_FLOAT, PT_FLOAT}}, // 106
     {"VM_SetWaveAuto",              1,  {PT_INT}},                                                        // 107
     {"VM_SetWave",                  2,  {PT_INT, PT_INT}},                                                 // 108
+    {"VM_GetCurCard",              0,  {},                                              PT_INT},          // 109 — 当前块所属的 mod 卡实例 id
+    {"VM_EnemyInRange",            5,  {PT_INT, PT_INT, PT_INT, PT_INT, PT_STRING},     PT_INT},          // 110 — 矩形范围是否存在敌人（前缀和，type: normal/obstacle/diver/air/dance/underground/all）
+    {"VM_GetHomingTarget",         1,  {PT_STRING},                                     PT_INT},          // 111 — 最左且血量最高的敌人 id（追踪索敌，param: 敌人类型，""/all=任意；每帧全场只扫一次）
+    {"VM_GetInstancesInRange",     7,  {PT_STRING, PT_INT, PT_INT, PT_INT, PT_INT, PT_STRING, PT_STRING}, PT_INT}, // 112 — 收集范围内敌人/卡片到 VM 数组（卡片可按 plant_id/plant_type 筛）
+    {"VM_CreateInstance",          3,  {PT_STRING, PT_FLOAT, PT_FLOAT},                 PT_INT},          // 113 — 按像素坐标创建实例（子弹等）
+    {"VM_LoadSpritePerm_Ex",       4,  {PT_STRING, PT_INT, PT_INT, PT_INT},             PT_INT},          // 114 — 永久缓存贴图带原点，不被 bin 重载清理
+    {"VM_SetShovelFlameRate",      1,  {PT_FLOAT},                                       PT_ANY},          // 115 — 铲子返还火苗系数（-1=原逻辑，0~1=直接用）
 };
 
 // ============================================================

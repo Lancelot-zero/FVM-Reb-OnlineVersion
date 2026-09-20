@@ -75,8 +75,11 @@ if attack_timer == 15 * current_flash_speed - 1&& global.network.mode != "client
 			global._net_before_plant_skill = target_card_info[$ "skill"];
 			global._net_card_equipped_attire_id = target_card_info[$ "_net_card_equipped_attire_id"]
 		}
+		// mod 卡：创建前传卡 id（obj_card_mod 的 Create 从全局取 plant_id）
+		if (card_slot_data[? "obj"] == obj_card_mod) { global._mod_pending_card_id = target_card; }
 		var new_card = instance_create_depth(logical_world.x + platform_shift_x, logical_world.y + platform_shift_y, 0, card_slot_data[? "obj"])
-		
+		global._mod_pending_card_id = "";
+
 		global._net_before_plant_shape = noone;
 		global._net_before_plant_skill = noone;
 		global._net_before_plant_current_level = noone;

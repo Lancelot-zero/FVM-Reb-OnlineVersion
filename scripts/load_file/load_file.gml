@@ -2,7 +2,7 @@
 /// @desc 加载存档文件到全局变量global.save_data中
 /// @param {real} file_slot 存档槽位
 function load_file(file_slot) {
-	var file_path = "saves/" + "save" + string(file_slot) + ".json"
+	var file_path = src_mod_save_path("save" + string(file_slot) + ".json")
     // 检查存档文件是否存在
     if (!file_exists(file_path)) {
         // 如果存档不存在，创建初始存档数据

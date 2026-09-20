@@ -1,0 +1,31 @@
+
+_OBJECT_CFG{
+    VM_LoadSpritePerm_Ex("combined_strip.png", 29,30,90)
+    VM_ShellPrint("mod_test_flame load")
+
+}
+
+// 测试产火卡：每隔攻击间隔产出一朵火苗（与小火炉同款 obj_flame 逻辑）
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+    VM_SetProp(self, "cd", 0)
+
+    VM_SetProp(self, "sprite_index", "combined_strip.png")
+    VM_SetProp(self, "attack_anim", 18)
+    VM_SetProp(self, "idle_anim", 11)
+    VM_SetProp(self, "plant_type", "normal")
+    VM_SetProp(self, "flame_produce", 25)
+    VM_SetProp(self, "first_produce_delay", 60)
+    VM_ShellPrint("mod_test_flame create")
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+    cd = VM_GetProp(self, "cd") + 1
+    if (cd >= 78) {
+        cd = 0
+        f = VM_CreateInstance("flame", VM_GetProp(self, "x"), VM_GetProp(self, "y") - 60)
+        VM_SetProp(f, "value", 25)
+    }
+    VM_SetProp(self, "cd", cd)
+}

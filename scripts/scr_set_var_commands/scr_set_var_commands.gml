@@ -730,3 +730,20 @@ function meta_fps() {
         deferred: false
     };
 }
+
+/// @description 命令行：仅重新加载所有 mod 的 bin 代码
+function sh_reloadmod(args) {
+    var _n = src_mod_reload();
+    if (_n < 0) return "[reloadmod] mod 目录不存在";
+    return "[reloadmod] 已重载 " + string(_n) + " 张 mod 卡的 bin 代码";
+}
+
+function meta_reloadmod() {
+    return {
+        description: "仅重新加载所有 mod 的 bin 代码（不动注册表，不影响场上已放置的卡）",
+        arguments: [],
+        suggestions: [],
+        hidden: false,
+        deferred: false
+    };
+}

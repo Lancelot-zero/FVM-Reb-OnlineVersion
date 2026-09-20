@@ -30,6 +30,10 @@ function get_load_sprite(_name) {
 	if (ds_map_exists(global._VM_sprite_temp_cache, _name)) {
 		return global._VM_sprite_temp_cache[? _name];
 	}
+	// 再查 VM 永久贴图缓存（VM_LoadSpritePerm_Ex，bin 重载不清）
+	if (ds_map_exists(global._VM_sprite_cache, _name)) {
+		return global._VM_sprite_cache[? _name];
+	}
 	if (ds_map_exists(global._sprite_cache,_name)){
 		return global._sprite_cache[? _name];
 	}

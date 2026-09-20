@@ -1,0 +1,42 @@
+// 测试追踪卡：场上有敌人时，按攻击间隔发射追踪飞镖
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+    VM_SetProp(self, "cd", 0)
+    VM_SetProp(self, "tick", 0)
+    VM_SetProp(self, "sprite_index", "spr_takoyaki")
+    VM_SetProp(self, "attack_anim", 14)
+    VM_SetProp(self, "idle_anim", 7)
+    VM_SetProp(self, "flash_speed", 5)
+    VM_SetProp(self, "plant_type", "normal")
+    VM_SetProp(self, "is_slowdown", 0)
+    VM_SetProp(self, "target_type", "track")
+    VM_ShellPrint("mod_test_tracker create")
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+    tick = VM_GetProp(self, "tick") + 1
+    if (tick >= 60) {
+        tick = 0
+        VM_ShellPrint("mod_test_tracker step ok")
+    }
+    VM_SetProp(self, "tick", tick)
+    t = VM_GetHomingTarget("")
+    if (t != -1) {
+        cd = VM_GetProp(self, "cd") + 1
+        if (cd >= 78) {
+            cd = 0
+            b = VM_CreateInstance("takoyaki_bullet", VM_GetProp(self, "x"), VM_GetProp(self, "y") - 55)
+            VM_ShellPrint("mod_test_tracker step ok",VM_GetProp(self, "atk"))
+            VM_SetProp(b, "damage", VM_GetProp(self, "atk"))
+            VM_SetProp(b, "move_speed", 10)
+            VM_SetProp(b, "target_enemy", t)
+            VM_SetProp(b, "banding_card_obj", self)
+            VM_SetProp(b, "row", VM_GetProp(self, "grid_row"))
+            VM_PlaySound("snd_throw")
+        }
+        VM_SetProp(self, "cd", cd)
+    } else {
+        VM_SetProp(self, "cd", 0)
+    }
+}

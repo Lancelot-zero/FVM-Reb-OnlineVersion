@@ -285,6 +285,13 @@ function _VM_LoadSpriteFile(name) {
         if (!string_ends_with(_prefix, "/") && !string_ends_with(_prefix, "\\")) _prefix += "/";
         array_push(_paths, _prefix + "../" + name);
     }
+    // mod 卡 JSON 所在目录（mod_dir）也是候选
+    var _cur_vm = global.__vm;
+    if (is_struct(_cur_vm) && variable_struct_exists(_cur_vm, "mod_dir")) {
+        var _md = _cur_vm[$ "mod_dir"];
+        if (!string_ends_with(_md, "/") && !string_ends_with(_md, "\\")) _md += "/";
+        array_push(_paths, _md + name);
+    }
     show_debug_message("[VM_LoadSprite] 查找贴图: " + name + "  json_path=" + (variable_global_exists("_file_cache_json_path") ? string(global._file_cache_json_path) : "(未设置)"));
     for (var _i = 0; _i < array_length(_paths); _i++) {
         show_debug_message("[VM_LoadSprite]   尝试: " + _paths[_i] + "  exist=" + string(file_exists(_paths[_i])));
@@ -314,6 +321,13 @@ function _VM_LoadSpriteFileEx(name, frames) {
         if (!string_ends_with(_prefix, "/") && !string_ends_with(_prefix, "\\")) _prefix += "/";
         array_push(_paths, _prefix + "../" + name);
     }
+    // mod 卡 JSON 所在目录（mod_dir）也是候选
+    var _cur_vm = global.__vm;
+    if (is_struct(_cur_vm) && variable_struct_exists(_cur_vm, "mod_dir")) {
+        var _md = _cur_vm[$ "mod_dir"];
+        if (!string_ends_with(_md, "/") && !string_ends_with(_md, "\\")) _md += "/";
+        array_push(_paths, _md + name);
+    }
     for (var _i = 0; _i < array_length(_paths); _i++) {
         if (file_exists(_paths[_i])) {
             var _spr = sprite_add(_paths[_i], frames, false, false, 0, 0);
@@ -339,6 +353,13 @@ function _VM_LoadSpriteFile_Ex(name, frames, xorigin, yorigin) {
         var _prefix = global._file_cache_json_path;
         if (!string_ends_with(_prefix, "/") && !string_ends_with(_prefix, "\\")) _prefix += "/";
         array_push(_paths, _prefix + "../" + name);
+    }
+    // mod 卡 JSON 所在目录（mod_dir）也是候选
+    var _cur_vm = global.__vm;
+    if (is_struct(_cur_vm) && variable_struct_exists(_cur_vm, "mod_dir")) {
+        var _md = _cur_vm[$ "mod_dir"];
+        if (!string_ends_with(_md, "/") && !string_ends_with(_md, "\\")) _md += "/";
+        array_push(_paths, _md + name);
     }
     for (var _i = 0; _i < array_length(_paths); _i++) {
         if (file_exists(_paths[_i])) {
@@ -419,6 +440,58 @@ function VM_FreeSpritePerm(name_addr) {
 	var _spr = global._VM_sprite_cache[? _name];
 	if (sprite_exists(_spr)) sprite_delete(_spr);
 	ds_map_delete(global._VM_sprite_cache, _name);
+	ds_map_delete(global._pid_reverse, _spr);
+}
+
+/// @function VM_LoadSpritePerm_Ex(name, frames, xorigin, yorigin)
+/// @desc 加载贴图到永久缓存并指定原点，不被 bin 重载清理
+/// @param name     贴图文件名
+/// @param frames   帧数 (-1=默认1)
+/// @param xorigin  原点 X，-1=默认0
+/// @param yorigin  原点 Y，-1=默认0
+/// @return sprite index
+function VM_LoadSpritePerm_Ex(name_addr, frames_addr, xorigin_addr, yorigin_addr) {
+	var _name = vm_read_mem(global.__vm, name_addr);
+	var _frames = vm_read_mem(global.__vm, frames_addr);
+	var _x = vm_read_mem(global.__vm, xorigin_addr);
+	var _y = vm_read_mem(global.__vm, yorigin_addr);
+	if (is_undefined(_frames) || _frames <= 0) _frames = 1;
+	if (is_undefined(_x) || _x == -1) _x = 0;
+	if (is_undefined(_y) || _y == -1) _y = 0;
+	if (ds_map_exists(global._VM_sprite_cache, _name))
+		return global._VM_sprite_cache[? _name];
+	var _paths = [];
+	if (variable_global_exists("_file_cache_json_path")) {
+		var _prefix = global._file_cache_json_path;
+		if (!string_ends_with(_prefix, "/") && !string_ends_with(_prefix, "\\")) _prefix += "/";
+		array_push(_paths, _prefix + "../" + _name);
+	}
+	// mod 卡 JSON 所在目录（mod_dir）也是候选
+	var _cur_vm = global.__vm;
+	if (is_struct(_cur_vm) && variable_struct_exists(_cur_vm, "mod_dir")) {
+		var _md = _cur_vm[$ "mod_dir"];
+		if (!string_ends_with(_md, "/") && !string_ends_with(_md, "\\")) _md += "/";
+		array_push(_paths, _md + _name);
+	}
+	array_push(_paths, _name);   // 裸文件名兜底（与原 VM_LoadSpritePerm 行为一致）
+	for (var _i = 0; _i < array_length(_paths); _i++) {
+		if (file_exists(_paths[_i])) {
+			var _spr = sprite_add(_paths[_i], _frames, false, false, _x, _y);
+			if (_spr != -1) {
+				ds_map_add(global._VM_sprite_cache, _name, _spr);
+				ds_map_add(global._pid_reverse, _spr, _name);
+				return _spr;
+			}
+		}
+	}
+	return -1;
+}
+
+/// @function VM_SetShovelFlameRate(rate)
+/// @desc 设置铲子铲卡返还火苗系数：-1=用原逻辑（铲子槽 flame_rate），0~1=直接用该系数
+/// @param rate 系数，-1 或 0~1
+function VM_SetShovelFlameRate(rate_addr) {
+	global._VM_shovel_flame_rate = vm_read_mem(global.__vm, rate_addr);
 }
 
 /// @function VM_GetLoadedSpriteName(index)
@@ -1629,7 +1702,9 @@ function VM_SpawnPlantsRandom(x_addr, y_addr, w_addr, h_addr,
 			if (_shape != -1) _props[$ "shape"] = _shape;
 			
 			
-			var _plant = spawn_plant(_c, _r, _card_data[? "obj"], _props);
+			if (_card_data[? "obj"] == obj_card_mod) { global._mod_pending_card_id = _card; }
+				var _plant = spawn_plant(_c, _r, _card_data[? "obj"], _props);
+				global._mod_pending_card_id = "";
 			if (_plant >= 0) {
 				network_apply_plant_level(_plant);
 				var _VM_id = ++global._VM_create_counter;
@@ -1910,6 +1985,193 @@ function VM_SetWave(wave_addr, subwave_addr) {
     return 1;
 }
 
+/// @function VM_GetCurCard()
+/// @return 当前正在执行块的 mod 卡实例 ID（_OBJECT_CREATE/_STEP/_DRAW/_DESTROY 块内有效，否则 noone）
+function VM_GetCurCard() {
+    return VM_ClientWrapId(real(global._VM_cur_card));
+}
+
+/// @function VM_EnemyInRange(r1, r2, c1, c2, type)
+/// @param r1 r2 行范围（闭区间，可反序，自动夹取到场内）
+/// @param c1 c2 列范围（闭区间，可反序，自动夹取到 0..grid_cols+1）
+/// @param type 敌人类型："normal"/"obstacle"/"diver"/"air"/"dance"/"underground"，""或"all"=任意
+/// @return 1=范围内存在该类型敌人，0=不存在
+/// @desc 前缀和查询（global.has_enemy_* 系列，obj_battle 每帧重建），O(行数×类型数)
+function VM_EnemyInRange(r1_addr, r2_addr, c1_addr, c2_addr, type_addr) {
+    var _r1 = vm_arg(r1_addr);
+    var _r2 = vm_arg(r2_addr);
+    var _c1 = vm_arg(c1_addr);
+    var _c2 = vm_arg(c2_addr);
+    var _type = vm_arg(type_addr);
+    if (!variable_global_exists("has_enemy_normal")) return 0;
+    var _arrs = [];
+    if (_type == "normal") _arrs = [global.has_enemy_normal];
+    else if (_type == "obstacle") _arrs = [global.has_enemy_obstacle];
+    else if (_type == "diver") _arrs = [global.has_enemy_diver];
+    else if (_type == "air") _arrs = [global.has_enemy_air];
+    else if (_type == "dance") _arrs = [global.has_enemy_dance];
+    else if (_type == "underground") _arrs = [global.has_enemy_underground];
+    else if (_type == "" || _type == "all") {
+        _arrs = [global.has_enemy_normal, global.has_enemy_obstacle, global.has_enemy_diver,
+                 global.has_enemy_air, global.has_enemy_dance, global.has_enemy_underground];
+    } else return 0;
+    if (_r1 > _r2) { var _t = _r1; _r1 = _r2; _r2 = _t; }
+    if (_c1 > _c2) { var _t = _c1; _c1 = _c2; _c2 = _t; }
+    _r1 = clamp(_r1, 0, global.grid_rows - 1);
+    _r2 = clamp(_r2, 0, global.grid_rows - 1);
+    _c1 = clamp(_c1, 0, global.grid_cols + 1);
+    _c2 = clamp(_c2, 0, global.grid_cols + 1);
+    var _stride = global.grid_cols + 2;
+    for (var _r = _r1; _r <= _r2; _r++) {
+        var _base = _r * _stride;
+        for (var _k = 0; _k < array_length(_arrs); _k++) {
+            var _p = _arrs[_k];
+            if (_p[_base + _c2] - (_c1 > 0 ? _p[_base + _c1 - 1] : 0) > 0) return 1;
+        }
+    }
+    return 0;
+}
+
+/// @function VM_GetHomingTarget(type)
+/// @param type 敌人类型（"normal"/"air"/"diver"/"dance"/"obstacle"/"underground"），"" 或 "all"=任意
+/// @return 最靠左（x 最小）、同 x 时血量最高的存活敌人 id；无则 -1
+/// @desc 追踪索敌（与糖葫芦炮弹同规则）；全场每帧只扫描一次，同帧所有调用共享缓存
+function VM_GetHomingTarget(type_addr) {
+    var _type = vm_arg(type_addr);
+    if (_type == "all") _type = "";
+    if (!variable_global_exists("_VM_homing_cache")) global._VM_homing_cache = ds_map_create();
+    var _cache = global._VM_homing_cache;
+    var _frame = instance_exists(obj_battle) ? obj_battle.battle_time : -1;
+    var _snap = ds_map_find_value(_cache, "snap");
+    if (!is_struct(_snap) || _snap[$ "frame"] != _frame) {
+        // 每帧只扫一次全场：按敌人类型各自记录 最左 x、同 x 血量最高 的实例
+        var _types = ds_map_create();
+        with (obj_enemy_parent) {
+            if (hp > 0 && y > 0) {
+                var _t = target_type;
+                var _cur = ds_map_find_value(_types, _t);
+                if (is_undefined(_cur) || x < _cur.x || (x == _cur.x && hp > _cur.hp)) {
+                    _types[? _t] = { x: x, hp: hp, id: id };
+                }
+            }
+        }
+        _snap = { frame: _frame, types: _types };
+        _cache[? "snap"] = _snap;
+    }
+    var _types = _snap[$ "types"];
+    if (_type == "") {
+        // 任意类型：取各类型最优里的全局最优
+        var _best = -1;
+        var _best_x = room_width;
+        var _best_hp = -1;
+        var _keys = ds_map_keys_to_array(_types);
+        for (var _i = 0; _i < array_length(_keys); _i++) {
+            var _e = _types[? _keys[_i]];
+            if (_e.x < _best_x || (_e.x == _best_x && _e.hp > _best_hp)) {
+                _best_x = _e.x;
+                _best_hp = _e.hp;
+                _best = _e.id;
+            }
+        }
+        return VM_ClientWrapId(_best);
+    }
+    var _e = ds_map_find_value(_types, _type);
+    if (is_undefined(_e)) return -1;
+    return VM_ClientWrapId(_e.id);
+}
+
+/// @function VM_GetInstancesInRange(arr, r1, r2, c1, c2, kind, type)
+/// @param arr  VM 命名数组：先清空，再存入结果
+/// @param r1 r2 行范围（闭区间，可反序，自动夹取到场内）
+/// @param c1 c2 列范围（闭区间，可反序）
+/// @param kind "enemy"=敌人 / "card"=我方卡片
+/// @param type 筛选：敌人按 target_type；卡片按 plant_id / plant_type(底座)；"" 或 "all"=不限
+/// @return 存入数量
+/// @desc 范围影响类卡常用：收集范围内实例 id 进数组，配合 VM_ArraySize/VM_ArrayGet 遍历
+function VM_GetInstancesInRange(arr_addr, r1_addr, r2_addr, c1_addr, c2_addr, kind_addr, type_addr) {
+    var _name = vm_arg(arr_addr);
+    var _r1 = vm_arg(r1_addr);
+    var _r2 = vm_arg(r2_addr);
+    var _c1 = vm_arg(c1_addr);
+    var _c2 = vm_arg(c2_addr);
+    var _kind = vm_arg(kind_addr);
+    var _type = vm_arg(type_addr);
+    if (_type == "all") _type = "";
+    if (_r1 > _r2) { var _t = _r1; _r1 = _r2; _r2 = _t; }
+    if (_c1 > _c2) { var _t = _c1; _c1 = _c2; _c2 = _t; }
+    _r1 = clamp(_r1, 0, global.grid_rows - 1);
+    _r2 = clamp(_r2, 0, global.grid_rows - 1);
+    var _vm = global.__vm;
+    if (!ds_map_exists(_vm.arrays, _name)) ds_map_add(_vm.arrays, _name, []);
+    var _arr = _vm.arrays[? _name];
+    array_resize(_arr, 0);
+    var _count = 0;
+    if (_kind == "enemy") {
+        if (!variable_global_exists("enemy_array")) return 0;
+        _c1 = clamp(_c1, 0, global.grid_cols + 1);
+        _c2 = clamp(_c2, 0, global.grid_cols + 1);
+        var _stride = global.grid_cols + 2;
+        for (var _r = _r1; _r <= _r2; _r++) {
+            var _base = _r * _stride;
+            for (var _c = _c1; _c <= _c2; _c++) {
+                var _cell = global.enemy_array[_base + _c];
+                for (var _i = 0; _i < array_length(_cell); _i++) {
+                    var _e = _cell[_i];
+                    if (!instance_exists(_e) || _e.hp <= 0) continue;
+                    if (_type != "" && _e.target_type != _type) continue;
+                    array_push(_arr, VM_ClientWrapId(_e));
+                    _count++;
+                }
+            }
+        }
+    } else if (_kind == "card") {
+        _c1 = clamp(_c1, 0, global.grid_cols - 1);
+        _c2 = clamp(_c2, 0, global.grid_cols - 1);
+        for (var _r = _r1; _r <= _r2; _r++) {
+            for (var _c = _c1; _c <= _c2; _c++) {
+                var _list = ds_grid_get(global.grid_plants, _c, _r);
+                for (var _i = 0; _i < ds_list_size(_list); _i++) {
+                    var _p = ds_list_find_value(_list, _i);
+                    if (!instance_exists(_p)) continue;
+                    if (_p.plant_id == "player") continue;   // 与 VM_SetCardProp 一致，跳过角色
+                    if (_type != "") {
+                        // 匹配卡 id / 底座类型
+                        var _pt = variable_instance_exists(_p, "plant_type") ? _p.plant_type : "";
+                        if (_p.plant_id != _type && _pt != _type) continue;
+                    }
+                    array_push(_arr, VM_ClientWrapId(_p));
+                    _count++;
+                }
+            }
+        }
+    }
+    return _count;
+}
+
+/// @function VM_CreateInstance(obj_name, x, y)
+/// @param obj_name 对象名（可带或不带 obj_ 前缀）
+/// @param x y 生成坐标（像素）
+/// @return 实例 ID；对象不存在或创建失败返回 -1
+/// @desc 通用创建实例（子弹等）：创建后用 VM_SetProp 配置属性
+function VM_CreateInstance(obj_name_addr, x_addr, y_addr) {
+    var obj_name = vm_arg(obj_name_addr);
+    var _x = vm_arg(x_addr);
+    var _y = vm_arg(y_addr);
+    if (!string_starts_with(obj_name, "obj_")) obj_name = "obj_" + obj_name;
+    var _obj = asset_get_index(obj_name);
+    if (_obj < 0) {
+        show_debug_message("[VM_CreateInstance] 对象不存在: " + obj_name);
+        return -1;
+    }
+    var _depth = -1200;
+    if (global._VM_cur_card != noone && instance_exists(global._VM_cur_card)) {
+        _depth = global._VM_cur_card.depth - 500;   // 与原版卡一致：子弹浮在发射卡上方
+    }
+    var _inst = instance_create_depth(_x, _y, _depth, _obj);
+    if (_inst < 0) return -1;
+    return VM_ClientWrapId(_inst);
+}
+
 /// @function VM_GetProp(inst_id, prop)
 /// @return 属性值
 function VM_GetProp(inst_id_addr, prop_addr) {
@@ -1978,6 +2240,10 @@ function VM_SetProp(inst_id_addr, prop_addr, value_addr) {
         inst_id = _real;
     }
     if (!instance_exists(inst_id)) return;
+    // 贴图属性传字符串时解析成精灵 id（与联机属性同步的转换保持一致）
+    if (prop == "sprite_index" && is_string(value)) {
+        value = get_load_sprite(value);
+    }
     // 客户端：有 net_id 则跳过，服务端会通过 MSG_MODIFY_PROP 同步
     if (global.network.mode == "client" && global._VM_sync_exec
         && ds_map_exists(global.network.map_instance_id_net_id, inst_id)) return;
@@ -2106,7 +2372,9 @@ function VM_SpawnPlant(card_id_addr, col_addr, row_addr, shape_addr, level_addr,
                 if (!_batch) return -_VM_id;
                 continue;
             }
+            if (_obj == obj_card_mod) { global._mod_pending_card_id = card_id; }
             var _plant = spawn_plant(_c, _r, _obj, _props);
+            global._mod_pending_card_id = "";
             if (_plant < 0) continue;
 			network_apply_plant_level(_plant);
             _last = _plant;
@@ -3157,6 +3425,7 @@ global._VM_card_level_cap = -1;
 global._VM_card_shape_cap = -1;
 global._VM_card_skill_cap = -1;
 global._VM_max_slots = -1;
+global._VM_shovel_flame_rate = -1;   // 铲子返还火苗系数：-1=原逻辑，0~1=VM 指定
 global._VM_strings = [];
 
 global._VM_ROOM_READY_ENTRY = undefined;
@@ -3488,6 +3757,13 @@ VM_RegisterFunction(global.__vm, VM_SetDrawSlotEx);        // 105
 VM_RegisterFunction(global.__vm, VM_SetDrawSlotEx_front);  // 106
 VM_RegisterFunction(global.__vm, VM_SetWaveAuto);    // 107
 VM_RegisterFunction(global.__vm, VM_SetWave);        // 108
+VM_RegisterFunction(global.__vm, VM_GetCurCard);         // 109
+VM_RegisterFunction(global.__vm, VM_EnemyInRange);       // 110
+VM_RegisterFunction(global.__vm, VM_GetHomingTarget);    // 111
+VM_RegisterFunction(global.__vm, VM_GetInstancesInRange);// 112
+VM_RegisterFunction(global.__vm, VM_CreateInstance);     // 113
+VM_RegisterFunction(global.__vm, VM_LoadSpritePerm_Ex);  // 114
+VM_RegisterFunction(global.__vm, VM_SetShovelFlameRate); // 115
 ds_map_add(global._VM_remote_funcs, "VM_SwapPlants", VM_SwapPlants);
 ds_map_add(global._VM_remote_funcs, "VM_SwapPlantRects", VM_SwapPlantRects);
 ds_map_add(global._VM_remote_funcs, "VM_CompactColumn", VM_CompactColumn);
@@ -3510,6 +3786,7 @@ function VM_InitRoomEntry(buf) {
     global._VM_card_shape_cap = -1;
     global._VM_card_skill_cap = -1;
     global._VM_max_slots = -1;
+    global._VM_shovel_flame_rate = -1;   // 铲子返还火苗系数：-1=原逻辑，0~1=VM 指定
     global._VM_ROOM_READY_ENTRY = undefined;
     global._VM_room_ready_done   = false;
     global._VM_BATTLE_START      = undefined;

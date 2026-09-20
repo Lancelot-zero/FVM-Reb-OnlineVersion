@@ -108,7 +108,9 @@ if ((is_selected && mouse_check_button_pressed(mb_left)) or (is_selected && glob
         ? global.network.map_instance_id_net_id[? plant_to_remove] : -1;
     var _flame_amount = -1;
     if (plant_to_remove != noone && instance_exists(obj_shovel_slot)) {
-        var _rate = obj_shovel_slot.flame_rate;
+        // VM 可覆盖返还火苗系数：-1=用原逻辑（obj_shovel_slot.flame_rate），0~1=直接用 VM 系数
+        var _rate = global._VM_shovel_flame_rate;
+        if (_rate == -1) _rate = obj_shovel_slot.flame_rate;
         if (_rate > 0) {
             var _cost = get_plant_data_with_skill(plant_to_remove.plant_id, plant_to_remove.shape, plant_to_remove.current_level, plant_to_remove.skill)[? "cost"];
             _flame_amount = round(_cost * _rate);

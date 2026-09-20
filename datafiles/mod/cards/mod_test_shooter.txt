@@ -1,0 +1,34 @@
+// 测试平射卡：前方一行出现敌人时，按攻击间隔发射直线子弹
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+    VM_SetProp(self, "cd", 0)
+    VM_SetProp(self, "sprite_index", "spr_xiao_long_bao")
+    VM_SetProp(self, "attack_anim", 7)
+    VM_SetProp(self, "idle_anim", 11)
+    VM_SetProp(self, "flash_speed", 5)
+    VM_SetProp(self, "plant_type", "normal")
+    VM_SetProp(self, "is_slowdown", 0)
+    VM_ShellPrint("mod_test_shooter create")
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+    tick = tick + 1
+    r = VM_GetProp(self, "grid_row")
+    c = VM_GetProp(self, "grid_col")
+    // 同行 c..最右列有敌人（任意类型）
+    if (VM_EnemyInRange(r, r, c, 15, "") == 1) {
+        cd = VM_GetProp(self, "cd") + 1
+        if (cd >= 78) {
+            cd = 0
+            b = VM_CreateInstance("xiaolongbao_bullet", VM_GetProp(self, "x") + 40, VM_GetProp(self, "y") - 75)
+            VM_SetProp(b, "damage", 25)
+            VM_SetProp(b, "move_speed", 8)
+            VM_SetProp(b, "row", r)
+            VM_PlaySound("snd_shot")
+        }
+        VM_SetProp(self, "cd", cd)
+    } else {
+        VM_SetProp(self, "cd", 0)
+    }
+}
