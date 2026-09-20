@@ -31,7 +31,7 @@ if not is_placed{
 					if array_get_index(global.banned_gems_online, gem_id) != -1 { continue; }
 					var gem_info = get_gem_info(gem_id)
 					if gem_info.obj != noone{
-						global._mod_pending_gem_id = gem_id; var _gem_inst = instance_create_depth(390,213+gem_index*80,-500,gem_info.obj); _gem_inst.parent_player = id;
+						global._mod_pending_gem_id = gem_id; instance_create_depth(390,213+gem_index*80,-500,gem_info.obj);
 						gem_index++
 					}
 				}
@@ -62,7 +62,9 @@ if not is_placed{
 				if array_get_index(global.banned_gems_online, gem_id) != -1 { continue; }
 				var gem_info = get_gem_info(gem_id)
 				if gem_info.obj != noone{
-					global._mod_pending_gem_id = gem_id; var _gem_inst = instance_create_depth(390,213+gem_index*80,-500,gem_info.obj); _gem_inst.parent_player = id;
+					global._mod_pending_gem_id = gem_id;
+					var _gem_inst = instance_create_depth(390,213+gem_index*80,-500,gem_info.obj); 
+					//_gem_inst.parent_player = id;
 					gem_index++
 				}
 			}

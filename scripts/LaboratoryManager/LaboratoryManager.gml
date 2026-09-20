@@ -138,6 +138,10 @@ function LaboratoryManager() constructor {
         var _json_path_list = self.file_util.find_files_with_extension_recursively(kCustomStageFolder, ".json")
         for (var i = 0; i < array_length(_json_path_list); i++) {
             var _json_path = _json_path_list[i]
+            // 跳过联机地图缓存目录（laboratory/cache/），其中的 json 是地图元数据而非关卡定义
+            if (string_pos("/" + kCustomStageFolder + "/cache/", "/" + string_replace_all(string(_json_path), "\\", "/")) > 0) {
+                continue
+            }
             var _result = self._load_stage(_json_path)
             if (_result.is_failed()) {
                 error_message += _result.get_error_stack()
