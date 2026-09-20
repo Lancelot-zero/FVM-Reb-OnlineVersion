@@ -1,0 +1,36 @@
+// 三连发枪：同行出现敌人时，按攻击间隔向本行及上下两行发射包子子弹
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+    VM_SetProp(self, "sprite_index", "spr_star_gun")
+    VM_SetProp(self, "cd", 0)
+    VM_ShellPrint("triple_gun create")
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+    r = VM_GetProp(self, "grid_row")
+    c = VM_GetProp(self, "grid_col")
+    // 同行 c..最右列有敌人时开火
+    if (VM_EnemyInRange(r, r, c, 15, "") == 1) {
+        cd = VM_GetProp(self, "cd") + 1
+        if (cd >= VM_GetProp(self, "cycle")) {
+            cd = 0
+            b = VM_CreateInstance("xiaolongbao_bullet", VM_GetProp(self, "x") + 40, VM_GetProp(self, "y") - 75)
+            VM_SetProp(b, "damage", VM_GetProp(self, "atk"))
+            VM_SetProp(b, "move_speed", 8)
+            VM_SetProp(b, "row", r)
+            b2 = VM_CreateInstance("xiaolongbao_bullet", VM_GetProp(self, "x") + 30, VM_GetProp(self, "y") - 115)
+            VM_SetProp(b2, "damage", VM_GetProp(self, "atk"))
+            VM_SetProp(b2, "move_speed", 8)
+            VM_SetProp(b2, "row", r - 1)
+            b3 = VM_CreateInstance("xiaolongbao_bullet", VM_GetProp(self, "x") + 30, VM_GetProp(self, "y") - 35)
+            VM_SetProp(b3, "damage", VM_GetProp(self, "atk"))
+            VM_SetProp(b3, "move_speed", 8)
+            VM_SetProp(b3, "row", r + 1)
+            VM_PlaySound("snd_shot")
+        }
+        VM_SetProp(self, "cd", cd)
+    } else {
+        VM_SetProp(self, "cd", 0)
+    }
+}

@@ -21,7 +21,11 @@ if card_equipped_attire_id(card_id) != -1{
 	var place_list = get_attire_info(card_equipped_attire_id(card_id)).spr
 	place_preview = place_list[get_card_info_simple(card_id).shape]
 }
-draw_sprite_ext(card_spr, 0, x, y+18,0.9,0.9,0,c_white,1);
+
+
+if(vm_card_spr!=-1)card_spr =get_load_sprite(vm_card_spr);
+if(vm_place_preview!=-1)place_preview=get_load_sprite(vm_place_preview);
+draw_sprite_ext(card_spr, 0, x+ vm_card_spr_addx, y+18+ vm_card_spr_addy,0.9,0.9,0,c_white,1);
 //绘制星级
 
 if clevel > 0{

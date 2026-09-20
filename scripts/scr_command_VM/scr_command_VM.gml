@@ -2177,6 +2177,11 @@ function VM_CreateInstance(obj_name_addr, x_addr, y_addr) {
 function VM_GetProp(inst_id_addr, prop_addr) {
     var inst_id = vm_read_mem(global.__vm, inst_id_addr);
     var prop = vm_read_mem(global.__vm, prop_addr);
+    // 特殊实例 id 0：读全局变量（0 永远不是真实实例 id），插件可用 VM_GetProp(0, "名字") 读取
+    if (inst_id == 0) {
+        if (variable_global_exists(prop)) return variable_global_get(prop);
+        return undefined;
+    }
     if (inst_id < 0) {
         var _real = ds_map_find_value(global._VM_id_to_real, -inst_id);
         if (is_undefined(_real)) return undefined;
@@ -2234,6 +2239,12 @@ function VM_SetProp(inst_id_addr, prop_addr, value_addr) {
     var inst_id = vm_read_mem(global.__vm, inst_id_addr);
     var prop = vm_read_mem(global.__vm, prop_addr);
     var value = vm_read_mem(global.__vm, value_addr);
+    // 特殊实例 id 0：写全局变量（0 永远不是真实实例 id），
+    // 插件可用 VM_SetProp(0, "名字", 值) 定义/修改全局，不存在会自动创建
+    if (inst_id == 0) {
+        variable_global_set(prop, value);
+        return;
+    }
     if (inst_id < 0) {
         var _real = ds_map_find_value(global._VM_id_to_real, -inst_id);
         if (is_undefined(_real)) return;
@@ -2414,6 +2425,7 @@ function VM_SpawnEnemy(type_addr, row_addr, hp_override_addr) {
     var _pos = get_world_position_from_grid(global.grid_cols, row);
     var _bak_log = global._evt_log_enabled;   // 记录日志开关
     global._evt_log_enabled = false;          // 创建不进帧尾日志（本函数手动广播）
+    global._mod_pending_enemy_id = type;  // mod 敌人创建前写入 pending id
     var _enemy = instance_create_depth(_pos.x + 30, _pos.y + 38, 0, _info._obj);
     if (!is_undefined(hp_override) && hp_override > 0) {
         _enemy.hp = hp_override;
@@ -2449,6 +2461,7 @@ function VM_SpawnBoss(type_addr, row_addr, hp_override_addr) {
     var _info = global.enemy_map[? type];
     if (is_undefined(_info)) return -1;
     var _pos = get_world_position_from_grid(10, row);
+    global._mod_pending_enemy_id = type;  // mod 敌人创建前写入 pending id
     var _boss = instance_create_depth(_pos.x - 80, _pos.y + 30, -200, _info._obj);
     if (!is_undefined(hp_override) && hp_override > 0) {
         _boss.hp = hp_override;
@@ -3621,6 +3634,10 @@ function VM_HandleNotify(json) {
     global._VM_sync_exec = true;
 }
 
+global._VM_last_damaged_player = -1;
+global._VM_last_damaged_enemy = -1;
+global._VM_last_damaged_card  = -1;
+
 global._VM_last_boss          = -1;
 global._VM_last_created_enemy = -1;
 global._VM_last_killed_enemy  = -1;
@@ -3826,6 +3843,9 @@ function VM_InitRoomEntry(buf) {
 	global._VM_ban_weapon        = false;
 	global._VM_ban_super_weapon  = false;
 	global._VM_ban_shield        = false;
+	global._VM_last_damaged_player = -1;
+	global._VM_last_damaged_enemy = -1;
+	global._VM_last_damaged_card  = -1;
 
     global._sync_vm_bin_buf = undefined;
     global._VM_strings = [];

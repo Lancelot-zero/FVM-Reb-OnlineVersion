@@ -16,6 +16,13 @@ cshape = 0
 cskill = 0
 info_got = false
 
+vm_card_spr=-1
+vm_place_preview=-1
+vm_card_spr_addx = 0
+vm_card_spr_addy = 0
+
+
+
 is_ready = true           // 卡槽是否可用
 is_selected = false       // 卡槽是否被选中
 hover_alpha = 0           // 悬停提示透明度

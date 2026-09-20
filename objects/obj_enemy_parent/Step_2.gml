@@ -82,3 +82,10 @@ if (global.network.mode == "server" && is_boss && state != _state_prev) {
 	}
 }
 _state_prev = state;
+
+if (pre_hp>hp&&buffer_exists(global._VM_ENEMY_DAMAGED)) {	
+	global._VM_last_damaged_enemy = id;
+    VM_Execute(global.__vm, global._VM_ENEMY_DAMAGED, "_VM_ENEMY_DAMAGED");
+}
+pre_hp = hp;
+

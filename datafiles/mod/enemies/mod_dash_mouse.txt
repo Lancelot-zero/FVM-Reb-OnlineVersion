@@ -1,0 +1,20 @@
+// mod_dash_mouse：演示敌人逻辑
+// 移动/攻击/死亡等基础行为由 obj_enemy_parent 提供，这里只写特殊逻辑：
+// 每 3 秒冲刺（提速）2.5 秒
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+    VM_SetProp(self, "dash_timer", 0)
+    VM_SetProp(self, "move_speed", 0.9)
+}
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+    t = VM_GetProp(self, "dash_timer") + 1
+    if (t == 180) {
+        VM_SetProp(self, "move_speed", 1.6)
+    }
+    if (t == 330) {
+        VM_SetProp(self, "move_speed", 0.9)
+        t = 0
+    }
+    VM_SetProp(self, "dash_timer", t)
+}

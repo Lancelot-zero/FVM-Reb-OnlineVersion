@@ -187,14 +187,14 @@ switch(state) {
 
 		if (variable_global_exists("grid_plants") && ds_exists(global.grid_plants, ds_type_grid)) {
 			// 左右±2列范围
-			var start_c = max(grid_col - 2, 0);
+			var start_c = max(grid_col - 2, -1);
 			var end_c = min(grid_col + 2, global.grid_cols - 1);
 
 			for(var _c = start_c; _c <= end_c; _c++)
 			{
 				
 				if(grid_row<0||grid_row>=global.grid_rows)continue;
-				var _list = ds_grid_get(global.grid_plants, _c, grid_row);
+				var _list = ds_grid_get(global.grid_plants, (_c+global.grid_cols+64)%(global.grid_cols+64), grid_row);
 				for(var _item = 0; _item < ds_list_size(_list); _item++)
 				{
 					var plant_inst = ds_list_find_value(_list, _item);
@@ -339,13 +339,13 @@ switch(state) {
 		if (variable_global_exists("grid_plants") && ds_exists(global.grid_plants, ds_type_grid)) {
 			
 			// 左右±2列范围
-			var start_c = max(grid_col - 2, 0);
+			var start_c = max(grid_col - 2, -1);
 			var end_c = min(grid_col + 2, global.grid_cols - 1);
 	
 			for(var _c = start_c; _c <= end_c; _c++)
 			{
 				if(grid_row<0||grid_row>=global.grid_rows)continue;
-				var _list = ds_grid_get(global.grid_plants, _c, grid_row);
+				var _list = ds_grid_get(global.grid_plants, (_c+global.grid_cols+64)%(global.grid_cols+64), grid_row);
 				for(var _item = 0; _item < ds_list_size(_list); _item++)
 				{
 					var plant_inst = ds_list_find_value(_list, _item);

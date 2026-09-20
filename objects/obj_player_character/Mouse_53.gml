@@ -31,7 +31,7 @@ if not is_placed{
 					if array_get_index(global.banned_gems_online, gem_id) != -1 { continue; }
 					var gem_info = get_gem_info(gem_id)
 					if gem_info.obj != noone{
-						instance_create_depth(390,213+gem_index*80,-500,gem_info.obj)
+						global._mod_pending_gem_id = gem_id; var _gem_inst = instance_create_depth(390,213+gem_index*80,-500,gem_info.obj); _gem_inst.parent_player = id;
 						gem_index++
 					}
 				}
@@ -50,6 +50,7 @@ if not is_placed{
 		var gem_index = 0
 		if global.save_data.equipped_items.main_weapon.id != ""&&global._VM_ban_weapon==false{
 			var main_info = get_weapon_info(global.save_data.equipped_items.main_weapon.id)
+			global._mod_pending_weapon_id = global.save_data.equipped_items.main_weapon.id
 			var main_weapon_inst = instance_create_depth(x-10,y-100,depth-1,main_info.obj)
 			main_weapon_inst.parent_player = id
 			main_weapon_inst.grid_row = grid_row
@@ -61,7 +62,7 @@ if not is_placed{
 				if array_get_index(global.banned_gems_online, gem_id) != -1 { continue; }
 				var gem_info = get_gem_info(gem_id)
 				if gem_info.obj != noone{
-					instance_create_depth(390,213+gem_index*80,-500,gem_info.obj)
+					global._mod_pending_gem_id = gem_id; var _gem_inst = instance_create_depth(390,213+gem_index*80,-500,gem_info.obj); _gem_inst.parent_player = id;
 					gem_index++
 				}
 			}
@@ -81,6 +82,7 @@ if not is_placed{
 		}
 		if global.save_data.equipped_items.super_weapon.id != ""&&global._VM_ban_super_weapon==false{
 			var main_info = get_weapon_info(global.save_data.equipped_items.super_weapon.id)
+			global._mod_pending_weapon_id = global.save_data.equipped_items.super_weapon.id
 			var main_weapon_inst = instance_create_depth(x-10,y-100,depth-1,main_info.obj)
 			main_weapon_inst.parent_player = id
 			main_weapon_inst.grid_row = grid_row

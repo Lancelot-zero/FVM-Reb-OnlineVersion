@@ -1,0 +1,11 @@
+{
+  "name": "三连发枪",
+  "description": "mod示例主武器：前方有敌人时向三行发射包子子弹（.bin插件逻辑）",
+  "sprite": "spr_star_gun",
+  "icon": "spr_star_gun_icon",
+  "slot": "main_weapon",
+  "atk": 10,
+  "cycle": 90,
+  "atk_impact": [12, 14, 16, 18, 20, 22, 26, 32, 40, 55, 70, 85, 100, 115, 130, 145],
+  "shop": { "cost": "20000", "description": "mod示例主武器：三行发射包子子弹（.bin插件逻辑）" }
+}

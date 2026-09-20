@@ -1,0 +1,26 @@
+// 哨兵宝石：面前有敌人时累计冷却，冷却到就发射一发包子
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+    VM_SetProp(self, "sprite_index", "spr_attack_gem_icon")
+    VM_SetProp(self, "cd", 0)
+    VM_ShellPrint("sentry_gem create")
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+    // 面前任意位置有敌人时累计冷却
+    if (VM_EnemyInRange(0, 5, 0, 15, "") == 1) {
+        cd = VM_GetProp(self, "cd") + 1
+        if (cd >= VM_GetProp(self, "cooldown")) {
+            cd = 0
+            b = VM_CreateInstance("xiaolongbao_bullet", VM_GetProp(self, "x") + 30, VM_GetProp(self, "y"))
+            VM_SetProp(b, "damage", 25)
+            VM_SetProp(b, "move_speed", 8)
+            VM_SetProp(b, "row", 2)
+            VM_PlaySound("snd_shot")
+        }
+        VM_SetProp(self, "cd", cd)
+    } else {
+        VM_SetProp(self, "cd", 0)
+    }
+}

@@ -1,0 +1,10 @@
+{
+	"name": "mod测试时装",
+	"target_card": "player",
+	"icon": "spr_player_attire_1",
+	"spr": "spr_player_attire_1",
+	"shop": {
+		"cost": "1000",
+		"description": "mod时装演示：雪球兔兔外观"
+	}
+}

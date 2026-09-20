@@ -385,3 +385,481 @@ function src_mod_reload() {
 	file_find_close();
 	return _count;
 }
+
+/// @function src_mod_register_weapon(_id, _c)
+/// @desc 用一份武器 JSON 注册一把武器（register_weapon），发射对象统一用 obj_weapon_mod；
+///       副武器只有数值（盾牌逻辑在 obj_player_shield），obj 填 obj_player_shield。
+///       可选 "bullet" 字段：无 bin 时 obj_weapon_mod 的默认攻击逻辑按此发射子弹
+/// @param _id 武器 id
+/// @param _c 武器配置结构体：
+/// {
+///   "name": "武器名", "description": "描述",
+///   "sprite": "spr_xxx", "icon": "spr_xxx",     // 运行时按名加载
+///   "slot": "main_weapon|secondary_weapon|super_weapon",
+///   "atk": 10, "cycle": 78,
+///   "atk_impact": [16档], "cycle_impact": [16档],
+///   "hp_increase": 100,                          // 副武器
+///   "shop": { "cost": "20000", "description": "商店描述" }  // 可选：注册商店（type=weapon）
+/// }
+/// @return true=注册成功
+function src_mod_register_weapon(_id, _c) {
+	if (!is_struct(_c)) return false;
+	var _spr = noone;
+	var _spr_name = _c[$ "sprite"];
+	if (is_string(_spr_name) && _spr_name != "") { _spr = get_load_sprite(_spr_name); }
+	var _icon = noone;
+	var _icon_name = _c[$ "icon"];
+	if (is_string(_icon_name) && _icon_name != "") { _icon = get_load_sprite(_icon_name); }
+	if (_icon == noone) { _icon = _spr; }
+
+	var _data = {
+		sprite: _spr,
+		icon: _icon,
+		obj: (_c[$ "slot"] == "secondary_weapon") ? obj_player_shield : obj_weapon_mod,
+		slot: _c[$ "slot"] ?? "main_weapon",
+		atk: _c[$ "atk"] ?? 0,
+		cycle: _c[$ "cycle"] ?? 60,
+		description: _c[$ "description"] ?? _id,
+		name: _c[$ "name"] ?? _id,
+	};
+	if (variable_struct_exists(_c, "atk_impact"))   { _data[$ "atk_impact"]   = _c[$ "atk_impact"]; }
+	if (variable_struct_exists(_c, "cycle_impact")) { _data[$ "cycle_impact"] = _c[$ "cycle_impact"]; }
+	if (variable_struct_exists(_c, "hp_increase"))  { _data[$ "hp_increase"]  = _c[$ "hp_increase"]; }
+
+	register_weapon(_id, _data);
+
+	if (variable_struct_exists(_c, "shop")) {  // 商店（type=weapon，与原版武器一致）
+		var _sp = _c[$ "shop"];
+		register_goods(_id, {
+			type: "weapon",
+			cost: string(_sp[$ "cost"] ?? 0),
+			unlock_item_id: _id,
+			description: _sp[$ "description"] ?? "",
+			display_name: _c[$ "name"] ?? _id,
+		});
+	}
+	return true;
+}
+
+/// @function src_mod_weapons_init(_dir)
+/// @desc 扫描 mod/weapons/ 目录下的所有 .json，每个文件注册一把武器，
+///       文件名（不含 .json）即武器 id；同名 .bin 解析为该武器自己的虚拟机，
+///       统一放进 global.mod_weapon_vms；注册成功的 id 记录进 global.mod_weapon_ids
+/// @return 成功注册的武器数量；-1=目录不存在
+function src_mod_weapons_init(_dir = "") {
+	if (_dir == "") { _dir = working_directory + "mod/weapons/"; }
+	if (!directory_exists(_dir)) {
+		show_debug_message("src_mod: 目录不存在 " + _dir);
+		return -1;
+	}
+	if (!variable_global_exists("mod_weapon_vms")) { global.mod_weapon_vms = ds_map_create(); }
+
+	var _count = 0;
+	var _file = file_find_first(_dir + "*.json", 0);
+	while (_file != "") {
+		var _path = _dir + _file;
+		var _json = json_parse(src_mod_read_text(_path));
+		if (!is_struct(_json)) {
+			show_debug_message("src_mod: 武器 JSON 解析失败 " + _path);
+		} else {
+			var _name = filename_name(_file);
+			var _id = string_copy(_name, 1, string_length(_name) - 5);  // 去掉 .json
+			var _bin_path = string_replace(_path, ".json", ".bin");
+			var _bin_buf = file_exists(_bin_path) ? buffer_load(_bin_path) : undefined;
+			global.mod_weapon_vms[? _id] = src_mod_card_vm_load(_bin_buf, _dir);
+			global.mod_weapon_vms[? _id][$ "card_data"] = _json;
+			global.mod_weapon_vms[? _id][$ "mod_dir"] = _dir;
+			if (src_mod_register_weapon(_id, _json)) {
+				show_debug_message("src_mod: 注册武器 " + _id);
+				_count++;
+			}
+		}
+		_file = file_find_next();
+	}
+	file_find_close();
+	return _count;
+}
+
+/// @function src_mod_weapons_reload()
+/// @desc 仅重载所有 mod 武器的 bin 代码（与 src_mod_reload 同套路），
+///       不触碰 weapon_pool 注册表
+/// @return 重载了 bin 的武器数量；-1=mod 目录不存在
+function src_mod_weapons_reload() {
+	var _dir = working_directory + "mod/weapons/";
+	if (!directory_exists(_dir)) {
+		show_debug_message("src_mod: 目录不存在 " + _dir);
+		return -1;
+	}
+	if (!variable_global_exists("mod_weapon_vms")) { global.mod_weapon_vms = ds_map_create(); }
+
+	var _count = 0;
+	var _file = file_find_first(_dir + "*.json", 0);
+	while (_file != "") {
+		var _path = _dir + _file;
+		var _json = json_parse(src_mod_read_text(_path));
+		if (!is_struct(_json)) {
+			show_debug_message("src_mod: 武器 JSON 解析失败 " + _path);
+		} else {
+			var _name = filename_name(_file);
+			var _id = string_copy(_name, 1, string_length(_name) - 5);
+			var _bin_path = string_replace(_path, ".json", ".bin");
+			var _bin_buf = file_exists(_bin_path) ? buffer_load(_bin_path) : undefined;
+			var _vm;
+			if (ds_map_exists(global.mod_weapon_vms, _id)) {
+				_vm = src_mod_card_vm_fill(global.mod_weapon_vms[? _id], _bin_buf, _dir);
+			} else {
+				_vm = src_mod_card_vm_load(_bin_buf, _dir);
+			}
+			_vm[$ "card_data"] = _json;
+			_vm[$ "mod_dir"] = _dir;
+			_count++;
+		}
+		_file = file_find_next();
+	}
+	file_find_close();
+	return _count;
+}
+
+/// @function src_mod_register_gem(_id, _c)
+/// @desc 用一份宝石 JSON 注册一颗宝石（register_gem），实体统一用 obj_gem_mod；
+///       JSON 除 name/description/icon/slot/shop/passive 外其余字段原样透传进
+///       宝石数据（max_level/first_cooldown/cooldown 数组等升级字段），效果逻辑在 .bin
+/// @param _id 宝石 id
+/// @param _c 宝石配置结构体：
+/// {
+///   "name": "宝石名", "description": "描述",
+///   "icon": "spr_xxx",
+///   "slot": "main_weapon|secondary_weapon|super_weapon",
+///   "max_level": 10, "first_cooldown": 60, "cooldown": [11档],
+///   "passive": false,     // true=纯被动，obj 填 noone 不创建实体
+///   "shop": { "cost": "25000", "description": "商店描述" }  // 可选：注册商店（type=gem）
+/// }
+/// @return true=注册成功
+function src_mod_register_gem(_id, _c) {
+	if (!is_struct(_c)) return false;
+	var _icon = noone;
+	var _icon_name = _c[$ "icon"];
+	if (is_string(_icon_name) && _icon_name != "") { _icon = get_load_sprite(_icon_name); }
+
+	var _data = {
+		name: _c[$ "name"] ?? _id,
+		description: _c[$ "description"] ?? _id,
+		icon: _icon,
+		slot: _c[$ "slot"] ?? "main_weapon",
+		obj: (_c[$ "passive"] == true) ? noone : obj_gem_mod,
+	};
+	// 其余字段（max_level/first_cooldown/cooldown 数组等）原样透传
+	var _keys = variable_struct_get_names(_c);
+	for (var _i = 0; _i < array_length(_keys); _i++) {
+		var _k = _keys[_i];
+		if (_k == "name" || _k == "description" || _k == "icon" || _k == "slot" || _k == "shop" || _k == "passive") continue;
+		_data[$ _k] = _c[$ _k];
+	}
+
+	register_gem(_id, _data);
+
+	if (variable_struct_exists(_c, "shop")) {  // 商店（type=gem，与原版宝石一致）
+		var _sp = _c[$ "shop"];
+		register_goods(_id, {
+			type: "gem",
+			cost: string(_sp[$ "cost"] ?? 0),
+			unlock_item_id: _id,
+			description: _sp[$ "description"] ?? "",
+			display_name: _c[$ "name"] ?? _id,
+		});
+	}
+	return true;
+}
+
+/// @function src_mod_gems_init(_dir)
+/// @desc 扫描 mod/gems/ 目录下的所有 .json，每个文件注册一颗宝石，
+///       文件名（不含 .json）即宝石 id；同名 .bin 解析为该宝石自己的虚拟机，
+///       统一放进 global.mod_gem_vms
+/// @return 成功注册的宝石数量；-1=目录不存在
+function src_mod_gems_init(_dir = "") {
+	if (_dir == "") { _dir = working_directory + "mod/gems/"; }
+	if (!directory_exists(_dir)) {
+		show_debug_message("src_mod: 目录不存在 " + _dir);
+		return -1;
+	}
+	if (!variable_global_exists("mod_gem_vms")) { global.mod_gem_vms = ds_map_create(); }
+
+	var _count = 0;
+	var _file = file_find_first(_dir + "*.json", 0);
+	while (_file != "") {
+		var _path = _dir + _file;
+		var _json = json_parse(src_mod_read_text(_path));
+		if (!is_struct(_json)) {
+			show_debug_message("src_mod: 宝石 JSON 解析失败 " + _path);
+		} else {
+			var _name = filename_name(_file);
+			var _id = string_copy(_name, 1, string_length(_name) - 5);  // 去掉 .json
+			var _bin_path = string_replace(_path, ".json", ".bin");
+			var _bin_buf = file_exists(_bin_path) ? buffer_load(_bin_path) : undefined;
+			global.mod_gem_vms[? _id] = src_mod_card_vm_load(_bin_buf, _dir);
+			global.mod_gem_vms[? _id][$ "card_data"] = _json;
+			global.mod_gem_vms[? _id][$ "mod_dir"] = _dir;
+			if (src_mod_register_gem(_id, _json)) {
+				show_debug_message("src_mod: 注册宝石 " + _id);
+				_count++;
+			}
+		}
+		_file = file_find_next();
+	}
+	file_find_close();
+	return _count;
+}
+
+/// @function src_mod_gems_reload()
+/// @desc 仅重载所有 mod 宝石的 bin 代码（与 src_mod_reload 同套路），
+///       不触碰 gems_pool 注册表
+/// @return 重载了 bin 的宝石数量；-1=mod 目录不存在
+function src_mod_gems_reload() {
+	var _dir = working_directory + "mod/gems/";
+	if (!directory_exists(_dir)) {
+		show_debug_message("src_mod: 目录不存在 " + _dir);
+		return -1;
+	}
+	if (!variable_global_exists("mod_gem_vms")) { global.mod_gem_vms = ds_map_create(); }
+
+	var _count = 0;
+	var _file = file_find_first(_dir + "*.json", 0);
+	while (_file != "") {
+		var _path = _dir + _file;
+		var _json = json_parse(src_mod_read_text(_path));
+		if (!is_struct(_json)) {
+			show_debug_message("src_mod: 宝石 JSON 解析失败 " + _path);
+		} else {
+			var _name = filename_name(_file);
+			var _id = string_copy(_name, 1, string_length(_name) - 5);
+			var _bin_path = string_replace(_path, ".json", ".bin");
+			var _bin_buf = file_exists(_bin_path) ? buffer_load(_bin_path) : undefined;
+			var _vm;
+			if (ds_map_exists(global.mod_gem_vms, _id)) {
+				_vm = src_mod_card_vm_fill(global.mod_gem_vms[? _id], _bin_buf, _dir);
+			} else {
+				_vm = src_mod_card_vm_load(_bin_buf, _dir);
+			}
+			_vm[$ "card_data"] = _json;
+			_vm[$ "mod_dir"] = _dir;
+			_count++;
+		}
+		_file = file_find_next();
+	}
+	file_find_close();
+	return _count;
+}
+
+/// @function src_mod_register_attire(_id, _c)
+/// @desc 用一份时装 JSON 注册一件时装（register_attire）。时装是纯外观：把 spr/icon
+///       贴图名按运行时加载（get_load_sprite），装备逻辑（equip_attire/人物换皮）都是
+///       原版流程，不用写任何 GML。可选 "shop" 注册商店：target_card=="player" 的
+///       角色时装进 tab5（type=player_attire），卡片时装进 tab4（type=card_attire）
+/// @param _id 时装 id
+/// @param _c 时装配置结构体：
+/// {
+///   "name": "时装名",
+///   "target_card": "player",              // 或卡片 id
+///   "icon": "spr_xxx",                    // 时装图标（编辑菜单/商店用）
+///   "spr": "spr_xxx" 或 ["spr_a","spr_b"],  // 单张贴图或动画帧数组
+///   "card_slot_icon": ["spr_xxx",...],     // 可选：卡片卡槽图标帧数组
+///   "shop": { "cost": "50000", "description": "商店描述" }  // 可选：注册商店
+/// }
+/// @return true=注册成功
+function src_mod_register_attire(_id, _c) {
+	if (!is_struct(_c)) return false;
+	var _icon = noone;
+	var _icon_name = _c[$ "icon"];
+	if (is_string(_icon_name) && _icon_name != "") { _icon = get_load_sprite(_icon_name); }
+
+	// spr：单张贴图名或帧名数组，逐张按名加载
+	var _spr = noone;
+	var _spr_val = _c[$ "spr"];
+	if (is_string(_spr_val) && _spr_val != "") {
+		_spr = get_load_sprite(_spr_val);
+	} else if (is_array(_spr_val)) {
+		_spr = [];
+		for (var _i = 0; _i < array_length(_spr_val); _i++) {
+			array_push(_spr, get_load_sprite(_spr_val[_i]));
+		}
+	}
+
+	var _data = {
+		target_card: _c[$ "target_card"] ?? "player",
+		name: _c[$ "name"] ?? _id,
+		icon: _icon,
+		spr: _spr,
+	};
+	// card_slot_icon：卡槽图标帧数组（仅卡片时装用到，可选）
+	if (is_array(_c[$ "card_slot_icon"])) {
+		var _csi = [];
+		var _csi_val = _c[$ "card_slot_icon"];
+		for (var _i = 0; _i < array_length(_csi_val); _i++) {
+			array_push(_csi, get_load_sprite(_csi_val[_i]));
+		}
+		_data[$ "card_slot_icon"] = _csi;
+	}
+
+	register_attire(_id, _data);
+
+	if (variable_struct_exists(_c, "shop")) {  // 商店：角色时装 tab5，卡片时装 tab4
+		var _sp = _c[$ "shop"];
+		register_goods(_id, {
+			type: (_data[$ "target_card"] == "player") ? "player_attire" : "card_attire",
+			cost: string(_sp[$ "cost"] ?? 0),
+			unlock_item_id: _id,
+			description: _sp[$ "description"] ?? "",
+			display_name: _data[$ "name"],
+		});
+	}
+	return true;
+}
+
+/// @function src_mod_attires_init(_dir)
+/// @desc 扫描 mod/attires/ 目录下的所有 .json，每个文件注册一件时装，
+///       文件名（不含 .json）即时装 id。时装纯外观无逻辑，只有 json 没有 bin
+/// @return 成功注册的时装数量；-1=目录不存在
+function src_mod_attires_init(_dir = "") {
+	if (_dir == "") { _dir = working_directory + "mod/attires/"; }
+	if (!directory_exists(_dir)) {
+		show_debug_message("src_mod: 目录不存在 " + _dir);
+		return -1;
+	}
+
+	var _count = 0;
+	var _file = file_find_first(_dir + "*.json", 0);
+	while (_file != "") {
+		var _path = _dir + _file;
+		var _json = json_parse(src_mod_read_text(_path));
+		if (!is_struct(_json)) {
+			show_debug_message("src_mod: 时装 JSON 解析失败 " + _path);
+		} else {
+			var _name = filename_name(_file);
+			var _id = string_copy(_name, 1, string_length(_name) - 5);  // 去掉 .json
+			if (src_mod_register_attire(_id, _json)) {
+				show_debug_message("src_mod: 注册时装 " + _id);
+				_count++;
+			}
+		}
+		_file = file_find_next();
+	}
+	file_find_close();
+	return _count;
+}
+
+/// @function src_mod_register_enemy(_id, _c)
+/// @desc 用一份敌人 JSON 注册一个敌人（register_enemy），实体统一用 obj_enemy_mod
+///       （继承 obj_enemy_parent，移动/攻击/死亡等基础行为全部复用父类，
+///       特殊逻辑写在同名 .bin 里）。注册进 enemy_map 后，关卡 JSON 波次里直接
+///       写敌人 id、插件里用 VM_SpawnEnemy/VM_SpawnBoss 都能生成它
+/// @param _id 敌人 id
+/// @param _c 敌人配置结构体：
+/// {
+///   "name": "敌人名", "description": "描述",
+///   "spr": "spr_xxx",
+///   "hp": 100, "shield": 0, "speed": 0.3,
+///   "atk": 10, "cycle": 36, "range": 90,
+///   "ash_proof": false, "feature": "land|water"
+/// }
+/// @return true=注册成功
+function src_mod_register_enemy(_id, _c) {
+	if (!is_struct(_c)) return false;
+	var _spr = noone;
+	var _spr_name = _c[$ "spr"];
+	if (is_string(_spr_name) && _spr_name != "") { _spr = get_load_sprite(_spr_name); }
+
+	register_enemy(_id, {
+		name: _c[$ "name"] ?? _id,
+		_obj: obj_enemy_mod,
+		hp: _c[$ "hp"] ?? 100,
+		shield: _c[$ "shield"] ?? 0,
+		description: _c[$ "description"] ?? "",
+		speed: _c[$ "speed"] ?? 0.3,
+		atk: _c[$ "atk"] ?? 10,
+		cycle: _c[$ "cycle"] ?? 36,
+		range: _c[$ "range"] ?? 90,
+		ash_proof: _c[$ "ash_proof"] ?? false,
+		spr: _spr,
+		feature: _c[$ "feature"] ?? "land",
+	});
+	return true;
+}
+
+/// @function src_mod_enemies_init(_dir)
+/// @desc 扫描 mod/enemies/ 目录下的所有 .json，每个文件注册一个敌人，
+///       文件名（不含 .json）即敌人 id；同名 .bin 解析为该敌人自己的虚拟机，
+///       统一放进 global.mod_enemy_vms
+/// @return 成功注册的敌人数量；-1=目录不存在
+function src_mod_enemies_init(_dir = "") {
+	if (_dir == "") { _dir = working_directory + "mod/enemies/"; }
+	if (!directory_exists(_dir)) {
+		show_debug_message("src_mod: 目录不存在 " + _dir);
+		return -1;
+	}
+	if (!variable_global_exists("mod_enemy_vms")) { global.mod_enemy_vms = ds_map_create(); }
+
+	var _count = 0;
+	var _file = file_find_first(_dir + "*.json", 0);
+	while (_file != "") {
+		var _path = _dir + _file;
+		var _json = json_parse(src_mod_read_text(_path));
+		if (!is_struct(_json)) {
+			show_debug_message("src_mod: 敌人 JSON 解析失败 " + _path);
+		} else {
+			var _name = filename_name(_file);
+			var _id = string_copy(_name, 1, string_length(_name) - 5);  // 去掉 .json
+			var _bin_path = string_replace(_path, ".json", ".bin");
+			var _bin_buf = file_exists(_bin_path) ? buffer_load(_bin_path) : undefined;
+			global.mod_enemy_vms[? _id] = src_mod_card_vm_load(_bin_buf, _dir);
+			global.mod_enemy_vms[? _id][$ "card_data"] = _json;
+			global.mod_enemy_vms[? _id][$ "mod_dir"] = _dir;
+			if (src_mod_register_enemy(_id, _json)) {
+				show_debug_message("src_mod: 注册敌人 " + _id);
+				_count++;
+			}
+		}
+		_file = file_find_next();
+	}
+	file_find_close();
+	return _count;
+}
+
+/// @function src_mod_enemies_reload()
+/// @desc 仅重载所有 mod 敌人的 bin 代码（与 src_mod_reload 同套路），
+///       不触碰 enemy_map 注册表
+/// @return 重载了 bin 的敌人数量；-1=mod 目录不存在
+function src_mod_enemies_reload() {
+	var _dir = working_directory + "mod/enemies/";
+	if (!directory_exists(_dir)) {
+		show_debug_message("src_mod: 目录不存在 " + _dir);
+		return -1;
+	}
+	if (!variable_global_exists("mod_enemy_vms")) { global.mod_enemy_vms = ds_map_create(); }
+
+	var _count = 0;
+	var _file = file_find_first(_dir + "*.json", 0);
+	while (_file != "") {
+		var _path = _dir + _file;
+		var _json = json_parse(src_mod_read_text(_path));
+		if (!is_struct(_json)) {
+			show_debug_message("src_mod: 敌人 JSON 解析失败 " + _path);
+		} else {
+			var _name = filename_name(_file);
+			var _id = string_copy(_name, 1, string_length(_name) - 5);
+			var _bin_path = string_replace(_path, ".json", ".bin");
+			var _bin_buf = file_exists(_bin_path) ? buffer_load(_bin_path) : undefined;
+			var _vm;
+			if (ds_map_exists(global.mod_enemy_vms, _id)) {
+				_vm = src_mod_card_vm_fill(global.mod_enemy_vms[? _id], _bin_buf, _dir);
+			} else {
+				_vm = src_mod_card_vm_load(_bin_buf, _dir);
+			}
+			_vm[$ "card_data"] = _json;
+			_vm[$ "mod_dir"] = _dir;
+			_count++;
+		}
+		_file = file_find_next();
+	}
+	file_find_close();
+	return _count;
+}

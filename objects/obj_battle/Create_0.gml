@@ -357,6 +357,7 @@ function enemy_subwave_summon(){
             var new_y = global.grid_offset_y + (target_row - 1) * global.grid_cell_size_y;
             
             var grid_pos = get_grid_position_from_world(new_x, new_y);
+            global._mod_pending_enemy_id = enemy_list[i].type;  // mod 敌人创建前写入 pending id
             var new_enemy = instance_create_depth(grid_pos.x+30, grid_pos.y + 38, 0, enemy_obj);
 		
 			// 服务端广播产生敌人（boss_sync列表中的走hook的MSG_EVENT_ACTIONS，此处跳过）

@@ -1,0 +1,13 @@
+{
+	"name": "mod冲刺鼠",
+	"description": "mod演示敌人：每3秒冲刺加速2.5秒",
+	"spr": "spr_normal_mouse",
+	"hp": 300,
+	"shield": 0,
+	"speed": 0.9,
+	"atk": 10,
+	"cycle": 36,
+	"range": 90,
+	"ash_proof": false,
+	"feature": "land"
+}

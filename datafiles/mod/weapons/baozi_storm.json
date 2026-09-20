@@ -1,0 +1,12 @@
+{
+  "name": "包子风暴炮",
+  "description": "mod示例超级武器：全屏六行发射包子弹幕（.bin插件逻辑）",
+  "sprite": "spr_howitzer_icon",
+  "icon": "spr_howitzer_icon",
+  "slot": "super_weapon",
+  "atk": 50,
+  "cycle": 1200,
+  "atk_impact": [55, 60, 65, 70, 80, 90, 100, 110, 120, 135, 150, 160, 170, 180, 190, 200],
+  "cycle_impact": [1188, 1164, 1140, 1116, 1068, 1020, 972, 900, 828, 756, 660, 600, 540, 480, 420, 360],
+  "shop": { "cost": "50000", "description": "mod示例超级武器：全屏六行发射包子弹幕" }
+}

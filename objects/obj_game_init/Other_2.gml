@@ -36,6 +36,10 @@ cards_init()
 // mod 卡片注册（global.mod_enabled 开启时扫描 mod/cards/，注册 卡池/植物数据/技能/商店/图鉴）
 if (global.mod_enabled) {
 	src_mod_init()
+	src_mod_weapons_init()
+	src_mod_gems_init()
+	src_mod_attires_init()
+	src_mod_enemies_init()
 }
 
 global.player_name = "Player";

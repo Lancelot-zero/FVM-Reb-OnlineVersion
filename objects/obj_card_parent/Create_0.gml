@@ -55,3 +55,4 @@ awake_anim = 0
 plant_id = ""  // 植物唯一标识符
 current_level = 0  // 当前等级
 
+pre_hp=-1

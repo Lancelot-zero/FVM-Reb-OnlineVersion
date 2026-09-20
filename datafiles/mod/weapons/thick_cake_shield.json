@@ -1,0 +1,9 @@
+{
+  "name": "厚切糕盾",
+  "description": "mod示例副武器：增加150生命值",
+  "sprite": "spr_cut_cake_shield_icon",
+  "icon": "spr_cut_cake_shield_icon",
+  "slot": "secondary_weapon",
+  "hp_increase": 150,
+  "shop": { "cost": "15000", "description": "mod示例副武器：增加150生命值" }
+}

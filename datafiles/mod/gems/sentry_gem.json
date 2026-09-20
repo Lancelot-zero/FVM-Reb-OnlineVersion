@@ -1,0 +1,10 @@
+{
+  "name": "哨兵宝石",
+  "description": "mod示例宝石：装备后每隔一段时间向前方发射包子",
+  "icon": "spr_attack_gem_icon",
+  "slot": "main_weapon",
+  "max_level": 10,
+  "first_cooldown": 60,
+  "cooldown": [300, 280, 260, 240, 220, 200, 190, 180, 170, 160, 150],
+  "shop": { "cost": "25000", "description": "mod示例宝石：定时向前方发射包子" }
+}

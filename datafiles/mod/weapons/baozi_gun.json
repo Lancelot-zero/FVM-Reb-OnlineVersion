@@ -1,0 +1,11 @@
+{
+  "name": "包子枪",
+  "description": "mod示例主武器：发射包子攻击敌人（.bin插件逻辑）",
+  "sprite": "spr_long_bao_gun",
+  "icon": "spr_long_bao_gun_icon",
+  "slot": "main_weapon",
+  "atk": 10,
+  "cycle": 78,
+  "atk_impact": [12, 14, 16, 18, 20, 22, 26, 32, 40, 55, 70, 85, 100, 115, 130, 145],
+  "shop": { "cost": "10000", "description": "mod示例主武器：发射包子攻击敌人" }
+}

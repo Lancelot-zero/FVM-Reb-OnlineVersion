@@ -20,7 +20,7 @@ with (obj_enemy_parent) {
 
 // 如果有目标敌人，移动到其头上
 if (has_target) {
-	var x_distance = min(global.grid_cell_size_x,abs(x - nearest_enemy.x))
+	var x_distance = min(global.grid_cell_size_x*2,abs(x - nearest_enemy.x))
 	if nearest_enemy.x < x{
 		target_x = x - x_distance
 	}
@@ -45,7 +45,7 @@ if (has_target) {
 	
 	
 } else {
-	var x_distance = min(global.grid_cell_size_x,abs(x - first_target_x))
+	var x_distance = min(global.grid_cell_size_x*2,abs(x - first_target_x))
 	if first_target_x < x{
 		target_x = x - x_distance
 	}

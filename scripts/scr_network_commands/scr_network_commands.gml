@@ -305,6 +305,9 @@ function sh_queryroom(args) {
 }
 
 function sh_connectpubserver(args) {
+	if(global.mod_enabled){
+		return "mod模式下不能联机"
+	}
     // 如果在 room_ready 界面，先清理再退出（对齐 obj_quit_confirm 逻辑）
     if (global.gui_stack.get_top() == room_ready) {
         // 通知所有客户端离开

@@ -81,7 +81,12 @@ if !(variable_instance_exists(id, "platform_grid_lock") && platform_grid_lock) {
     grid_row = grid_pos.row
 }
 
-depth = calculate_plant_depth(grid_pos.col, grid_pos.row, plant_type)
+if(grid_pos.col>50){
+	depth = calculate_plant_depth(grid_pos.col-64-global.grid_cols, grid_pos.row, plant_type)
+}else{
+	depth = calculate_plant_depth(grid_pos.col, grid_pos.row, plant_type)
+
+}
 if instance_exists(banding_star_obj){
 banding_star_obj.depth = depth - 1
 }
@@ -143,3 +148,10 @@ if(global.network.mode!="offline"&&!ds_map_exists(global.network.map_instance_id
 	instance_destroy(id);
 	show_debug_message("销毁卡片");
 }
+
+
+if (pre_hp>hp&&buffer_exists(global._VM_CARD_DAMAGED)) {	
+	global._VM_last_damaged_card = id;
+    VM_Execute(global.__vm, global._VM_CARD_DAMAGED, "_VM_CARD_DAMAGED");
+}
+pre_hp = hp;

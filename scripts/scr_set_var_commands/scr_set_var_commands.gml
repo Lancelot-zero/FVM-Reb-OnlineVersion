@@ -166,7 +166,7 @@ function spawn_plant(col, row, plant_obj, props) {
 					var _mw_name_id = _eq[$ "main_weapon_id"] ?? "";
 					if (_mw_name_id != "") {
 						var main_info = get_weapon_info(_mw_name_id) 
-						var main_weapon_inst = instance_create_depth(_plant.x-10, _plant.y-100, _plant.depth-1, main_info.obj);
+						var main_weapon_inst = global._mod_pending_weapon_id = _mw_name_id; instance_create_depth(_plant.x-10, _plant.y-100, _plant.depth-1, main_info.obj);
 						main_weapon_inst.parent_player = _plant.id;
 
 						main_weapon_inst.grid_row = grid_row;
@@ -246,7 +246,7 @@ function spawn_plant(col, row, plant_obj, props) {
 					var _sup_name_id = _eq[$ "super_weapon_id"] ?? "";
 					if (_sup_name_id != "") {
 						var main_info = get_weapon_info(_sup_name_id);
-						var main_weapon_inst = instance_create_depth(_plant.x-10,_plant.y-100,_plant.depth-1,main_info.obj)
+						var main_weapon_inst = global._mod_pending_weapon_id = _sup_name_id; instance_create_depth(_plant.x-10,_plant.y-100,_plant.depth-1,main_info.obj)
 						main_weapon_inst.parent_player = _plant.id
 						main_weapon_inst.grid_row = grid_row
 						main_weapon_inst.grid_col = grid_col
@@ -734,6 +734,10 @@ function meta_fps() {
 /// @description 命令行：仅重新加载所有 mod 的 bin 代码
 function sh_reloadmod(args) {
     var _n = src_mod_reload();
+    src_mod_weapons_reload();
+    src_mod_gems_reload();
+    src_mod_attires_init();
+    src_mod_enemies_reload();
     if (_n < 0) return "[reloadmod] mod 目录不存在";
     return "[reloadmod] 已重载 " + string(_n) + " 张 mod 卡的 bin 代码";
 }
