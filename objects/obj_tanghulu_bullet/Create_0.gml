@@ -9,3 +9,9 @@ row = 0
 image_xscale = 1.8
 image_yscale = 1.8
 image_speed = 0
+
+
+if (!variable_global_exists("_tanghulu_buttet_number")){
+	global._tanghulu_buttet_number=0
+}
+global._tanghulu_buttet_number+=1

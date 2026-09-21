@@ -723,7 +723,6 @@
     {"$GMIncludedFile":"","%Name":"sundae_base_hard.json","CopyToMask":-1,"filePath":"datafiles/level_data/volcanic","name":"sundae_base_hard.json","resourceType":"GMIncludedFile","resourceVersion":"2.0",},
     {"$GMIncludedFile":"","%Name":"sundae_base.json","CopyToMask":-1,"filePath":"datafiles/level_data/volcanic","name":"sundae_base.json","resourceType":"GMIncludedFile","resourceVersion":"2.0",},
     {"$GMIncludedFile":"","%Name":"请不要修改这个文件夹中的文件","CopyToMask":-1,"filePath":"datafiles/level_data","name":"请不要修改这个文件夹中的文件","resourceType":"GMIncludedFile","resourceVersion":"2.0",},
-    {"$GMIncludedFile":"","%Name":"mod_enable.txt","CopyToMask":-1,"filePath":"datafiles","name":"mod_enable.txt","resourceType":"GMIncludedFile","resourceVersion":"2.0",},
     {"$GMIncludedFile":"","%Name":"mod_player_attire_demo.json","CopyToMask":-1,"filePath":"datafiles/mod/attires","name":"mod_player_attire_demo.json","resourceType":"GMIncludedFile","resourceVersion":"2.0",},
     {"$GMIncludedFile":"","%Name":"combined_strip.png","CopyToMask":-1,"filePath":"datafiles/mod/cards","name":"combined_strip.png","resourceType":"GMIncludedFile","resourceVersion":"2.0",},
     {"$GMIncludedFile":"","%Name":"LabMapCompiler.exe","CopyToMask":-1,"filePath":"datafiles/mod/cards","name":"LabMapCompiler.exe","resourceType":"GMIncludedFile","resourceVersion":"2.0",},

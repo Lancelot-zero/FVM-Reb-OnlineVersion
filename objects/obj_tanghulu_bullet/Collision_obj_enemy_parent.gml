@@ -13,6 +13,6 @@
 
 			var inst = instance_create_depth(x,y,depth,obj_coke_bomb_explode)
 			inst.sprite_index = spr_tanghulu_bullet_effect
-		
+		global._tanghulu_buttet_number-=1
 		instance_destroy()
 	}

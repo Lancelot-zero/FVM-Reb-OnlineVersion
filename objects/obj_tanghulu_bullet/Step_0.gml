@@ -23,29 +23,27 @@ if (global._tanghulu_scan_frame != obj_battle.battle_time) {
         }
     }
 
-    // 近距离炮弹合并：遍历ds_list，靠近的叠伤害销毁
-    var _blist = global._tanghulu_bullets;
-    var _blen = ds_list_size(_blist);
-    for (var _bi = _blen - 1; _bi >= 0; _bi--) {
-        var _bid = _blist[| _bi];
-        if (_bid == id ) continue;
-		if (!instance_exists(_bid)){
-			ds_list_delete(global._tanghulu_bullets,_bi);
-			continue;
-		}
-        with (_bid) {
-            if (abs(x - other.x) < 3 && abs(y - other.y) < 3) {
-                other.damage += damage;
-                instance_destroy();
-            }
-        }
-    }
 }
 // 从缓存取最左敌人
 var _best = global._tanghulu_best_id;
 
 // 子弹追踪逻辑
 if (instance_exists(target_enemy) && target_enemy.hp > 0 && can_hit(target_type,target_enemy.target_type)) {
+	
+	if(global._tanghulu_buttet_number>100){
+
+		with(target_enemy){
+			audio_play_sound(hit_sound,0,0)
+			damage_amount = other.damage
+			damage_type = other.damage_type
+			event_user(0)
+		}
+		instance_create_depth(x,y,depth,obj_takoyaki_bullet_effect)
+		global._tanghulu_buttet_number-=1
+		instance_destroy()
+		exit
+	}
+	
     // 目标存在且存活，继续追踪
     var target_x = target_enemy.x;
     var target_y = target_enemy.y-75;
@@ -112,4 +110,5 @@ if (instance_exists(target_enemy) && target_enemy.hp > 0 && can_hit(target_type,
 image_angle =- timer * 6
 if x > 2200 or y > 1200 or x < -200 or y < -200{
 	instance_destroy()
+	global._tanghulu_buttet_number-=1
 }
