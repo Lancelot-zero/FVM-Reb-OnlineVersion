@@ -21,7 +21,7 @@ if (instance_exists(target_enemy) && target_enemy.hp > 0 && can_hit(target_type,
     var min_x = room_width;
     var max_hp = 0;
     var right_range = 150;
-    
+    /*
     // 寻找更高优先级的目标
     with (obj_enemy_parent) {
         if (hp > 0 && can_hit(other.target_type,target_type) && y > 0) {
@@ -36,8 +36,29 @@ if (instance_exists(target_enemy) && target_enemy.hp > 0 && can_hit(target_type,
                 }
             }
         }
-    }
-    
+    }*/
+	
+    // 每帧首次扫描缓存最左敌人，同帧其他炮弹复用
+	if (!variable_global_exists("_tanghulu_scan_frame")) {
+	    global._tanghulu_scan_frame = -1;
+	    global._tanghulu_best_id = noone;
+	}
+	if (global._tanghulu_scan_frame != obj_battle.battle_time) {
+	    global._tanghulu_scan_frame = obj_battle.battle_time;
+	    global._tanghulu_best_id = noone;
+	    var _best_x = room_width;
+	    var _best_hp = 0;
+	    with (obj_enemy_parent) {
+	        if (hp > 0 && can_hit(other.target_type,target_type) && y > 0) {
+	            if (x < _best_x || (x == _best_x && hp > _best_hp)) {
+	                _best_x = x;
+	                _best_hp = hp;
+	                global._tanghulu_best_id = id;
+	            }
+	        }
+	    }
+	}
+	
     // 如果找到更高优先级的目标，切换目标
     if (new_target != noone) {
         target_enemy = new_target;

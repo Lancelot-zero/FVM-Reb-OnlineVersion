@@ -15,9 +15,11 @@ if instance_exists(obj_enemy_parent){
 	with obj_enemy_parent{
 		if can_target_on(other.target_type,target_type){
 			has_enemy = true
+			break
 		}
 	}
 }
+
 //攻击逻辑
 if (has_enemy) {
     if (attack_timer <= cycle - attack_anim * current_flash_speed) {
