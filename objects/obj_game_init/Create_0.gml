@@ -68,6 +68,7 @@ global.native_util = new NativeUtil()
 
 init_native_log()
 move_files()
+src_mod_map_clear_temp()
 
 // 初始化全局键位映射
 global.keybind_map = ds_map_create();

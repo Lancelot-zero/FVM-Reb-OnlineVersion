@@ -1,0 +1,14 @@
+{
+    "id":  "example_island",
+    "name":  "示例大地图",
+    "levels":  [
+                   {
+                       "name":  "示例自定义关卡",
+                       "button_x":  400,
+                       "button_y":  400,
+                       "stage_json":  "level_1/level.json",
+                       "icon":  "spr_levelselect_button"
+                   }
+               ],
+    "share":  "share"
+}

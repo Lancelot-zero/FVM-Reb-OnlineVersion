@@ -210,10 +210,35 @@ function card_created(plant_inst, col, row) {
 		}
 		add_net_id(plant_inst.id);
 	}
-	
+
 	// VM Hook: 卡片创建
 	global._VM_last_created_card = plant_inst.id;
 	if (buffer_exists(global._VM_CARD_CREATED)) VM_QueueHook(global._VM_CARD_CREATED, "card", plant_inst.id);
+
+	// 维护最近种植的5个卡片种类（1 为最新）
+	var _card_type = variable_instance_exists(plant_inst, "plant_id") ? plant_inst.plant_id : "";
+	if (_card_type != "" && _card_type != "player") {
+		var _dup_index = 0;
+		if (global._recent_card_type_1 == _card_type) _dup_index = 1;
+		else if (global._recent_card_type_2 == _card_type) _dup_index = 2;
+		else if (global._recent_card_type_3 == _card_type) _dup_index = 3;
+		else if (global._recent_card_type_4 == _card_type) _dup_index = 4;
+		else if (global._recent_card_type_5 == _card_type) _dup_index = 5;
+
+		if (_dup_index == 0) {
+			global._recent_card_type_5 = global._recent_card_type_4;
+			global._recent_card_type_4 = global._recent_card_type_3;
+			global._recent_card_type_3 = global._recent_card_type_2;
+			global._recent_card_type_2 = global._recent_card_type_1;
+			global._recent_card_type_1 = _card_type;
+		} else {
+			if (_dup_index >= 5) global._recent_card_type_5 = global._recent_card_type_4;
+			if (_dup_index >= 4) global._recent_card_type_4 = global._recent_card_type_3;
+			if (_dup_index >= 3) global._recent_card_type_3 = global._recent_card_type_2;
+			if (_dup_index >= 2) global._recent_card_type_2 = global._recent_card_type_1;
+			global._recent_card_type_1 = _card_type;
+		}
+	}
 
 }
 

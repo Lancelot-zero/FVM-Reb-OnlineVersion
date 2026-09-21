@@ -81,6 +81,7 @@ function apply_local_filter() {
 }
 
 function refresh_custom_stages() {
+    src_mod_map_clear_temp()
     self.state.laboratory_manager.reset()
     var _result = self.state.laboratory_manager.load_all_stages()
     if (_result.is_failed()) {

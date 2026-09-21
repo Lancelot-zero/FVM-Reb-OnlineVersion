@@ -1,0 +1,30 @@
+{
+  "id": "mod_arena",
+  "name": "竞技场",
+  "levels": [
+    {
+      "name": "斗兽场-中级",
+      "button_x": 360,
+      "button_y": 360,
+      "stage_json": "level_1/斗兽场-中级.json"
+    },
+    {
+      "name": "斗兽场-高级",
+      "button_x": 620,
+      "button_y": 360,
+      "stage_json": "level_2/斗兽场-高级.json"
+    },
+    {
+      "name": "我是老鼠",
+      "button_x": 880,
+      "button_y": 360,
+      "stage_json": "level_3/I,mouse.json"
+    },
+    {
+      "name": "里飞船",
+      "button_x": 1140,
+      "button_y": 360,
+      "stage_json": "level_4/里飞船.json"
+    }
+  ]
+}

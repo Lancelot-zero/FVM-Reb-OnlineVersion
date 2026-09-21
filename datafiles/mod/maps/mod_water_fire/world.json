@@ -1,0 +1,24 @@
+{
+  "id": "mod_water_fire",
+  "name": "水火岛",
+  "levels": [
+    {
+      "name": "水火相位(改)",
+      "button_x": 360,
+      "button_y": 360,
+      "stage_json": "level_1/water and fire 2nd hard.json"
+    },
+    {
+      "name": "古堡初探",
+      "button_x": 620,
+      "button_y": 360,
+      "stage_json": "level_2/old castle 1st.json"
+    },
+    {
+      "name": "古堡初探",
+      "button_x": 880,
+      "button_y": 360,
+      "stage_json": "level_3/old castle 1st hard.json"
+    }
+  ]
+}

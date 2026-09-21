@@ -3870,6 +3870,12 @@ function VM_InitRoomEntry(buf) {
     global._VM_last_killed_enemy  = -1;
     global._VM_last_created_card  = -1;
     global._VM_last_destroyed_card = -1;
+    // 最近种植的5个卡片种类（1 为最新）
+    global._recent_card_type_1 = "";
+    global._recent_card_type_2 = "";
+    global._recent_card_type_3 = "";
+    global._recent_card_type_4 = "";
+    global._recent_card_type_5 = "";
     global._VM_last_idle_platform = -1;
     global._VM_last_boss_state_change_id = -1;
     global._VM_last_boss_old_state = -1;

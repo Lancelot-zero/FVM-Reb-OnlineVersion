@@ -738,6 +738,8 @@ function sh_reloadmod(args) {
     src_mod_gems_reload();
     src_mod_attires_init();
     src_mod_enemies_reload();
+    src_mod_bullets_reload();
+    src_mod_effects_reload();
     if (_n < 0) return "[reloadmod] mod 目录不存在";
     return "[reloadmod] 已重载 " + string(_n) + " 张 mod 卡的 bin 代码";
 }
