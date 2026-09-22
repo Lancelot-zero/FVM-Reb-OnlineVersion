@@ -1,6 +1,6 @@
 
 _OBJECT_CFG{
-    VM_LoadSpritePerm_Ex("combined_strip.png", 29,30,90)
+    VM_LoadSpritePerm_Ex("tex/combined_strip.png", 29,30,90)
     VM_ShellPrint("mod_test_flame load")
 
 }
@@ -10,7 +10,7 @@ _OBJECT_CREATE {
     self = VM_GetCurCard()
     VM_SetProp(self, "cd", 0)
 
-    VM_SetProp(self, "sprite_index", "combined_strip.png")
+    VM_SetProp(self, "sprite_index", "tex/combined_strip.png")
     VM_SetProp(self, "attack_anim", 18)
     VM_SetProp(self, "idle_anim", 11)
     VM_SetProp(self, "plant_type", "normal")

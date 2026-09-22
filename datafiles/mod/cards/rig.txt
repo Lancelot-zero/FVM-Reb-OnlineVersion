@@ -25,17 +25,17 @@
 
 _OBJECT_CFG {
     // 本体：25 帧，原点 (90, 129)
-    VM_LoadSpritePerm_Ex("spr_rig_3_0.png", 25, 90, 129)
+    VM_LoadSpritePerm_Ex("tex/spr_rig_3_0.png", 25, 90, 129)
 
     // 子弹：7 帧，原点 (55, 59)
     // 管理器画弹幕时按名字查缓存，就是靠这里加载进永久缓存的
-    VM_LoadSpritePerm_Ex("spr_rig_bullet_3_0.png", 7, 55, 59)
+    VM_LoadSpritePerm_Ex("tex/spr_rig_bullet_3_0.png", 7, 55, 59)
 }
 
 _OBJECT_CREATE {
     self = VM_GetCurCard()
 
-    VM_SetProp(self, "sprite_index", "spr_rig_3_0.png")
+    VM_SetProp(self, "sprite_index", "tex/spr_rig_3_0.png")
     VM_SetProp(self, "idle_anim", 9)
     VM_SetProp(self, "attack_anim", 16)
     VM_SetProp(self, "flash_speed", 5)
@@ -109,19 +109,19 @@ _OBJECT_STEP {
             by = VM_GetProp(self, "y") - 40
 
             // ① 直射
-            VM_BulletScreenAdd("spr_rig_bullet_3_0.png", 7, 0, 1.2, 2, bx, by, 8, 0, dmg, 0 - 1, 0 - 1, "pierce", "", "")
+            VM_BulletScreenAdd("tex/spr_rig_bullet_3_0.png", 7, 0, 1.2, 2, bx, by, 8, 0, dmg, 0 - 1, 0 - 1, "pierce", "", "")
 
             // ② +45°
-            VM_BulletScreenAdd("spr_rig_bullet_3_0.png", 7, 0, 1.2, 2, bx, by, 5.658, 5.658, dmg, 0 - 1, 0 - 1, "pierce", "", "")
+            VM_BulletScreenAdd("tex/spr_rig_bullet_3_0.png", 7, 0, 1.2, 2, bx, by, 5.658, 5.658, dmg, 0 - 1, 0 - 1, "pierce", "", "")
 
             // ③ -45°
-            VM_BulletScreenAdd("spr_rig_bullet_3_0.png", 7, 0, 1.2, 2, bx, by, 5.658, 0 - 5.658, dmg, 0 - 1, 0 - 1, "pierce", "", "")
+            VM_BulletScreenAdd("tex/spr_rig_bullet_3_0.png", 7, 0, 1.2, 2, bx, by, 5.658, 0 - 5.658, dmg, 0 - 1, 0 - 1, "pierce", "", "")
 
             // ④ +22.5°
-            VM_BulletScreenAdd("spr_rig_bullet_3_0.png", 7, 0, 1.2, 2, bx, by, 7.391, 3.062, dmg, 0 - 1, 0 - 1, "pierce", "", "")
+            VM_BulletScreenAdd("tex/spr_rig_bullet_3_0.png", 7, 0, 1.2, 2, bx, by, 7.391, 3.062, dmg, 0 - 1, 0 - 1, "pierce", "", "")
 
             // ⑤ -22.5°
-            VM_BulletScreenAdd("spr_rig_bullet_3_0.png", 7, 0, 1.2, 2, bx, by, 7.391, 0 - 3.062, dmg, 0 - 1, 0 - 1, "pierce", "", "")
+            VM_BulletScreenAdd("tex/spr_rig_bullet_3_0.png", 7, 0, 1.2, 2, bx, by, 7.391, 0 - 3.062, dmg, 0 - 1, 0 - 1, "pierce", "", "")
 
             VM_PlaySound("snd_shot")
         }

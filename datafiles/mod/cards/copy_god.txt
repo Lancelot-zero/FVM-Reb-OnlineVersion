@@ -24,16 +24,16 @@
 
 _OBJECT_CFG {
     // 卡面图标：1 帧，原点 (170, 215)
-    VM_LoadSpritePerm_Ex("spr_brahma_icon_3_0.png", 1, 170, 215)
+    VM_LoadSpritePerm_Ex("tex/spr_brahma_icon_3_0.png", 1, 170, 215)
 
     // 本体：35 帧，原点 (170, 216)
-    VM_LoadSpritePerm_Ex("spr_brahma_3_0.png", 35, 170, 216)
+    VM_LoadSpritePerm_Ex("tex/spr_brahma_3_0.png", 35, 170, 216)
 }
 
 _OBJECT_CREATE {
     self = VM_GetCurCard()
 
-    VM_SetProp(self, "sprite_index", "spr_brahma_3_0.png")
+    VM_SetProp(self, "sprite_index", "tex/spr_brahma_3_0.png")
     VM_SetProp(self, "idle_anim", 35)
     VM_SetProp(self, "attack_anim", 0)
     VM_SetProp(self, "flash_speed", 5)

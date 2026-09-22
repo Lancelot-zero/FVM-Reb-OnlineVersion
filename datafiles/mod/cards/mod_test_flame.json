@@ -5,7 +5,7 @@
       "shape": 0,
       "name": "测试产火",
       "description": "测试产火：每隔攻击间隔产出一朵火苗",
-      "sprite": "combined_strip.png",
+      "sprite": "tex/combined_strip.png",
       "plant_type": "normal",
       "feature_type": "normal",
       "target_card": "none",

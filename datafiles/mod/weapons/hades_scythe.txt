@@ -17,7 +17,7 @@
 //       atk 1897 / cycle 300 / bullet_amount 5 / ghost_shape 2 / bullet_shape 4
 //       其中 atk 与 cycle 走 JSON（obj_weapon_mod 会读 weapon_info），
 //       其余三个 JSON 自定义字段不上实例，所以在 _OBJECT_CREATE 里自己设。
-//       满级形态正好对应 spr_hades_scythe_2_0.png 与 spr_hades_scythe_bullet_4_0.png。
+//       满级形态正好对应 tex/spr_hades_scythe_2_0.png 与 tex/spr_hades_scythe_bullet_4_0.png。
 //
 // 调试开关 debug_fast（在 _OBJECT_CREATE 里设置）：
 //       0 = 正式节奏（当前）：第 32 帧首发 / 间隔 10 帧 / 打完歇 cycle / 需要场上有敌人
@@ -31,16 +31,16 @@ _OBJECT_CFG {
     // 商店/背包图标：1 帧，原点 (35,35)
     // 必须在注册武器之前加载好：src_mod 是按 JSON 的 sprite/icon 名去 get_load_sprite 查的，
     // 查不到会给一张空白占位图而且不报错（图标就是这么消失的）。
-    VM_LoadSpritePerm_Ex("spr_hades_scythe_icon_0.png", 1, 35, 35)
+    VM_LoadSpritePerm_Ex("tex/spr_hades_scythe_icon_0.png", 1, 35, 35)
 
     // 本体：36 帧，原点 (202,235)
-    VM_LoadSpritePerm_Ex("spr_hades_scythe_2_0.png", 36, 202, 235)
+    VM_LoadSpritePerm_Ex("tex/spr_hades_scythe_2_0.png", 36, 202, 235)
 
     // 入场特效：16 帧，原点 (202,164)
-    VM_LoadSpritePerm_Ex("spr_hades_scythe_effect_2_0.png", 16, 202, 164)
+    VM_LoadSpritePerm_Ex("tex/spr_hades_scythe_effect_2_0.png", 16, 202, 164)
 
     // 子弹：6 帧，原点 (58,58)
-    VM_LoadSpritePerm_Ex("spr_hades_scythe_bullet_4_0.png", 6, 58, 58)
+    VM_LoadSpritePerm_Ex("tex/spr_hades_scythe_bullet_4_0.png", 6, 58, 58)
 }
 
 _OBJECT_CREATE {
@@ -78,7 +78,7 @@ _OBJECT_CREATE {
     VM_SetProp(self, "debug_fast", 0)
 
     // 入场特效：16 帧，每 2 帧走一格
-    VM_SetProp(self, "sprite_index", "spr_hades_scythe_effect_2_0.png")
+    VM_SetProp(self, "sprite_index", "tex/spr_hades_scythe_effect_2_0.png")
     VM_SetProp(self, "idle_anim", 16)
     VM_SetProp(self, "attack_anim", 0)
     VM_SetProp(self, "flash_speed", 2)
@@ -100,7 +100,7 @@ _OBJECT_STEP {
         VM_SetProp(self, "anim", anim)
 
         if (anim >= 32) {
-            VM_SetProp(self, "sprite_index", "spr_hades_scythe_2_0.png")
+            VM_SetProp(self, "sprite_index", "tex/spr_hades_scythe_2_0.png")
 
             // 本体出现后整体下移 100
             VM_SetProp(self, "lock_y", 640)

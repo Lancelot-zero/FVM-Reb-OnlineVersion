@@ -20,13 +20,13 @@
 
 _OBJECT_CFG {
     // 子弹：6 帧，原点 (58,58)
-    VM_LoadSpritePerm_Ex("spr_hades_scythe_bullet_4_0.png", 6, 58, 58)
+    VM_LoadSpritePerm_Ex("tex/spr_hades_scythe_bullet_4_0.png", 6, 58, 58)
 }
 
 _OBJECT_CREATE {
     self = VM_GetCurCard()
 
-    VM_SetProp(self, "sprite_index", "spr_hades_scythe_bullet_4_0.png")
+    VM_SetProp(self, "sprite_index", "tex/spr_hades_scythe_bullet_4_0.png")
     VM_SetProp(self, "image_speed", 2)
     VM_SetProp(self, "image_xscale", 1.2)
     VM_SetProp(self, "image_yscale", 1.2)
