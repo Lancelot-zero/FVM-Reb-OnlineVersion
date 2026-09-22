@@ -1,0 +1,90 @@
+// 至尊水神（金卡 · 水神·忒提丝最终形态）：把经过自己的子弹弹回去，并给这发子弹加伤
+// mod 分支里 obj_water_god 的 Step 只有动画，反弹逻辑全在子弹侧的 Collision_obj_water_god：
+//     if !bounced && row == other.grid_row {
+//         move_speed *= -1; damage += other.atk; image_angle += 180; bounced = true;
+//     }
+// 原版子弹改不了，所以这里改成**卡片每帧查自己那格**，再照抄那几行。
+//
+// 查的是全局表 global.bullet_array_special —— 正好就是带原版碰撞事件的那 10 个平射子弹
+// （由 obj_battle 每帧重建，只收录落在格子中间 50% 的实例）。
+//
+//   贴图：本体 18 帧 原点 (61,131)；图标 1 帧 原点 (50,119)
+
+_OBJECT_CFG {
+    if (VM_SpriteExists("spr_water_god_3") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_water_god_3_0.png", 18, 61, 131)
+        VM_AliasSpritePerm("spr_water_god_3", "tex/spr_water_god_3_0.png")
+    }
+
+    // 卡面图标（JSON 的 sprite）
+    if (VM_SpriteExists("spr_water_god_3_icon") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_water_god_3_icon_0.png", 1, 50, 119)
+        VM_AliasSpritePerm("spr_water_god_3_icon", "tex/spr_water_god_3_icon_0.png")
+    }
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+
+    VM_SetProp(self, "sprite_index", "spr_water_god_3")
+    VM_SetProp(self, "idle_anim", 9)
+    VM_SetProp(self, "attack_anim", 26)
+    VM_SetProp(self, "flash_speed", 6)
+    VM_SetProp(self, "plant_type", "normal")
+    VM_SetProp(self, "state", 0)
+
+    // 弹幕卡片效果：bit4 = 自定义类（反弹）
+    // 管理器里的子弹进到本格中心带时：伤害 + 本卡攻击力、x 方向反向、画面转 180°
+    VM_SetProp(self, "bullet_flag", 4)
+    VM_SetProp(self, "bullet_add_dmg", VM_GetProp(self, "atk"))
+    VM_SetProp(self, "bullet_flip_x", 1)
+    VM_SetProp(self, "bullet_angle_add", 180)
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+
+    // 弹幕卡片效果：攻击力会随星级变，每帧刷新给弹幕用的值（放在冻结判断之前，保证一直刷新）
+    VM_SetProp(self, "bullet_add_dmg", VM_GetProp(self, "atk"))
+
+    if (VM_GetProp(self, "is_frozen") == 1) {
+        exit
+    }
+
+    c = VM_GetProp(self, "grid_col")
+    r = VM_GetProp(self, "grid_row")
+    atk = VM_GetProp(self, "atk")
+
+    n = VM_CellCount("bullet_array_special", c, r)
+    k = 0
+    while (k < n) {
+        b = VM_CellItem("bullet_array_special", c, r, k)
+        if (VM_IsDestroyed(b) == 0) {
+            // bounced 是"整发只弹一次"的守卫（原版也是这么用的）
+            bo = VM_GetProp(b, "bounced")
+            if (VM_IsUndefined(bo)) {
+                bo = 0
+            }
+            if (bo == 0) {
+                d = VM_GetProp(b, "damage")
+                if (VM_IsUndefined(d)) {
+                    d = 0
+                }
+                ms = VM_GetProp(b, "move_speed")
+                if (VM_IsUndefined(ms)) {
+                    ms = 0
+                }
+                ia = VM_GetProp(b, "image_angle")
+                if (VM_IsUndefined(ia)) {
+                    ia = 0
+                }
+
+                VM_SetProp(b, "move_speed", 0 - ms)
+                VM_SetProp(b, "damage", d + atk)
+                VM_SetProp(b, "image_angle", ia + 180)
+                VM_SetProp(b, "bounced", 1)
+            }
+        }
+        k = k + 1
+    }
+}

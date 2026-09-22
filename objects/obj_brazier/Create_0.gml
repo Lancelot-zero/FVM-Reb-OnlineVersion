@@ -32,3 +32,9 @@ flash_speed = 5
 plant_type = "normal"
 is_slowdown = false
 
+// ── 弹幕卡片效果：管理器里的子弹进到本格中心带时生效 ──
+// bullet_flag 的 bit1 = 过火类（换点燃贴图 + 放大 1.8 + 点燃音效）
+// bullet_mul_dmg = 点燃时伤害 × 本卡攻击力
+bullet_flag    = 1
+bullet_mul_dmg = atk
+

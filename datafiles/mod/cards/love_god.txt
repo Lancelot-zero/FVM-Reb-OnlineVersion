@@ -10,12 +10,13 @@
 //             at > cycle → 归零
 //           一轮 3 次齐射共 9 发 + 每 4 轮一轮超级（首轮就有）。
 //           state 只在「-7fs / -5fs 那两次」被置 1，一直到 at > cycle 才归 0（原版如此）。
-//   子弹  ：普通弹命中一个敌人就 instance_destroy（hits = 1，伤害就是 atk）；
-//           超级弹是 pierce（hits = -1），每帧伤害 = 6*atk 穿一格的总量 → 6*atk*8/107。
-//   三行定位：原版子弹从 (x+40, y-75±20) 出生，然后纵向 lerp 到目标行的
-//             target_y = grid_offset_y + grid_cell_size_y * target_row（格子顶边）。
-//             管理器没有 lerp，所以这里直接按目标行的**格子中心**出生、直线飞过去：
-//             row = floor((y - grid_offset_y) / grid_cell_size_y)，中心才稳稳算在这一行。
+//   子弹  ：普通弹走原版实例 obj_waterpipe_bullet（命中一个敌人就 instance_destroy，伤害 = atk）；
+//           超级弹（穿透弹）走**屏幕弹幕管理器** VM_BulletScreenAdd_Ex：
+//             hits = -1 穿透、life = -1 靠出屏消失、贴图 spr_pierce_bullet、每帧伤害 = 6*atk/13
+//             （原版 pierce_bullet 是"整段总伤害 6*atk 按 hit_frames = 13 摊到每帧"，
+//               而管理器每帧都会对格内敌人结算一次 → 这里必须自己除 13，否则是 13 倍伤害）
+//   三行定位：普通弹从 (x+40, y-75±20) 出生、由子弹自己纵向 lerp 到目标行；
+//             超级弹没有 lerp（管理器不支持逐帧改向），直接按目标行走：y = gy + gcs*tr + 10。
 //             目标行越界时（最上行往上 / 最下行往下）原版会改打本行并把 x 退回 20。
 
 _OBJECT_CFG {
@@ -32,8 +33,9 @@ _OBJECT_CFG {
         VM_AliasSpritePerm("spr_love_god_bullet_3", "tex/spr_love_god_bullet_3_0.png")
     }
 
-    // 超级弹的贴图不在这里：它走 mod 子弹 bullets/pierce_bullet（图在 bullets/tex/，
-    // 由那颗子弹自己的 _OBJECT_CFG 加载），这样才是原版「超级弹穿透」的行为。
+    // 超级弹的贴图 spr_pierce_bullet 也不在这里：它由 bullets/tex/spr_pierce_bullet_0.png 加载。
+    // 加载那份贴图的 _OBJECT_CFG 在 mod 子弹 bullets/pierce_bullet 里，而 src_mod_bullets_init()
+    // 开局会把 mod/bullets/ 全跑一遍 CFG（不创建实例也跑），所以弹幕管理器这边直接写名字就能取到。
 }
 
 _OBJECT_CREATE {
@@ -155,14 +157,32 @@ _OBJECT_STEP {
         }
     }
 
-    // 超级弹：同三行，贴图换 _p、伤害 6*atk
+    // 超级弹（穿透弹）：走**屏幕弹幕管理器**，不再造 obj_bullet_mod 实例
+    //   ── 管理器版的参数对齐 ──
+    //   穿透  ：hits = -1（格内所有可命中敌人都结算、永不减）；life = -1（不倒计时，靠出屏消失）
+    //   伤害  ：原版 pierce_bullet 拿到的 damage = 6*atk 是「整段总伤害」，它自己按 hit_frames=13
+    //           摊成每帧伤害（穿一格 107px / 速度 8 ≈ 13 帧）。管理器是一帧一结算，
+    //           所以这里直接给每帧伤害 = 6*atk/13，整段总量和原版一致
+    //   出生点：管理器不支持原版那种 y 向 lerp，直接按目标行的世界坐标出生（+10 稳落在这一行）
+    //   过火盆：flag = 1（过火类）—— 火盆卡片是 bullet_flag = 1 / bullet_mul_dmg = atk，
+    //           管理器内置表现就是换 spr_fire_bullet + 缩放 1.8 + snd_bullet_burnt，同原版 burnt
+    //   伤害类型：explosion = 无视护盾直接扣血（obj_enemy_parent/Other_10 的 else 分支），
+    //           和原版这颗子弹「直接 hp -= dmg」一致
+    //   贴图帧数：spr_pierce_bullet 是 5 帧
     if (sup == 1) {
         atk = VM_GetProp(self, "atk")
         bx = VM_GetProp(self, "x")
-        by = VM_GetProp(self, "y") - 75
         grows = VM_GetProp(0, "grid_rows")
         if (VM_IsUndefined(grows)) {
             grows = 6
+        }
+        gy = VM_GetProp(0, "grid_offset_y")
+        gcs = VM_GetProp(0, "grid_cell_size_y")
+        if (VM_IsUndefined(gy)) {
+            gy = 0
+        }
+        if (VM_IsUndefined(gcs)) {
+            gcs = 116
         }
 
         lane = 0 - 1
@@ -180,18 +200,11 @@ _OBJECT_STEP {
                 tr = r
                 sx = bx + 20
             }
+            sy = gy + gcs * tr + 10
 
-            // 超级弹：走 mod 子弹 bullets/pierce_bullet（穿透，命中不消失）
-            // 贴图用它自带的 spr_pierce_bullet，所以这里不覆盖 sprite_index
-            s = VM_CreateInstance("obj_bullet_mod", sx, by)
-            VM_SetProp(s, "mod_type", "pierce_bullet")
-            VM_SetProp(s, "sprite_index", "spr_pierce_bullet")   // ⚠️ 必须显式设：sprite_index 永远"已定义"（没设= -1），
-                                                                  //    子弹里用 VM_IsUndefined 兜底是不生效的
-            VM_SetProp(s, "damage", 6 * atk)
-            VM_SetProp(s, "vx", 8)          // ⚠️ 必须显式设：obj_bullet_mod 自带 vx=0/vy=0
-            VM_SetProp(s, "vy", 0)
-            VM_SetProp(s, "row", r)
-            VM_SetProp(s, "target_row", tr)
+            // 参数：贴图 5帧 打击范围0格 缩放1.6 动画速度1 x y vx=8 vy=0 每帧伤害
+            //       伤害计数-1(穿透) 存活-1 类型all 无销毁对象 伤害类型explosion 标志1(过火) 角度0
+            VM_BulletScreenAdd_Ex("spr_pierce_bullet", 5, 0, 1.6, 1, sx, sy, 8, 0, 6 * atk / 13, 0 - 1, 0 - 1, "all", "", "", "explosion", 1, 0)
 
             lane = lane + 1
         }

@@ -28,3 +28,10 @@ _net_cookbook_equipped = ""
 if(is_cookbook_equipped("pineapple_pudding")){
 	_net_cookbook_equipped= "pineapple_pudding"
 }
+
+// ── 弹幕卡片效果：管理器里的子弹进到本格中心带时生效 ──
+// bullet_flag 的 bit4 = 自定义类（反弹）：伤害 + 本卡攻击力、x 方向反向、画面转 180°
+bullet_flag      = 4
+bullet_add_dmg   = atk
+bullet_flip_x    = 1
+bullet_angle_add = 180

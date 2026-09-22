@@ -164,6 +164,11 @@ while (i < 10) {
 | `VM_CreateInstance("对象名",x,y)` | 3个 | 按像素坐标创建实例（子弹等） |
 | `VM_BulletScreenAdd(贴图,总帧数,打击范围,缩放,动画速度,x,y,vx,vy,伤害,伤害计数,存活帧数,子弹类型,销毁对象,mod名字)` | 15个 | 往屏幕弹幕管理器塞一颗子弹。管理器 `obj_Bullet_Screen_Management` 由 `obj_battle` 开局创建，全场只此一个实例，所有弹幕统一迭代与绘制、**不占实例**。`打击范围`=格子半径，0=只算本格；`伤害计数`=最多命中几个，`-1`=不限次数（此时范围内所有可命中敌人都结算）；`存活帧数`=倒计时，`<=0`=不自动消失；`子弹类型`同 `can_hit`（all/normal/air/air_only/pierce/track/throw/rotate/d_fruit）；`销毁对象`非空则在该子弹消失处创建它，是 mod 对象时用 `mod名字` 指定 `mod_type`。出界（x<0 / x>2200 / y<0 / y>1200）静默删除、不生成销毁对象 |
 
+| `VM_BulletScreenAdd_Ex(贴图,总帧数,打击范围,缩放,动画速度,x,y,vx,vy,伤害,伤害计数,存活帧数,子弹类型,销毁对象,mod名字,伤害类型,标志数值,角度)` | 18个 | 同 `VM_BulletScreenAdd`，多三个参数：`伤害类型`（normal=有盾只打盾 / pierce=盾血一起掉 / 其它=无视护盾）、`标志数值`（位掩码，见下）、`角度`（出生角度，后向子弹传 `180` 就倒过来）。<br>**标志数值 = 这颗子弹还能接受哪些类别的卡片效果**：`bit1`=过火类、`bit2`=解冻类、`4/8/16…`=自定义类。子弹进到**格子中心带**（x 落在该格 25%~75%，和 `bullet_array_special` 同口径）时，与本格卡片的 `bullet_flag` 做**与运算**，`>0` 就应用效果并**消位** —— 所以同一类卡片对同一颗子弹只生效一次。<br>**内置表现**：`bit1` → 换 `spr_fire_bullet` + 缩放设 1.8 + `snd_bullet_burnt`；`bit2` → 换 `spr_xiaolongbao_bullet` + `snd_bullet_burnt`，且**不启用增益**、把子弹的冰冻帧数清零，之后**或上 bit1**（解冻完就变成能被点燃）。<br>**卡片侧字段**（实例变量，mod 卡用 `VM_SetProp` 写；原版火盆/布丁已在 Create+Step 里写好）：`bullet_flag`（去重位）、`bullet_mul_dmg`（乘伤害，默认1）、`bullet_add_dmg`（加伤害，默认0）、`bullet_flip_x`/`bullet_flip_y`（反向，0/1）、`bullet_angle_add`（画面旋转角度，默认0）、`bullet_freeze_mul`（乘冰冻帧，默认1）、`bullet_freeze_add`（加冰冻帧，默认0。子弹命中时把累计冰冻帧写给敌人的 `ice_timer`） |
+| `VM_HomingBulletAdd(贴图,缩放,x,y,速度,伤害,可命中类型,销毁对象,mod名字,销毁贴图,模式)` | 11个 | 往**追踪弹管理器** `obj_Homing_Bullet_Management` 塞一颗会拐弯的子弹（管理器不在时会自动创建，所以 `obj_battle` 不用改）。和 `VM_BulletScreenAdd` 的区别是**每帧都改追目标**（同原版糖葫芦 / 章鱼烧：出现更靠左的就换，可以来回换），然后按 `point_direction` 转向目标并重写 `vx/vy`；`速度`是每帧像素的**标量**。`模式`：`0`=只追全场最左的可命中敌人（同原版糖葫芦）；`1`=先找**本行正前方 150 像素内血最多**的敌人，找不到再退回全场最左（同原版章鱼烧 / 月神）。**所有子弹都自转**（每帧 6 度，和原版糖葫芦 / 章鱼烧的 `image_angle = -timer*6` 一致），朝向只用于飞行、不影响画面。命中：走敌人自己的受击事件（同原版 `event_user(0)`：闪白 / 音效 / 护盾，`normal` 有盾只打盾），而且**只判定它当前锁定的那个目标** —— 两者像素距离上下 85 / 左右 90 以内就算撞上，立刻结算并消失（不扫网格、不穿透）。`销毁对象`生成在**命中点**（还有 `mod名字` / `销毁贴图` 两个可选参数，用法同 `VM_BulletScreenAdd`）。固定项：动画速度 1、帧数取贴图自身、不自动消失 |
+| `VM_DamageEnemy(敌人id, 伤害, 伤害类型)` | 3个 | 给敌人造成伤害：走敌人自己的受击事件 `event_user(0)`，所以**闪白、受击音效、护盾判定全都对**（含 `obj_butterfly_mouse` / `obj_charge_spring_mouse` / `obj_landlady_mouse` / `obj_oyster_mouse` 这 4 个自己重写了受击事件的），比直接改 `hp` 正确。`伤害类型`：`normal`=有盾只打盾，`pierce`=盾血一起掉，其它（如 `throw`）=无视护盾 |
+| `VM_DamageEnemyAsh(敌人id, 伤害, 伤害类型)` | 3个 | 灰烬伤害：伤害接得下就按 `VM_DamageEnemy` 结算；接不下（`hp <= 伤害`）就一击必杀、原地换成 `obj_mouse_ash_death`（**不看护盾**，照抄原版大力神）。若该敌人 `special_ash = true`，灰烬会继承它的贴图和当前帧 |
+
 ### 属性
 
 | 函数 | 说明 |
@@ -302,6 +307,45 @@ while (i < 10) {
 | `VM_ArraySize("数组名")` | int | 数组长度；数组不存在返回 0 |
 | `VM_ArrayClear("数组名")` | - | 清空数组，长度归 0；数组不存在无操作 |
 | `VM_ArrayClearAll()` | - | 清空所有数组 |
+| `VM_ArrayContains("数组名",值)` | int | **值第一次出现的下标**（从 0 起）；没有这个值 / 数组不存在 → -1 |
+
+### 表格查询（全局二维表）
+
+引擎会把一些**按格子排的全局变量表**维护好（例如子弹的三张表 `bullet_array_special` / `bullet_array_normal` / `bullet_array_mod`），
+插件用下面这几个函数只读查询。表是**扁平的**，格子下标 `idx = j * (grid_cols + 2) + i`（`i` = 列，`j` = 行），
+脚本不用自己算 —— 直接把列、行传给函数就行。
+
+| 函数 | 返回 | 说明 |
+|---|---|---|
+| `VM_ArrayExists("表名")` | int | 1=存在且是数组，0=不是 |
+| `VM_CellCount("表名",i,j)` | int | 第 i 列 j 行那格的元素个数 |
+| `VM_CellItem("表名",i,j,k)` | int | 那格第 k 个实例（k 从 0 起） |
+| `VM_CellContains("表名",i,j,值)` | int | 那格里有没有这个值 |
+
+**表不存在 / 不是数组 / i,j 越界 → 全部返回 -1**，所以 `n = VM_CellCount(...)` 之后直接 `while (k < n)` 是安全的
+（表不在时 n = -1，循环天然不跑）。`VM_CellContains` 正常返回 1 / 0。
+（按数组名查一维数组请用 `VM_ArrayContains("数组名",值)`，它返回下标，那套归上面的「数组」小节。）
+
+> 子弹表由 `obj_battle` 每帧重建，**比敌人表更严格**：实例的 x/y 必须落在格子长宽**中间 50%** 的内矩形里才收录
+> （四周各留 25% 的三不管带），免得贴着格边飞的子弹被相邻两格的卡片同时触发。
+
+### 实例数组
+
+读写**挂在某个实例身上的一维数组**（实例变量）。`id` 支持 VM 的负号包装 id。
+
+| 函数 | 返回 | 说明 |
+|---|---|---|
+| `VM_InstArrayExists(id,"数组名")` | int | 1=有且是数组，0=没有 |
+| `VM_InstArraySize(id,"数组名")` | int | 长度；不存在 / 不是数组 → -1 |
+| `VM_InstArrayItem(id,"数组名",k)` | any | 第 k 个元素；越界 → -1 |
+| `VM_InstArraySet(id,"数组名",k,值)` | int | 改第 k 个；失败 → -1 |
+| `VM_InstArrayAdd(id,"数组名",值)` | int | 末尾追加；失败 → -1（不会自动建数组） |
+| `VM_InstArrayDel(id,"数组名",k)` | int | 删第 k 个；失败 → -1 |
+| `VM_InstArrayClear(id,"数组名")` | int | 清空；失败 → -1 |
+| `VM_InstArrayContains(id,"数组名",值)` | int | 有没有这个值；不存在 → -1 |
+
+> ⚠️ 只对**真正的 GML 数组**有效。原版子弹身上像 `hitted_enemy` 那种是 **ds_list**，这套读不到。
+> 写操作内部会自动写回实例（GML 数组是值语义）。
 
 ### 鼠标与键盘
 

@@ -34,14 +34,14 @@ while (_i >= 0) {
     // 1. 坐标推进
     _b.x += _b.vx;
     _b.y += _b.vy;
-
+	
     var _gone = false;
 
     // 2. 出界：静默删除，不生成销毁对象（边界跟 obj_bullet_mod 一致）
     if (_b.x < 0 || _b.x > 2200 || _b.y < 0 || _b.y > 1200) {
         _gone = true;
     } else {
-
+		
         // 3. 动画帧计数（循环，速度由 anim_speed 决定，可以是小数）
         if (_b.frames > 1) {
             _b.frame += _b.anim_speed;
@@ -51,7 +51,73 @@ while (_i >= 0) {
                 if (_b.frame < 0) _b.frame += _b.frames;
             }
         }
+		if(obj_battle.battle_time%5==0){
 
+        // 3.5 卡片效果：子弹进到「格子中心带」时，看那一格卡片有没有能吃它的标志数值
+        //     规则：子弹 flag 与卡片 bullet_flag 做【与运算】，> 0 就应用效果，然后消位
+        //           → 同一类卡片的加成对同一颗子弹只生效一次
+        //     bit1 = 过火类：换点燃贴图 spr_fire_bullet + 放大 1.8 + 播 snd_bullet_burnt
+        //     bit2 = 解冻类：换包子贴图 spr_xiaolongbao_bullet + 播 snd_bullet_burnt；
+        //                    不启用增益；子弹自己的冰冻帧数清零；之后「或上 1」= 变成可以被点燃
+        //     4/8/16…= 自定义类：没有内置表现，效果全看卡片字段
+        //     卡片字段（实例变量，mod 卡用 VM_SetProp 写，原版卡在 Create 里写）：
+        //       bullet_flag       去重位（本卡属于哪些类）
+        //       bullet_mul_dmg    伤害倍率（默认 1）     bullet_add_dmg    伤害加值（默认 0）
+        //       bullet_flip_x     反向 x（0/1）           bullet_flip_y     反向 y（0/1）
+        //       bullet_freeze_mul 冰冻帧数倍率（默认 1）   bullet_freeze_add 冰冻帧数加值（默认 0）
+        if (_has_grid && _b.flag > 0) {
+            var _fx = (_b.x - _gox) / _gcsx;
+            var _pc = floor(_fx);
+            var _pr = floor((_b.y - _goy) / _gcsz);
+            // 中心带：和 obj_battle 收录 bullet_array_special 同一口径（格子中间 50%）
+            if (_pc >= 0 && _pc < global.grid_cols && _pr >= 0 && _pr < _rows
+                && (_fx - _pc) >= 0.25 && (_fx - _pc) <= 0.75) {
+                var _cards = ds_grid_get(global.grid_plants, _pc, _pr);
+                var _ncard = ds_list_size(_cards);
+                for (var _ci = 0; _ci < _ncard; _ci++) {
+                    var _car = ds_list_find_value(_cards, _ci);
+                    if (!instance_exists(_car)) continue;
+                    if (!variable_instance_exists(_car, "bullet_flag")) continue;
+                    var _cf = _car.bullet_flag;
+                    if (_cf <= 0) continue;
+                    if ((_b.flag & _cf) == 0) continue;
+
+                    var _thaw = ((_cf & 2) != 0);
+                    // ① 内置表现
+                    if ((_cf & 1) != 0) {                                  // 过火类
+                        _b.spr    = spr_fire_bullet;
+                        _b.frames = sprite_get_number(_b.spr);
+                        _b.scale  = 1.8;                                       // 同原版 image_xscale/yscale = 1.8（直接设，不是乘）
+                        audio_play_sound(snd_bullet_burnt, 0, 0);
+                    }
+                    if (_thaw) {                                           // 解冻类
+                        _b.spr    = spr_xiaolongbao_bullet;
+                        _b.frames = sprite_get_number(_b.spr);
+                        audio_play_sound(snd_bullet_burnt, 0, 0);
+                    }
+                    // ② 增益（解冻位不启用；解冻另外把子弹自己的冰冻帧数清零）
+                    if (_thaw) {
+                        _b.freeze = 0;
+                    } else {
+                        var _mul = variable_instance_exists(_car, "bullet_mul_dmg")    ? _car.bullet_mul_dmg    : 1;
+                        var _add = variable_instance_exists(_car, "bullet_add_dmg")    ? _car.bullet_add_dmg    : 0;
+                        var _fm  = variable_instance_exists(_car, "bullet_freeze_mul") ? _car.bullet_freeze_mul : 1;
+                        var _fa  = variable_instance_exists(_car, "bullet_freeze_add") ? _car.bullet_freeze_add : 0;
+                        _b.dmg    = _b.dmg * _mul + _add;
+                        _b.freeze = _b.freeze * _fm + _fa;
+                        if (variable_instance_exists(_car, "bullet_flip_x") && _car.bullet_flip_x) _b.vx = -_b.vx;
+                        if (variable_instance_exists(_car, "bullet_flip_y") && _car.bullet_flip_y) _b.vy = -_b.vy;
+                        // 旋转量也由卡片给（原版布丁是 +180）；不填就是 0，只反向不转
+                        if (variable_instance_exists(_car, "bullet_angle_add")) _b.angle += _car.bullet_angle_add;
+                    }
+                    // ③ 消位（解冻后额外获得"能被点燃"的位）
+                    _b.flag = _b.flag & (~_cf);
+                    if (_thaw) _b.flag = _b.flag | 1;
+                    if (_b.flag <= 0) break;      // 没位可吃了，剩下的卡不用再看
+                }
+            }
+        }
+		
         // 4. 命中：打击范围内 可命中敌人，按格子里敌人数组的顺序依次结算
         //    打击范围是「方格子」：以子弹所在格为中心，上下左右各扩 cell_range 格（0=只算本格）
         //    伤害计数 -1（不限次数）→ 范围内敌人**全部**结算，永不减
@@ -80,7 +146,14 @@ while (_i >= 0) {
                             if (!instance_exists(_e)) continue;
                             if (_e.hp <= 0) continue;
                             if (!can_hit(_b.target_type, _e.target_type)) continue;
-                            _e.hp -= _b.dmg;
+                            // 走敌人自己的受击事件（闪白 + 音效 + 护盾，含各敌人自己重写的 Other_10），
+                            // 和原版子弹命中一样 —— 不再直接 _e.hp -= dmg 手抄父对象那 16 行。
+                            // 伤害类型固定在 bullet_screen_add 里（normal），和追踪弹管理器同一口径。
+                            damage_enemy(_e, _b.dmg, _b.damage_type);
+                            // 冰冻：子弹累计的冰冻帧数写给敌人（只加不减，同原版 ice_timer）
+                            if (_b.freeze > 0 && variable_instance_exists(_e, "ice_timer")) {
+                                if (_e.ice_timer < _b.freeze) _e.ice_timer = _b.freeze;
+                            }
                             if (!_all) {
                                 _left -= 1;
                                 if (_left <= 0) break;
@@ -93,6 +166,7 @@ while (_i >= 0) {
                 if (!_all) _b.hits = _left;
             }
         }
+		}	
 
         // 5. 存活倒计时
         if (_b.life > 0) _b.life -= 1;
@@ -121,3 +195,4 @@ while (_i >= 0) {
 
     _i -= 1;
 }
+

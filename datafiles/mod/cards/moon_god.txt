@@ -7,12 +7,12 @@
 //             at == cycle - 7..1*flash_speed  → 每帧一发普通弹，共 7 发
 //           attack_anim 之后的窗口内 state = 1（和原版一样）。
 //
-//   子弹  ：原版 obj_moon_god_bullet 和原版【糖葫芦】obj_tanghulu_bullet 是同一套写法
-//           （直朝目标飞 + image_angle = -timer*6 自转 + 每帧重挑最左目标），
-//           所以这里直接复用 obj_tanghulu_bullet 换皮：只改贴图 / 伤害 / 索敌类型，
-//           不再自写子弹。它自带 Collision_obj_enemy_parent，但只认 target_enemy，
-//           创建时必须把 target_enemy 设成真实敌人 id，否则永远打不中。
-//           索敌类型沿用原版 target_type = "track"（可打 normal / diver / air）。
+//   子弹  ：复用【章鱼烧】的 obj_takoyaki_bullet —— 两段式：
+//             第一阶段它只打「自己（发射卡）本行、正前方 150px 内」的敌人；
+//             前方没可命中敌人时，它把这颗子弹转交给追踪弹管理器
+//             obj_Homing_Bullet_Management，之后按「最左可命中敌人」继续追。
+//           所以卡片这边只要给贴图 / 伤害 / 速度 / 可命中类型 / 行 和 banding_card_obj。
+//           （原版章鱼烧自己那颗子弹也走同一条路，我们只是复用。）
 //
 //   叠加增伤：原版 final_atk = atk * min(0.95 + 场上月神数 * 0.05, 1.45)。
 //             但原代码 Step 每帧开头会把 final_atk 重置回 atk，实际只有同帧生成的
@@ -144,29 +144,12 @@ _OBJECT_STEP {
         r = VM_GetProp(self, "grid_row")
 
         if (shot == 1) {
-            b = VM_CreateInstance("obj_tanghulu_bullet", bx, by)
-            VM_SetProp(b, "sprite_index", "spr_moon_god_bullet_3")
-            VM_SetProp(b, "image_xscale", 1.5)
-            VM_SetProp(b, "image_yscale", 1.5)
-            VM_SetProp(b, "damage", atk * boost)
-            VM_SetProp(b, "move_speed", 10)
-            VM_SetProp(b, "target_type", "track")
-            VM_SetProp(b, "target_enemy", tgt)
-            VM_SetProp(b, "banding_card_obj", self)
-            VM_SetProp(b, "row", r)
+            // 追踪弹统一走弹幕管理器（模式 1 = 先打发射卡前方，再退回全场最左）
+            VM_HomingBulletAdd("spr_moon_god_bullet_3", 1.5, bx, by, 10, atk * boost, "track", "", "", "", 1)
         }
 
         if (sup == 1) {
-            s = VM_CreateInstance("obj_tanghulu_bullet", bx, by)
-            VM_SetProp(s, "sprite_index", "spr_moon_god_bullet_3_s")
-            VM_SetProp(s, "image_xscale", 1.5)
-            VM_SetProp(s, "image_yscale", 1.5)
-            VM_SetProp(s, "damage", 2 * atk * boost)
-            VM_SetProp(s, "move_speed", 10)
-            VM_SetProp(s, "target_type", "track")
-            VM_SetProp(s, "target_enemy", tgt)
-            VM_SetProp(s, "banding_card_obj", self)
-            VM_SetProp(s, "row", r)
+            VM_HomingBulletAdd("spr_moon_god_bullet_3_s", 1.5, bx, by, 10, 2 * atk * boost, "track", "", "", "", 1)
         }
     }
 

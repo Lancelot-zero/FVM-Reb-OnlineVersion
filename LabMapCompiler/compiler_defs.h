@@ -334,6 +334,23 @@ static std::vector<FuncDef> FUNC_DEFS = {
     {"VM_FuncDesc",                1,  {PT_STRING}, PT_STRING}, // 124 — 返回字典里登记的该函数说明字符串，没有返回 ""（VM_CallFunc 的配套）
     {"VM_SpriteExists",            1,  {PT_STRING}}, // 125 — 贴图现在真的可用吗（项目资源→VM临时缓存→VM永久缓存→全局缓存，并排除 get_load_sprite 的空白占位图），1=可用 0=不可用
     {"VM_AliasSpritePerm",         2,  {PT_STRING, PT_STRING}}, // 126 — 把名字永久指向一个已在永久缓存里的贴图（存精灵 id，进房间不会被清；[reloadmod] 时释放），配合 VM_SpriteExists 做「内置有就用内置、没有才外置覆盖」
+    {"VM_ArrayExists",             1,  {PT_STRING}}, // 127 — 全局二维表是否存在（存在且是数组）1/0
+    {"VM_CellCount",               3,  {PT_STRING, PT_INT, PT_INT}}, // 128 — 表里第 i 列 j 行那格的元素个数；表不存在/非数组/i,j 越界 → -1
+    {"VM_CellItem",                4,  {PT_STRING, PT_INT, PT_INT, PT_INT}}, // 129 — 表里第 i 列 j 行那格的第 k 个元素（k 从 0 起）；越界 → -1
+    {"VM_CellContains",            4,  {PT_STRING, PT_INT, PT_INT, PT_ANY}}, // 130 — 表里第 i 列 j 行那格有没有这个值，1/0；越界 → -1
+    {"VM_ArrayContains",           2,  {PT_STRING, PT_ANY}}, // 131 — 整张表里有没有这个值，1/0；表不存在 → -1
+    {"VM_InstArrayExists",         2,  {PT_INT, PT_STRING}}, // 132 — 实例身上有没有这个一维数组，1/0
+    {"VM_InstArraySize",           2,  {PT_INT, PT_STRING}, PT_INT}, // 133 — 实例身上一维数组的长度；实例/变量不存在 → -1
+    {"VM_InstArrayItem",           3,  {PT_INT, PT_STRING, PT_INT}, PT_ANY}, // 134 — 实例身上一维数组的第 k 个元素；越界 → -1
+    {"VM_InstArraySet",            4,  {PT_INT, PT_STRING, PT_INT, PT_ANY}}, // 135 — 改实例身上一维数组的第 k 个元素；失败 → -1
+    {"VM_InstArrayAdd",            3,  {PT_INT, PT_STRING, PT_ANY}}, // 136 — 往实例身上一维数组末尾追加；失败 → -1
+    {"VM_InstArrayDel",            3,  {PT_INT, PT_STRING, PT_INT}}, // 137 — 删实例身上一维数组的第 k 个元素；失败 → -1
+    {"VM_InstArrayClear",          2,  {PT_INT, PT_STRING}}, // 138 — 清空实例身上的一维数组；失败 → -1
+    {"VM_InstArrayContains",       3,  {PT_INT, PT_STRING, PT_ANY}}, // 139 — 实例身上一维数组里有没有这个值，1/0；不存在 → -1
+    {"VM_HomingBulletAdd",        11,  {PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY}}, // 140 — 追踪弹：贴图,缩放,x,y,速度,伤害,可命中类型,销毁对象,mod名字,销毁贴图,模式（只打自己锁定的目标，像素距离 90x85 命中；自转 6 度/帧、伤害类型 normal 都固定）
+    {"VM_DamageEnemy",             3,  {PT_INT, PT_ANY, PT_STRING}}, // 141 — 给敌人造成伤害：走敌人自己的受击事件（闪白/音效/护盾，含自定义 Other_10），比直接改 hp 正确
+    {"VM_DamageEnemyAsh",          3,  {PT_INT, PT_ANY, PT_STRING}}, // 142 — 灰烬伤害：接不下就一击必杀换成 obj_mouse_ash_death（照抄原版 obj_power_god_bullet_1，不看护盾）
+    {"VM_BulletScreenAdd_Ex",     18,  {PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY}}, // 143 — 屏幕弹幕(带卡片效果)：同 VM_BulletScreenAdd，多【伤害类型】【标志数值 flag】【出生角度】；flag bit1=过火/bit2=解冻/4,8,16…=自定义，进格子中心带时与卡片的 bullet_flag 取且运算，>0 就应用并消位；angle 给后向子弹用（180=倒过来）
 };
 
 // ============================================================

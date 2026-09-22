@@ -7,6 +7,7 @@ depth = 50
 
 instance_create_depth(0,0,-900,obj_flame_manager)
 instance_create_depth(0,0,-700,obj_Bullet_Screen_Management)   // 屏幕弹幕管理器：全场弹幕都塞它一个实例
+instance_create_depth(0,0,-700,obj_Homing_Bullet_Management)   // 追踪弹管理器：会拐弯/追目标的子弹塞它（homing_bullet_add 里还留了懒创建兜底）
 instance_create_depth(0,0,0,obj_event_manager)
 //instance_create_depth(450,1040,-900,obj_boss_hpbar)
 var mus_inst = instance_create_depth(0,0,0,obj_battle_music_controller)
@@ -83,6 +84,7 @@ if (variable_global_exists("eat_order") && ds_exists(global.eat_order, ds_type_l
 	ds_list_destroy(global.eat_order);
 }
 global._takoyaki_buttet_number = 0 
+global._tanghulu_buttet_number = 0 
 
 
 // 植物层级定义

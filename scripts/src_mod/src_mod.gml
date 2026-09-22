@@ -682,6 +682,16 @@ function src_mod_card_vm_fill(_vm, _buf, _dir = "") {
 	array_resize(_vm.strings, 0);
 	ds_map_clear(_vm.str_map);
 
+	// ⚠️ 解码缓存必须跟着一起清掉，否则 reloadmod 等于没 reload：
+	//    VM_Execute 把「块名 → VM_Decode 出来的值数组」缓存在 vm.codes（惰性解码、一块只解一次），
+	//    而 fill 是**复用同一个 VM 结构体**换 bin 的，codes 里还是上一版 bin 解出来的指令数组，
+	//    换完 blocks 后执行时缓存照命中 → 跑的还是旧代码；
+	//    而且旧代码里的字符串池下标是按旧 strings 编的，不清就是新旧混用。
+	//    （值数组本身是 GML 数组，map 清掉后没有引用，交给 GC 回收。）
+	if (variable_struct_exists(_vm, "codes") && ds_exists(_vm[$ "codes"], ds_type_map)) {
+		ds_map_clear(_vm[$ "codes"]);
+	}
+
 	if (!buffer_exists(_buf)) return _vm;
 	buffer_seek(_buf, buffer_seek_start, 0);
 	var _buf_size = buffer_get_size(_buf);

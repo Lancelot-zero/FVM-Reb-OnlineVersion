@@ -122,26 +122,21 @@ _OBJECT_STEP {
         st = 0
     }
 
-    // 发射：直接用原版【双向水管】的子弹对象 obj_waterpipe_bullet（同一套「前后各一发、
-    // 后向 image_angle = 180、命中即消失、伤害走敌人自己的结算」），只换贴图和伤害。
-    // 原版双向水管就是这么写的：inst.damage / move_speed = ±8 / row = grid_row。
+    // 发射：全部走【屏幕弹幕管理器】（不再造实体子弹）
+    // 原版 obj_war_god_bullet 是直线飞（move_speed ±8）+ 命中即消失 + 缩放 1.6，
+    // 后向那一发靠 image_angle = 180 倒过来 —— 管理器现在支持出生角度，所以直接传 180。
+    // 参数：贴图,帧数,打击范围,缩放,动画速度,x,y,vx,vy,伤害,伤害计数,存活帧数,类型,销毁对象,mod名字,
+    //       伤害类型, 标志数值, 出生角度
+    //   flag = 5：bit1 过火 + bit4 反弹（原来用的是 obj_waterpipe_bullet，本来就带这两个碰撞事件）
     if (volley == 1) {
         atk = VM_GetProp(self, "atk")
         bx = VM_GetProp(self, "x")
         by = VM_GetProp(self, "y") - 50
 
-        b1 = VM_CreateInstance("obj_waterpipe_bullet", bx + 40, by)
-        VM_SetProp(b1, "sprite_index", "spr_war_god_bullet")
-        VM_SetProp(b1, "damage", atk)
-        VM_SetProp(b1, "move_speed", 8)
-        VM_SetProp(b1, "row", r)
-
-        b2 = VM_CreateInstance("obj_waterpipe_bullet", bx - 40, by)
-        VM_SetProp(b2, "sprite_index", "spr_war_god_bullet")
-        VM_SetProp(b2, "damage", atk)
-        VM_SetProp(b2, "move_speed", 0 - 8)
-        VM_SetProp(b2, "row", r)
-        VM_SetProp(b2, "image_angle", 180)
+        // 前向
+        VM_BulletScreenAdd_Ex("spr_war_god_bullet", 3, 0, 1.6, 1, bx + 40, by, 8, 0, atk, 1, 0 - 1, "normal", "", "", "normal", 5, 0)
+        // 后向：vx 取负 + 出生角度 180
+        VM_BulletScreenAdd_Ex("spr_war_god_bullet", 3, 0, 1.6, 1, bx - 40, by, 0 - 8, 0, atk, 1, 0 - 1, "normal", "", "", "normal", 5, 180)
     }
 
     if (sup == 1) {
@@ -149,18 +144,8 @@ _OBJECT_STEP {
         bx = VM_GetProp(self, "x")
         by = VM_GetProp(self, "y") - 50
 
-        s1 = VM_CreateInstance("obj_waterpipe_bullet", bx + 40, by)
-        VM_SetProp(s1, "sprite_index", "spr_war_god_bullet_s")
-        VM_SetProp(s1, "damage", 12 * atk)
-        VM_SetProp(s1, "move_speed", 8)
-        VM_SetProp(s1, "row", r)
-
-        s2 = VM_CreateInstance("obj_waterpipe_bullet", bx - 40, by)
-        VM_SetProp(s2, "sprite_index", "spr_war_god_bullet_s")
-        VM_SetProp(s2, "damage", 12 * atk)
-        VM_SetProp(s2, "move_speed", 0 - 8)
-        VM_SetProp(s2, "row", r)
-        VM_SetProp(s2, "image_angle", 180)
+        VM_BulletScreenAdd_Ex("spr_war_god_bullet_s", 3, 0, 1.6, 1, bx + 40, by, 8, 0, 12 * atk, 1, 0 - 1, "normal", "", "", "normal", 5, 0)
+        VM_BulletScreenAdd_Ex("spr_war_god_bullet_s", 3, 0, 1.6, 1, bx - 40, by, 0 - 8, 0, 12 * atk, 1, 0 - 1, "normal", "", "", "normal", 5, 180)
     }
 
     VM_SetProp(self, "attack_timer", at)

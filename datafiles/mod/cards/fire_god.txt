@@ -1,0 +1,99 @@
+// 至尊火神（金卡 · 火神·洛基最终形态）：把经过自己的子弹点着，伤害按自己的攻击力放大
+// mod 分支里 obj_fire_god 的 Step 只有动画，点燃逻辑全在子弹侧的 Collision_obj_fire_god：
+//     if (ds_list_find_index(brazier_list, other.id) == -1 && burnt == 0 && row == other.grid_row) {
+//         burnt += 1; damage = round(damage * other.atk);
+//         ds_list_add(brazier_list, other.id); audio_play_sound(snd_bullet_burnt, 0, 0);
+//         image_xscale = 1.8; image_yscale = 1.8;
+//     }
+// 原版子弹改不了，所以这里改成**卡片每帧查自己那格**，再照抄那几行。
+// （`brazier_list` 那段是防同一颗子弹被点两次的，而 burnt 的守卫本身就是"只能点一次"，
+//   所以直接用 burnt == 0 就等价，不用碰那个 ds_list。）
+//
+// 查的是全局表 global.bullet_array_special —— 正好就是带原版碰撞事件的那 10 个平射子弹
+// （由 obj_battle 每帧重建，只收录落在格子中间 50% 的实例）。
+//
+//   贴图：本体 11 帧 原点 (40,62)
+
+_OBJECT_CFG {
+    if (VM_SpriteExists("spr_fire_god_3") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_fire_god_3_0.png", 11, 40, 62)
+        VM_AliasSpritePerm("spr_fire_god_3", "tex/spr_fire_god_3_0.png")
+    }
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+
+    VM_SetProp(self, "sprite_index", "spr_fire_god_3")
+    VM_SetProp(self, "idle_anim", 11)
+    VM_SetProp(self, "attack_anim", 26)
+    VM_SetProp(self, "flash_speed", 5)
+    VM_SetProp(self, "plant_type", "normal")
+    VM_SetProp(self, "state", 0)
+
+    // 弹幕卡片效果：bit1 = 过火类
+    // 管理器里的子弹进到本格中心带时，换点燃贴图 + 放大 1.8 + 点燃音效，伤害 × 本卡攻击力
+    VM_SetProp(self, "bullet_flag", 1)
+    VM_SetProp(self, "bullet_mul_dmg", VM_GetProp(self, "atk"))
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+
+    // 弹幕卡片效果：攻击力会随星级变，每帧刷新给弹幕用的值（放在冻结判断之前，保证一直刷新）
+    VM_SetProp(self, "bullet_mul_dmg", VM_GetProp(self, "atk"))
+
+    if (VM_GetProp(self, "is_frozen") == 1) {
+        exit
+    }
+
+    c = VM_GetProp(self, "grid_col")
+    r = VM_GetProp(self, "grid_row")
+    atk = VM_GetProp(self, "atk")
+
+    lit = 0
+    n = VM_CellCount("bullet_array_special", c, r)
+    k = 0
+    while (k < n) {
+        b = VM_CellItem("bullet_array_special", c, r, k)
+        if (VM_IsDestroyed(b) == 0) {
+            // burnt 是"整发只点一次"的守卫（原版也是这么用的）
+            bu = VM_GetProp(b, "burnt")
+            if (VM_IsUndefined(bu)) {
+                bu = 0
+            }
+            if (bu == 0) {
+                d = VM_GetProp(b, "damage")
+                if (VM_IsUndefined(d)) {
+                    d = 0
+                }
+                // 原版是 round(damage * atk)；VM 没有 round，用 floor(x + 0.5) 等价
+                VM_SetProp(b, "damage", VM_Floor(d * atk + 0.5))
+                VM_SetProp(b, "burnt", 1)
+                VM_SetProp(b, "image_xscale", 1.8)
+                VM_SetProp(b, "image_yscale", 1.8)
+                lit = 1
+            }
+        }
+        k = k + 1
+    }
+
+    // 点燃音效：**全局节流**。同一帧可能点亮好几颗子弹，场上也可能有好几张火神，
+    // 每颗都播就会在同一帧叠成一片（audio_play_sound 不去重）。
+    // 实例 id 0 = 读写全局变量，所以几张火神共用这一个冷却：
+    // 最多每 15 帧（约 0.25 秒）响一次，音效还在但不会糊。
+    cd = VM_GetProp(0, "fire_burn_sound_cd")
+    if (VM_IsUndefined(cd)) {
+        cd = 0
+    }
+    if (cd > 0) {
+        cd = cd - 1
+    }
+    if (lit == 1) {
+        if (cd <= 0) {
+            VM_PlaySound("snd_bullet_burnt")
+            cd = 15
+        }
+    }
+    VM_SetProp(0, "fire_burn_sound_cd", cd)
+}

@@ -502,6 +502,101 @@ with obj_enemy_parent{
 	pre_state = state
 }
 
+// ============================================================
+// 子弹格子表（供 VM 的 VM_ArrayExists / VM_CellCount / VM_CellItem
+//                / VM_CellContains / VM_ArrayContains 查询）
+//   下标和平面的敌人表同一套：idx = row * stride + col
+//   ⚠️ 行**不能用 y 反算**：子弹出生在卡片 y-75 之类的位置，而卡片 y 在格子顶边附近，
+//      按 y 算会整体偏一整行（第 0 行的子弹还会算成 -1 行被丢掉）。
+//      原版火盆/布丁的判定是 `row == other.grid_row`，考的是子弹自己的 row，所以这里也用它；
+//      只有没 row 的（垂直弹之类）才退回按 y 反算。
+//   列按 x 反算，并且**只收落在格子长宽中间 50% 的**（四周各留 25% 三不管带，
+//      免得贴着格边飞的子弹被相邻两格的卡片同时触发）。
+//   三张表分开放：
+//     global.bullet_array_special —— 带卡片侧碰撞事件（火盆点燃 / 布丁反弹）的 10 个原版子弹
+//     global.bullet_array_normal  —— 其余原版子弹
+//     global.bullet_array_mod     —— mod 子弹（obj_bullet_mod）
+// ============================================================
+if (!variable_global_exists("bullet_array_special")
+    || array_length(global.bullet_array_special) != size) {
+    global.bullet_array_special = array_create(size);
+    global.bullet_array_normal  = array_create(size);
+    global.bullet_array_mod     = array_create(size);
+    for (var _bi = 0; _bi < size; _bi++) {
+        global.bullet_array_special[_bi] = [];
+        global.bullet_array_normal[_bi]  = [];
+        global.bullet_array_mod[_bi]     = [];
+    }
+    // 运行时没有「这颗子弹带不带那个碰撞事件」的标记，只能把对象列出来
+    global.special_bullet_objs = [
+        obj_waterpipe_bullet, obj_icegun_bullet, obj_icelongbao_bullet,
+        obj_icelongbao_bullet_vertical, obj_mightygun_bullet, obj_triplewinerack_bullet,
+        obj_xiaolongbao_bullet, obj_xiaolongbao_bullet_vertical,
+        obj_coalstarfish_bullet, obj_tarsprayer_bullet
+    ];
+}
+for (var _bi = 0; _bi < size; _bi++) {
+    array_resize(global.bullet_array_special[_bi], 0);
+    array_resize(global.bullet_array_normal[_bi], 0);
+    array_resize(global.bullet_array_mod[_bi], 0);
+}
+
+var _b_ox = global.grid_offset_x;
+var _b_oy = global.grid_offset_y;
+var _b_cw = global.grid_cell_size_x;
+var _b_ch = global.grid_cell_size_y;
+
+with (obj_bullet_parent) {
+    // 行：优先用子弹自己的 row（原版就是这么判的）；没有才按 y 反算
+    var _brow = -1;
+    if (variable_instance_exists(id, "row")) _brow = row;
+    else _brow = floor((y - _b_oy) / _b_ch);
+
+    // 列：按 x 反算，只收格子中间 50%
+    var _fgx = (x - _b_ox) / _b_cw;
+    var _bcol = floor(_fgx);
+    if (_bcol >= 0 && _bcol < global.grid_cols
+        && (_fgx - _bcol) >= 0.25 && (_fgx - _bcol) <= 0.75
+        && _brow >= 0 && _brow < global.grid_rows) {
+        var _bidx = _brow * stride + _bcol;
+        if (array_contains(global.special_bullet_objs, object_index)) {
+            array_push(global.bullet_array_special[_bidx], id);
+        } else {
+            array_push(global.bullet_array_normal[_bidx], id);
+        }
+    }
+}
+
+// 焦油喷雾的子弹没挂 obj_bullet_parent，单独收一趟（它属于 special 那一类）
+with (obj_tarsprayer_bullet) {
+    var _brow = -1;
+    if (variable_instance_exists(id, "row")) _brow = row;
+    else _brow = floor((y - _b_oy) / _b_ch);
+
+    var _fgx = (x - _b_ox) / _b_cw;
+    var _bcol = floor(_fgx);
+    if (_bcol >= 0 && _bcol < global.grid_cols
+        && (_fgx - _bcol) >= 0.25 && (_fgx - _bcol) <= 0.75
+        && _brow >= 0 && _brow < global.grid_rows) {
+        array_push(global.bullet_array_special[_brow * stride + _bcol], id);
+    }
+}
+
+// mod 子弹也是独立对象，不挂在 obj_bullet_parent 下
+with (obj_bullet_mod) {
+    var _brow = -1;
+    if (variable_instance_exists(id, "row")) _brow = row;
+    else _brow = floor((y - _b_oy) / _b_ch);
+
+    var _fgx = (x - _b_ox) / _b_cw;
+    var _bcol = floor(_fgx);
+    if (_bcol >= 0 && _bcol < global.grid_cols
+        && (_fgx - _bcol) >= 0.25 && (_fgx - _bcol) <= 0.75
+        && _brow >= 0 && _brow < global.grid_rows) {
+        array_push(global.bullet_array_mod[_brow * stride + _bcol], id);
+    }
+}
+
 for(var i = 0; i < global.grid_rows; i++){
 	var row_base = i * stride;
 	for(var j = 1; j < stride; j++){

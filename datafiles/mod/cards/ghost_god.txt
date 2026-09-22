@@ -14,8 +14,12 @@
 //             横向：格子宽 107 / 速度 8 = 13.4 帧  → atk * 8 / 107
 //             纵向：格子高 116 / 速度 8 = 14.5 帧  → atk * 8 / 116
 //             斜向：横向分量 6.128 先出格 = 17.5 帧 → atk * 6.128 / 107
-//   贴图旋转：原版用 image_angle（90=上、180=左、270=下、45=右上、315=右下）转贴图，
-//           管理器不支持旋转，所以预先抽了 5 张旋转版 spr_ghost_god_bullet_3_a*。
+//   贴图旋转：一张图 + 管理器的 angle 参数（原来的 5 张预旋转图已经用不上了）。
+//           基准图就是 a180 那张（矛尖朝左，原点在矛尖），其余方向在这张图上再转：
+//             a180(朝左)=0°、a270(朝下)=90°、a90(朝上)=270°、a315(右下)=135°、a45(右上)=225°
+//           （GM 的 angle 是逆时针：180° + 90° = 270° 正好是"朝下"，和原来那张 a270 对得上）
+//           ⚠️ 旋转是绕原点转的，原点 (1,10) 就在矛尖 —— 和原来 5 张图各自手工设的原点等效，
+//              所以出生点/飞行轨迹不用改。
 
 _OBJECT_CFG {
     // 统一写内部 spr 名：内置有就直接用；内置没有才把本地图挂到这个名上。
@@ -25,26 +29,12 @@ _OBJECT_CFG {
         VM_AliasSpritePerm("spr_ghost_god_3", "tex/spr_ghost_god_3_0.png")
     }
 
-    // 子弹（1 帧 46x21，原点在矛尖）：原图朝右，其余 4 个方向是它的旋转版
-    if (VM_SpriteExists("spr_ghost_god_bullet_3_a180") == 0) {
+    // 子弹（1 帧 46x21，原点在矛尖）：**只加载一张图**（a180 那张，矛尖朝左），
+    // 五个方向全部由弹幕管理器的 angle 参数旋转出来 —— 一页贴图、天然合批，
+    // 也不用再维护 5 张预旋转图（tex 里那 4 张 a270/a90/a315/a45 现在没人用了）。
+    if (VM_SpriteExists("spr_ghost_god_bullet_3") == 0) {
         VM_LoadSpritePerm_Ex("tex/spr_ghost_god_bullet_3_a180_0.png", 1, 1, 10)
-        VM_AliasSpritePerm("spr_ghost_god_bullet_3_a180", "tex/spr_ghost_god_bullet_3_a180_0.png")
-    }
-    if (VM_SpriteExists("spr_ghost_god_bullet_3_a270") == 0) {
-        VM_LoadSpritePerm_Ex("tex/spr_ghost_god_bullet_3_a270_0.png", 1, 10, 45)
-        VM_AliasSpritePerm("spr_ghost_god_bullet_3_a270", "tex/spr_ghost_god_bullet_3_a270_0.png")
-    }
-    if (VM_SpriteExists("spr_ghost_god_bullet_3_a90") == 0) {
-        VM_LoadSpritePerm_Ex("tex/spr_ghost_god_bullet_3_a90_0.png", 1, 11, 1)
-        VM_AliasSpritePerm("spr_ghost_god_bullet_3_a90", "tex/spr_ghost_god_bullet_3_a90_0.png")
-    }
-    if (VM_SpriteExists("spr_ghost_god_bullet_3_a315") == 0) {
-        VM_LoadSpritePerm_Ex("tex/spr_ghost_god_bullet_3_a315_0.png", 1, 39, 40)
-        VM_AliasSpritePerm("spr_ghost_god_bullet_3_a315", "tex/spr_ghost_god_bullet_3_a315_0.png")
-    }
-    if (VM_SpriteExists("spr_ghost_god_bullet_3_a45") == 0) {
-        VM_LoadSpritePerm_Ex("tex/spr_ghost_god_bullet_3_a45_0.png", 1, 40, 9)
-        VM_AliasSpritePerm("spr_ghost_god_bullet_3_a45", "tex/spr_ghost_god_bullet_3_a45_0.png")
+        VM_AliasSpritePerm("spr_ghost_god_bullet_3", "tex/spr_ghost_god_bullet_3_a180_0.png")
     }
 }
 
@@ -121,12 +111,12 @@ _OBJECT_STEP {
         dv = atk * 8 / 116        // 纵向穿格
         dd = atk * 6.128 / 107    // 斜向（横分量先出格）
 
-        // 正后、正下、正上、右下、右上
-        VM_BulletScreenAdd("spr_ghost_god_bullet_3_a180", 1, 0, 1.8, 1, bx, by, 0 - 8, 0, dh, 0 - 1, 0 - 1, "normal", "", "")
-        VM_BulletScreenAdd("spr_ghost_god_bullet_3_a270", 1, 0, 1.8, 1, bx, by, 0, 8, dv, 0 - 1, 0 - 1, "normal", "", "")
-        VM_BulletScreenAdd("spr_ghost_god_bullet_3_a90", 1, 0, 1.8, 1, bx, by, 0, 0 - 8, dv, 0 - 1, 0 - 1, "normal", "", "")
-        VM_BulletScreenAdd("spr_ghost_god_bullet_3_a315", 1, 0, 1.8, 1, bx, by, 6.128, 5.1424, dd, 0 - 1, 0 - 1, "normal", "", "")
-        VM_BulletScreenAdd("spr_ghost_god_bullet_3_a45", 1, 0, 1.8, 1, bx, by, 6.128, 0 - 5.1424, dd, 0 - 1, 0 - 1, "normal", "", "")
+        // 正后、正下、正上、右下、右上：同一张图 + angle（180=/0、270=/90、90=/270、315=/135、45=/225）
+        VM_BulletScreenAdd_Ex("spr_ghost_god_bullet_3", 1, 0, 1.8, 1, bx, by, 0 - 8, 0, dh, 0 - 1, 0 - 1, "normal", "", "", "normal", 3, 0)
+        VM_BulletScreenAdd_Ex("spr_ghost_god_bullet_3", 1, 0, 1.8, 1, bx, by, 0, 8, dv, 0 - 1, 0 - 1, "normal", "", "", "normal", 3, 90)
+        VM_BulletScreenAdd_Ex("spr_ghost_god_bullet_3", 1, 0, 1.8, 1, bx, by, 0, 0 - 8, dv, 0 - 1, 0 - 1, "normal", "", "", "normal", 3, 270)
+        VM_BulletScreenAdd_Ex("spr_ghost_god_bullet_3", 1, 0, 1.8, 1, bx, by, 6.128, 5.1424, dd, 0 - 1, 0 - 1, "normal", "", "", "normal", 3, 135)
+        VM_BulletScreenAdd_Ex("spr_ghost_god_bullet_3", 1, 0, 1.8, 1, bx, by, 6.128, 0 - 5.1424, dd, 0 - 1, 0 - 1, "normal", "", "", "normal", 3, 225)
     }
 
     VM_SetProp(self, "attack_timer", at)

@@ -39,7 +39,11 @@ function VM_Create(mem_size = 32768) {
         func_ret_types: [],
         strings: [],
         str_map: ds_map_create(),
-        arrays: ds_map_create()   // 命名数组: 数组名 → GML 数组
+        arrays: ds_map_create(),  // 命名数组: 数组名 → GML 数组
+        // 随机种子必须在这里初始化：VM_Random 直接读 _vm.rng_state，
+        // 少了它就是 "Variable ...rng_state not set before reading it"，整张卡的 Step 当场断掉。
+        // （mod 卡各有自己的 VM，是 VM_Create 建的，不会走 global.__vm 那句种子赋值）
+        rng_state: 0x9E3779B9
     };
     return vm;
 }
@@ -1735,6 +1739,7 @@ function VM_SpawnPlantsRandom(x_addr, y_addr, w_addr, h_addr,
 				var _plant = spawn_plant(_c, _r, _card_data[? "obj"], _props);
 				global._mod_pending_card_id = "";
 			if (_plant >= 0) {
+				vm_attach_plant_to_platform(_plant, _c, _r);   // 和手牌种植一样贴平台
 				network_apply_plant_level(_plant);
 				var _VM_id = ++global._VM_create_counter;
 				_plant._VM_id = _VM_id;
@@ -2215,6 +2220,272 @@ function VM_GetInstancesInRange(arr_addr, r1_addr, r2_addr, c1_addr, c2_addr, ki
     return _count;
 }
 
+// ============================================================
+// 表格 / 数组查询（只读，不参与联机同步）
+//   · 全局二维表：参数传**全局变量名**，表是扁平的，格子下标 idx = j * (grid_cols + 2) + i
+//     （i = 列，j = 行；stride 留 +2 是为了能放下 col = -1 / col = grid_cols 这两列）
+//   · 实例一维数组：参数传**实例变量名**，就是挂在该实例身上的普通一维数组
+//   目标不存在 / 不是数组 / 下标越界 一律返回 -1；Contains 类正常返回 1 / 0
+// ============================================================
+
+/// @function VM_ArrayExists(name)
+/// @param name 全局变量名
+/// @return 1=存在且是数组，0=不存在或不是数组
+function VM_ArrayExists(name_addr) {
+    var _name = vm_arg(name_addr);
+    if (!variable_global_exists(_name)) return 0;
+    return is_array(variable_global_get(_name)) ? 1 : 0;
+}
+
+/// @function VM_CellCount(name, i, j)
+/// @param name 全局变量名（扁平二维表）
+/// @param i 列  j 行
+/// @return 该格元素个数；表不存在 / 非数组 / i,j 越界 → -1
+function VM_CellCount(name_addr, i_addr, j_addr) {
+    var _name = vm_arg(name_addr);
+    var _i = vm_arg(i_addr);
+    var _j = vm_arg(j_addr);
+    if (!variable_global_exists(_name)) return -1;
+    var _tbl = variable_global_get(_name);
+    if (!is_array(_tbl)) return -1;
+    if (_i < 0 || _i >= global.grid_cols) return -1;
+    if (_j < 0 || _j >= global.grid_rows) return -1;
+    var _idx = _j * (global.grid_cols + 2) + _i;
+    if (_idx < 0 || _idx >= array_length(_tbl)) return -1;
+    var _cell = _tbl[_idx];
+    if (!is_array(_cell)) return -1;
+    return array_length(_cell);
+}
+
+/// @function VM_CellItem(name, i, j, k)
+/// @param name 全局变量名（扁平二维表）
+/// @param i 列  j 行  k 第几个（从 0 起）
+/// @return 实例 ID；表不存在 / 非数组 / 下标越界 → -1
+function VM_CellItem(name_addr, i_addr, j_addr, k_addr) {
+    var _name = vm_arg(name_addr);
+    var _i = vm_arg(i_addr);
+    var _j = vm_arg(j_addr);
+    var _k = vm_arg(k_addr);
+    if (!variable_global_exists(_name)) return -1;
+    var _tbl = variable_global_get(_name);
+    if (!is_array(_tbl)) return -1;
+    if (_i < 0 || _i >= global.grid_cols) return -1;
+    if (_j < 0 || _j >= global.grid_rows) return -1;
+    var _idx = _j * (global.grid_cols + 2) + _i;
+    if (_idx < 0 || _idx >= array_length(_tbl)) return -1;
+    var _cell = _tbl[_idx];
+    if (!is_array(_cell)) return -1;
+    if (_k < 0 || _k >= array_length(_cell)) return -1;
+    return VM_ClientWrapId(_cell[_k]);
+}
+
+/// @function VM_CellContains(name, i, j, value)
+/// @param name 全局变量名（扁平二维表）
+/// @param i 列  j 行
+/// @return 1=这一格里有这个值，0=没有；表不存在 / 非数组 / i,j 越界 → -1
+function VM_CellContains(name_addr, i_addr, j_addr, value_addr) {
+    var _name = vm_arg(name_addr);
+    var _i = vm_arg(i_addr);
+    var _j = vm_arg(j_addr);
+    var _v = vm_arg(value_addr);
+    if (!variable_global_exists(_name)) return -1;
+    var _tbl = variable_global_get(_name);
+    if (!is_array(_tbl)) return -1;
+    if (_i < 0 || _i >= global.grid_cols) return -1;
+    if (_j < 0 || _j >= global.grid_rows) return -1;
+    var _idx = _j * (global.grid_cols + 2) + _i;
+    if (_idx < 0 || _idx >= array_length(_tbl)) return -1;
+    var _cell = _tbl[_idx];
+    if (!is_array(_cell)) return -1;
+    return array_contains(_cell, _v) ? 1 : 0;
+}
+
+/// @function VM_ArrayContains(name, value)
+/// @param name 命名数组名（和 VM_ArrayADD / VM_ArraySet / VM_ArrayGet 同一套**一维数组**）
+/// @return **值第一次出现的下标**（从 0 起）；没有这个值 / 数组不存在 → -1
+/// @desc 就是 GML 的 array_get_index。注意它查的是 VM 的命名一维数组，
+///       不是 enemy_array 那种全局二维表（那是 VM_CellCount / CellItem / CellContains 一家）
+function VM_ArrayContains(name_addr, value_addr) {
+    var _name = vm_arg(name_addr);
+    var _v = vm_arg(value_addr);
+    var _vm = global.__vm;
+    if (!ds_map_exists(_vm.arrays, _name)) return -1;
+    return array_get_index(_vm.arrays[? _name], _v);
+}
+
+/// @function VM_InstArrayExists(inst_id, name)
+/// @param inst_id 实例 ID（支持 VM 的负号包装 ID）
+/// @param name 实例变量名
+/// @return 1=该实例身上有这个一维数组，0=没有
+function VM_InstArrayExists(inst_addr, name_addr) {
+    var _inst = vm_arg(inst_addr);
+    var _name = vm_arg(name_addr);
+    if (_inst == 0) return 0;
+    if (_inst < 0) {
+        var _real = ds_map_find_value(global._VM_id_to_real, -_inst);
+        if (is_undefined(_real)) return 0;
+        _inst = _real;
+    }
+    if (!instance_exists(_inst)) return 0;
+    if (!variable_instance_exists(_inst, _name)) return 0;
+    return is_array(variable_instance_get(_inst, _name)) ? 1 : 0;
+}
+
+/// @function VM_InstArraySize(inst_id, name)
+/// @return 数组长度；实例/变量不存在或不是数组 → -1
+function VM_InstArraySize(inst_addr, name_addr) {
+    var _inst = vm_arg(inst_addr);
+    var _name = vm_arg(name_addr);
+    if (_inst == 0) return -1;
+    if (_inst < 0) {
+        var _real = ds_map_find_value(global._VM_id_to_real, -_inst);
+        if (is_undefined(_real)) return -1;
+        _inst = _real;
+    }
+    if (!instance_exists(_inst)) return -1;
+    if (!variable_instance_exists(_inst, _name)) return -1;
+    var _arr = variable_instance_get(_inst, _name);
+    if (!is_array(_arr)) return -1;
+    return array_length(_arr);
+}
+
+/// @function VM_InstArrayItem(inst_id, name, k)
+/// @param k 第几个（从 0 起）
+/// @return 元素值；实例/变量不存在、不是数组、k 越界 → -1
+function VM_InstArrayItem(inst_addr, name_addr, k_addr) {
+    var _inst = vm_arg(inst_addr);
+    var _name = vm_arg(name_addr);
+    var _k = vm_arg(k_addr);
+    if (_inst == 0) return -1;
+    if (_inst < 0) {
+        var _real = ds_map_find_value(global._VM_id_to_real, -_inst);
+        if (is_undefined(_real)) return -1;
+        _inst = _real;
+    }
+    if (!instance_exists(_inst)) return -1;
+    if (!variable_instance_exists(_inst, _name)) return -1;
+    var _arr = variable_instance_get(_inst, _name);
+    if (!is_array(_arr)) return -1;
+    if (_k < 0 || _k >= array_length(_arr)) return -1;
+    var _v = _arr[_k];
+    if (is_real(_v) && instance_exists(_v)) return VM_ClientWrapId(_v);
+    return _v;
+}
+
+/// @function VM_InstArraySet(inst_id, name, k, value)
+/// @param k 第几个（从 0 起）
+/// @return 1=成功；实例/变量不存在、不是数组、k 越界 → -1
+/// @desc 注意 GML 数组是值语义，改完必须 variable_instance_set 写回去
+function VM_InstArraySet(inst_addr, name_addr, k_addr, value_addr) {
+    var _inst = vm_arg(inst_addr);
+    var _name = vm_arg(name_addr);
+    var _k = vm_arg(k_addr);
+    var _v = vm_arg(value_addr);
+    if (_inst == 0) return -1;
+    if (_inst < 0) {
+        var _real = ds_map_find_value(global._VM_id_to_real, -_inst);
+        if (is_undefined(_real)) return -1;
+        _inst = _real;
+    }
+    if (!instance_exists(_inst)) return -1;
+    if (!variable_instance_exists(_inst, _name)) return -1;
+    var _arr = variable_instance_get(_inst, _name);
+    if (!is_array(_arr)) return -1;
+    if (_k < 0 || _k >= array_length(_arr)) return -1;
+    // 写进去的如果是 VM 的负号包装 id，先解回真实实例 id，免得引擎那边拿到负数
+    if (is_real(_v) && _v < 0) {
+        var _rv = ds_map_find_value(global._VM_id_to_real, -_v);
+        if (!is_undefined(_rv)) _v = _rv;
+    }
+    _arr[_k] = _v;
+    variable_instance_set(_inst, _name, _arr);
+    return 1;
+}
+
+/// @function VM_InstArrayAdd(inst_id, name, value)
+/// @return 1=成功；实例/变量不存在或不是数组 → -1（不自动建数组）
+function VM_InstArrayAdd(inst_addr, name_addr, value_addr) {
+    var _inst = vm_arg(inst_addr);
+    var _name = vm_arg(name_addr);
+    var _v = vm_arg(value_addr);
+    if (_inst == 0) return -1;
+    if (_inst < 0) {
+        var _real = ds_map_find_value(global._VM_id_to_real, -_inst);
+        if (is_undefined(_real)) return -1;
+        _inst = _real;
+    }
+    if (!instance_exists(_inst)) return -1;
+    if (!variable_instance_exists(_inst, _name)) return -1;
+    var _arr = variable_instance_get(_inst, _name);
+    if (!is_array(_arr)) return -1;
+    if (is_real(_v) && _v < 0) {
+        var _rv = ds_map_find_value(global._VM_id_to_real, -_v);
+        if (!is_undefined(_rv)) _v = _rv;
+    }
+    array_push(_arr, _v);
+    variable_instance_set(_inst, _name, _arr);
+    return 1;
+}
+
+/// @function VM_InstArrayDel(inst_id, name, k)
+/// @return 1=成功；实例/变量不存在、不是数组、k 越界 → -1
+function VM_InstArrayDel(inst_addr, name_addr, k_addr) {
+    var _inst = vm_arg(inst_addr);
+    var _name = vm_arg(name_addr);
+    var _k = vm_arg(k_addr);
+    if (_inst == 0) return -1;
+    if (_inst < 0) {
+        var _real = ds_map_find_value(global._VM_id_to_real, -_inst);
+        if (is_undefined(_real)) return -1;
+        _inst = _real;
+    }
+    if (!instance_exists(_inst)) return -1;
+    if (!variable_instance_exists(_inst, _name)) return -1;
+    var _arr = variable_instance_get(_inst, _name);
+    if (!is_array(_arr)) return -1;
+    if (_k < 0 || _k >= array_length(_arr)) return -1;
+    array_delete(_arr, _k, 1);
+    variable_instance_set(_inst, _name, _arr);
+    return 1;
+}
+
+/// @function VM_InstArrayClear(inst_id, name)
+/// @return 1=成功；实例/变量不存在或不是数组 → -1
+function VM_InstArrayClear(inst_addr, name_addr) {
+    var _inst = vm_arg(inst_addr);
+    var _name = vm_arg(name_addr);
+    if (_inst == 0) return -1;
+    if (_inst < 0) {
+        var _real = ds_map_find_value(global._VM_id_to_real, -_inst);
+        if (is_undefined(_real)) return -1;
+        _inst = _real;
+    }
+    if (!instance_exists(_inst)) return -1;
+    if (!variable_instance_exists(_inst, _name)) return -1;
+    if (!is_array(variable_instance_get(_inst, _name))) return -1;
+    variable_instance_set(_inst, _name, []);
+    return 1;
+}
+
+/// @function VM_InstArrayContains(inst_id, name, value)
+/// @return 1=数组里有这个值，0=没有；实例/变量不存在或不是数组 → -1
+function VM_InstArrayContains(inst_addr, name_addr, value_addr) {
+    var _inst = vm_arg(inst_addr);
+    var _name = vm_arg(name_addr);
+    var _v = vm_arg(value_addr);
+    if (_inst == 0) return -1;
+    if (_inst < 0) {
+        var _real = ds_map_find_value(global._VM_id_to_real, -_inst);
+        if (is_undefined(_real)) return -1;
+        _inst = _real;
+    }
+    if (!instance_exists(_inst)) return -1;
+    if (!variable_instance_exists(_inst, _name)) return -1;
+    var _arr = variable_instance_get(_inst, _name);
+    if (!is_array(_arr)) return -1;
+    return array_contains(_arr, _v) ? 1 : 0;
+}
+
 /// @function VM_CreateInstance(obj_name, x, y)
 /// @param obj_name 对象名（可带或不带 obj_ 前缀）
 /// @param x y 生成坐标（像素）
@@ -2344,7 +2615,7 @@ function VM_SetProp(inst_id_addr, prop_addr, value_addr) {
 		}
 	}
 	if(prop=="shape" || prop=="skill"|| prop=="current_level" ){
-		network_apply_plant_level(_plant,true)
+		network_apply_plant_level(inst_id,true)   // 原来写的 _plant 在 VM_SetProp 里没有定义，会读未赋值变量报错
 	}
     if (global.network.mode == "server") {
         var _nid = ds_map_exists(global.network.map_instance_id_net_id, inst_id) ? global.network.map_instance_id_net_id[? inst_id] : -1;
@@ -2356,6 +2627,85 @@ function VM_SetProp(inst_id_addr, prop_addr, value_addr) {
                 send_message(_list[_i], MSG_MODIFY_PROP, _nid, _json);
         }
     }
+}
+
+/// @function damage_enemy(inst, dmg, dmg_type)
+/// @param inst     敌人实例（真实实例 id）
+/// @param dmg      伤害值
+/// @param dmg_type 伤害类型（同原版子弹的 damage_type）："normal" = 有盾只打盾；
+///                 "pierce" = 盾和血一起掉；其它（"explosion" 等）= 无视护盾直接扣血
+/// @return 1=已结算 0=实例不存在
+/// @desc 走**敌人自己的受击事件**（闪白 + 音效 + 护盾结算，含各敌人自己重写的 Other_10），
+///       和原版子弹命中时做的事完全一致。
+///       比 VM_SetProp(敌人, "hp", …) 正确：后者绕过受击事件，没闪白没音效、跳过护盾，
+///       也跑不到那些自定义受击逻辑的敌人。
+///       GML 侧（对象事件里）直接调这个；VM 脚本里调 VM_DamageEnemy。
+function damage_enemy(inst, dmg, dmg_type) {
+    var _type = dmg_type;
+    if (is_undefined(_type) || _type == "") _type = "normal";
+    if (!instance_exists(inst)) return 0;
+    with (inst) {
+        if (variable_instance_exists(id, "hit_sound")) audio_play_sound(hit_sound, 0, 0);
+        damage_amount = dmg;
+        damage_type   = _type;
+        event_user(0);
+    }
+    return 1;
+}
+
+/// @function damage_enemy_ash(inst, dmg, dmg_type)
+/// @desc **灰烬伤害**：接得下（剩余血量 > 伤害）就正常结算；接不下就**一击必杀**，
+///       把敌人换成 obj_mouse_ash_death（灰烬），不再走正常死亡表现。
+///       口径照抄原版 obj_power_god_bullet_1：它比的是 hp 和伤害，**不看护盾**。
+///       GML 侧直接调这个；VM 脚本里调 VM_DamageEnemyAsh。
+function damage_enemy_ash(inst, dmg, dmg_type) {
+    var _type = dmg_type;
+    if (is_undefined(_type) || _type == "") _type = "normal";
+    if (!instance_exists(inst)) return 0;
+    with (inst) {
+        if (variable_instance_exists(id, "hit_sound")) audio_play_sound(hit_sound, 0, 0);
+        if (hp > dmg) {
+            damage_amount = dmg;
+            damage_type   = _type;
+            event_user(0);
+        } else {
+            var _ash = instance_create_depth(x, y - 20, depth, obj_mouse_ash_death);
+            // 带了 special_ash 的敌人（灰烬类）要把外形也带给灰烬
+            if (variable_instance_exists(id, "special_ash") && special_ash) {
+                _ash.special_ash  = true;
+                _ash.sprite_index = sprite_index;
+                _ash.image_index  = image_index;
+            }
+            instance_destroy();
+        }
+    }
+    return 1;
+}
+
+/// @function VM_DamageEnemy(inst_id, dmg, dmg_type)
+/// @desc VM 侧接口，走 damage_enemy
+function VM_DamageEnemy(inst_addr, dmg_addr, dmg_type_addr) {
+    var _inst = vm_arg(inst_addr);
+    if (_inst == 0) return 0;
+    if (_inst < 0) {
+        var _real = ds_map_find_value(global._VM_id_to_real, -_inst);
+        if (is_undefined(_real)) return 0;
+        _inst = _real;
+    }
+    return damage_enemy(_inst, vm_arg(dmg_addr), vm_arg(dmg_type_addr));
+}
+
+/// @function VM_DamageEnemyAsh(inst_id, dmg, dmg_type)
+/// @desc VM 侧接口，走 damage_enemy_ash
+function VM_DamageEnemyAsh(inst_addr, dmg_addr, dmg_type_addr) {
+    var _inst = vm_arg(inst_addr);
+    if (_inst == 0) return 0;
+    if (_inst < 0) {
+        var _real = ds_map_find_value(global._VM_id_to_real, -_inst);
+        if (is_undefined(_real)) return 0;
+        _inst = _real;
+    }
+    return damage_enemy_ash(_inst, vm_arg(dmg_addr), vm_arg(dmg_type_addr));
 }
 
 /// @function VM_SpawnObject(obj_name, col, row)
@@ -2412,6 +2762,43 @@ function VM_SpawnObject(obj_name_addr, col_addr, row_addr) {
     }
     return real(_last);
 }
+/// @function vm_attach_plant_to_platform(plant, col, row)
+/// @desc 让 VM 生成出来的植物像**手牌种植**一样贴在平台上。
+///       手牌那条路（obj_card_slot/Step_0.gml）是「鼠标位置先减去平台的 visual_*_shift 算逻辑格
+///       → 创建时再加回位移 → 平台正在移动时给植物 platform_grid_lock = true」。
+///       这里植物已经由 spawn_plant 按逻辑格建好了，所以事后做同样两件事：
+///         1. 把实例挪到平台的**视觉**位置（加上 visual_x_shift / visual_y_shift）；
+///         2. 平台 state 是 "moving" 时打 platform_grid_lock —— 否则 obj_card_parent 的 Step
+///            会用 x/y 反算 grid_col/grid_row，格子会被视觉位置带偏。
+///       **不动 spawn_plant**：它里面那段 platform_id/platform_offset 是给网络传参用的
+///       （单机在 props 里没有 platform_id），所以本地生成走这里补。
+/// @return 是否贴在平台上
+function vm_attach_plant_to_platform(plant, col, row) {
+    if (!instance_exists(plant)) return false;
+    var _sx = 0;
+    var _sy = 0;
+    var _moving = false;
+    var _found = false;
+    with (obj_platform) {
+        var _isx  = (variable_instance_exists(id, "move_axis") && move_axis == "x");
+        var _p_sc = start_col + ((_isx) ? current_offset : 0);
+        var _p_sr = start_row + ((_isx) ? 0 : current_offset);
+        if (col >= _p_sc && col < _p_sc + width && row >= _p_sr && row < _p_sr + length) {
+            if (_isx) _sx = visual_x_shift; else _sy = visual_y_shift;
+            if (variable_instance_exists(id, "state") && state == "moving") _moving = true;
+            _found = true;
+            break;
+        }
+    }
+    if (!_found) return false;
+    if (_sx != 0 || _sy != 0) {
+        plant.x += _sx;
+        plant.y += _sy;
+    }
+    if (_moving) plant.platform_grid_lock = true;
+    return true;
+}
+
 /// @function VM_SpawnPlant(card_id, col, row, shape, level, skill)
 /// @return 植物实例 ID
 function VM_SpawnPlant(card_id_addr, col_addr, row_addr, shape_addr, level_addr, skill_addr) {
@@ -2454,6 +2841,7 @@ function VM_SpawnPlant(card_id_addr, col_addr, row_addr, shape_addr, level_addr,
             var _plant = spawn_plant(_c, _r, _obj, _props);
             global._mod_pending_card_id = "";
             if (_plant < 0) continue;
+            vm_attach_plant_to_platform(_plant, _c, _r);   // 和手牌种植一样贴平台
 			network_apply_plant_level(_plant);
             _last = _plant;
             _plant._VM_id = _VM_id;
@@ -2662,11 +3050,365 @@ function vm_arg(_addr) {
     return vm_read_mem(global.__vm, _addr);
 }
 
+/// @function VM_Decode(buf)
+/// @desc 把一块字节码**一次性**解码成"值数组"，供 VM_Execute_code 用下标直接取指。
+///       原始字节码里每条指令要 3~5 次 buffer_read（原生调用），爱神卡一次 Step 就是 647 次、
+///       穿透弹 510 次，而且是每帧每实例重来 —— 这里是"少量多次"的最大浪费。
+///       解码后每条指令只剩若干次数组下标读。
+///
+///       数组里的排布 = 解释器读的顺序，一个操作数一个元素：
+///         opcode, 操作数1, 操作数2, ...      （浮点已转成真数、字符串存池下标）
+///       所以解释器只要 _ip 一路往后走，不需要知道原始宽度。
+///
+///       ⚠️ IF / JMP 在字节码里存的是**绝对字节偏移**，数组版必须换成**数组下标**，
+///          所以解码时分两趟：先记 字节偏移→数组下标 的映射，最后回填跳转目标。
+///          （-1 是"不跳"，原样保留）
+/// @return 值数组（空块返回空数组）
+function VM_Decode(buf) {
+    var _code = [];
+    if (!buffer_exists(buf)) return _code;
+
+    var _off2idx = ds_map_create();   // 字节偏移（string）→ 数组下标
+    var _fix = [];                    // 待回填：[数组位置, 原始字节偏移, 数组位置, 原始字节偏移, ...]
+    buffer_seek(buf, buffer_seek_start, 0);
+    var _size = buffer_get_size(buf);
+
+    while (buffer_tell(buf) < _size) {
+        _off2idx[? string(buffer_tell(buf))] = array_length(_code);
+        var _op = buffer_read(buf, buffer_u8);
+        array_push(_code, _op);
+
+        switch (_op) {
+            case VM_OP_ASSIGN: {
+                array_push(_code, buffer_read(buf, buffer_s32));      // dst
+                var _at = buffer_read(buf, buffer_u8);                // 类型
+                array_push(_code, _at);
+                if (_at == VM_TYPE_STRING) {
+                    array_push(_code, buffer_read(buf, buffer_u16));  // 字符串池下标
+                } else if (_at == VM_TYPE_FLOAT) {
+                    array_push(_code, buffer_read(buf, buffer_f32));
+                } else {
+                    array_push(_code, buffer_read(buf, buffer_s32));
+                }
+                break;
+            }
+            case VM_OP_COPY: {
+                array_push(_code, buffer_read(buf, buffer_s32));
+                array_push(_code, buffer_read(buf, buffer_s32));
+                break;
+            }
+            case VM_OP_CALL: {
+                array_push(_code, buffer_read(buf, buffer_u16));      // 函数 id
+                var _argc = buffer_read(buf, buffer_u8);
+                array_push(_code, _argc);
+                array_push(_code, buffer_read(buf, buffer_s32));      // dst
+                for (var _i = 0; _i < _argc; _i++) {
+                    array_push(_code, buffer_read(buf, buffer_s32));
+                }
+                break;
+            }
+            case VM_OP_IF: {
+                array_push(_code, buffer_read(buf, buffer_s32));      // cond
+                var _raw_t = buffer_read(buf, buffer_s32);
+                array_push(_fix, array_length(_code));                // 记下 true 目标所在下标
+                array_push(_fix, _raw_t);
+                array_push(_code, _raw_t);                            // ⚠️ 必须占位，最后回填成数组下标
+                var _raw_f = buffer_read(buf, buffer_s32);
+                array_push(_fix, array_length(_code));                // 记下 false 目标所在下标
+                array_push(_fix, _raw_f);
+                array_push(_code, _raw_f);                            // ⚠️ 同上
+                break;
+            }
+            case VM_OP_JMP: {
+                var _raw_j = buffer_read(buf, buffer_s32);
+                array_push(_fix, array_length(_code));
+                array_push(_fix, _raw_j);
+                array_push(_code, _raw_j);                            // ⚠️ 同上
+                break;
+            }
+            case VM_OP_HALT: {
+                break;                                               // 无操作数
+            }
+            default: {
+                // ADD/SUB/MUL/DIV/MOD/EQ/NEQ/GT/GTE/LT/LTE：dst, a, b
+                array_push(_code, buffer_read(buf, buffer_s32));
+                array_push(_code, buffer_read(buf, buffer_s32));
+                array_push(_code, buffer_read(buf, buffer_s32));
+                break;
+            }
+        }
+    }
+
+    // 跳转目标：字节偏移 → 数组下标（-1 原样）
+    // ⚠️ 必须把"块末尾"(_size) 也登记进去：编译器有大量 `IF.false -> 块末尾` 的跳转
+    //    （跳过剩余指令直接结束），映射成 array_length(_code) 正好让 while 退出。
+    //    漏了它就会被当成 -1（= 不跳）而继续往下执行，行为就错了。
+    _off2idx[? string(_size)] = array_length(_code);
+    for (var _f = 0; _f < array_length(_fix); _f += 2) {
+        var _pos = _fix[_f];
+        var _tar = _fix[_f + 1];
+        if (_tar == -1) continue;
+        var _key = string(_tar);
+        // 映射不到（理论上不会，结构校验过全部 bin）就跳到块末尾，宁可少执行也不乱执行
+        _code[_pos] = ds_map_exists(_off2idx, _key) ? _off2idx[? _key] : array_length(_code);
+    }
+    ds_map_destroy(_off2idx);
+
+    return _code;
+}
+
+/// @function VM_Execute_code(vm, code, name)
+/// @desc 数组版解释器：逻辑和 VM_Execute 完全一致，只是取指从"buffer_read"换成"_code[_ip]"。
+///       跳转目标在 VM_Decode 里已经换算成数组下标，所以 IF/JMP 直接 _ip = 目标。
+/// @param code VM_Decode 出来的值数组
+function VM_Execute_code(vm, code, name) {
+    try {
+        var _n  = array_length(code);
+        var _ip = 0;
+        var _mt = vm.mem_type;
+        var _mv = vm.mem_val;
+
+        while (_ip < _n) {
+            var _op = code[_ip];
+            _ip += 1;
+
+            switch (_op) {
+
+                // ==================== ASSIGN ====================
+                case VM_OP_ASSIGN: {
+                    var _dst = code[_ip]; _ip += 1;
+                    var _type = code[_ip]; _ip += 1;
+                    if (_type == VM_TYPE_STRING) {
+                        _mt[_dst] = VM_TYPE_STRING;
+                        _mv[_dst] = code[_ip]; _ip += 1;
+                    } else if (_type == VM_TYPE_FLOAT) {
+                        _mt[_dst] = VM_TYPE_FLOAT;
+                        _mv[_dst] = code[_ip]; _ip += 1;
+                    } else {
+                        _mt[_dst] = _type;
+                        _mv[_dst] = code[_ip]; _ip += 1;
+                    }
+                    break;
+                }
+
+                // ==================== COPY ====================
+                case VM_OP_COPY: {
+                    var _dst = code[_ip]; _ip += 1;
+                    var _src = code[_ip]; _ip += 1;
+                    _mt[_dst] = _mt[_src];
+                    _mv[_dst] = _mv[_src];
+                    break;
+                }
+
+                // ==================== 算术 ====================
+                case VM_OP_ADD: {
+                    var _d = code[_ip]; _ip += 1;
+                    var _a = code[_ip]; _ip += 1;
+                    var _b = code[_ip]; _ip += 1;
+                    var _res = _mv[_a] + _mv[_b];
+                    _mt[_d] = (_mt[_a] == VM_TYPE_FLOAT || _mt[_b] == VM_TYPE_FLOAT) ? VM_TYPE_FLOAT : VM_TYPE_INT;
+                    _mv[_d] = _res;
+                    break;
+                }
+                case VM_OP_SUB: {
+                    var _d = code[_ip]; _ip += 1;
+                    var _a = code[_ip]; _ip += 1;
+                    var _b = code[_ip]; _ip += 1;
+                    _mt[_d] = (_mt[_a] == VM_TYPE_FLOAT || _mt[_b] == VM_TYPE_FLOAT) ? VM_TYPE_FLOAT : VM_TYPE_INT;
+                    _mv[_d] = _mv[_a] - _mv[_b];
+                    break;
+                }
+                case VM_OP_MUL: {
+                    var _d = code[_ip]; _ip += 1;
+                    var _a = code[_ip]; _ip += 1;
+                    var _b = code[_ip]; _ip += 1;
+                    _mt[_d] = (_mt[_a] == VM_TYPE_FLOAT || _mt[_b] == VM_TYPE_FLOAT) ? VM_TYPE_FLOAT : VM_TYPE_INT;
+                    _mv[_d] = _mv[_a] * _mv[_b];
+                    break;
+                }
+                case VM_OP_DIV: {
+                    var _d = code[_ip]; _ip += 1;
+                    var _a = code[_ip]; _ip += 1;
+                    var _b = code[_ip]; _ip += 1;
+                    var _int_div = (_mt[_a] != VM_TYPE_FLOAT && _mt[_b] != VM_TYPE_FLOAT);
+                    if (_mv[_b] == 0) {
+                        _mt[_d] = _int_div ? VM_TYPE_INT : VM_TYPE_FLOAT;
+                        _mv[_d] = 0;
+                    } else if (_int_div) {
+                        _mt[_d] = VM_TYPE_INT;
+                        _mv[_d] = _mv[_a] div _mv[_b];
+                    } else {
+                        _mt[_d] = VM_TYPE_FLOAT;
+                        _mv[_d] = _mv[_a] / _mv[_b];
+                    }
+                    break;
+                }
+                case VM_OP_MOD: {
+                    var _d = code[_ip]; _ip += 1;
+                    var _a = code[_ip]; _ip += 1;
+                    var _b = code[_ip]; _ip += 1;
+                    _mt[_d] = VM_TYPE_INT;
+                    _mv[_d] = (_mv[_b] != 0) ? _mv[_a] mod _mv[_b] : 0;
+                    break;
+                }
+
+                // ==================== 比较 ====================
+                case VM_OP_EQ: {
+                    var _d = code[_ip]; _ip += 1;
+                    var _a = code[_ip]; _ip += 1;
+                    var _b = code[_ip]; _ip += 1;
+                    _mt[_d] = VM_TYPE_INT;
+                    _mv[_d] = (_mv[_a] == _mv[_b]) ? 1 : 0;
+                    break;
+                }
+                case VM_OP_NEQ: {
+                    var _d = code[_ip]; _ip += 1;
+                    var _a = code[_ip]; _ip += 1;
+                    var _b = code[_ip]; _ip += 1;
+                    _mt[_d] = VM_TYPE_INT;
+                    _mv[_d] = (_mv[_a] != _mv[_b]) ? 1 : 0;
+                    break;
+                }
+                case VM_OP_GT: {
+                    var _d = code[_ip]; _ip += 1;
+                    var _a = code[_ip]; _ip += 1;
+                    var _b = code[_ip]; _ip += 1;
+                    _mt[_d] = VM_TYPE_INT;
+                    _mv[_d] = (_mv[_a] > _mv[_b]) ? 1 : 0;
+                    break;
+                }
+                case VM_OP_GTE: {
+                    var _d = code[_ip]; _ip += 1;
+                    var _a = code[_ip]; _ip += 1;
+                    var _b = code[_ip]; _ip += 1;
+                    _mt[_d] = VM_TYPE_INT;
+                    _mv[_d] = (_mv[_a] >= _mv[_b]) ? 1 : 0;
+                    break;
+                }
+                case VM_OP_LT: {
+                    var _d = code[_ip]; _ip += 1;
+                    var _a = code[_ip]; _ip += 1;
+                    var _b = code[_ip]; _ip += 1;
+                    _mt[_d] = VM_TYPE_INT;
+                    _mv[_d] = (_mv[_a] < _mv[_b]) ? 1 : 0;
+                    break;
+                }
+                case VM_OP_LTE: {
+                    var _d = code[_ip]; _ip += 1;
+                    var _a = code[_ip]; _ip += 1;
+                    var _b = code[_ip]; _ip += 1;
+                    _mt[_d] = VM_TYPE_INT;
+                    _mv[_d] = (_mv[_a] <= _mv[_b]) ? 1 : 0;
+                    break;
+                }
+
+                // ==================== CALL ====================
+                case VM_OP_CALL: {
+                    var _func_id = code[_ip]; _ip += 1;
+                    var _arg_count = code[_ip]; _ip += 1;
+                    var _dst = code[_ip]; _ip += 1;
+                    var _args = array_create(_arg_count);
+                    for (var _i = 0; _i < _arg_count; _i++) {
+                        _args[_i] = code[_ip];
+                        _ip += 1;
+                    }
+
+                    if (_func_id < 0 || _func_id >= array_length(vm.functions)) {
+                        shell_print("VM Error: 未注册函数ID " + string(_func_id));
+                        return -1;
+                    }
+
+                    var _fn = vm.functions[_func_id];
+                    var _result = script_execute_ext(_fn, _args);
+
+                    if (_dst != VM_DST_VOID) {
+                        if (is_string(_result)) {
+                            _mt[_dst] = VM_TYPE_STRING;
+                            var _idx;
+                            if (ds_map_exists(vm.str_map, _result)) {
+                                _idx = vm.str_map[? _result];
+                            } else {
+                                _idx = array_length(vm.strings);
+                                array_push(vm.strings, _result);
+                                vm.str_map[? _result] = _idx;
+                            }
+                            _mv[_dst] = _idx;
+                        } else if (is_real(_result)) {
+                            if (floor(_result) == _result) {
+                                _mt[_dst] = VM_TYPE_INT;
+                            } else {
+                                _mt[_dst] = VM_TYPE_FLOAT;
+                            }
+                            _mv[_dst] = _result;
+                        } else {
+                            _mt[_dst] = VM_TYPE_INT;
+                            _mv[_dst] = _result;
+                        }
+                    }
+                    break;
+                }
+
+                // ==================== IF ====================
+                case VM_OP_IF: {
+                    var _cond_addr = code[_ip]; _ip += 1;
+                    var _true_ip = code[_ip]; _ip += 1;
+                    var _false_ip = code[_ip]; _ip += 1;
+
+                    var _cond = _mv[_cond_addr];
+                    if (!is_real(_cond)) _cond = 0;
+
+                    if (_cond != 0) {
+                        if (_true_ip != -1) _ip = _true_ip;
+                    } else {
+                        if (_false_ip != -1) _ip = _false_ip;
+                    }
+                    break;
+                }
+
+                // ==================== JMP ====================
+                case VM_OP_JMP: {
+                    _ip = code[_ip];
+                    break;
+                }
+
+                // ==================== HALT ====================
+                case VM_OP_HALT: {
+                    return 0;
+                }
+
+                default: {
+                    shell_print("VM Error: 未知操作码 " + string(_op));
+                    return -1;
+                }
+            }
+        }
+
+        return 0;
+
+    } catch (_err) {
+        shell_print("VM Error: " + string(_err));
+        return -1;
+    }
+}
+
 /// @function VM_Execute(vm, buf, name)
 function VM_Execute(vm, buf, name) {
     if (!buffer_exists(buf)) return 0;
     try {
         if (global._VM_debug_mode && (global._VM_debug_block == "" || name == global._VM_debug_block)) return VM_Execute_debug(vm, buf, name);
+
+        // ══════════════ 新增：解码缓存命中就走数组版解释器 ══════════════
+        // vm.codes = 块名 → VM_Decode 出来的值数组（惰性解码，一块只解一次）
+        // 解码结果为空（解码失败/空块）就继续走下面的原版字节码路径，等于一行开关就能回退
+        if (!variable_struct_exists(vm, "codes")) vm[$ "codes"] = ds_map_create();
+        if (!ds_map_exists(vm.codes, name)) {
+            vm.codes[? name] = VM_Decode(buf);
+        }
+        var _cached_code = vm.codes[? name];
+        if (is_array(_cached_code) && array_length(_cached_code) > 0) {
+            return VM_Execute_code(vm, _cached_code, name);
+        }
+        // ══════════════ 以下为原来的字节码解释器，未改动 ══════════════
         buffer_seek(buf, buffer_seek_start, 0);
         var _size = buffer_get_size(buf);
         var _mt = vm.mem_type;
@@ -3977,6 +4719,7 @@ function bullet_screen_add(spr, frames, range, scale, anim_speed, x, y, vx, vy, 
         frames:      _frames,
         cell_range:  range,
         scale:       scale,
+        angle:       0,          // 绘制角度（度）：管理器默认不转，只有卡片效果翻转方向时才 +180
         anim_speed:  anim_speed,
         frame:       0,
         x:           x,
@@ -3987,6 +4730,11 @@ function bullet_screen_add(spr, frames, range, scale, anim_speed, x, y, vx, vy, 
         hits:        hits,
         life:        life,
         target_type: type,
+        damage_type: "normal",   // 固定：命中走 damage_enemy（闪白/音效/护盾 + 各敌人的 Other_10），
+                                 // 和追踪弹一个口径；要按子弹区分类型时再开参数（或用 bullet_screen_add_Ex）
+        // 卡片效果用的两个字段（普通版本固定成"什么都不吃"，所以只有 _Ex 加的子弹才参与）
+        flag:        0,          // 标志数值：还能接受哪些类别的卡片效果（bit1 过火 / bit2 解冻 / 4,8,16… 自定义）
+        freeze:      0,          // 累计的冰冻帧数：命中时写给敌人的 ice_timer
         death_obj:   death_obj,
         death_mod:   death_mod
     });
@@ -3999,6 +4747,149 @@ function VM_BulletScreenAdd(spr_addr, frames_addr, range_addr, scale_addr, anim_
     return bullet_screen_add(vm_arg(spr_addr), vm_arg(frames_addr), vm_arg(range_addr), vm_arg(scale_addr), vm_arg(anim_speed_addr),
                              vm_arg(x_addr), vm_arg(y_addr), vm_arg(vx_addr), vm_arg(vy_addr), vm_arg(dmg_addr),
                              vm_arg(hits_addr), vm_arg(life_addr), vm_arg(type_addr), vm_arg(death_obj_addr), vm_arg(death_mod_addr));
+}
+
+/// @function bullet_screen_add_Ex(spr, frames, range, scale, anim_speed, x, y, vx, vy, dmg, hits, life,
+///                                type, death_obj, death_mod, damage_type, flag)
+/// @desc 往 obj_Bullet_Screen_Management 里塞一颗子弹，比 bullet_screen_add 多两个可控项：
+///       【伤害类型】走 damage_enemy 的护盾口径（normal / pierce / 其它）；
+///       【标志数值】flag = 这颗子弹**还能接受哪些类别的卡片效果**（位掩码）：
+///           bit1 = 过火类、bit2 = 解冻类、4 / 8 / 16 … = 自定义类（效果全看卡片上的属性字段）
+///       子弹进到格子中心带时，与本格卡片上的 bullet_flag 做【与运算】，> 0 就应用并消位，
+///       所以同一类卡片对同一颗子弹只生效一次。
+///       规则和卡片字段详见 obj_Bullet_Screen_Management/Step_0.gml 的「3.5 卡片效果」
+/// @return 子弹在管理器数组里的下标；管理器或贴图不存在时返回 -1
+function bullet_screen_add_Ex(spr, frames, range, scale, anim_speed, x, y, vx, vy, dmg, hits, life,
+                              type = "all", death_obj = "", death_mod = "",
+                              damage_type = "normal", flag = 0, angle = 0) {
+    var _idx = bullet_screen_add(spr, frames, range, scale, anim_speed, x, y, vx, vy,
+                                 dmg, hits, life, type, death_obj, death_mod);
+    if (_idx < 0) return -1;
+    var _mgr = instance_find(obj_Bullet_Screen_Management, 0);
+    var _b   = _mgr.list[_idx];
+    if (!is_undefined(damage_type) && damage_type != "") _b.damage_type = damage_type;
+    if (is_undefined(flag)) flag = 0;
+    _b.flag = flag;
+    if (is_undefined(angle)) angle = 0;
+    _b.angle = angle;          // 出生角度（度）：后向子弹传 180，和原版 image_angle = 180 一致
+    return _idx;
+}
+
+/// @function VM_BulletScreenAdd_Ex(spr, frames, range, scale, anim_speed, x, y, vx, vy, dmg, hits, life,
+///                                 type, death_obj, death_mod, damage_type, flag, angle)
+/// @desc VM 侧接口，参数和返回值和 bullet_screen_add_Ex 一致
+function VM_BulletScreenAdd_Ex(spr_addr, frames_addr, range_addr, scale_addr, anim_speed_addr,
+                               x_addr, y_addr, vx_addr, vy_addr, dmg_addr, hits_addr, life_addr,
+                               type_addr, death_obj_addr, death_mod_addr,
+                               damage_type_addr, flag_addr, angle_addr) {
+    return bullet_screen_add_Ex(vm_arg(spr_addr), vm_arg(frames_addr), vm_arg(range_addr), vm_arg(scale_addr),
+                                vm_arg(anim_speed_addr), vm_arg(x_addr), vm_arg(y_addr), vm_arg(vx_addr),
+                                vm_arg(vy_addr), vm_arg(dmg_addr), vm_arg(hits_addr), vm_arg(life_addr),
+                                vm_arg(type_addr), vm_arg(death_obj_addr), vm_arg(death_mod_addr),
+                                vm_arg(damage_type_addr), vm_arg(flag_addr), vm_arg(angle_addr));
+}
+
+/// @function homing_bullet_instant_hit(mgr, type, dmg)
+/// @desc 追踪弹到数量上限时的"直接命中"：不生成子弹，直接按管理器**当帧的索敌快照**
+///       挑最左的可命中敌人（和模式 0 一个口径）结算一次伤害。
+///       快照由 obj_Homing_Bullet_Management 的 Step 每帧刷新，上限触发时数组必然非空，
+///       所以快照一定是最新的。
+/// @return 被命中的敌人 id；没有可打目标返回 noone
+function homing_bullet_instant_hit(mgr, type, dmg) {
+    var _best    = noone;
+    var _best_x  = 999999;
+    var _best_hp = -1;
+    for (var _qt = 0; _qt < 6; _qt++) {
+        if (mgr.scan_id[_qt] == noone) continue;
+        if (!can_hit(type, mgr.scan_types[_qt])) continue;
+        if (mgr.scan_x[_qt] < _best_x || (mgr.scan_x[_qt] == _best_x && mgr.scan_hp[_qt] > _best_hp)) {
+            _best_x  = mgr.scan_x[_qt];
+            _best_hp = mgr.scan_hp[_qt];
+            _best    = mgr.scan_id[_qt];
+        }
+    }
+    if (instance_exists(_best)) damage_enemy(_best, dmg, "normal");
+    return _best;
+}
+
+/// @function homing_bullet_add(spr, scale, x, y, spd, dmg, type, death_obj, death_mod, death_spr, mode)
+/// @param spr        贴图：sprite 索引，或资源名/文件名（走 get_load_sprite 的缓存链）
+/// @param scale      缩放（横竖同值）；0 或 undefined = 1
+/// @param spd        速度大小（每帧像素）；追踪时 vx/vy 每帧按朝向重算
+/// @param type       子弹类型（can_hit 那一套）：all/normal/air/air_only/pierce/track/throw/rotate/d_fruit
+/// @param death_obj  销毁对象：非空时在这颗子弹销毁的位置创建该对象（字符串资产名）；出界不生成
+/// @param death_mod  销毁对象是 mod 对象时填它的 mod 名字（创建后写进 mod_type）；原生对象留空
+/// @param death_spr  销毁对象的贴图覆盖：非空时把创建出来的销毁对象贴图换成它。
+///                   有些子弹的销毁对象是通用的、要靠换贴图区分
+///                   （例如糖葫芦借 obj_coke_bomb_explode 再盖上 spr_tanghulu_bullet_effect）
+/// @param mode       索敌模式：0（默认）= 只咬"全场最左的可命中敌人"（糖葫芦 / 大力神）；
+///                   1 = **先打发射卡前方**：本行、正前方 150px 内血最高的那个，没有才退回全场最左
+///                       （章鱼烧 / 月神）。锚点 = 调用这个函数的卡片实例，自动取，不用传。
+/// @return 子弹在管理器数组里的下标；贴图不存在、或管理器已到上限（没生成子弹）返回 -1
+/// @desc 往 obj_Homing_Bullet_Management 的数组里塞一颗追踪弹；管理器不在时会自动创建。
+///       固定口径（都不是参数）：**打一下就消失**、**不自动到期**（出界才没）、帧数取贴图自身、
+///       动画速度固定 1、**每帧自转 6 度**、**伤害类型固定 "normal"**（有盾只打盾）、
+///       命中 = 只管自己锁定的那个目标，像素距离 <= 90x85 就算撞上（不扫网格、不穿透）。
+///       出生自带朝右的初速度（免得没索到目标时原地卡死，同原版"没敌人就按原方向飞"）。
+///       **数量上限** = 管理器的 max_bullets（400）：到顶后这一发不再生成子弹，
+///       改为**直接命中**管理器当帧锁定的那个敌人（伤害不丢，个数硬卡在上限）。
+function homing_bullet_add(spr, scale, x, y, spd, dmg, type = "all", death_obj = "", death_mod = "", death_spr = "", mode = 0) {
+    var _mgr = instance_find(obj_Homing_Bullet_Management, 0);
+    if (!instance_exists(_mgr)) {
+        _mgr = instance_create_depth(0, 0, -700, obj_Homing_Bullet_Management);
+    }
+    var _spr = is_string(spr) ? get_load_sprite(spr) : spr;
+    if (!sprite_exists(_spr)) return -1;
+    var _frames = sprite_get_number(_spr);      // 帧数固定取贴图自身，不再当参数传
+    if (is_undefined(scale) || scale == 0) scale = 1;
+    if (is_undefined(spd)) spd = 0;
+    if (is_undefined(mode)) mode = 0;
+    // ── 数量上限：到顶就不再生成子弹，这一发直接命中（否则子弹只会在出界时才删，会无限堆积）──
+    if (array_length(_mgr.list) >= _mgr.max_bullets) {
+        homing_bullet_instant_hit(_mgr, type, dmg);
+        return -1;
+    }
+    // 锚点（模式 1 的"发射卡"）：调用这个函数的实例如果是一张卡（有 grid_row），就认它。
+    // 从卡片对象事件里调 → self 就是那张卡；从 VM 卡片脚本里调 → self 也是那张 mod 卡实例。
+    var _anchor = noone;
+    if (instance_exists(id) && variable_instance_exists(id, "grid_row")) _anchor = id;
+    array_push(_mgr.list, {
+        spr:         _spr,
+        frames:      _frames,
+        scale:       scale,
+        anim_speed:  1,          // 固定 1
+        frame:       0,
+        x:           x,
+        y:           y,
+        vx:          spd,        // 出生就给朝右的初速度：这一帧没索到目标也不会原地卡死
+        vy:          0,          //   （原版糖葫芦没敌人时也是"按原方向继续飞"）
+        spd:         spd,
+        angle:       0,
+        spin:        0,          // 自转累加器：每帧 +6，绘制取 -spin
+        spin_speed:  6,          // 固定 6 度/帧（同原版 image_angle = -timer*6）
+        target:      noone,      // 每帧按 mode 重挑
+        anchor:      _anchor,
+        mode:        mode,
+        dmg:         dmg,
+        hits:        1,          // 固定：打一下就消失
+        life:        0 - 1,      // 固定：不自动到期，出界才没
+        target_type: type,
+        damage_type: "normal",   // 固定：伤害类型不再当参数（四个调用点本来就全是 normal）
+        death_obj:   death_obj,
+        death_mod:   death_mod,
+        death_spr:   death_spr
+    });
+    return array_length(_mgr.list) - 1;
+}
+
+/// @function VM_HomingBulletAdd(spr, scale, x, y, spd, dmg, type, death_obj, death_mod, death_spr, mode)
+/// @desc VM 侧接口，参数和返回值和 homing_bullet_add 一致
+function VM_HomingBulletAdd(spr_addr, scale_addr, x_addr, y_addr, spd_addr, dmg_addr, type_addr, death_obj_addr, death_mod_addr, death_spr_addr, mode_addr) {
+    return homing_bullet_add(vm_arg(spr_addr), vm_arg(scale_addr),
+                             vm_arg(x_addr), vm_arg(y_addr), vm_arg(spd_addr),
+                             vm_arg(dmg_addr), vm_arg(type_addr),
+                             vm_arg(death_obj_addr), vm_arg(death_mod_addr),
+                             vm_arg(death_spr_addr), vm_arg(mode_addr));
 }
 
 global.__vm = VM_Create();
@@ -4130,6 +5021,23 @@ VM_RegisterFunction(global.__vm, VM_FuncExists);     // 123
 VM_RegisterFunction(global.__vm, VM_FuncDesc);       // 124
 VM_RegisterFunction(global.__vm, VM_SpriteExists);   // 125
 VM_RegisterFunction(global.__vm, VM_AliasSpritePerm); // 126
+VM_RegisterFunction(global.__vm, VM_ArrayExists);      // 127
+VM_RegisterFunction(global.__vm, VM_CellCount);        // 128
+VM_RegisterFunction(global.__vm, VM_CellItem);         // 129
+VM_RegisterFunction(global.__vm, VM_CellContains);     // 130
+VM_RegisterFunction(global.__vm, VM_ArrayContains);    // 131
+VM_RegisterFunction(global.__vm, VM_InstArrayExists);  // 132
+VM_RegisterFunction(global.__vm, VM_InstArraySize);    // 133
+VM_RegisterFunction(global.__vm, VM_InstArrayItem);    // 134
+VM_RegisterFunction(global.__vm, VM_InstArraySet);     // 135
+VM_RegisterFunction(global.__vm, VM_InstArrayAdd);     // 136
+VM_RegisterFunction(global.__vm, VM_InstArrayDel);     // 137
+VM_RegisterFunction(global.__vm, VM_InstArrayClear);   // 138
+VM_RegisterFunction(global.__vm, VM_InstArrayContains);// 139
+VM_RegisterFunction(global.__vm, VM_HomingBulletAdd);  // 140
+VM_RegisterFunction(global.__vm, VM_DamageEnemy);      // 141
+VM_RegisterFunction(global.__vm, VM_DamageEnemyAsh);   // 142
+VM_RegisterFunction(global.__vm, VM_BulletScreenAdd_Ex);   // 143
 ds_map_add(global._VM_remote_funcs, "VM_SwapPlants", VM_SwapPlants);
 ds_map_add(global._VM_remote_funcs, "VM_SwapPlantRects", VM_SwapPlantRects);
 ds_map_add(global._VM_remote_funcs, "VM_CompactColumn", VM_CompactColumn);

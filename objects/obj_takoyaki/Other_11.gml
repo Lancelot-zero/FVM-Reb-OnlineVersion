@@ -105,22 +105,22 @@ function find_priority_enemy() {
     return closest_left_enemy;
 	*/
 }
-var target = find_priority_enemy()
-var inst = instance_create_depth(x,y-55,depth-500,obj_takoyaki_bullet)
-inst.damage = atk
-inst.move_speed = 10
-inst.target_enemy = target
-inst.banding_card_obj = id
-inst.row = grid_row
-
+// 追踪弹统一走【弹幕管理器 obj_Homing_Bullet_Management】（结构体弹幕，不占实例）：
+//   模式 1 = 先打发射卡前方（本行、正前方 150px 内血最高），前方没人再退回"全场最左"
+//   —— 这就是原版那颗 obj_takoyaki_bullet 的行为，现在由管理器负责，那个对象不再需要。
+//   目标不用卡片算了：锚点（发射卡）由管理器自动认，索敌它每帧自己做。
+//   贴图按服饰换：takoyaki_cancer 服饰 → spr_takoyaki_cancer_bullet(_1)。
 _net_un = (variable_instance_get(id, "_net_card_equipped_attire_id")  == noone)
 
+var _bspr = spr_takoyaki_bullet;
 if _net_un&&card_equipped_attire_id(plant_id) == "takoyaki_cancer"||variable_instance_get(id, "_net_card_equipped_attire_id")=="takoyaki_cancer"{
-	inst.sprite_index = spr_takoyaki_cancer_bullet
+	_bspr = spr_takoyaki_cancer_bullet
 	if shape >= 2{
-		inst.sprite_index = spr_takoyaki_cancer_bullet_1
+		_bspr = spr_takoyaki_cancer_bullet_1
 	}
 }
+
+homing_bullet_add(_bspr, 1.8, x, y - 55, 10, atk, "track", "obj_takoyaki_bullet_effect", "", "", 1);
 /*
 if shape == 2{
 	var inst2 = instance_create_depth(x+40,y-55,depth-500,obj_takoyaki_bullet)

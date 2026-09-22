@@ -8,6 +8,7 @@
 //   frames       总帧数（这段动画一共多少帧）
 //   cell_range   可打击范围：方格子半径，以子弹所在格为中心上下左右各扩 N 格；0 = 只算本格
 //   scale        缩放（横竖同值）
+//   angle        绘制角度（度）：默认 0，只有卡片效果翻转方向时才 +180（否则看着像没弹回去）
 //   anim_speed   动画速度：每帧 frame 自增多少，可以是小数；1 = 每帧走一帧
 //   frame        帧数计数（每帧 += anim_speed，到 frames 回绕，循环播放；小数累加器）
 //   x, y         坐标
@@ -20,11 +21,25 @@
 //   life         存活帧数：倒计时，每帧 -1，减到 0 移除；初始 <= 0（如 -1）表示不自动移除
 //   target_type  子弹类型：决定能命中哪些敌人（can_hit 的 card_target_type 那一套：
 //                all / normal / air / air_only / pierce / track / throw / rotate / d_fruit）
+//   damage_type  伤害类型（bullet_screen_add 里固定 "normal"）：命中走 damage_enemy，
+//                也就是敌人的受击事件（闪白/音效/护盾 + 各敌人自己重写的 Other_10）；
+//                normal = 有盾只打盾 / pierce = 盾血一起掉 / 其它 = 无视护盾
 //   death_obj    销毁对象：非空时，在这颗子弹销毁的位置创建这个对象（字符串资产名；
 //                写 "xxx" 或 "obj_xxx" 都行，找不到会补一次 "obj_" 前缀再找）
 //                注意：出界销毁**不**生成销毁对象
 //   death_mod    销毁对象是 mod 对象时，填它的 mod 名字（创建后写进 mod_type）；
 //                原生对象留空
+//
+//   —— 卡片效果（只有 bullet_screen_add_Ex / VM_BulletScreenAdd_Ex 加的子弹才参与）——
+//   flag         标志数值：这颗子弹**还能接受哪些类别**的卡片效果（位掩码）
+//                bit1 = 过火类 / bit2 = 解冻类 / 4、8、16… = 自定义类
+//                子弹进到格子中心带时与本格卡片的 bullet_flag 取且运算，>0 就应用并消位，
+//                所以同一类卡片对同一颗子弹只生效一次；解冻位生效后额外「或上 1」= 变成能被点燃
+//   freeze       累计冰冻帧数：命中时写给敌人的 ice_timer
+//   卡片侧字段（实例变量，mod 卡用 VM_SetProp 写）：
+//                bullet_flag（去重位）、bullet_mul_dmg（乘伤害，默认1）、bullet_add_dmg（加伤害，默认0）、
+//                bullet_flip_x / bullet_flip_y（反向，0/1）、bullet_angle_add（画面旋转角度，默认0）、
+//                bullet_freeze_mul（乘冰冻帧，默认1）、bullet_freeze_add（加冰冻帧，默认0）
 //
 // 消失条件有三条：出界（x<0 / x>2200 / y<0 / y>1200，静默删）、伤害次数用完、存活帧数走完。
 
