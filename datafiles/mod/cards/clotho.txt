@@ -1,0 +1,217 @@
+// 至尊命运女神（金卡 · 命运女神·克洛托最终形态）：范围内随机提升卡片星级
+// 按 mod 分支 obj_clotho（shape 3）移植，但**不做回滚**——原版代码里本来也没有回滚，
+// 星级改了就是改了（注册文案里那句"一段时间后恢复"代码里没实现）。
+//
+//   Create：idle_anim = 35、flash_speed = 5、plant_type = "coffee"
+//           transform_timer = idle_anim * flash_speed = 175 帧
+//   Step  ：放下约 60 帧后（transform_timer == 115）生效一次：
+//             范围内（列 ±2、行 ±3）每张卡随机 +1 ~ +4 星级，上限 16，
+//             并把头顶的星级贴图换成对应的 spr_star_N（没星的按原版补一个 obj_stars）。
+//           之后继续倒数，到 0 自杀；自杀 / 被吃掉时把光环一起收掉。
+//
+//   光环  ：原版是独立对象 obj_clotho_effect（本体下面那圈光）。
+//           这里用 obj_bullet_mod + mod_type "clotho_aura" 造一个跟着本体走的装饰实例，
+//           在 _OBJECT_DESTROY 里销毁它。
+//
+//   ⚠️ 只改 current_level 改不动攻防：main 分支里 current_level 只在
+//      obj_card_parent 的 Create（event_user(0)）读一次，之后没有任何地方重算属性
+//      （原版是靠 get_plant_data_with_skill 手动刷的，VM 没有这个接口）。
+//      所以这一版是"星级数字 + 星星贴图"变了，atk / hp 不变。
+//
+//   贴图：本体 35 帧 原点 (306,361)；图标 1 帧 原点 (215,250)；光环 28 帧 原点 (207,290)。
+
+_OBJECT_CFG {
+    // 统一写内部 spr 名：内置有就直接用；内置没有才把本地图挂到这个名上。
+    if (VM_SpriteExists("spr_clotho_3") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_clotho_3_0.png", 35, 306, 361)
+        VM_AliasSpritePerm("spr_clotho_3", "tex/spr_clotho_3_0.png")
+    }
+
+    // 卡面图标（JSON 的 sprite）
+    if (VM_SpriteExists("spr_clotho_icon_3") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_clotho_icon_3_0.png", 1, 215, 250)
+        VM_AliasSpritePerm("spr_clotho_icon_3", "tex/spr_clotho_icon_3_0.png")
+    }
+
+    // 光环：给它自己用，也给 clotho_aura 那颗 mod 子弹用（贴图名是全局的）
+    if (VM_SpriteExists("spr_clotho_effect_2") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_clotho_effect_2_0.png", 28, 207, 290)
+        VM_AliasSpritePerm("spr_clotho_effect_2", "tex/spr_clotho_effect_2_0.png")
+    }
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+
+    VM_SetProp(self, "sprite_index", "spr_clotho_3")
+    VM_SetProp(self, "idle_anim", 35)
+    VM_SetProp(self, "attack_anim", 0)
+    VM_SetProp(self, "flash_speed", 5)
+    VM_SetProp(self, "plant_type", "coffee")
+    VM_SetProp(self, "state", 0)
+
+    fs = VM_GetProp(self, "flash_speed")
+    ia = VM_GetProp(self, "idle_anim")
+    VM_SetProp(self, "transform_timer", ia * fs)
+    VM_SetProp(self, "clotho_fired", 0)
+
+    // 光环：跟着本体走的装饰实例，本体死了一起收掉
+    a = VM_CreateInstance("obj_bullet_mod", VM_GetProp(self, "x"), VM_GetProp(self, "y") - 30)
+    VM_SetProp(a, "mod_type", "clotho_aura")
+    VM_SetProp(a, "sprite_index", "spr_clotho_effect_2")
+    VM_SetProp(a, "image_alpha", 1)
+    VM_SetProp(a, "depth", VM_GetProp(self, "depth") + 1)
+    VM_SetProp(a, "owner", self)
+    VM_SetProp(self, "clotho_aura", a)
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+
+    if (VM_GetProp(self, "is_frozen") == 1) {
+        exit
+    }
+
+    fs = VM_GetProp(self, "flash_speed")
+    ia = VM_GetProp(self, "idle_anim")
+    if (VM_IsUndefined(ia)) {
+        ia = 35
+    }
+
+    t = VM_GetProp(self, "transform_timer")
+    if (VM_IsUndefined(t)) {
+        t = ia * fs
+    }
+
+    if (t > 4) {
+        t = t - 1
+        VM_SetProp(self, "transform_timer", t)
+    } else {
+        // 收工：先收光环再自杀
+        VM_DestroyInstance(self)
+        exit
+    }
+
+    fired = VM_GetProp(self, "clotho_fired")
+    if (VM_IsUndefined(fired)) {
+        fired = 0
+    }
+
+    // 放下 12*flash_speed 帧后生效一次
+    if (t == (ia * fs) - (12 * fs)) {
+        if (fired == 0) {
+            VM_SetProp(self, "clotho_fired", 1)
+
+            r = VM_GetProp(self, "grid_row")
+            c = VM_GetProp(self, "grid_col")
+            n = VM_GetInstancesInRange("cl_near", r - 3, r + 3, c - 2, c + 2, "card", "")
+
+            k = 0
+            while (k < n) {
+                p = VM_ArrayGet("cl_near", k)
+                pid = VM_GetProp(p, "plant_id")
+                use = 1
+                if (pid == "clotho") {
+                    use = 0
+                }
+                if (pid == "player") {
+                    use = 0
+                }
+
+                if (use == 1) {
+                    lv = VM_GetProp(p, "current_level")
+                    if (VM_IsUndefined(lv)) {
+                        lv = 0
+                    }
+
+                    nl = lv + VM_Random(1, 4)
+                    if (nl > 16) {
+                        nl = 16
+                    }
+
+                    if (nl > lv) {
+                        VM_SetProp(p, "current_level", nl)
+
+                        sn = ""
+                        if (nl == 4) {
+                            sn = "spr_star_4"
+                        }
+                        if (nl == 5) {
+                            sn = "spr_star_5"
+                        }
+                        if (nl == 6) {
+                            sn = "spr_star_6"
+                        }
+                        if (nl == 7) {
+                            sn = "spr_star_7"
+                        }
+                        if (nl == 8) {
+                            sn = "spr_star_8"
+                        }
+                        if (nl == 9) {
+                            sn = "spr_star_9"
+                        }
+                        if (nl == 10) {
+                            sn = "spr_star_10"
+                        }
+                        if (nl == 11) {
+                            sn = "spr_star_11"
+                        }
+                        if (nl == 12) {
+                            sn = "spr_star_12"
+                        }
+                        if (nl == 13) {
+                            sn = "spr_star_13"
+                        }
+                        if (nl == 14) {
+                            sn = "spr_star_14"
+                        }
+                        if (nl == 15) {
+                            sn = "spr_star_15"
+                        }
+                        if (nl == 16) {
+                            sn = "spr_star_16"
+                        }
+
+                        if (sn != "") {
+                            so = VM_GetProp(p, "banding_star_obj")
+                            has = 0
+                            if (VM_IsUndefined(so) == 0) {
+                                if (so >= 0) {
+                                    has = 1
+                                }
+                            }
+
+                            if (has == 1) {
+                                if (VM_IsDestroyed(so) == 0) {
+                                    VM_SetProp(so, "sprite_index", sn)
+                                }
+                            } else {
+                                // 原版：升级到 4 星以上才补一个星星对象
+                                ns = VM_CreateInstance("obj_stars", VM_GetProp(p, "x"), VM_GetProp(p, "y") - 5)
+                                VM_SetProp(ns, "sprite_index", sn)
+                                VM_SetProp(ns, "parent_card", p)
+                                VM_SetProp(p, "banding_star_obj", ns)
+                            }
+                        }
+                    }
+                }
+
+                k = k + 1
+            }
+        }
+    }
+}
+
+_OBJECT_DESTROY {
+    self = VM_GetCurCard()
+
+    a = VM_GetProp(self, "clotho_aura")
+    if (VM_IsUndefined(a) == 0) {
+        if (a >= 0) {
+            if (VM_IsDestroyed(a) == 0) {
+                VM_DestroyInstance(a)
+            }
+        }
+    }
+}

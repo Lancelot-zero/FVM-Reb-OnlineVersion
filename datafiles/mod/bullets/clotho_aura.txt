@@ -1,0 +1,52 @@
+// 命运女神光环（纯装饰）：跟着本体走，本体没了就自己消失
+//
+// 由 cards/clotho.txt 创建：
+//     a = VM_CreateInstance("obj_bullet_mod", x, y - 30)
+//     VM_SetProp(a, "mod_type", "clotho_aura")
+//     VM_SetProp(a, "sprite_index", "spr_clotho_effect_2")
+//     VM_SetProp(a, "owner", self)
+// 贴图 spr_clotho_effect_2 由【卡片】的 _OBJECT_CFG 加载 —— 贴图名是全局的，
+// 而这颗子弹的 mod_dir 是 bullets/，够不到 cards/tex。
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+
+    VM_SetProp(self, "destroy_timer", 0 - 1)   // 不自动销毁，出界由 obj_bullet_mod 处理
+    VM_SetProp(self, "image_speed", 1)
+
+    // ⚠️ sprite_index 是内置实例变量，永远"已定义"（没设时是 -1），
+    //    所以这里不能只判 undefined；卡片没给贴图时才用自带的。
+    spr = VM_GetProp(self, "sprite_index")
+    if (VM_IsUndefined(spr)) {
+        spr = 0 - 1
+    }
+    if (spr == 0 - 1) {
+        VM_SetProp(self, "sprite_index", "spr_clotho_effect_2")
+    }
+
+    // ⚠️ obj_bullet_mod 自带 vx = 0 / vy = 0，不用默认值兜底也停在原地
+    if (VM_IsUndefined(VM_GetProp(self, "vx"))) {
+        VM_SetProp(self, "vx", 0)
+    }
+    if (VM_IsUndefined(VM_GetProp(self, "vy"))) {
+        VM_SetProp(self, "vy", 0)
+    }
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+
+    // 本体没了就跟着消失（卡片自己的 _OBJECT_DESTROY 通常已经收过了，这里是兜底）
+    o = VM_GetProp(self, "owner")
+    if (VM_IsUndefined(o)) {
+        VM_DestroyInstance(self)
+        exit
+    }
+    if (VM_IsDestroyed(o) == 1) {
+        VM_DestroyInstance(self)
+        exit
+    }
+
+    VM_SetProp(self, "x", VM_GetProp(o, "x"))
+    VM_SetProp(self, "y", VM_GetProp(o, "y") - 30)
+}

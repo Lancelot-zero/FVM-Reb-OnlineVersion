@@ -1,0 +1,113 @@
+// 至尊大力神（金卡 · 大力神·赫丘利最终形态）：四发追踪弹，只打空中鼠军
+// 按 mod 分支 obj_power_god（shape 3）移植。
+//
+//   Create：attack_anim = 17、idle_anim = 13、flash_speed = 5、target_type = "track"
+//   Step  ：**只认空中敌人**——原版是 `can_target_on(target_type, "air")`，
+//           没有空中目标就完全不开打（attack_timer 归零）。
+//           一轮 4 发：at == cycle - 8 / 6 / 4 / 2 * flash_speed 各一发。
+//
+//   子弹  ：原版 obj_power_god_bullet 也是「直朝目标飞 + 自转」那一套，
+//           所以照样复用原版【糖葫芦】obj_tanghulu_bullet 换皮。
+//           索敌类型用 "air"（normal + air，和原版 target_type 一致）。
+//
+//   和原版的两处差别（原版写在子弹自己的碰撞事件里，复用原版子弹后拿不到）：
+//     · 原版命中后有 30% 概率让敌人眩晕 240 帧（stun_timer）
+//     · 原版至尊用的是 obj_power_god_bullet_1，击杀时走 obj_mouse_ash_death（灰烬）
+//   这两条要保留就得自写子弹，先按复用做。
+//
+//   贴图：本体 25 帧 原点 (65,101)；子弹 5 帧 原点 (51,72)。
+
+_OBJECT_CFG {
+    if (VM_SpriteExists("spr_power_god_3") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_power_god_3_0.png", 25, 65, 101)
+        VM_AliasSpritePerm("spr_power_god_3", "tex/spr_power_god_3_0.png")
+    }
+
+    if (VM_SpriteExists("spr_power_god_bullet_3") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_power_god_bullet_3_0.png", 5, 51, 72)
+        VM_AliasSpritePerm("spr_power_god_bullet_3", "tex/spr_power_god_bullet_3_0.png")
+    }
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+
+    VM_SetProp(self, "sprite_index", "spr_power_god_3")
+    VM_SetProp(self, "idle_anim", 13)
+    VM_SetProp(self, "attack_anim", 17)
+    VM_SetProp(self, "flash_speed", 5)
+    VM_SetProp(self, "plant_type", "normal")
+
+    VM_SetProp(self, "attack_timer", 0)
+    VM_SetProp(self, "state", 0)
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+
+    if (VM_GetProp(self, "is_frozen") == 1) {
+        exit
+    }
+
+    fs = VM_GetProp(self, "flash_speed")
+    cfs = fs
+    if (VM_GetProp(self, "is_slowdown") == 1) {
+        cfs = cfs * 2
+    }
+
+    at = VM_GetProp(self, "attack_timer")
+    cyc = VM_GetProp(self, "cycle")
+    st = 0
+    shots = 0
+
+    // 只打空中：场上没有空中目标就整轮停摆
+    tgt = VM_GetHomingTarget("air")
+
+    if (tgt >= 0) {
+        if (at <= cyc - 17 * cfs) {
+            at = at + 1
+        } else if (at <= cyc) {
+            at = at + 1
+            st = 1
+        } else {
+            at = 0
+            st = 0
+        }
+
+        if (at == cyc - 8 * fs) {
+            shots = 1
+        }
+        if (at == cyc - 6 * fs) {
+            shots = 1
+        }
+        if (at == cyc - 4 * fs) {
+            shots = 1
+        }
+        if (at == cyc - 2 * fs) {
+            shots = 1
+        }
+    } else {
+        at = 0
+        st = 0
+    }
+
+    if (shots == 1) {
+        atk = VM_GetProp(self, "atk")
+        bx = VM_GetProp(self, "x")
+        by = VM_GetProp(self, "y") - 105
+        r = VM_GetProp(self, "grid_row")
+
+        b = VM_CreateInstance("obj_tanghulu_bullet", bx, by)
+        VM_SetProp(b, "sprite_index", "spr_power_god_bullet_3")
+        VM_SetProp(b, "image_alpha", 1)
+        VM_SetProp(b, "damage", atk)
+        VM_SetProp(b, "move_speed", 10)
+        VM_SetProp(b, "target_type", "air")
+        VM_SetProp(b, "target_enemy", tgt)
+        VM_SetProp(b, "banding_card_obj", self)
+        VM_SetProp(b, "row", r)
+    }
+
+    VM_SetProp(self, "attack_timer", at)
+    VM_SetProp(self, "state", st)
+}

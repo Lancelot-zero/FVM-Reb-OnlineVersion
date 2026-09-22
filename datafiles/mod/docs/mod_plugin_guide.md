@@ -1029,6 +1029,40 @@ n = VM_GetInstancesInRange("c3", br, br, bc, bc, "enemy", "obstacle")
 > 顺带：`VM_EnemyInRange` 的类型名是**另一套**（走 `global.has_enemy_*` 前缀和数组），
 > 名字像但不是一回事。它的合法值是 `normal` / `obstacle` / `diver` / `air` / `dance` / `underground`。
 
+---
+
+### 9.8 要"会追踪的子弹"就直接租原版【糖葫芦】`obj_tanghulu_bullet`
+
+自写追踪弹绕不开一个坎：**VM 没有 `sqrt` / `sin` / `cos`**，
+算不出"每帧朝目标走 10 像素"的方向（§9.6）。所以别硬写，租原版那颗：
+
+```gml
+tgt = VM_GetHomingTarget("normal")          // 空则返回 -1；类型按敌人的 target_type 填
+if (tgt >= 0) {
+    b = VM_CreateInstance("obj_tanghulu_bullet", x, y)
+    VM_SetProp(b, "sprite_index", "spr_xxx")   // 换皮
+    VM_SetProp(b, "damage", atk)
+    VM_SetProp(b, "move_speed", 10)
+    VM_SetProp(b, "target_type", "track")      // 可打类型，见 §9.7 那张表
+    VM_SetProp(b, "target_enemy", tgt)         // ⚠️ 必须给，不然永远打不中，见下
+    VM_SetProp(b, "row", grid_row)
+}
+```
+
+它白送的：每帧朝 `target_enemy` 直飞、目标死了自动改追场上最左的可打敌人、
+`image_angle = -timer * 6` 自转、出界自毁。
+
+三个坑：
+
+- **`target_enemy` 必须显式设**。它的 `Collision_obj_enemy_parent` 里写着
+  `target_enemy == other.id` 才结算伤害 —— 不给就是一颗永远穿过去的哑弹。
+- `Create` 里写死 `target_type = "air_only"`，想要别的可打范围得自己 `VM_SetProp` 覆盖。
+- 它有个全局计数 `global._tanghulu_buttet_number`，超过 100 时会在当前位置**直接秒掉目标**
+  （原版多拿滋的补丁）。正常一轮几发不会碰到，但别拿它当"弹幕管理器"那样海量刷。
+
+`VM_GetHomingTarget("类型")` 的规则和它一样：最靠左、同 x 时血最高的存活敌人；
+全场每帧只扫一次，同帧多处调用共享缓存，所以逐类型连问几次不心疼。
+
 ## 10. 编写地图 Mod
 
 目录：

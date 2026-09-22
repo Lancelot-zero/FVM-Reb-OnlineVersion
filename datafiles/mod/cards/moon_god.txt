@@ -1,0 +1,175 @@
+// 至尊月神（金卡 · 月神·狄安娜最终形态）：连发追踪弹，首发是超级弹
+// 按 mod 分支 obj_moon_god（shape 3）移植。
+//
+//   Create：attack_anim = 11、idle_anim = 7、flash_speed = 5、target_type = "track"
+//   Step  ：场上有能打的目标就开打，一轮里
+//             at == cycle - 8*flash_speed     → 首发超级弹（2*atk）
+//             at == cycle - 7..1*flash_speed  → 每帧一发普通弹，共 7 发
+//           attack_anim 之后的窗口内 state = 1（和原版一样）。
+//
+//   子弹  ：原版 obj_moon_god_bullet 和原版【糖葫芦】obj_tanghulu_bullet 是同一套写法
+//           （直朝目标飞 + image_angle = -timer*6 自转 + 每帧重挑最左目标），
+//           所以这里直接复用 obj_tanghulu_bullet 换皮：只改贴图 / 伤害 / 索敌类型，
+//           不再自写子弹。它自带 Collision_obj_enemy_parent，但只认 target_enemy，
+//           创建时必须把 target_enemy 设成真实敌人 id，否则永远打不中。
+//           索敌类型沿用原版 target_type = "track"（可打 normal / diver / air）。
+//
+//   叠加增伤：原版 final_atk = atk * min(0.95 + 场上月神数 * 0.05, 1.45)。
+//             但原代码 Step 每帧开头会把 final_atk 重置回 atk，实际只有同帧生成的
+//             超级弹吃到加成、后面 7 发普通弹吃不到（原版漏接）。
+//             这里按【设计意图】让整轮 8 发都吃加成。
+//
+//   贴图：本体 18 帧 原点 (57,112)；普通弹 / 超级弹都是 4 帧 原点 (49,49)。
+
+_OBJECT_CFG {
+    // 统一写内部 spr 名：内置有就直接用；内置没有才把本地图挂到这个名上。
+    if (VM_SpriteExists("spr_moon_god_3") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_moon_god_3_0.png", 18, 57, 112)
+        VM_AliasSpritePerm("spr_moon_god_3", "tex/spr_moon_god_3_0.png")
+    }
+
+    if (VM_SpriteExists("spr_moon_god_bullet_3") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_moon_god_bullet_3_0.png", 4, 49, 49)
+        VM_AliasSpritePerm("spr_moon_god_bullet_3", "tex/spr_moon_god_bullet_3_0.png")
+    }
+
+    if (VM_SpriteExists("spr_moon_god_bullet_3_s") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_moon_god_bullet_3_s_0.png", 4, 49, 49)
+        VM_AliasSpritePerm("spr_moon_god_bullet_3_s", "tex/spr_moon_god_bullet_3_s_0.png")
+    }
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+
+    VM_SetProp(self, "sprite_index", "spr_moon_god_3")
+    VM_SetProp(self, "idle_anim", 7)
+    VM_SetProp(self, "attack_anim", 11)
+    VM_SetProp(self, "flash_speed", 5)
+    VM_SetProp(self, "plant_type", "normal")
+
+    VM_SetProp(self, "attack_timer", 0)
+    VM_SetProp(self, "state", 0)
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+
+    if (VM_GetProp(self, "is_frozen") == 1) {
+        exit
+    }
+
+    fs = VM_GetProp(self, "flash_speed")
+    cfs = fs
+    if (VM_GetProp(self, "is_slowdown") == 1) {
+        cfs = cfs * 2
+    }
+
+    at = VM_GetProp(self, "attack_timer")
+    cyc = VM_GetProp(self, "cycle")
+    st = 0
+    shot = 0
+    sup = 0
+
+    // 索敌（原版 target_type = "track" → 可打 normal / diver / air）。
+    // VM_GetHomingTarget 的缓存每帧只扫一次全场，逐个类型问很便宜。
+    tgt = VM_GetHomingTarget("normal")
+    if (tgt < 0) {
+        tgt = VM_GetHomingTarget("air")
+    }
+    if (tgt < 0) {
+        tgt = VM_GetHomingTarget("diver")
+    }
+
+    if (tgt >= 0) {
+        if (at <= cyc - 11 * cfs) {
+            at = at + 1
+        } else if (at <= cyc) {
+            at = at + 1
+            st = 1
+        } else {
+            at = 0
+            st = 0
+        }
+
+        if (at == cyc - 8 * fs) {
+            sup = 1
+        }
+        // 普通弹：原版就是 7 个离散时刻，不能写成范围（那样会变成每帧一发）
+        if (at == cyc - 7 * fs) {
+            shot = 1
+        }
+        if (at == cyc - 6 * fs) {
+            shot = 1
+        }
+        if (at == cyc - 5 * fs) {
+            shot = 1
+        }
+        if (at == cyc - 4 * fs) {
+            shot = 1
+        }
+        if (at == cyc - 3 * fs) {
+            shot = 1
+        }
+        if (at == cyc - 2 * fs) {
+            shot = 1
+        }
+        if (at == cyc - 1 * fs) {
+            shot = 1
+        }
+    } else {
+        at = 0
+        st = 0
+    }
+
+    fire = 0
+    if (shot == 1) {
+        fire = 1
+    }
+    if (sup == 1) {
+        fire = 1
+    }
+
+    if (fire == 1) {
+        // 场上月神越多伤害越高：0.95 + 数量 * 0.05，上限 1.45
+        n = VM_GetInstancesInRange("mg_all", 0, 99, 0, 99, "card", "moon_god")
+        boost = 0.95 + n * 0.05
+        if (boost > 1.45) {
+            boost = 1.45
+        }
+
+        atk = VM_GetProp(self, "atk")
+        bx = VM_GetProp(self, "x")
+        by = VM_GetProp(self, "y") - 55
+        r = VM_GetProp(self, "grid_row")
+
+        if (shot == 1) {
+            b = VM_CreateInstance("obj_tanghulu_bullet", bx, by)
+            VM_SetProp(b, "sprite_index", "spr_moon_god_bullet_3")
+            VM_SetProp(b, "image_xscale", 1.5)
+            VM_SetProp(b, "image_yscale", 1.5)
+            VM_SetProp(b, "damage", atk * boost)
+            VM_SetProp(b, "move_speed", 10)
+            VM_SetProp(b, "target_type", "track")
+            VM_SetProp(b, "target_enemy", tgt)
+            VM_SetProp(b, "banding_card_obj", self)
+            VM_SetProp(b, "row", r)
+        }
+
+        if (sup == 1) {
+            s = VM_CreateInstance("obj_tanghulu_bullet", bx, by)
+            VM_SetProp(s, "sprite_index", "spr_moon_god_bullet_3_s")
+            VM_SetProp(s, "image_xscale", 1.5)
+            VM_SetProp(s, "image_yscale", 1.5)
+            VM_SetProp(s, "damage", 2 * atk * boost)
+            VM_SetProp(s, "move_speed", 10)
+            VM_SetProp(s, "target_type", "track")
+            VM_SetProp(s, "target_enemy", tgt)
+            VM_SetProp(s, "banding_card_obj", self)
+            VM_SetProp(s, "row", r)
+        }
+    }
+
+    VM_SetProp(self, "attack_timer", at)
+    VM_SetProp(self, "state", st)
+}
