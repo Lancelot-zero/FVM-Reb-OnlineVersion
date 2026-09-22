@@ -1,0 +1,111 @@
+// 日耀暖暖鸡（金卡 · 暖暖鸡最终形态）：定时生产火苗
+// 按 mod 分支 obj_warm_birds 的 shape 2 移植到 mod 卡（obj_card_mod 继承 obj_card_parent）。
+// mod 卡只有形态 0，所以这里直接按最终形态写死：不判 shape，贴图/产量都用最终形态的。
+//
+//   Create：flame_produce = 25、attack_anim = 13、idle_anim = 11、
+//           first_produce_delay = 60、flash_speed 用父对象默认的 6
+//   Step  ：先等 60 帧 → 播 13 帧攻击动画（每帧 flash_speed 个游戏帧）→ 吐 5 朵火苗；
+//           之后每隔 cycle 帧重复。攻击窗口里 state = ATTACK(1) 让父对象播攻击段，
+//           其余时间 state = IDLE(0)。
+//   火苗  ：原版 instance_create_depth(x, y - 60, depth - 1000, obj_flame) + inst.value，
+//           这里用 VM_CreateInstance("flame", x, y - 60)（深度 depth - 500），再写 value。
+//
+// 两个坑：
+//   1) 本块跑在父对象 Step 之后，父对象里 `if is_frozen exit` 只结束父事件、挡不住本块，
+//      所以冰冻判定要自己写一次（减速时动画窗口翻倍，父对象已经把 cycle 翻倍了）。
+//   2) first_produce_delay 不在卡池数据里（父对象 Other_10 也没搬这项），只能按原对象写死；
+//      火苗产量读 flame_produce —— 它由技能表给（25 → 48），星级则影响 cycle。
+
+_OBJECT_CFG {
+    // 统一写内部 spr 名：内置有就直接用；内置没有才把本地图挂到这个名上。
+    // 本体：24 帧，原点 (33, 99)
+    if (VM_SpriteExists("spr_warm_birds_2") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_warm_birds_2_0.png", 24, 33, 99)
+        VM_AliasSpritePerm("spr_warm_birds_2", "tex/spr_warm_birds_2_0.png")
+    }
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+
+    VM_SetProp(self, "sprite_index", "spr_warm_birds_2")
+    VM_SetProp(self, "idle_anim", 11)
+    VM_SetProp(self, "attack_anim", 13)
+    VM_SetProp(self, "plant_type", "normal")
+
+    VM_SetProp(self, "first_produce_delay", 60)
+    VM_SetProp(self, "attack_timer", 0)
+    VM_SetProp(self, "first_produce", 0)
+    VM_SetProp(self, "state", 0)
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+
+    if (VM_GetProp(self, "is_frozen") == 1) {
+        exit
+    }
+
+    fs = VM_GetProp(self, "flash_speed")
+    if (VM_GetProp(self, "is_slowdown") == 1) {
+        fs = fs * 2
+    }
+
+    at = VM_GetProp(self, "attack_timer")
+    cyc = VM_GetProp(self, "cycle")
+    fp = VM_GetProp(self, "first_produce")
+    st = 0
+    fire = 0
+
+    // 第一次生产：等 first_produce_delay(60) 帧 + 攻击动画
+    if (fp == 0) {
+        if (at <= 60) {
+            at = at + 1
+        } else if (at <= 60 + 13 * fs) {
+            at = at + 1
+            st = 1
+        } else {
+            fire = 1
+            at = 0
+            fp = 1
+        }
+    } else {
+        if (at <= cyc - 13 * fs) {
+            at = at + 1
+        } else if (at <= cyc) {
+            at = at + 1
+            st = 1
+        } else {
+            fire = 1
+            at = 0
+        }
+    }
+
+    if (fire == 1) {
+        fpn = VM_GetProp(self, "flame_produce")
+        if (VM_IsUndefined(fpn)) {
+            fpn = 25
+        }
+        if (fpn == 0) {
+            fpn = 25
+        }
+        fx = VM_GetProp(self, "x")
+        fy = VM_GetProp(self, "y") - 60
+
+        // 原版 event_user(1) 一次吐 5 朵（最终形态：3 朵 + 一转 1 朵 + 二转 1 朵）
+        f1 = VM_CreateInstance("flame", fx, fy)
+        VM_SetProp(f1, "value", fpn)
+        f2 = VM_CreateInstance("flame", fx, fy)
+        VM_SetProp(f2, "value", fpn)
+        f3 = VM_CreateInstance("flame", fx, fy)
+        VM_SetProp(f3, "value", fpn)
+        f4 = VM_CreateInstance("flame", fx, fy)
+        VM_SetProp(f4, "value", fpn)
+        f5 = VM_CreateInstance("flame", fx, fy)
+        VM_SetProp(f5, "value", fpn)
+    }
+
+    VM_SetProp(self, "attack_timer", at)
+    VM_SetProp(self, "first_produce", fp)
+    VM_SetProp(self, "state", st)
+}

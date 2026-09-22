@@ -1,0 +1,103 @@
+// 双子座星宿（金卡 · 双子座精灵最终形态）：一次产出 6 朵火苗
+// 按 mod 分支 obj_shuangzi 的 shape 2 移植。骨架和日耀暖暖鸡同一套，差别只有产量和节奏：
+// 原版 Step 每次到点把 event_user(1) 调两次，最终形态每次吐 3 朵（2 朵 + 二转 1 朵），一轮共 6 朵。
+//
+//   Create：flame_produce = 25、attack_anim = 13、idle_anim = 11、
+//           first_produce_delay = 60、flash_speed 用父对象默认的 6
+//   其余（冰冻判定、cycle 由父对象按减速翻倍、flame_produce 走技能表）同暖暖鸡。
+
+_OBJECT_CFG {
+    // 统一写内部 spr 名：内置有就直接用；内置没有才把本地图挂到这个名上。
+    // 本体：40 帧，原点 (44, 117)
+    if (VM_SpriteExists("spr_shuangzi_2") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_shuangzi_2_0.png", 40, 44, 117)
+        VM_AliasSpritePerm("spr_shuangzi_2", "tex/spr_shuangzi_2_0.png")
+    }
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+
+    VM_SetProp(self, "sprite_index", "spr_shuangzi_2")
+    VM_SetProp(self, "idle_anim", 11)
+    VM_SetProp(self, "attack_anim", 13)
+    VM_SetProp(self, "plant_type", "normal")
+
+    VM_SetProp(self, "first_produce_delay", 60)
+    VM_SetProp(self, "attack_timer", 0)
+    VM_SetProp(self, "first_produce", 0)
+    VM_SetProp(self, "state", 0)
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+
+    if (VM_GetProp(self, "is_frozen") == 1) {
+        exit
+    }
+
+    fs = VM_GetProp(self, "flash_speed")
+    if (VM_GetProp(self, "is_slowdown") == 1) {
+        fs = fs * 2
+    }
+
+    at = VM_GetProp(self, "attack_timer")
+    cyc = VM_GetProp(self, "cycle")
+    fp = VM_GetProp(self, "first_produce")
+    st = 0
+    fire = 0
+
+    if (fp == 0) {
+        if (at <= 60) {
+            at = at + 1
+        } else if (at <= 60 + 13 * fs) {
+            at = at + 1
+            st = 1
+        } else {
+            fire = 1
+            at = 0
+            fp = 1
+        }
+    } else {
+        if (at <= cyc - 13 * fs) {
+            at = at + 1
+        } else if (at <= cyc) {
+            at = at + 1
+            st = 1
+        } else {
+            fire = 1
+            at = 0
+        }
+    }
+
+    if (fire == 1) {
+        fpn = VM_GetProp(self, "flame_produce")
+        if (VM_IsUndefined(fpn)) {
+            fpn = 25
+        }
+        if (fpn == 0) {
+            fpn = 25
+        }
+        fx = VM_GetProp(self, "x")
+        fy = VM_GetProp(self, "y") - 60
+
+        // 原版调两次 event_user(1)，每次 3 朵（最终形态），共 6 朵
+        a1 = VM_CreateInstance("flame", fx, fy)
+        VM_SetProp(a1, "value", fpn)
+        a2 = VM_CreateInstance("flame", fx, fy)
+        VM_SetProp(a2, "value", fpn)
+        a3 = VM_CreateInstance("flame", fx, fy)
+        VM_SetProp(a3, "value", fpn)
+
+        b1 = VM_CreateInstance("flame", fx, fy)
+        VM_SetProp(b1, "value", fpn)
+        b2 = VM_CreateInstance("flame", fx, fy)
+        VM_SetProp(b2, "value", fpn)
+        b3 = VM_CreateInstance("flame", fx, fy)
+        VM_SetProp(b3, "value", fpn)
+    }
+
+    VM_SetProp(self, "attack_timer", at)
+    VM_SetProp(self, "first_produce", fp)
+    VM_SetProp(self, "state", st)
+}

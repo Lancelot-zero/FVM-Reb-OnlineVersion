@@ -930,10 +930,36 @@ obj_bullet_mod 自带：
 `x` / `y` / `sprite_index` / `image_alpha` / `image_speed` 等是普通实例属性，直接读写。
 注意 obj_bullet_mod 的 Create 里 `image_speed = 0`，要动的话自己设。
 
+⚠️ **速度用 `vx` / `vy`（每帧位移），而且必须由卡片显式设置。**
+obj_bullet_mod 的 Create 里**已经**写了 `vx = 0` / `vy = 0`，Step 末尾才做 `x += vx; y += vy`。
+所以"不设就用默认"是不成立的 —— 属性早就存在，只是值等于 0，子弹会一动不动：
+
+```gml
+b = VM_CreateInstance("obj_bullet_mod", sx, sy)
+VM_SetProp(b, "mod_type", "pierce_bullet")
+VM_SetProp(b, "vx", 8)      // ← 必须显式设，不写就停在原地
+VM_SetProp(b, "vy", 0)
+```
+
+要抛物线/自转（例如 `bullets/thor_bullet.txt`）就在 `_OBJECT_STEP` 里每帧重写 `vx`/`vy`。
+详见 14.21。
+
 ### 9.5 碰撞要自己写
 
 VM 里没有通用的子弹碰撞，要在 `_OBJECT_STEP` 里自己判定。常用套路：
 
+⚠️ **原版子弹身上的那些 `Collision_*` 联动，`obj_bullet_mod` 一个都没有**（它没有碰撞事件），
+用自建子弹就得自己补。常见几个：
+
+| 原版事件 | 效果 | VM 里怎么写 |
+|---|---|---|
+| `Collision_obj_brazier`（火盆） | `burnt = 1`、`damage = round(damage * 火盆.atk)`、贴图换 `spr_fire_bullet`、放大 1.8、放 `snd_bullet_burnt` | `VM_GetInstancesInRange("a", row, row, bc-1, bc+1, "card", "brazier")` 找到火盆后自己改 `damage` / `sprite_index` / 缩放 |
+| `Collision_obj_cherry_pudding`（樱桃布丁） | 反弹：`move_speed *= -1`、`damage += atk`、`image_angle += 180` | 同上换成布丁的 plant_id，然后反向写 `vx`、`image_angle` |
+| `Collision_obj_obstacle` | 撞障碍物就销毁 | 按 `plant_type` / 地形自己判 |
+
+要点：`VM_GetInstancesInRange` 的 `kind` 传 `"card"` 查我方卡片，`type` 填 **`plant_id`**（例：`"brazier"`）
+或 `plant_type`。可对照 `bullets/pierce_bullet.txt` 里的过火盆段。
+（当前 main 工程里只有 `brazier`；`obj_fire_god` / `obj_jinniu` 是 mod 分支的金卡，合并进来后再把类型补上。）
 ```gml
 // 1. 取子弹所在格子
 bc = VM_GetProp(self, "grid_col")
@@ -1672,6 +1698,56 @@ ds_map_clear(global._VM_sprite_temp_cache);
 后果很隐蔽：在 `_OBJECT_CFG`（开局**之前**执行）里建的别名，等你真进战斗时早没了 —— 表现是**卡面/本体空白**，而且看起来像是"别名函数坏了"，其实不是。
 
 **要在房间里活下来，用永久缓存那一组**：`VM_LoadSpritePerm_Ex`（加载）+ `VM_AliasSpritePerm`（挂名），见 11.4。永久缓存只被 `VM_FreeSpritePerm` 和 `[reloadmod]` 的别名释放动过，不受房间切换影响。
+
+### 14.21 给 obj_bullet_mod 设速度：必须显式写 vx / vy
+
+`obj_bullet_mod` 的 Create 里**已经**定义了 `vx = 0`、`vy = 0`，实例在 Step 末尾才做 `x += vx; y += vy`。于是：
+
+- **不写 `vx` / `vy`，子弹就停在原地** —— 不是"没设所以有默认值"，而是"属性已存在且等于 0"；
+- 在子弹自己的 `_OBJECT_CREATE` 里用
+  `if (VM_IsUndefined(VM_GetProp(self, "vx"))) { VM_SetProp(self, "vx", 8) }`
+  兜底**永远不会触发**，等于没写（踩过一次：爱神穿透弹就是这么不动的）；
+- 正确做法：**创建子弹时由卡片显式写速度**（单位：像素/帧）
+
+```gml
+b = VM_CreateInstance("obj_bullet_mod", sx, sy)
+VM_SetProp(b, "mod_type", "pierce_bullet")
+VM_SetProp(b, "vx", 8)      // ← 必须写
+VM_SetProp(b, "vy", 0)
+```
+
+要抛物线 / 自转的（`bullets/thor_bullet.txt`）反过来：在 `_OBJECT_STEP` 里**每帧重写** `vx` / `vy`
+（`obj_bullet_mod` 在跑完你的块之后才应用它们，所以逐帧写就是逐帧改速度）。
+
+同理，`hspeed` / `vspeed` 这类内置速度在 VM 里别用（见 15.4）。
+
+### 14.22 `sprite_index` 永远"已定义"，别用 undefined 兜底
+
+`obj_bullet_mod` 的实例上，`sprite_index` 是**内置实例变量**：没设过时它不是 undefined，而是 **`-1`**。
+所以在子弹的 `_OBJECT_CREATE` 里写
+
+```gml
+if (VM_IsUndefined(VM_GetProp(self, "sprite_index"))) {   // ← 永远不成立
+    VM_SetProp(self, "sprite_index", "spr_xxx")
+}
+```
+
+**等于没写** —— 表现是子弹被正常创建、`_OBJECT_CREATE` 也跑了（打印能看到），但**画面上什么都没有**（没有贴图），
+而且不会报任何错。踩过一次：爱神的穿透超级弹就是这么隐形的。
+
+正确做法两条都做：
+
+```gml
+// ① 创建时由卡片显式给贴图
+VM_SetProp(s, "sprite_index", "spr_pierce_bullet")
+
+// ② 子弹里兜底时把 -1 也算"没设"
+spr = VM_GetProp(self, "sprite_index")
+if (VM_IsUndefined(spr)) { spr = 0 - 1 }
+if (spr == 0 - 1) { VM_SetProp(self, "sprite_index", "spr_pierce_bullet") }
+```
+
+同一类陷阱还有 `image_index` / `image_alpha` / `depth` 等内置变量：**判断"设没设过"只能靠哨兵值（-1 / 0），不能靠 undefined**。
 
 ---
 

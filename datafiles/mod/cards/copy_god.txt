@@ -76,8 +76,6 @@ _OBJECT_CREATE {
     if (VM_IsUndefined(r5)) {
         r5 = ""
     }
-    VM_ShellPrint("cg recent=[", r1, "][", r2, "][", r3, "][", r4, "][", r5, "]")
-
     // 依次试，取第一个不在黑名单里的
     bln = VM_ArraySize("cg_bl")
     tg = ""
@@ -118,7 +116,6 @@ _OBJECT_CREATE {
     }
 
     VM_SetProp(self, "target", tg)
-    VM_ShellPrint("cg create target=[", tg, "]")
 
     VM_SetProp(self, "copy_timer", 0)
     VM_SetProp(self, "copied", 0)
@@ -146,7 +143,6 @@ _OBJECT_STEP {
             if (VM_IsUndefined(tg)) {
                 tg = ""
             }
-            VM_ShellPrint("cg @70 target=[", tg, "]")
 
             c = VM_GetProp(self, "grid_col")
             r = VM_GetProp(self, "grid_row")
@@ -161,9 +157,8 @@ _OBJECT_STEP {
                 bad = 1
             }
 
-            if (bad == 1) {
-                VM_ShellPrint("cg @70 SKIP: 没有目标或坐标无效")
-            } else {
+            // 目标或坐标无效就整段跳过
+            if (bad == 0) {
                 // 目标卡的属性：存档里的外形/星级/技能 + 卡池里的层/特性
                 sh = VM_GetCardProp(tg, "shape")
                 lv = VM_GetCardProp(tg, "level")
@@ -193,8 +188,6 @@ _OBJECT_STEP {
                 if (VM_IsUndefined(gc)) {
                     gc = 99
                 }
-                VM_ShellPrint("cg @70 sh=", sh, " lv=", lv, " sk=", sk, " pt=[", pt, "] ft=[", ft, "] grid=", gc, "x", gr)
-
                 // 复制期间临时关掉「替换模式」（玩家的设置项，obj_wooden_plate 也这么干）：
                 // VM_CanPlace 内部会读 global.replace_placement，开着的话格子被占也算能种，
                 // 复制就会把别人的卡顶掉。关掉之后它只往真正空得下的地方种。
@@ -207,10 +200,8 @@ _OBJECT_STEP {
                 // ① 自己那格：也走正规规则（地形/障碍/水陆/莲叶/护盾层/底座卡都算）
                 made = 0
                 if (VM_CanPlace(tg, c, r) == 1) {
-                    VM_ShellPrint("cg spawn self ret=", VM_SpawnPlant(tg, c, r, sh, lv, sk))
+                    VM_SpawnPlant(tg, c, r, sh, lv, sk)
                     made = 1
-                } else {
-                    VM_ShellPrint("cg self 不能种，跳过")
                 }
 
                 // ② 按原版顺序把候选格生成到命名数组（cgc = 列, cgr = 行）
@@ -256,7 +247,6 @@ _OBJECT_STEP {
                     }
                     d = d + 1
                 }
-                VM_ShellPrint("cg candidates n=", n)
 
                 // ③ 按顺序填，凑满 5 张（自己那格已占 1 张）
                 i = 0
@@ -286,7 +276,6 @@ _OBJECT_STEP {
                     }
                     i = i + 1
                 }
-                VM_ShellPrint("cg made=", made, " / 5")
 
                 // 还原玩家的替换模式设置
                 VM_SetProp(0, "replace_placement", rp_bak)

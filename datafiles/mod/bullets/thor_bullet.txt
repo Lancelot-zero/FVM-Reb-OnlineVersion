@@ -1,0 +1,164 @@
+// 至尊雷神的冰锤子弹（真·子弹实例，不是弹幕）
+//   b = VM_CreateInstance("obj_bullet_mod", x, y)
+//   VM_SetProp(b, "mod_type", "thor_bullet")
+// 卡片侧会再写：damage / row / thrower_y / sprite_index / move_speed / cvspeed / cgravity
+//
+// 按 mod 分支 obj_thor_bullet 移植。原版飞行是抛体：
+//     x += move_speed;
+//     y -= cvspeed;
+//     cvspeed -= cgravity;
+//     image_angle -= 5;
+// obj_bullet_mod 在跑完本块之后才做 x += vx / y += vy，所以这里把每帧位移写进 vx/vy，
+// 重力累积写回 cvspeed，和原版逐帧顺序完全一致。
+//
+// 命中：原版只打一个敌人（命中即销毁），伤害 damage，并给敌人写 ice_timer = 600 减速。
+//       判定用「同一行 + 子弹周围 3 格内收集敌人 + x/y 距离」，比原版 bbox 略宽松。
+// 溅射：原版其实**没接上**（obj_thor_bullet_effect_1 只是动画，splashed 是死变量），
+//       所以这里也不做范围伤害，只放一个同款命中特效（用弹幕管理器放个 0 伤害的纯视觉弹）。
+// 落地：掉到投掷高度以下就销毁（原版是「目标没了才落地销毁」，效果一样）。
+
+// 子弹自己的贴图放在 mod/bullets/tex/，由本块的 _OBJECT_CFG 加载
+// （和 hades_scythe_bullet 一个规矩：子弹的东西归 bullets 文件夹）。
+_OBJECT_CFG {
+    // 冰锤：普通 / 超级，各 1 帧，原点 (135, 93)
+    if (VM_SpriteExists("spr_thor_bullet_3") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_thor_bullet_3_0.png", 1, 135, 93)
+        VM_AliasSpritePerm("spr_thor_bullet_3", "tex/spr_thor_bullet_3_0.png")
+    }
+    if (VM_SpriteExists("spr_thor_bullet_3_s") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_thor_bullet_3_s_0.png", 1, 135, 93)
+        VM_AliasSpritePerm("spr_thor_bullet_3_s", "tex/spr_thor_bullet_3_s_0.png")
+    }
+
+    // 命中特效：9 帧，原点 (132, 70)
+    if (VM_SpriteExists("spr_thor_effect") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_thor_effect_0.png", 9, 132, 70)
+        VM_AliasSpritePerm("spr_thor_effect", "tex/spr_thor_effect_0.png")
+    }
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+
+    VM_SetProp(self, "vx", 0)
+    VM_SetProp(self, "vy", 0)
+    VM_SetProp(self, "destroy_timer", -1)
+    VM_SetProp(self, "image_angle", 0 - 45)
+    VM_SetProp(self, "image_speed", 0)
+    VM_SetProp(self, "hit", 0)
+
+    // 卡片侧没给飞行参数时用原版「没锁到目标」那套
+    if (VM_IsUndefined(VM_GetProp(self, "move_speed"))) {
+        VM_SetProp(self, "move_speed", 8)
+    }
+    if (VM_IsUndefined(VM_GetProp(self, "cvspeed"))) {
+        VM_SetProp(self, "cvspeed", 6)
+    }
+    if (VM_IsUndefined(VM_GetProp(self, "cgravity"))) {
+        VM_SetProp(self, "cgravity", 0.2)
+    }
+    if (VM_IsUndefined(VM_GetProp(self, "thrower_y"))) {
+        VM_SetProp(self, "thrower_y", VM_GetProp(self, "y") + 125)
+    }
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+
+    if (VM_GetProp(self, "hit") == 1) {
+        exit
+    }
+
+    // ---- 抛体推进（原版逐帧顺序）----
+    cvs = VM_GetProp(self, "cvspeed")
+    VM_SetProp(self, "vx", VM_GetProp(self, "move_speed"))
+    VM_SetProp(self, "vy", 0 - cvs)
+    VM_SetProp(self, "cvspeed", cvs - VM_GetProp(self, "cgravity"))
+    VM_SetProp(self, "image_angle", VM_GetProp(self, "image_angle") - 5)
+
+    // ---- 命中：同一行、周围 3 格内的敌人 ----
+    // ⚠️ 必须先判命中再判落地：冰锤是在落到投掷高度附近才够到敌人的，
+    //    先判落地的话，正好在那一帧被吃掉，永远打不到。
+    row = VM_GetProp(self, "row")
+    bc = VM_GetProp(self, "grid_col")
+    bx = VM_GetProp(self, "x")
+    by = VM_GetProp(self, "y")
+    // 原版是 bbox 相交，锤子贴图 201x156、原点 (135,93)，纵向判定本来就宽
+    rad = 90
+    rad_y = 120
+
+    n = VM_GetInstancesInRange("tb_cell", row, row, bc - 1, bc + 1, "enemy", "")
+    k = 0
+    while (k < n) {
+        e = VM_ArrayGet("tb_cell", k)
+        dx = VM_GetProp(e, "x") - bx
+        if (dx < 0) {
+            dx = 0 - dx
+        }
+        dy = VM_GetProp(e, "y") - by
+        if (dy < 0) {
+            dy = 0 - dy
+        }
+
+        hit_ok = 0
+        if (dx <= rad) {
+            if (dy <= rad_y) {
+                if (VM_GetProp(e, "hp") > 0) {
+                    hit_ok = 1
+                }
+            }
+        }
+
+        if (hit_ok == 1) {
+            ex = VM_GetProp(e, "x")
+            ey = VM_GetProp(e, "y")
+
+            // 伤害 + 减速（原版：if (ice_timer < 600) ice_timer = 600;）
+            VM_SetProp(e, "hp", VM_GetProp(e, "hp") - VM_GetProp(self, "damage"))
+            it = VM_GetProp(e, "ice_timer")
+            if (VM_IsUndefined(it)) {
+                it = 0
+            }
+            if (it < 600) {
+                VM_SetProp(e, "ice_timer", 600)
+            }
+
+            // 命中特效：9 帧动画摊到 24 帧，纯视觉（伤害 0）
+            VM_BulletScreenAdd("spr_thor_effect", 9, 0, 1.8, 0.375, ex, ey, 0, 0, 0, 0 - 1, 24, "all", "", "")
+
+            // ---- 溅射（原版没接上，这里按终转图鉴「溅射伤害 100%」补上）----
+            // 命中点周围 3×3 格内的**其他**敌人：各吃一次 atk，并同样减速 600 帧
+            sr = VM_GetProp(self, "grid_row")
+            sc = VM_GetProp(self, "grid_col")
+            sn = VM_GetInstancesInRange("tb_splash", sr - 1, sr + 1, sc - 1, sc + 1, "enemy", "")
+            sk = 0
+            while (sk < sn) {
+                se = VM_ArrayGet("tb_splash", sk)
+                if (se != e) {
+                    if (VM_GetProp(se, "hp") > 0) {
+                        VM_SetProp(se, "hp", VM_GetProp(se, "hp") - VM_GetProp(self, "damage"))
+                        sit = VM_GetProp(se, "ice_timer")
+                        if (VM_IsUndefined(sit)) {
+                            sit = 0
+                        }
+                        if (sit < 600) {
+                            VM_SetProp(se, "ice_timer", 600)
+                        }
+                    }
+                }
+                sk = sk + 1
+            }
+
+            VM_SetProp(self, "hit", 1)
+            VM_SetProp(self, "destroy_timer", 0)
+            exit
+        }
+        k = k + 1
+    }
+
+    // ---- 落地（没打到才销毁；原版是「目标没了才落地销毁」，效果一样）----
+    if (VM_GetProp(self, "y") >= VM_GetProp(self, "thrower_y")) {
+        VM_SetProp(self, "destroy_timer", 0)
+        exit
+    }
+}

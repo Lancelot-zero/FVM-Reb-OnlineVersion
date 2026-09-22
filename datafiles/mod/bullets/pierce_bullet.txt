@@ -1,0 +1,170 @@
+// 穿透弹（自写 mod 子弹）：直线飞、命中不消失（穿透）、可飞向指定行
+//
+// 卡片侧创建方式（和 thor_bullet 一样）：
+//     b = VM_CreateInstance("obj_bullet_mod", x, y)
+//     VM_SetProp(b, "mod_type", "pierce_bullet")
+//     VM_SetProp(b, "damage", 6 * atk)        // 整段总伤害，按 hit_frames 摊到每帧
+//     VM_SetProp(b, "vx", 8)                 // ⚠️ 必须显式设：obj_bullet_mod 自带 vx=0/vy=0，"未定义才给默认" 是不生效的
+//     VM_SetProp(b, "vy", 0)
+//     VM_SetProp(b, "row", grid_row)          // 起始行
+//     VM_SetProp(b, "target_row", 目标行)      // 可选：飞向这一行（照原版 lerp）
+//   不写 sprite_index 就用自带的 spr_pierce_bullet。
+//
+// 为什么不复用原版子弹：工程里没有「直线 + 穿透 + 不自转」的原版子弹 ——
+//   直线那批（水管弹 / mightygun / icegun …）全是命中即 instance_destroy；
+//   穿透那几颗 obj_*pult_bullet 每帧都会 image_angle -= 2 自转，还带投掷类专属逻辑。
+//
+// 穿透的伤害口径：原版穿透弹是"每个敌人只结算一次，打完整的 damage"，
+//   管理器/自写子弹没法给每颗子弹存"打过谁"的名单，所以按**每帧等量**摊：
+//   穿一格约 13 帧（格子宽 107 / 速度 8），整段总伤害仍是 damage。
+
+_OBJECT_CFG {
+    // 贴图归 bullets/tex，由子弹自己加载
+    if (VM_SpriteExists("spr_pierce_bullet") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_pierce_bullet_0.png", 5, 87, 45)
+        VM_AliasSpritePerm("spr_pierce_bullet", "tex/spr_pierce_bullet_0.png")
+    }
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+
+    VM_SetProp(self, "destroy_timer", 0 - 1)   // 不自动销毁，出界由 obj_bullet_mod 处理
+    VM_SetProp(self, "image_xscale", 1.6)
+    VM_SetProp(self, "image_yscale", 1.6)
+    VM_SetProp(self, "image_speed", 1)
+
+    // ⚠️ sprite_index 是内置实例变量，永远"已定义"（没设时是 -1），
+    //    所以这里不能只判 undefined；卡片没给贴图时才用自带的。
+    spr = VM_GetProp(self, "sprite_index")
+    if (VM_IsUndefined(spr)) {
+        spr = 0 - 1
+    }
+    if (spr == 0 - 1) {
+        VM_SetProp(self, "sprite_index", "spr_pierce_bullet")
+    }
+    if (VM_IsUndefined(VM_GetProp(self, "vx"))) {
+        VM_SetProp(self, "vx", 8)
+    }
+    if (VM_IsUndefined(VM_GetProp(self, "vy"))) {
+        VM_SetProp(self, "vy", 0)
+    }
+    if (VM_IsUndefined(VM_GetProp(self, "damage"))) {
+        VM_SetProp(self, "damage", 0)
+    }
+    if (VM_IsUndefined(VM_GetProp(self, "hit_frames"))) {
+        VM_SetProp(self, "hit_frames", 13)
+    }
+    if (VM_IsUndefined(VM_GetProp(self, "ice"))) {
+        VM_SetProp(self, "ice", 0)
+    }
+    if (VM_IsUndefined(VM_GetProp(self, "row"))) {
+        VM_SetProp(self, "row", VM_GetProp(self, "grid_row"))
+    }
+    if (VM_IsUndefined(VM_GetProp(self, "burnt"))) {
+        VM_SetProp(self, "burnt", 0)      // 过火盆标记，整发只点一次
+    }
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+
+    // 目标行渐变：y 朝目标行插值，靠近后把 row 切过去（原版 pult / 爱神都是这个套路）
+    tr = VM_GetProp(self, "target_row")
+    tr_ok = 0
+    if (VM_IsUndefined(tr) == 0) {
+        if (tr >= 0) {
+            tr_ok = 1
+        }
+    }
+    if (tr_ok == 1) {
+        gy = VM_GetProp(0, "grid_offset_y")
+        gcs = VM_GetProp(0, "grid_cell_size_y")
+        if (VM_IsUndefined(gy)) {
+            gy = 0
+        }
+        if (VM_IsUndefined(gcs)) {
+            gcs = 116
+        }
+        ty = gy + gcs * tr
+        cy = VM_GetProp(self, "y")
+        dy = ty - cy
+        if (dy < 0) {
+            dy = 0 - dy
+        }
+        // obj_bullet_mod 在跑完本块之后才 y += vy，所以把每帧该走的量写进 vy
+        VM_SetProp(self, "vy", (ty - cy) * 0.15)
+        if (dy < 30) {
+            VM_SetProp(self, "row", tr)
+        }
+    }
+
+    r = VM_GetProp(self, "row")
+    bc = VM_GetProp(self, "grid_col")
+    bx = VM_GetProp(self, "x")
+
+    // ── 过火盆（照原版 Collision_obj_brazier）──
+    // 同一行、挨着子弹的火盆 → 整发只点一次：伤害 × 火盆.atk（火盆 atk 从 2.0 起）、
+    // 换燃烧贴图 spr_fire_bullet、放大到 1.8、放点燃音效；冰弹被点燃后失去减速（图鉴说明）。
+    bu = VM_GetProp(self, "burnt")
+    if (VM_IsUndefined(bu)) {
+        bu = 0
+    }
+    if (bu == 0) {
+        nb = VM_GetInstancesInRange("pb_burn", r, r, bc - 1, bc + 1, "card", "brazier")
+        if (nb > 0) {
+            bz = VM_ArrayGet("pb_burn", 0)
+            batk = VM_GetProp(bz, "atk")
+            if (VM_IsUndefined(batk)) {
+                batk = 2
+            }
+            VM_SetProp(self, "damage", VM_GetProp(self, "damage") * batk)
+            VM_SetProp(self, "burnt", 1)
+            VM_SetProp(self, "sprite_index", "spr_fire_bullet")
+            VM_SetProp(self, "image_xscale", 1.8)
+            VM_SetProp(self, "image_yscale", 1.8)
+            VM_SetProp(self, "ice", 0)
+            VM_PlaySound("snd_bullet_burnt")
+        }
+    }
+
+    // 穿透伤害：只打 row 那一行、子弹周围 3 格内的敌人；命中不销毁
+    dmg = VM_GetProp(self, "damage")
+    hf = VM_GetProp(self, "hit_frames")
+    if (VM_IsUndefined(hf)) {
+        hf = 13
+    }
+    if (hf < 1) {
+        hf = 13
+    }
+    dmg = dmg / hf
+    ice = VM_GetProp(self, "ice")
+    if (VM_IsUndefined(ice)) {
+        ice = 0
+    }
+
+    n = VM_GetInstancesInRange("pb_hit", r, r, bc - 1, bc + 1, "enemy", "")
+    k = 0
+    while (k < n) {
+        e = VM_ArrayGet("pb_hit", k)
+        if (VM_GetProp(e, "hp") > 0) {
+            dx = VM_GetProp(e, "x") - bx
+            if (dx < 0) {
+                dx = 0 - dx
+            }
+            if (dx <= 90) {
+                VM_SetProp(e, "hp", VM_GetProp(e, "hp") - dmg)
+                if (ice > 0) {
+                    it = VM_GetProp(e, "ice_timer")
+                    if (VM_IsUndefined(it)) {
+                        it = 0
+                    }
+                    if (it < ice) {
+                        VM_SetProp(e, "ice_timer", ice)
+                    }
+                }
+            }
+        }
+        k = k + 1
+    }
+}

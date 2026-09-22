@@ -1,0 +1,134 @@
+// 至尊冥神（金卡 · 冥神·哈迪斯最终形态）：五向穿透子弹
+// 按 mod 分支 obj_ghost_god（shape 3）+ obj_ghost_god_bullet_*_m 移植。
+//
+//   Create：attack_anim = 11、idle_anim = 10、flash_speed = 5
+//   Step  ：场上**任意位置**有敌人就开打（原版不限行列），一轮里：
+//             at == cycle - 20 / 15 / 10 / 5 → 各来一次五向齐射（每次都走 event_user(3)）
+//           注意这几个判定原版写的是**固定帧数**，没有乘 flash_speed。
+//           state == 4（睡眠）和冰冻都不打，照原样判。
+//   五向  ：正后（vx -8）、正下（vy +8）、正上（vy -8）、
+//           右下（vx +8*0.766, vy +8*0.6428）、右上（vx +8*0.766, vy -8*0.6428）
+//   子弹  ：最终形态全用 __m 版（次级弹），_m = 1 → 伤害就是 atk，且是**穿透**
+//           （原版每颗只对同一敌人结算一次然后继续飞）→ 管理器 hits = -1。
+//           穿透弹按帧扣血，所以每帧伤害按「穿过一格的总量 = atk」换算：
+//             横向：格子宽 107 / 速度 8 = 13.4 帧  → atk * 8 / 107
+//             纵向：格子高 116 / 速度 8 = 14.5 帧  → atk * 8 / 116
+//             斜向：横向分量 6.128 先出格 = 17.5 帧 → atk * 6.128 / 107
+//   贴图旋转：原版用 image_angle（90=上、180=左、270=下、45=右上、315=右下）转贴图，
+//           管理器不支持旋转，所以预先抽了 5 张旋转版 spr_ghost_god_bullet_3_a*。
+
+_OBJECT_CFG {
+    // 统一写内部 spr 名：内置有就直接用；内置没有才把本地图挂到这个名上。
+    // 本体：21 帧，原点 (82, 136)
+    if (VM_SpriteExists("spr_ghost_god_3") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_ghost_god_3_0.png", 21, 82, 136)
+        VM_AliasSpritePerm("spr_ghost_god_3", "tex/spr_ghost_god_3_0.png")
+    }
+
+    // 子弹（1 帧 46x21，原点在矛尖）：原图朝右，其余 4 个方向是它的旋转版
+    if (VM_SpriteExists("spr_ghost_god_bullet_3_a180") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_ghost_god_bullet_3_a180_0.png", 1, 1, 10)
+        VM_AliasSpritePerm("spr_ghost_god_bullet_3_a180", "tex/spr_ghost_god_bullet_3_a180_0.png")
+    }
+    if (VM_SpriteExists("spr_ghost_god_bullet_3_a270") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_ghost_god_bullet_3_a270_0.png", 1, 10, 45)
+        VM_AliasSpritePerm("spr_ghost_god_bullet_3_a270", "tex/spr_ghost_god_bullet_3_a270_0.png")
+    }
+    if (VM_SpriteExists("spr_ghost_god_bullet_3_a90") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_ghost_god_bullet_3_a90_0.png", 1, 11, 1)
+        VM_AliasSpritePerm("spr_ghost_god_bullet_3_a90", "tex/spr_ghost_god_bullet_3_a90_0.png")
+    }
+    if (VM_SpriteExists("spr_ghost_god_bullet_3_a315") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_ghost_god_bullet_3_a315_0.png", 1, 39, 40)
+        VM_AliasSpritePerm("spr_ghost_god_bullet_3_a315", "tex/spr_ghost_god_bullet_3_a315_0.png")
+    }
+    if (VM_SpriteExists("spr_ghost_god_bullet_3_a45") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_ghost_god_bullet_3_a45_0.png", 1, 40, 9)
+        VM_AliasSpritePerm("spr_ghost_god_bullet_3_a45", "tex/spr_ghost_god_bullet_3_a45_0.png")
+    }
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+
+    VM_SetProp(self, "sprite_index", "spr_ghost_god_3")
+    VM_SetProp(self, "idle_anim", 10)
+    VM_SetProp(self, "attack_anim", 11)
+    VM_SetProp(self, "flash_speed", 5)
+    VM_SetProp(self, "plant_type", "normal")
+
+    VM_SetProp(self, "attack_timer", 0)
+    VM_SetProp(self, "state", 0)
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+
+    if (VM_GetProp(self, "is_frozen") == 1) {
+        exit
+    }
+    if (VM_GetProp(self, "state") == 4) {
+        exit
+    }
+
+    cfs = VM_GetProp(self, "flash_speed")
+    if (VM_GetProp(self, "is_slowdown") == 1) {
+        cfs = cfs * 2
+    }
+
+    at = VM_GetProp(self, "attack_timer")
+    st = 0
+    volley = 0
+
+    // 原版：全屏任意敌人（只看能不能打，不看行列）
+    if (VM_EnemyInRange(0, 99, 0, 99, "") == 1) {
+        cyc = VM_GetProp(self, "cycle")
+
+        if (at <= cyc - 11 * cfs) {
+            at = at + 1
+        } else if (at <= cyc) {
+            at = at + 1
+            st = 1
+        } else {
+            at = 0
+            st = 0
+        }
+
+        // 最终形态四次齐射（原版 shape >= 1 / >= 2 / >= 3 那几段叠出来的）
+        if (at == cyc - 20) {
+            volley = 1
+        }
+        if (at == cyc - 15) {
+            volley = 1
+        }
+        if (at == cyc - 10) {
+            volley = 1
+        }
+        if (at == cyc - 5) {
+            volley = 1
+        }
+    } else {
+        at = 0
+        st = 0
+    }
+
+    if (volley == 1) {
+        atk = VM_GetProp(self, "atk")
+        bx = VM_GetProp(self, "x")
+        by = VM_GetProp(self, "y") - 50
+
+        dh = atk * 8 / 107        // 横向穿格
+        dv = atk * 8 / 116        // 纵向穿格
+        dd = atk * 6.128 / 107    // 斜向（横分量先出格）
+
+        // 正后、正下、正上、右下、右上
+        VM_BulletScreenAdd("spr_ghost_god_bullet_3_a180", 1, 0, 1.8, 1, bx, by, 0 - 8, 0, dh, 0 - 1, 0 - 1, "normal", "", "")
+        VM_BulletScreenAdd("spr_ghost_god_bullet_3_a270", 1, 0, 1.8, 1, bx, by, 0, 8, dv, 0 - 1, 0 - 1, "normal", "", "")
+        VM_BulletScreenAdd("spr_ghost_god_bullet_3_a90", 1, 0, 1.8, 1, bx, by, 0, 0 - 8, dv, 0 - 1, 0 - 1, "normal", "", "")
+        VM_BulletScreenAdd("spr_ghost_god_bullet_3_a315", 1, 0, 1.8, 1, bx, by, 6.128, 5.1424, dd, 0 - 1, 0 - 1, "normal", "", "")
+        VM_BulletScreenAdd("spr_ghost_god_bullet_3_a45", 1, 0, 1.8, 1, bx, by, 6.128, 0 - 5.1424, dd, 0 - 1, 0 - 1, "normal", "", "")
+    }
+
+    VM_SetProp(self, "attack_timer", at)
+    VM_SetProp(self, "state", st)
+}

@@ -1,0 +1,5 @@
+{
+  "name": "穿透弹",
+  "description": "自写 mod 子弹：直线飞行、命中不消失（穿透），可飞向指定行",
+  "sprite": "spr_pierce_bullet"
+}

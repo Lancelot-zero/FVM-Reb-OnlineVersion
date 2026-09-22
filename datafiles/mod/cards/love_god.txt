@@ -1,0 +1,204 @@
+// 至尊爱神（金卡 · 爱神最终形态）：本行及上下两行各打一发
+// 按 mod 分支 obj_love_god（shape 3）+ obj_love_god_bullet / _bullet_super 移植。
+//
+//   Create：attack_anim = 13、idle_anim = 15、flash_speed = 5、super_bullet = 4
+//   Step  ：本行及上下相邻行、自己前方有敌人就开打。attack_timer 每帧 +1（原版没有攻击动画窗口），
+//             at == cycle - 7*flash_speed 且 super_bullet >= 4 → 三行各一发超级子弹，计数清零
+//             at == cycle - 5*flash_speed → 三行各一发普通子弹，计数 +1
+//             at == cycle - 3*flash_speed → 三行各一发普通子弹
+//             at == cycle - 1*flash_speed → 三行各一发普通子弹
+//             at > cycle → 归零
+//           一轮 3 次齐射共 9 发 + 每 4 轮一轮超级（首轮就有）。
+//           state 只在「-7fs / -5fs 那两次」被置 1，一直到 at > cycle 才归 0（原版如此）。
+//   子弹  ：普通弹命中一个敌人就 instance_destroy（hits = 1，伤害就是 atk）；
+//           超级弹是 pierce（hits = -1），每帧伤害 = 6*atk 穿一格的总量 → 6*atk*8/107。
+//   三行定位：原版子弹从 (x+40, y-75±20) 出生，然后纵向 lerp 到目标行的
+//             target_y = grid_offset_y + grid_cell_size_y * target_row（格子顶边）。
+//             管理器没有 lerp，所以这里直接按目标行的**格子中心**出生、直线飞过去：
+//             row = floor((y - grid_offset_y) / grid_cell_size_y)，中心才稳稳算在这一行。
+//             目标行越界时（最上行往上 / 最下行往下）原版会改打本行并把 x 退回 20。
+
+_OBJECT_CFG {
+    // 统一写内部 spr 名：内置有就直接用；内置没有才把本地图挂到这个名上。
+    // 本体：29 帧，原点 (70, 90)
+    if (VM_SpriteExists("spr_love_god_3") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_love_god_3_0.png", 29, 70, 90)
+        VM_AliasSpritePerm("spr_love_god_3", "tex/spr_love_god_3_0.png")
+    }
+
+    // 普通子弹：5 帧 103x82，原点 (78, 45)
+    if (VM_SpriteExists("spr_love_god_bullet_3") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_love_god_bullet_3_0.png", 5, 78, 45)
+        VM_AliasSpritePerm("spr_love_god_bullet_3", "tex/spr_love_god_bullet_3_0.png")
+    }
+
+    // 超级弹的贴图不在这里：它走 mod 子弹 bullets/pierce_bullet（图在 bullets/tex/，
+    // 由那颗子弹自己的 _OBJECT_CFG 加载），这样才是原版「超级弹穿透」的行为。
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+
+    VM_SetProp(self, "sprite_index", "spr_love_god_3")
+    VM_SetProp(self, "idle_anim", 15)
+    VM_SetProp(self, "attack_anim", 13)
+    VM_SetProp(self, "flash_speed", 5)
+    VM_SetProp(self, "plant_type", "normal")
+
+    VM_SetProp(self, "attack_timer", 0)
+    VM_SetProp(self, "state", 0)
+    VM_SetProp(self, "super_bullet", 4)
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+
+    if (VM_GetProp(self, "is_frozen") == 1) {
+        exit
+    }
+
+    fs = VM_GetProp(self, "flash_speed")
+    r = VM_GetProp(self, "grid_row")
+    c = VM_GetProp(self, "grid_col")
+    at = VM_GetProp(self, "attack_timer")
+    volley = 0
+    sup = 0
+    st = 0
+    st_set = 0
+
+    // 原版：本行 grid_row-1 ~ grid_row+1、自己那一格往右有可打目标才开打
+    if (VM_EnemyInRange(r - 1, r + 1, c, 99, "") == 1) {
+        cyc = VM_GetProp(self, "cycle")
+        sb = VM_GetProp(self, "super_bullet")
+        if (VM_IsUndefined(sb)) {
+            sb = 4
+        }
+
+        at = at + 1
+
+        if (at == cyc - 7 * fs) {
+            if (sb >= 4) {
+                sup = 1
+                sb = 0
+                st = 1
+                st_set = 1
+            }
+        }
+        if (at == cyc - 5 * fs) {
+            volley = 1
+            st = 1
+            st_set = 1
+            sb = sb + 1
+        }
+        if (at == cyc - 3 * fs) {
+            volley = 1
+        }
+        if (at == cyc - 1 * fs) {
+            volley = 1
+        }
+
+        if (at > cyc) {
+            at = 0
+            st = 0
+            st_set = 1
+        }
+
+        VM_SetProp(self, "super_bullet", sb)
+    } else {
+        at = 0
+        st = 0
+        st_set = 1
+    }
+
+    // 发射：用原版【双向水管】的子弹对象 obj_waterpipe_bullet。
+    // 它的 Step 自带 target_row 渐变（y 向目标行插值，靠近后把 row 设成 target_row），
+    // 正好就是爱神「上中下三行各一发、子弹自己飞到那一行」要的行为；
+    // 命中判定也是它自己做的（同一行 + 命中即消失）。
+    if (volley == 1) {
+        atk = VM_GetProp(self, "atk")
+        bx = VM_GetProp(self, "x")
+        by = VM_GetProp(self, "y") - 75
+        grows = VM_GetProp(0, "grid_rows")
+        if (VM_IsUndefined(grows)) {
+            grows = 6
+        }
+
+        VM_PlaySound("snd_shot")
+
+        // 三条线：上一行、本行、下一行；越界就改打本行并把出生点往回收 20
+        lane = 0 - 1
+        while (lane <= 1) {
+            tr = r + lane
+            sx = bx + 40
+            bad = 0
+            if (tr < 0) {
+                bad = 1
+            }
+            if (tr >= grows) {
+                bad = 1
+            }
+            if (bad == 1) {
+                tr = r
+                sx = bx + 20
+            }
+
+            // 普通弹：原版 obj_love_god_bullet 是「命中即消失」（单体），
+            // 所以继续用原版双向水管的子弹对象换皮，不走穿透弹。
+            b = VM_CreateInstance("obj_waterpipe_bullet", sx, by)
+            VM_SetProp(b, "sprite_index", "spr_love_god_bullet_3")
+            VM_SetProp(b, "damage", atk)
+            VM_SetProp(b, "move_speed", 8)
+            VM_SetProp(b, "row", r)
+            VM_SetProp(b, "target_row", tr)
+
+            lane = lane + 1
+        }
+    }
+
+    // 超级弹：同三行，贴图换 _p、伤害 6*atk
+    if (sup == 1) {
+        atk = VM_GetProp(self, "atk")
+        bx = VM_GetProp(self, "x")
+        by = VM_GetProp(self, "y") - 75
+        grows = VM_GetProp(0, "grid_rows")
+        if (VM_IsUndefined(grows)) {
+            grows = 6
+        }
+
+        lane = 0 - 1
+        while (lane <= 1) {
+            tr = r + lane
+            sx = bx + 40
+            bad = 0
+            if (tr < 0) {
+                bad = 1
+            }
+            if (tr >= grows) {
+                bad = 1
+            }
+            if (bad == 1) {
+                tr = r
+                sx = bx + 20
+            }
+
+            // 超级弹：走 mod 子弹 bullets/pierce_bullet（穿透，命中不消失）
+            // 贴图用它自带的 spr_pierce_bullet，所以这里不覆盖 sprite_index
+            s = VM_CreateInstance("obj_bullet_mod", sx, by)
+            VM_SetProp(s, "mod_type", "pierce_bullet")
+            VM_SetProp(s, "sprite_index", "spr_pierce_bullet")   // ⚠️ 必须显式设：sprite_index 永远"已定义"（没设= -1），
+                                                                  //    子弹里用 VM_IsUndefined 兜底是不生效的
+            VM_SetProp(s, "damage", 6 * atk)
+            VM_SetProp(s, "vx", 8)          // ⚠️ 必须显式设：obj_bullet_mod 自带 vx=0/vy=0
+            VM_SetProp(s, "vy", 0)
+            VM_SetProp(s, "row", r)
+            VM_SetProp(s, "target_row", tr)
+
+            lane = lane + 1
+        }
+    }
+
+    VM_SetProp(self, "attack_timer", at)
+    if (st_set == 1) {
+        VM_SetProp(self, "state", st)
+    }
+}

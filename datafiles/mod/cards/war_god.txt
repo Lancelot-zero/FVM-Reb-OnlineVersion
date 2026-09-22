@@ -1,0 +1,168 @@
+// 至尊战神（金卡 · 战神·阿瑞斯最终形态）：前后各一发，每 4 轮来一发超级子弹
+// 按 mod 分支 obj_war1_god（shape 3）+ obj_war_god_bullet / obj_war_god_bullet_super 移植。
+//
+//   Create：attack_anim = 10、idle_anim = 11、flash_speed = 5、super_bullet = 4
+//   Step  ：本行**任意位置**（前后都算）有敌人就开打，一轮里：
+//             at == cycle - 7*flash_speed  且 super_bullet >= 4 → 前后各一发超级子弹，计数清零
+//             at == cycle - 5*flash_speed  → 前后各一发普通子弹，计数 +1
+//             at == cycle - 4 / 3 / 2 / 1 * flash_speed → 各一次前后齐射
+//           也就是：每轮 5 次齐射（10 发普通），每隔 4 轮多一轮超级（首轮立即就有）。
+//           计数从 4 起，所以第 1 轮打超级、第 5、9…轮再打。
+//   子弹  ：原版 obj_war_god_bullet 直线飞（自带 move_speed ±8），命中一个敌人就 instance_destroy，
+//           缩放 1.6。交给弹幕管理器：
+//             · 伤害计数 hits = 1 → 打一个就移除，和原版「命中即消失」等价，
+//               所以每帧伤害直接填原版那一下的伤害（普通 atk、超级 12*atk），不用按帧换算
+//             · 存活 life = -1（不自动到期，出界由管理器删）
+//             · 类型 "normal"（原弹 target_type = "normal"）
+//   后向子弹：原版用 image_angle = 180 把贴图倒过来。管理器不支持旋转，
+//             所以另外抽了一份 180° 旋转的贴图 spr_*_r180 专给后向子弹用（原点也翻了）。
+//   一个原版贴图 bug：obj_war_god_bullet_super 的默认贴图是 spr_war_god_bullet_f
+//             （40x40 的「燃烧普通弹」），而真正的超级弹 spr_war_god_bullet_s（57x57）
+//             从没被引用过。这里按意图用 spr_war_god_bullet_s。
+
+_OBJECT_CFG {
+    // 统一写内部 spr 名：内置有就直接用；内置没有才把本地图挂到这个名上。
+    // 本体：23 帧，原点 (51, 108)
+    if (VM_SpriteExists("spr_war_god_3") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_war_god_3_0.png", 23, 51, 108)
+        VM_AliasSpritePerm("spr_war_god_3", "tex/spr_war_god_3_0.png")
+    }
+
+    // 普通子弹：3 帧 57x57，原点 (28, 28)
+    // （后向那一发不用单独贴图：直接用真实例的 image_angle = 180，跟原版双向水管一样）
+    if (VM_SpriteExists("spr_war_god_bullet") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_war_god_bullet_0.png", 3, 28, 28)
+        VM_AliasSpritePerm("spr_war_god_bullet", "tex/spr_war_god_bullet_0.png")
+    }
+
+    // 超级子弹：3 帧 57x57
+    if (VM_SpriteExists("spr_war_god_bullet_s") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_war_god_bullet_s_0.png", 3, 28, 28)
+        VM_AliasSpritePerm("spr_war_god_bullet_s", "tex/spr_war_god_bullet_s_0.png")
+    }
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+
+    VM_SetProp(self, "sprite_index", "spr_war_god_3")
+    VM_SetProp(self, "idle_anim", 11)
+    VM_SetProp(self, "attack_anim", 10)
+    VM_SetProp(self, "flash_speed", 5)
+    VM_SetProp(self, "plant_type", "normal")
+
+    VM_SetProp(self, "attack_timer", 0)
+    VM_SetProp(self, "state", 0)
+    VM_SetProp(self, "super_bullet", 4)
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+
+    if (VM_GetProp(self, "is_frozen") == 1) {
+        exit
+    }
+
+    fs = VM_GetProp(self, "flash_speed")
+    cfs = fs
+    if (VM_GetProp(self, "is_slowdown") == 1) {
+        cfs = cfs * 2
+    }
+
+    at = VM_GetProp(self, "attack_timer")
+    r = VM_GetProp(self, "grid_row")
+    st = 0
+    volley = 0
+    sup = 0
+
+    // 原版：本行任意列有敌人就开打（前后都算）
+    if (VM_EnemyInRange(r, r, 0, 99, "") == 1) {
+        cyc = VM_GetProp(self, "cycle")
+        sb = VM_GetProp(self, "super_bullet")
+        if (VM_IsUndefined(sb)) {
+            sb = 4
+        }
+
+        if (at <= cyc - 10 * cfs) {
+            at = at + 1
+        } else if (at <= cyc) {
+            at = at + 1
+            st = 1
+        } else {
+            at = 0
+            st = 0
+        }
+
+        if (at == cyc - 7 * fs) {
+            if (sb >= 4) {
+                sup = 1
+                sb = 0
+            }
+        }
+        if (at == cyc - 5 * fs) {
+            volley = 1
+            sb = sb + 1
+        }
+        if (at == cyc - 4 * fs) {
+            volley = 1
+        }
+        if (at == cyc - 3 * fs) {
+            volley = 1
+        }
+        if (at == cyc - 2 * fs) {
+            volley = 1
+        }
+        if (at == cyc - 1 * fs) {
+            volley = 1
+        }
+
+        VM_SetProp(self, "super_bullet", sb)
+    } else {
+        at = 0
+        st = 0
+    }
+
+    // 发射：直接用原版【双向水管】的子弹对象 obj_waterpipe_bullet（同一套「前后各一发、
+    // 后向 image_angle = 180、命中即消失、伤害走敌人自己的结算」），只换贴图和伤害。
+    // 原版双向水管就是这么写的：inst.damage / move_speed = ±8 / row = grid_row。
+    if (volley == 1) {
+        atk = VM_GetProp(self, "atk")
+        bx = VM_GetProp(self, "x")
+        by = VM_GetProp(self, "y") - 50
+
+        b1 = VM_CreateInstance("obj_waterpipe_bullet", bx + 40, by)
+        VM_SetProp(b1, "sprite_index", "spr_war_god_bullet")
+        VM_SetProp(b1, "damage", atk)
+        VM_SetProp(b1, "move_speed", 8)
+        VM_SetProp(b1, "row", r)
+
+        b2 = VM_CreateInstance("obj_waterpipe_bullet", bx - 40, by)
+        VM_SetProp(b2, "sprite_index", "spr_war_god_bullet")
+        VM_SetProp(b2, "damage", atk)
+        VM_SetProp(b2, "move_speed", 0 - 8)
+        VM_SetProp(b2, "row", r)
+        VM_SetProp(b2, "image_angle", 180)
+    }
+
+    if (sup == 1) {
+        atk = VM_GetProp(self, "atk")
+        bx = VM_GetProp(self, "x")
+        by = VM_GetProp(self, "y") - 50
+
+        s1 = VM_CreateInstance("obj_waterpipe_bullet", bx + 40, by)
+        VM_SetProp(s1, "sprite_index", "spr_war_god_bullet_s")
+        VM_SetProp(s1, "damage", 12 * atk)
+        VM_SetProp(s1, "move_speed", 8)
+        VM_SetProp(s1, "row", r)
+
+        s2 = VM_CreateInstance("obj_waterpipe_bullet", bx - 40, by)
+        VM_SetProp(s2, "sprite_index", "spr_war_god_bullet_s")
+        VM_SetProp(s2, "damage", 12 * atk)
+        VM_SetProp(s2, "move_speed", 0 - 8)
+        VM_SetProp(s2, "row", r)
+        VM_SetProp(s2, "image_angle", 180)
+    }
+
+    VM_SetProp(self, "attack_timer", at)
+    VM_SetProp(self, "state", st)
+}

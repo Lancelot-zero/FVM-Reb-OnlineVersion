@@ -1,5 +1,5 @@
 // 冥王战镰：超级武器
-// 语法依据 mod/docs/help.md：不支持 && ||；花括号必写；一行一句
+// 语法依据 mod/docs/help.md：花括号必写；一行一句（&& / || 是支持的，本文件用嵌套 if 只是顺手）
 //
 // 动画：武器对象靠 idle_anim / attack_anim / flash_speed 驱动 image_index，
 //       三者默认为 0 会把形象锁在第 0 帧，必须显式设置。
