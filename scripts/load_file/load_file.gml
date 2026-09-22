@@ -55,6 +55,24 @@ function load_file(file_slot) {
 				global.save_data.version = 1.8
 			}
 		}
+		// 卡池里已不存在的卡（mod 卡被删掉或改名后留下的孤儿记录）不进卡表：
+		// 它们会在强化实验室/包裹等界面画成空框幽灵——点得中、能强化，但没有图没花费。
+		// 只放进内存里的 global.save_orphan_cards，**不动存档结构**；
+		// save_file 写盘时会把它们并回 unlocked_cards，所以存档内容和以前一样。
+		global.save_orphan_cards = [];
+		if (is_array(global.save_data.unlocked_cards)) {
+			var _uc   = global.save_data.unlocked_cards;
+			var _keep = [];
+			for (var _i = 0; _i < array_length(_uc); _i++) {
+				if (deck_get_card_data(_uc[_i].id, _uc[_i].shape) != noone) array_push(_keep, _uc[_i]);
+				else array_push(global.save_orphan_cards, _uc[_i]);
+			}
+			if (array_length(global.save_orphan_cards) > 0) {
+				show_debug_message("[save] 有 " + string(array_length(global.save_orphan_cards))
+				                 + " 张卡未注册，本次会话内不显示（存档不动，写档时原样写回）");
+			}
+			global.save_data.unlocked_cards = _keep;
+		}
         return true;
     } catch(e) {
         show_debug_message("存档解析错误: " + string(e));
@@ -64,6 +82,7 @@ function load_file(file_slot) {
 
 function reset_file(file_slot){
 	//重置到初始存档
+	global.save_orphan_cards = [];   // 新档不带上一个档摘出来的未注册卡
 	global.save_data = {
             "version": 1.8,
             "player": {
