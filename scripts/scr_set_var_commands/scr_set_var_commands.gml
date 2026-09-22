@@ -633,7 +633,7 @@ function sh_vmcall(args) {
         if (!is_real(_v) || string(_v) == "NaN") return "[vmcall] 参数必须是数字(内存地址): " + args[_i];
         array_push(_call_args, _v);
     }
-    return "[vmcall] " + VM_CallFunc(_func_ref, _call_args);
+    return "[vmcall] " + VM_CallFuncRaw(_func_ref, _call_args);
 }
 
 function meta_vmcall() {

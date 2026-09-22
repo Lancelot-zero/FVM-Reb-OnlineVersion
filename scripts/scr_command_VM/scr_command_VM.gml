@@ -503,6 +503,35 @@ function VM_GetLoadedSpriteName(index_addr) {
     return global._VM_loaded_sprite_indices[index];
 }
 
+/// @function VM_SpriteExists(name)
+/// @desc 判断一张贴图现在**真的可用**吗（而不是 get_load_sprite 塞的空白占位图）。
+///       查的顺序和贴图解析链一致：项目资源 → VM 临时缓存 → VM 永久缓存 → 全局贴图缓存。
+///       坑：get_load_sprite 找不到时会塞一张空白图并且**永不失败**，所以光看它有没有返回
+///       分不出真假；这里对全局缓存额外查 global._sprite_state 的 empty_load 标记。
+///       （VM_LoadSprite 的返回值不能当存在性用：它只查临时缓存 + 本地文件，
+///         永久缓存里有的、本地文件不在的贴图它照样返回 -1）
+/// @return 1 = 可用，0 = 不可用（不存在 / 只是占位图 / 名字为空）
+function VM_SpriteExists(name_addr) {
+    var _name = vm_arg(name_addr);
+    if (!is_string(_name) || _name == "") return 0;
+    // ① 项目内置资源
+    var _native = asset_get_index(_name);
+    if (_native != -1 && sprite_exists(_native)) return 1;
+    // ② VM 临时缓存（bin 专属贴图）/ ③ VM 永久缓存（VM_LoadSpritePerm_Ex）
+    if (ds_map_exists(global._VM_sprite_temp_cache, _name)) {
+        if (sprite_exists(global._VM_sprite_temp_cache[? _name])) return 1;
+    }
+    if (ds_map_exists(global._VM_sprite_cache, _name)) {
+        if (sprite_exists(global._VM_sprite_cache[? _name])) return 1;
+    }
+    // ④ 全局贴图缓存：这里混着真图和占位图，靠 _sprite_state 区分
+    if (ds_map_exists(global._sprite_cache, _name)) {
+        var _state = ds_map_exists(global._sprite_state, _name) ? global._sprite_state[? _name] : empty_load;
+        if (_state != empty_load && sprite_exists(global._sprite_cache[? _name])) return 1;
+    }
+    return 0;
+}
+
 /// @function VM_SetDrawSlot(slot, sprite, x, y, alpha)
 /// @param slot   槽位索引 0~63
 /// @param sprite  贴图名(string)或精灵ID(int)，空/""/-1/noone 时清除
@@ -3249,12 +3278,13 @@ function VM_DumpStrings() {
     }
 }
 
-/// @function VM_CallFunc(_func_id, _args)
-/// @desc 从 shell 直接调用已注册的 VM 函数，参数为内存地址（与字节码 CALL 一致）
+/// @function VM_CallFuncRaw(_func_id, _args)
+/// @desc **只给控制台 vmcall 用**：从已注册的 VM 函数表里按编号/名字调，参数为内存地址。
+///       （脚本侧要按名字调用请用 VM_CallFunc，它走的是独立字典，和这里无关）
 /// @param {Real|String} _func_id  函数 ID（见 VM_RegisterFunction 注册顺序）或函数名（如 "VM_SpawnEnemy"）
 /// @param {Array} _args  参数数组，每个元素是内存地址
 /// @returns {String} 调用结果描述
-function VM_CallFunc(_func_id, _args) {
+function VM_CallFuncRaw(_func_id, _args) {
     var _vm = global.__vm;
     // 支持按函数名调用
     if (is_string(_func_id)) {
@@ -3276,6 +3306,84 @@ function VM_CallFunc(_func_id, _args) {
     var _name = script_get_name(_fn);
     shell_print("[VM] call func" + string(_func_id) + " (" + _name + ") args[" + string(array_length(_args)) + "] = " + string(_result));
     return "func" + string(_func_id) + " (" + _name + ") = " + string(_result);
+}
+
+/// @function VM_CallFunc(name, 参数1, ..., 参数15)
+/// @desc 按名字调用**独立字典** global._VM_call_dict 里的函数（不是 VM 注册表，也和控制台 vmcall 无关）。
+///       名字对编译器只是字符串，编译器不检查、不校验参数——所以往字典里加函数不用改编译器、
+///       不用重编编译器、不用跑编辑器 sync。
+///       字典条目：{ fn: 函数引用, raw: 收地址/收真值, desc: 说明 }，见本文件末尾的字典初始化。
+///         raw = false → 目标是 VM 函数（收内存地址），把地址原样转发
+///         raw = true  → 目标是普通 GML 函数（收真值），转发前先用 vm_arg 把地址转成值
+/// @return 被调函数的返回值；名字不在字典里返回 undefined（同时打一条调试输出）
+function VM_CallFunc(name_addr, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o) {
+    var _name = vm_arg(name_addr);
+    if (!variable_global_exists("_VM_call_dict")) return undefined;
+    var _dict = global._VM_call_dict;
+    if (!ds_map_exists(_dict, _name)) {
+        show_debug_message("[VM_CallFunc] 字典里没有这个函数: " + string(_name) + "（VM_FuncExists 可先判断）");
+        return undefined;
+    }
+    // 收集参数：它们是内存地址，遇到 undefined 说明后面没传了（和 VM_ShellPrint 同一个套路）
+    var _slots = [a, b, c, d, e, f, g, h, i, j, k, l, m, n, o];
+    var _addrs = [];
+    for (var _i = 0; _i < 15; _i++) {
+        if (is_undefined(_slots[_i])) break;
+        array_push(_addrs, _slots[_i]);
+    }
+    var _ent = _dict[? _name];
+    var _args = _addrs;
+    if (_ent[$ "raw"]) {          // 普通 GML 函数：地址 → 值
+        _args = [];
+        for (var _i = 0; _i < array_length(_addrs); _i++) {
+            array_push(_args, vm_arg(_addrs[_i]));
+        }
+    }
+    return script_execute_ext(_ent[$ "fn"], _args);
+}
+
+/// @function VM_FuncExists(name)
+/// @return 1 = 字典里有这个函数，0 = 没有
+/// @desc VM_CallFunc 的配套：调之前先问一句
+function VM_FuncExists(name_addr) {
+    var _name = vm_arg(name_addr);
+    if (!variable_global_exists("_VM_call_dict")) return 0;
+    return ds_map_exists(global._VM_call_dict, _name) ? 1 : 0;
+}
+
+/// @function VM_FuncDesc(name)
+/// @return 字典里登记的该函数说明字符串；没登记或没写说明返回 ""
+/// @desc VM_CallFunc 的配套：看这个函数是干什么的、参数怎么排
+function VM_FuncDesc(name_addr) {
+    var _name = vm_arg(name_addr);
+    if (!variable_global_exists("_VM_call_dict")) return "";
+    if (!ds_map_exists(global._VM_call_dict, _name)) return "";
+    var _ent = global._VM_call_dict[? _name];
+    if (!is_struct(_ent) || !variable_struct_exists(_ent, "desc")) return "";
+    return _ent[$ "desc"];
+}
+
+/// @function VM_CanPlace(card_id, col, row)
+/// @desc 按游戏正规种植规则判断某格能不能种这张卡：地形、障碍、水域/莲叶、护盾层、底座卡、
+///       替换开关全都算进去（就是玩家手牌点下去时走的那套规则）。
+/// @return 1 = 能种，0 = 不能种
+function VM_CanPlace(card_id_addr, col_addr, row_addr) {
+    var _id  = vm_arg(card_id_addr);
+    var _col = vm_arg(col_addr);
+    var _row = vm_arg(row_addr);
+    if (!is_string(_id) || _id == "") return 0;
+    // 卡池数据：plant_type / feature_type / target_card 是判定要用的三项
+    var _shape = 0;
+    var _save_info = get_card_info_simple(_id);
+    if (is_struct(_save_info)) _shape = _save_info[$ "shape"] ?? 0;
+    var _card_data = deck_get_card_data(_id, _shape);
+    if (is_undefined(_card_data) || _card_data == noone) return 0;
+    var _world = get_world_position_from_grid(_col, _row);
+    var _ok = can_place_at_position(_world.x, _world.y,
+                                    _card_data[? "plant_type"],
+                                    _card_data[? "feature_type"],
+                                    _card_data[? "target_card"]);
+    return _ok ? 1 : 0;
 }
 
 /// @function VM_SetMem(_addr, _value, _type = "")
@@ -3663,31 +3771,42 @@ global._VM_ban_weapon        = false;
 global._VM_ban_super_weapon  = false;
 global._VM_ban_shield        = false;
 
-/// @function VM_GetCardSaveInfo(card_id, arr_name)
-/// @param card_id  卡片 id
-/// @param arr_name 命名数组名（先清空再写）
-/// @return 写入的数量（3=成功；-1=卡未解锁 / 名字为空，此时数组是空的）
-/// @desc 把这张卡**存档里**的外形/星级/技能写进命名数组：
-///         数组[0] = shape
-///         数组[1] = level
-///         数组[2] = skill
-///       复制类卡用：先 VM_GetProp(0, "prev_place_id") 拿上一张卡的 id，
-///       再用本函数读出它的存档外形/星级/技能，原样丢给 VM_SpawnPlant。
-///       （原版 obj_magic_chicken 走的是 get_card_info_simple(prev_place_id).shape/.level）
-function VM_GetCardSaveInfo(card_id_addr, arr_addr) {
+/// @function VM_GetCardProp(card_id, prop)
+/// @param card_id 卡片 id（字符串）
+/// @param prop    属性名，见下
+/// @return 属性值；卡不存在 / 属性名不认识 → undefined（脚本用 VM_IsUndefined 判断）
+/// @desc 按属性名读一张卡的数据，单值返回（不再往命名数组里塞）。
+///       存档类（走 get_card_info_simple，是玩家自己那张卡的进度）：
+///         "shape" "level" "skill" "max_level" "max_shape"
+///       卡池类（走 deck_get_card_data，是卡片本身的配置，与存档无关）：
+///         "plant_type" "feature_type" "target_card" "cost" "cooldown"
+///       复制类卡用：VM_GetCardProp(上一张卡id, "shape" / "level" / "skill") 读出来
+///       原样丢给 VM_SpawnPlant；"plant_type" / "feature_type" 用来判格子能不能种。
+function VM_GetCardProp(card_id_addr, prop_addr) {
     var _id   = vm_arg(card_id_addr);
-    var _name = vm_arg(arr_addr);
-    var _vm = global.__vm;
-    if (!ds_map_exists(_vm.arrays, _name)) ds_map_add(_vm.arrays, _name, []);
-    var _arr = _vm.arrays[? _name];
-    array_resize(_arr, 0);
-    if (!is_string(_id) || _id == "") return -1;
-    var _info = get_card_info_simple(_id);
-    if (!is_struct(_info)) return -1;
-    array_push(_arr, _info[$ "shape"] ?? 0);
-    array_push(_arr, _info[$ "level"] ?? 0);
-    array_push(_arr, _info[$ "skill"] ?? 0);
-    return 3;
+    var _prop = vm_arg(prop_addr);
+    if (!is_string(_id) || _id == "" || !is_string(_prop)) return undefined;
+
+    // 存档类
+    if (_prop == "shape" || _prop == "level" || _prop == "skill"
+     || _prop == "max_level" || _prop == "max_shape") {
+        var _info = get_card_info_simple(_id);
+        if (!is_struct(_info)) return undefined;
+        return _info[$ _prop];
+    }
+
+    // 卡池类：先拿存档里的 shape 才能定位到对应形态
+    if (_prop == "plant_type" || _prop == "feature_type" || _prop == "target_card"
+     || _prop == "cost" || _prop == "cooldown") {
+        var _shape = 0;
+        var _save_info = get_card_info_simple(_id);
+        if (is_struct(_save_info)) _shape = _save_info[$ "shape"] ?? 0;
+        var _card_data = deck_get_card_data(_id, _shape);
+        if (is_undefined(_card_data) || _card_data == noone) return undefined;
+        return _card_data[? _prop];
+    }
+
+    return undefined;
 }
 
 /// @function VM_DestroyInstance(inst)
@@ -3966,7 +4085,12 @@ VM_RegisterFunction(global.__vm, VM_BulletScreenAdd);    // 116
 VM_RegisterFunction(global.__vm, VM_DrawSpriteExt);      // 117
 VM_RegisterFunction(global.__vm, VM_RunStep);            // 118
 VM_RegisterFunction(global.__vm, VM_DestroyInstance);    // 119
-VM_RegisterFunction(global.__vm, VM_GetCardSaveInfo);    // 120
+VM_RegisterFunction(global.__vm, VM_GetCardProp);    // 120
+VM_RegisterFunction(global.__vm, VM_CanPlace);       // 121
+VM_RegisterFunction(global.__vm, VM_CallFunc);       // 122
+VM_RegisterFunction(global.__vm, VM_FuncExists);     // 123
+VM_RegisterFunction(global.__vm, VM_FuncDesc);       // 124
+VM_RegisterFunction(global.__vm, VM_SpriteExists);   // 125
 ds_map_add(global._VM_remote_funcs, "VM_SwapPlants", VM_SwapPlants);
 ds_map_add(global._VM_remote_funcs, "VM_SwapPlantRects", VM_SwapPlantRects);
 ds_map_add(global._VM_remote_funcs, "VM_CompactColumn", VM_CompactColumn);
@@ -3977,6 +4101,23 @@ ds_map_add(global._VM_remote_funcs, "VM_SetCardProp", VM_SetCardProp);
 ds_map_add(global._VM_remote_funcs, "VM_SetEnemyProp", VM_SetEnemyProp);
 ds_map_add(global._VM_remote_funcs, "VM_ApplyPlantLevel", VM_ApplyPlantLevel);
 ds_map_add(global._VM_remote_funcs, "VM_SetTimeLimit", VM_SetTimeLimit);
+
+// ══════════ VM_CallFunc 的可调用字典（单独维护）══════════
+// 和 VM 注册表**无关**——这里没有自动收录。没写进来的，VM_CallFunc 就调不到，
+// 所以这是一份明确的清单，想看能调什么、直接看这几行就行。
+// 加一个「能被 VM_CallFunc 按名字调用」的函数：
+//     ① 写一个 GML 函数（VM_ 开头或随便叫什么都行，**不用注册、不占 VM 函数号**）
+//     ② 在下面加一行
+// 因为不占函数号，所以不用改 compiler_defs.h、不用重编编译器、不用跑编辑器 sync_vmfuncs.py。
+// 条目格式： 名字 → { fn: 函数引用, raw: 收地址还是收真值, desc: 说明（VM_FuncDesc 会返回它） }
+//     raw = false → VM 那套：函数用 vm_read_mem(global.__vm, addr) 收内存地址（VM_* 全是这种）
+//     raw = true  → 普通 GML 函数：直接收真值，参数就是普通参数，写起来不用管地址
+global._VM_call_dict = ds_map_create();
+
+// ── 清单（想开放哪个写哪个）──
+// 示例：ds_map_add(global._VM_call_dict, "VM_SpawnPlant", { fn: VM_SpawnPlant, raw: false, desc: "种下植物（卡名,列,行,形态,星级,技能）" });
+// 示例：ds_map_add(global._VM_call_dict, "my_helper",    { fn: my_helper,    raw: true,  desc: "my_helper(a, b) → 返回 ..." });
+
 global._sync_vm_bin_buf = undefined;
 
 

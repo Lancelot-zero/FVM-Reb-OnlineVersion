@@ -7,7 +7,11 @@
 //        同一列（上/下）  ← priority 0
 //        同一行（左/右）  ← priority 1
 //        其余            ← priority 2，按 row 升序、同一行内 col 升序
-//   ③ 坐标要在场内、且该格没有卡片，才种；凑满 5 张就停
+//   ③ 每格都用 VM_CanPlace(目标卡, 列, 行) 按**游戏正规种植规则**判定：
+//        地形、障碍、水域/莲叶、护盾层、底座卡全都算，跟自己手牌点下去时一样
+//      复制期间临时把 global.replace_placement 关掉，所以只会种在真正空得下的地方，
+//      不会把已有的卡顶掉（obj_wooden_plate 也是这个套路）；用完还原
+//      坐标要在场内；凑满 5 张就停
 //
 // ── 目标来源 ──
 //   原版读 global.last_placed_card_id / _shape，这两个全局在当前 main 分支**不存在**。
@@ -152,14 +156,26 @@ _OBJECT_STEP {
             if (bad == 1) {
                 VM_ShellPrint("cg @70 SKIP: 没有目标或坐标无效")
             } else {
-                // 目标卡存档里的外形 / 星级 / 技能（-1 = 读不到，就用 0 / 0 / 0）
-                sh = 0
-                lv = 0
-                sk = 0
-                if (VM_GetCardSaveInfo(tg, "cg_info") == 3) {
-                    sh = VM_ArrayGet("cg_info", 0)
-                    lv = VM_ArrayGet("cg_info", 1)
-                    sk = VM_ArrayGet("cg_info", 2)
+                // 目标卡的属性：存档里的外形/星级/技能 + 卡池里的层/特性
+                sh = VM_GetCardProp(tg, "shape")
+                lv = VM_GetCardProp(tg, "level")
+                sk = VM_GetCardProp(tg, "skill")
+                pt = VM_GetCardProp(tg, "plant_type")
+                ft = VM_GetCardProp(tg, "feature_type")
+                if (VM_IsUndefined(sh)) {
+                    sh = 0
+                }
+                if (VM_IsUndefined(lv)) {
+                    lv = 0
+                }
+                if (VM_IsUndefined(sk)) {
+                    sk = 0
+                }
+                if (VM_IsUndefined(pt)) {
+                    pt = "normal"
+                }
+                if (VM_IsUndefined(ft)) {
+                    ft = "normal"
                 }
                 gr = VM_GetProp(0, "grid_rows")
                 gc = VM_GetProp(0, "grid_cols")
@@ -169,10 +185,25 @@ _OBJECT_STEP {
                 if (VM_IsUndefined(gc)) {
                     gc = 99
                 }
-                VM_ShellPrint("cg @70 sh=", sh, " lv=", lv, " sk=", sk, " grid=", gc, "x", gr)
+                VM_ShellPrint("cg @70 sh=", sh, " lv=", lv, " sk=", sk, " pt=[", pt, "] ft=[", ft, "] grid=", gc, "x", gr)
 
-                // ① 自己那格，无条件（原版也是优先试自身格）
-                VM_ShellPrint("cg spawn self ret=", VM_SpawnPlant(tg, c, r, sh, lv, sk))
+                // 复制期间临时关掉「替换模式」（玩家的设置项，obj_wooden_plate 也这么干）：
+                // VM_CanPlace 内部会读 global.replace_placement，开着的话格子被占也算能种，
+                // 复制就会把别人的卡顶掉。关掉之后它只往真正空得下的地方种。
+                rp_bak = VM_GetProp(0, "replace_placement")
+                if (VM_IsUndefined(rp_bak)) {
+                    rp_bak = 0
+                }
+                VM_SetProp(0, "replace_placement", 0)
+
+                // ① 自己那格：也走正规规则（地形/障碍/水陆/莲叶/护盾层/底座卡都算）
+                made = 0
+                if (VM_CanPlace(tg, c, r) == 1) {
+                    VM_ShellPrint("cg spawn self ret=", VM_SpawnPlant(tg, c, r, sh, lv, sk))
+                    made = 1
+                } else {
+                    VM_ShellPrint("cg self 不能种，跳过")
+                }
 
                 // ② 按原版顺序把候选格生成到命名数组（cgc = 列, cgr = 行）
                 VM_ArrayClear("cgc")
@@ -220,7 +251,6 @@ _OBJECT_STEP {
                 VM_ShellPrint("cg candidates n=", n)
 
                 // ③ 按顺序填，凑满 5 张（自己那格已占 1 张）
-                made = 1
                 i = 0
                 while (i < n) {
                     if (made < 5) {
@@ -240,7 +270,7 @@ _OBJECT_STEP {
                             ok = 0
                         }
                         if (ok == 1) {
-                            if (VM_GetPlantCountAt(cc, rr, "all") < 1) {
+                            if (VM_CanPlace(tg, cc, rr) == 1) {
                                 VM_SpawnPlant(tg, cc, rr, sh, lv, sk)
                                 made = made + 1
                             }
@@ -249,6 +279,9 @@ _OBJECT_STEP {
                     i = i + 1
                 }
                 VM_ShellPrint("cg made=", made, " / 5")
+
+                // 还原玩家的替换模式设置
+                VM_SetProp(0, "replace_placement", rp_bak)
             }
         }
     }

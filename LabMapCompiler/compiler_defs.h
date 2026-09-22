@@ -327,7 +327,12 @@ static std::vector<FuncDef> FUNC_DEFS = {
     {"VM_DrawSpriteExt",           8,  {PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY}, PT_INT}, // 117 — 直接 draw_sprite_ext（贴图,子图,x,y,xscale,yscale,rot,alpha；固定 c_white），只能在 _OBJECT_DRAW 里用
     {"VM_RunStep",                 2,  {PT_INT, PT_INT}, PT_INT}, // 118 — 让实例额外跑 N 轮 Step（实例,轮数），一轮 = Begin Step + Step + End Step，做加速用
     {"VM_DestroyInstance",         1,  {PT_INT}, PT_INT}, // 119 — 直接销毁一个实例（会触发它的 Destroy 事件）
-    {"VM_GetCardSaveInfo",         2,  {PT_STRING, PT_STRING}, PT_INT}, // 120 — 读卡片存档的外形/星级/技能写进命名数组（数组[0]=shape,[1]=level,[2]=skill）；3=成功，-1=卡未解锁/名字空
+    {"VM_GetCardProp",             2,  {PT_STRING, PT_STRING}, PT_ANY}, // 120 — 按属性名读一张卡的单值（返回类型取决于属性名）：存档类 shape/level/skill/max_level/max_shape，卡池类 plant_type/feature_type/target_card/cost/cooldown；失败返回 undefined
+    {"VM_CanPlace",                3,  {PT_STRING, PT_INT, PT_INT}}, // 121 — 按游戏正规种植规则判断某格能不能种这张卡（地形/障碍/水域莲叶/护盾层/底座卡/替换开关全都算），1=能 0=不能
+    {"VM_CallFunc",               -1}, // 122 — 变长：按名字调用独立字典 global._VM_call_dict 里的函数；名字对编译器只是字符串，不校验。第一个参数是函数名，后面是实参
+    {"VM_FuncExists",              1,  {PT_STRING}}, // 123 — 字典里有没有这个函数，1=有 0=没有（VM_CallFunc 的配套）
+    {"VM_FuncDesc",                1,  {PT_STRING}, PT_STRING}, // 124 — 返回字典里登记的该函数说明字符串，没有返回 ""（VM_CallFunc 的配套）
+    {"VM_SpriteExists",            1,  {PT_STRING}}, // 125 — 贴图现在真的可用吗（项目资源→VM临时缓存→VM永久缓存→全局缓存，并排除 get_load_sprite 的空白占位图），1=可用 0=不可用
 };
 
 // ============================================================

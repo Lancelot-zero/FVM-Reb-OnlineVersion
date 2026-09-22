@@ -162,6 +162,7 @@ while (i < 10) {
 | `VM_SpawnPlantsRandom(x,y,w,h, shape,level,skill, card1,...,card9)` | 16个 | 区域内随机种植。每格随机选卡，只种空格。后 9 个参数为卡片名，`"-1"`（字符串）=跳过。客户端不执行 |
 | `VM_CreateButton(x,y,"精灵名",缩放, idle, hover, press)` | 7个 | 创建按钮。后三帧 `-1`=默认(0,1,2)。点击触发 `_VM_BUTTON_CLICKED` |
 | `VM_CreateInstance("对象名",x,y)` | 3个 | 按像素坐标创建实例（子弹等） |
+| `VM_BulletScreenAdd(贴图,总帧数,打击范围,缩放,动画速度,x,y,vx,vy,伤害,伤害计数,存活帧数,子弹类型,销毁对象,mod名字)` | 15个 | 往屏幕弹幕管理器塞一颗子弹。管理器 `obj_Bullet_Screen_Management` 由 `obj_battle` 开局创建，全场只此一个实例，所有弹幕统一迭代与绘制、**不占实例**。`打击范围`=格子半径，0=只算本格；`伤害计数`=最多命中几个，`-1`=不限次数（此时范围内所有可命中敌人都结算）；`存活帧数`=倒计时，`<=0`=不自动消失；`子弹类型`同 `can_hit`（all/normal/air/air_only/pierce/track/throw/rotate/d_fruit）；`销毁对象`非空则在该子弹消失处创建它，是 mod 对象时用 `mod名字` 指定 `mod_type`。出界（x<0 / x>2200 / y<0 / y>1200）静默删除、不生成销毁对象 |
 
 ### 属性
 
@@ -261,6 +262,12 @@ while (i < 10) {
 | `VM_EnemyInRange(行1,行2,列1,列2,"类型")` | int | 矩形范围是否存在敌人（前缀和）。行列都是闭区间、可反序、自动夹取到场内。类型: normal/obstacle/diver/air/dance/underground，`""`或`"all"`=任意 |
 | `VM_GetHomingTarget("类型")` | int | 最左且血量最高的敌人 id（追踪索敌），类型 ""/all=任意，每帧全场只扫一次 |
 | `VM_GetInstancesInRange("数组名",行1,行2,列1,列2,"enemy"或"card","筛选")` | int | 收集范围内实例 id 进指定 VM 命名数组（会先清空），返回数量。筛选：敌人按 target_type，卡片按 plant_id/plant_type，`""`或`"all"`=不限 |
+| `VM_GetCardProp("卡名","属性名")` | 任意 | 按属性名读一张卡的**单值**。存档类（玩家自己那张卡的进度）：`"shape"` `"level"` `"skill"` `"max_level"` `"max_shape"`；卡池类（卡片本身的配置）：`"plant_type"` `"feature_type"` `"target_card"` `"cost"` `"cooldown"`。读不到返回 undefined，用 `VM_IsUndefined` 判断 |
+| `VM_CanPlace("卡名",列,行)` | int | 按**游戏正规种植规则**判断该格能不能种这张卡——地形、障碍、水域/莲叶、护盾层、底座卡、替换开关全都算进去（就是玩家手牌点下去时走的那套），1=能 0=不能 |
+| `VM_CallFunc("函数名", 参数...)` | 任意 | 按名字调用**独立字典**（`global._VM_call_dict`）里的函数，返回它的返回值。**名字对编译器只是字符串、不校验**，所以往字典里加函数不用改编译器、不用重编编译器、不用同步编辑器。第一个参数是函数名，后面是实参，最多 15 个；名字不在字典里返回 undefined（先 `VM_FuncExists` 判断） |
+| `VM_FuncExists("函数名")` | int | 字典里有没有这个函数，1=有 0=没有（`VM_CallFunc` 的配套） |
+| `VM_FuncDesc("函数名")` | string | 返回字典里登记的该函数说明字符串，没登记返回空串（`VM_CallFunc` 的配套） |
+| `VM_SpriteExists("贴图名")` | int | 这张贴图**现在真的可用吗**——按解析链查：项目资源 → VM 临时缓存 → VM 永久缓存 → 全局贴图缓存。注意 `get_load_sprite` 找不到时会塞一张**空白占位图**且永不失败，所以本函数会额外排除占位图，返回 1=可用 0=不可用 |
 
 ### BOSS 状态（BOSS_STATE）
 
@@ -359,6 +366,7 @@ while (i < 10) {
 | `VM_SetDrawSlot(槽位,"贴图名",x,y,alpha)` | 设置背景绘制槽。同上，绘制在火焰 UI 后面的背景层 |
 | `VM_SetDrawSlotEx(槽位,"贴图名",x,y,alpha,角度,xscale,yscale)` | 同上，可设置角度/缩放（-1 用默认值） |
 | `VM_SetDrawSlotEx_front(槽位,"贴图名",x,y,alpha,角度,xscale,yscale)` | 同上，前景槽 |
+| `VM_DrawSpriteExt("贴图名",子图,x,y,xscale,yscale,角度,alpha)` | 直接画一张贴图（等价 `draw_sprite_ext`，颜色固定白色）。**只能在 `_OBJECT_DRAW` 块里调用**，在 Step 里调画不出来。贴图名走 `get_load_sprite`，`VM_LoadSpritePerm_Ex` 加载的也能直接用 |
 
 ### 工具
 
@@ -374,6 +382,8 @@ while (i < 10) {
 | `VM_SetTimeLimit(帧数)` | 设置关卡倒计时帧数，无倒计时返回 undefined，联机自动同步, 60 帧为1s |
 | `VM_IsUndefined(值)` | 判断值是否为 undefined，返回 1=是 0=不是 |
 | `VM_IsDestroyed(实例ID)` | 判断实例是否已被销毁，返回 1=已销毁 0=存在 |
+| `VM_DestroyInstance(实例ID)` | 直接销毁实例（会触发它的 Destroy 事件）。在 `_OBJECT_STEP` 里销毁自己时，本帧剩下的语句还会继续执行，要用 `VM_IsDestroyed` 兜底 |
+| `VM_RunStep(实例, 轮数)` | 让该实例额外跑 N 轮 Step（一轮 = Begin Step + Step + End Step），用来做加速。同一个实例正在被重跑时再调会被忽略（防无限递归）。轮数夹在 1~60，返回实际跑了几轮 |
 | `VM_SetEventEnabled(0或1)` | 事件系统开关，默认 1 |
 | `VM_GameWin()` | 触发胜利 |
 | `VM_GameLose()` | 触发失败 |
