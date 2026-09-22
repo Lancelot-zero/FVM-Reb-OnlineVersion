@@ -333,6 +333,7 @@ static std::vector<FuncDef> FUNC_DEFS = {
     {"VM_FuncExists",              1,  {PT_STRING}}, // 123 — 字典里有没有这个函数，1=有 0=没有（VM_CallFunc 的配套）
     {"VM_FuncDesc",                1,  {PT_STRING}, PT_STRING}, // 124 — 返回字典里登记的该函数说明字符串，没有返回 ""（VM_CallFunc 的配套）
     {"VM_SpriteExists",            1,  {PT_STRING}}, // 125 — 贴图现在真的可用吗（项目资源→VM临时缓存→VM永久缓存→全局缓存，并排除 get_load_sprite 的空白占位图），1=可用 0=不可用
+    {"VM_AliasSpritePerm",         2,  {PT_STRING, PT_STRING}}, // 126 — 把名字永久指向一个已在永久缓存里的贴图（存精灵 id，进房间不会被清；[reloadmod] 时释放），配合 VM_SpriteExists 做「内置有就用内置、没有才外置覆盖」
 };
 
 // ============================================================

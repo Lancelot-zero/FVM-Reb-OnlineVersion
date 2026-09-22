@@ -1,6 +1,10 @@
 
 _OBJECT_CFG{
-    VM_LoadSpritePerm_Ex("tex/define_sun_god_3_0.png", 29,55,150)
+    // 统一写内部 spr 名：内置有就直接用；内置没有才把本地图挂到这个名上
+    if (VM_SpriteExists("spr_sun_god_3") == 0) {
+        VM_LoadSpritePerm_Ex("tex/define_sun_god_3_0.png", 29,55,150)
+        VM_AliasSpritePerm("spr_sun_god_3", "tex/define_sun_god_3_0.png")
+    }
     VM_ShellPrint("产火测试插件加载")
 }
 
@@ -8,7 +12,7 @@ _OBJECT_CFG{
 _OBJECT_CREATE {
     self = VM_GetCurCard()
     VM_SetProp(self, "cd", 0)
-    VM_SetProp(self, "sprite_index", "tex/define_sun_god_3_0.png")
+    VM_SetProp(self, "sprite_index", "spr_sun_god_3")
     VM_SetProp(self, "attack_anim", 18)
     VM_SetProp(self, "idle_anim", 11)
     VM_SetProp(self, "plant_type", "normal")

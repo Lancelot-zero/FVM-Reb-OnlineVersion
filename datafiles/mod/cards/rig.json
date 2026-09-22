@@ -5,7 +5,7 @@
       "shape": 0,
       "name": "至尊守护神",
       "description": "至尊守护神：前方5方向发射穿透子弹",
-      "sprite": "tex/spr_rig_3_0.png",
+      "sprite": "spr_rig_3",
       "plant_type": "normal",
       "feature_type": "normal",
       "target_card": "none",

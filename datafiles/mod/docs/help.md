@@ -268,6 +268,7 @@ while (i < 10) {
 | `VM_FuncExists("函数名")` | int | 字典里有没有这个函数，1=有 0=没有（`VM_CallFunc` 的配套） |
 | `VM_FuncDesc("函数名")` | string | 返回字典里登记的该函数说明字符串，没登记返回空串（`VM_CallFunc` 的配套） |
 | `VM_SpriteExists("贴图名")` | int | 这张贴图**现在真的可用吗**——按解析链查：项目资源 → VM 临时缓存 → VM 永久缓存 → 全局贴图缓存。注意 `get_load_sprite` 找不到时会塞一张**空白占位图**且永不失败，所以本函数会额外排除占位图，返回 1=可用 0=不可用 |
+| `VM_AliasSpritePerm("新名","已有名")` | - | 把新名**永久**指向已有名（写永久缓存，**进房间不会被清**）。已有名必须已在永久缓存里（`VM_LoadSpritePerm` / `_Ex` 加载过）。存的是**精灵 id**，所以 `get_load_sprite` 直接返回真 id，可以喂给 `sprite_index`。`[reloadmod]` 时会自动释放所有这类别名（底下的真图不动），让重新加载的 bin 再挂一次。配合 `VM_SpriteExists` 就是"内置有就用内置、没有才外置覆盖" |
 
 ### BOSS 状态（BOSS_STATE）
 

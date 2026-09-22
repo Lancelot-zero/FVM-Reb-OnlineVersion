@@ -5,7 +5,7 @@
       "shape": 0,
       "name": "至尊创造神",
       "description": "至尊创造神：复制 5 张上一次种下的卡片",
-      "sprite": "tex/spr_brahma_icon_3_0.png",
+      "sprite": "spr_brahma_icon_3",
       "plant_type": "coffee",
       "feature_type": "normal",
       "target_card": "none",

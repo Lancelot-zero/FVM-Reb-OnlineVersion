@@ -1,6 +1,10 @@
 
 _OBJECT_CFG{
-    VM_LoadSpritePerm_Ex("tex/combined_strip.png", 29,30,90)
+    // 统一写内部 spr 名：内置有就直接用；内置没有才把本地图挂到这个名上
+    if (VM_SpriteExists("spr_mod_test_flame") == 0) {
+        VM_LoadSpritePerm_Ex("tex/combined_strip.png", 29,30,90)
+        VM_AliasSpritePerm("spr_mod_test_flame", "tex/combined_strip.png")
+    }
     VM_ShellPrint("mod_test_flame load")
 
 }
@@ -10,7 +14,7 @@ _OBJECT_CREATE {
     self = VM_GetCurCard()
     VM_SetProp(self, "cd", 0)
 
-    VM_SetProp(self, "sprite_index", "tex/combined_strip.png")
+    VM_SetProp(self, "sprite_index", "spr_mod_test_flame")
     VM_SetProp(self, "attack_anim", 18)
     VM_SetProp(self, "idle_anim", 11)
     VM_SetProp(self, "plant_type", "normal")

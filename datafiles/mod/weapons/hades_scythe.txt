@@ -23,24 +23,39 @@
 //       0 = 正式节奏（当前）：第 32 帧首发 / 间隔 10 帧 / 打完歇 cycle / 需要场上有敌人
 //       1 = 调试模式：本体一出现就无条件开火，首发第 1 帧、间隔 6 帧、打完只歇 30 帧
 
-// 贴图只在这里加载一次（永久缓存，bin 重载不清除）
-// 内置贴图属于误打包，不能依赖，所以显式加载 mod 目录下的 PNG。
-// 加载后名字就是文件名（含扩展名），脚本里直接把它当 sprite_index 用。
+// 贴图加载：统一的「内置优先 + 外置覆盖」写法（永久缓存，bin 重载/进房间都不受影响）
+//   内置 spr 不存在时，把 mod 目录下的 PNG 用 VM_AliasSpritePerm 挂到内部名上；
+//   之后脚本里一律写内部 spr 名（sprite_index 拿到的是真精灵 id）。
 // 帧数 / 原点取自 removed_sprites.json。
 _OBJECT_CFG {
+    // 统一写内部 spr 名：内置有就直接用（性能好）；内置没有才把本地图挂到这个名上。
+    // VM_AliasSpritePerm 写永久缓存，进房间不会被清；[reloadmod] 时释放让这里重跑。
+
     // 商店/背包图标：1 帧，原点 (35,35)
     // 必须在注册武器之前加载好：src_mod 是按 JSON 的 sprite/icon 名去 get_load_sprite 查的，
     // 查不到会给一张空白占位图而且不报错（图标就是这么消失的）。
-    VM_LoadSpritePerm_Ex("tex/spr_hades_scythe_icon_0.png", 1, 35, 35)
+    if (VM_SpriteExists("spr_hades_scythe_icon") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_hades_scythe_icon_0.png", 1, 35, 35)
+        VM_AliasSpritePerm("spr_hades_scythe_icon", "tex/spr_hades_scythe_icon_0.png")
+    }
 
     // 本体：36 帧，原点 (202,235)
-    VM_LoadSpritePerm_Ex("tex/spr_hades_scythe_2_0.png", 36, 202, 235)
+    if (VM_SpriteExists("spr_hades_scythe_2") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_hades_scythe_2_0.png", 36, 202, 235)
+        VM_AliasSpritePerm("spr_hades_scythe_2", "tex/spr_hades_scythe_2_0.png")
+    }
 
     // 入场特效：16 帧，原点 (202,164)
-    VM_LoadSpritePerm_Ex("tex/spr_hades_scythe_effect_2_0.png", 16, 202, 164)
+    if (VM_SpriteExists("spr_hades_scythe_effect_2") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_hades_scythe_effect_2_0.png", 16, 202, 164)
+        VM_AliasSpritePerm("spr_hades_scythe_effect_2", "tex/spr_hades_scythe_effect_2_0.png")
+    }
 
     // 子弹：6 帧，原点 (58,58)
-    VM_LoadSpritePerm_Ex("tex/spr_hades_scythe_bullet_4_0.png", 6, 58, 58)
+    if (VM_SpriteExists("spr_hades_scythe_bullet_4") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_hades_scythe_bullet_4_0.png", 6, 58, 58)
+        VM_AliasSpritePerm("spr_hades_scythe_bullet_4", "tex/spr_hades_scythe_bullet_4_0.png")
+    }
 }
 
 _OBJECT_CREATE {
@@ -78,7 +93,7 @@ _OBJECT_CREATE {
     VM_SetProp(self, "debug_fast", 0)
 
     // 入场特效：16 帧，每 2 帧走一格
-    VM_SetProp(self, "sprite_index", "tex/spr_hades_scythe_effect_2_0.png")
+    VM_SetProp(self, "sprite_index", "spr_hades_scythe_effect_2")
     VM_SetProp(self, "idle_anim", 16)
     VM_SetProp(self, "attack_anim", 0)
     VM_SetProp(self, "flash_speed", 2)
@@ -100,7 +115,7 @@ _OBJECT_STEP {
         VM_SetProp(self, "anim", anim)
 
         if (anim >= 32) {
-            VM_SetProp(self, "sprite_index", "tex/spr_hades_scythe_2_0.png")
+            VM_SetProp(self, "sprite_index", "spr_hades_scythe_2")
 
             // 本体出现后整体下移 100
             VM_SetProp(self, "lock_y", 640)

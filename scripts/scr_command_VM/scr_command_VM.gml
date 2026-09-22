@@ -1875,6 +1875,44 @@ function VM_AliasSprite(new_name_addr, exist_name_addr) {
 	ds_map_add(global._VM_sprite_temp_cache, _new, _exist);
 }
 
+/// @function VM_AliasSpritePerm(new_name, exist_name)
+/// @desc 把 new_name **永久**指向 exist_name（写永久缓存，进房间不会被清）。
+///       exist_name 必须已在永久缓存里（VM_LoadSpritePerm / VM_LoadSpritePerm_Ex 加载过）。
+///       与 VM_AliasSprite 的区别：那个写临时缓存、存的是名字字符串、进房间会被清空；
+///       这个写永久缓存、存的是**精灵 id**，所以 get_load_sprite 直接返回真 id，
+///       可以安全地喂给 sprite_index（实例变量只能放 id，不能放名字）。
+///       建过的别名会被登记，[reloadmod] 时由 VM_FreeSpritePermAlias() 释放，让新 bin 重新挂。
+function VM_AliasSpritePerm(new_name_addr, exist_name_addr) {
+    var _new   = vm_read_mem(global.__vm, new_name_addr);
+    var _exist = vm_read_mem(global.__vm, exist_name_addr);
+    if (!is_string(_new) || _new == "" || !is_string(_exist) || _exist == "") return;
+    if (!ds_map_exists(global._VM_sprite_cache, _exist)) return;
+    var _spr = global._VM_sprite_cache[? _exist];
+    if (is_undefined(_spr) || is_string(_spr) || !sprite_exists(_spr)) return;
+    ds_map_add(global._VM_sprite_cache, _new, _spr);
+    if (!ds_map_exists(global._pid_reverse, _spr)) ds_map_add(global._pid_reverse, _spr, _new);
+    // 登记，供 reloadmod 释放（底下的真精灵不动，还按原文件名留在永久缓存里）
+    if (!variable_global_exists("_VM_perm_alias_names")) global._VM_perm_alias_names = [];
+    if (array_get_index(global._VM_perm_alias_names, _new) == -1) {
+        array_push(global._VM_perm_alias_names, _new);
+    }
+}
+
+/// @function VM_FreeSpritePermAlias()
+/// @desc 释放所有 VM_AliasSpritePerm 建过的永久别名（名字 → id 的重定向）。
+///       底下的真精灵**不动**（仍按原文件名留在永久缓存里），所以重新挂一遍不会重复加载。
+///       由 [reloadmod] 调用；mod 侧一般不用自己调。
+/// @return 释放的条数
+function VM_FreeSpritePermAlias() {
+    if (!variable_global_exists("_VM_perm_alias_names")) return 0;
+    var _n = array_length(global._VM_perm_alias_names);
+    for (var _i = 0; _i < _n; _i++) {
+        ds_map_delete(global._VM_sprite_cache, global._VM_perm_alias_names[_i]);
+    }
+    global._VM_perm_alias_names = [];
+    return _n;
+}
+
 /// @function VM_GetPreviewCard()
 /// @return 当前手牌的 card_id，没有返回 -1
 function VM_GetPreviewCard() {
@@ -4091,6 +4129,7 @@ VM_RegisterFunction(global.__vm, VM_CallFunc);       // 122
 VM_RegisterFunction(global.__vm, VM_FuncExists);     // 123
 VM_RegisterFunction(global.__vm, VM_FuncDesc);       // 124
 VM_RegisterFunction(global.__vm, VM_SpriteExists);   // 125
+VM_RegisterFunction(global.__vm, VM_AliasSpritePerm); // 126
 ds_map_add(global._VM_remote_funcs, "VM_SwapPlants", VM_SwapPlants);
 ds_map_add(global._VM_remote_funcs, "VM_SwapPlantRects", VM_SwapPlantRects);
 ds_map_add(global._VM_remote_funcs, "VM_CompactColumn", VM_CompactColumn);

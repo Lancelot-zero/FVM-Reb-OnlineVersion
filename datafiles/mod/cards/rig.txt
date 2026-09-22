@@ -24,18 +24,25 @@
 //   2. global.rig_count                  → 改用本卡 VM 的命名数组，不依赖全局
 
 _OBJECT_CFG {
+    // 统一写内部 spr 名：内置有就直接用（性能好）；内置没有才把本地图挂到这个名上。
     // 本体：25 帧，原点 (90, 129)
-    VM_LoadSpritePerm_Ex("tex/spr_rig_3_0.png", 25, 90, 129)
+    if (VM_SpriteExists("spr_rig_3") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_rig_3_0.png", 25, 90, 129)
+        VM_AliasSpritePerm("spr_rig_3", "tex/spr_rig_3_0.png")
+    }
 
     // 子弹：7 帧，原点 (55, 59)
-    // 管理器画弹幕时按名字查缓存，就是靠这里加载进永久缓存的
-    VM_LoadSpritePerm_Ex("tex/spr_rig_bullet_3_0.png", 7, 55, 59)
+    // 管理器画弹幕时按名字查缓存（get_load_sprite → 永久缓存里就是真 id）
+    if (VM_SpriteExists("spr_rig_bullet_3") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_rig_bullet_3_0.png", 7, 55, 59)
+        VM_AliasSpritePerm("spr_rig_bullet_3", "tex/spr_rig_bullet_3_0.png")
+    }
 }
 
 _OBJECT_CREATE {
     self = VM_GetCurCard()
 
-    VM_SetProp(self, "sprite_index", "tex/spr_rig_3_0.png")
+    VM_SetProp(self, "sprite_index", "spr_rig_3")
     VM_SetProp(self, "idle_anim", 9)
     VM_SetProp(self, "attack_anim", 16)
     VM_SetProp(self, "flash_speed", 5)
@@ -109,19 +116,19 @@ _OBJECT_STEP {
             by = VM_GetProp(self, "y") - 40
 
             // ① 直射
-            VM_BulletScreenAdd("tex/spr_rig_bullet_3_0.png", 7, 0, 1.2, 2, bx, by, 8, 0, dmg, 0 - 1, 0 - 1, "pierce", "", "")
+            VM_BulletScreenAdd("spr_rig_bullet_3", 7, 0, 1.2, 2, bx, by, 8, 0, dmg, 0 - 1, 0 - 1, "pierce", "", "")
 
             // ② +45°
-            VM_BulletScreenAdd("tex/spr_rig_bullet_3_0.png", 7, 0, 1.2, 2, bx, by, 5.658, 5.658, dmg, 0 - 1, 0 - 1, "pierce", "", "")
+            VM_BulletScreenAdd("spr_rig_bullet_3", 7, 0, 1.2, 2, bx, by, 5.658, 5.658, dmg, 0 - 1, 0 - 1, "pierce", "", "")
 
             // ③ -45°
-            VM_BulletScreenAdd("tex/spr_rig_bullet_3_0.png", 7, 0, 1.2, 2, bx, by, 5.658, 0 - 5.658, dmg, 0 - 1, 0 - 1, "pierce", "", "")
+            VM_BulletScreenAdd("spr_rig_bullet_3", 7, 0, 1.2, 2, bx, by, 5.658, 0 - 5.658, dmg, 0 - 1, 0 - 1, "pierce", "", "")
 
             // ④ +22.5°
-            VM_BulletScreenAdd("tex/spr_rig_bullet_3_0.png", 7, 0, 1.2, 2, bx, by, 7.391, 3.062, dmg, 0 - 1, 0 - 1, "pierce", "", "")
+            VM_BulletScreenAdd("spr_rig_bullet_3", 7, 0, 1.2, 2, bx, by, 7.391, 3.062, dmg, 0 - 1, 0 - 1, "pierce", "", "")
 
             // ⑤ -22.5°
-            VM_BulletScreenAdd("tex/spr_rig_bullet_3_0.png", 7, 0, 1.2, 2, bx, by, 7.391, 0 - 3.062, dmg, 0 - 1, 0 - 1, "pierce", "", "")
+            VM_BulletScreenAdd("spr_rig_bullet_3", 7, 0, 1.2, 2, bx, by, 7.391, 0 - 3.062, dmg, 0 - 1, 0 - 1, "pierce", "", "")
 
             VM_PlaySound("snd_shot")
         }

@@ -191,6 +191,40 @@ target = VM_GetHomingTarget("air")
 VM_PlaySound("snd_shot")
 ```
 
+### 3.10 按名字调用函数（VM_CallFunc）
+
+```gml
+r = VM_CallFunc("VM_GetFlame")            // 不传参
+r = VM_CallFunc("VM_SetFlame", 3000)      // 传参
+```
+
+第一个参数是**函数名**，后面是实参，最多 15 个。能调什么由一张**独立字典** `global._VM_call_dict` 决定（不在 VM 注册表里，也和控制台 `vmcall` 无关）：
+
+```gml
+// scr_command_VM.gml 末尾，想开放哪个写哪个
+ds_map_add(global._VM_call_dict, "名字", { fn: 函数引用, raw: false, desc: "说明" });
+```
+
+| `raw` | 目标函数收什么 | 什么时候用 |
+|---|---|---|
+| `false` | 内存地址（函数内部自己 `vm_read_mem`） | 目标是 `VM_*` 那套 |
+| `true` | 真值（就是普通参数） | 自己写的普通 GML 函数 |
+
+配套两个查询：
+
+```gml
+VM_FuncExists("名字")   // 1=字典里有，0=没有
+VM_FuncDesc("名字")     // 返回登记时写的 desc，没有返回空串
+```
+
+**关键性质：名字对编译器只是字符串，编译器不校验。** 所以往字典里加函数**不用改编译器、不用重编编译器、不用跑编辑器同步** —— 只重编游戏。
+
+三个限制：
+
+- 只能调**字典里登记的**函数，调不到任意 GML 函数（`sin`、`deck_get_card_data` 这些都不行）
+- 参数最多 15 个，而且**不能传"合法的 undefined"**（靠 undefined 判断参数结束）
+- 名字拼错**编译期查不出来**，只有运行时打 `[VM_CallFunc] 字典里没有这个函数`；所以调之前先 `VM_FuncExists`
+
 ---
 
 ## 4. 分析一个现有功能，判断能不能 Mod 化
@@ -1068,6 +1102,81 @@ VM_SetProp(self, "sprite_index", "body.png")
 
 ---
 
+### 11.2 贴图可以放子目录
+
+PNG 不用全堆在 mod 目录根下，可以收到子目录里（**卡片 / 武器 / 子弹三类都实测通过**）：
+
+```text
+mod/cards/tex/spr_brahma_3_0.png
+```
+
+名字里带上相对路径就行，**JSON 和 BIN 两边必须写同一串**：
+
+```json
+"sprite": "tex/spr_brahma_icon_3_0.png"
+```
+
+```gml
+_OBJECT_CFG {
+    VM_LoadSpritePerm_Ex("tex/spr_brahma_icon_3_0.png", 1, 170, 215)
+}
+```
+
+原因：贴图路径是**字符串拼接**（`mod_dir + "/" + 名字` 之类），不做文件名提取，所以子目录能原样落下。
+
+**名字是缓存 key，也是 `_pid_reverse` 的反查值**，两边差一个字就变成"加载一张、引用另一张"，表现是空白图（见 11.1）。
+
+用 `/`，别用 `\` —— GML 字符串里反斜杠要转义，容易踩。
+
+### 11.3 怎么判断一张贴图"在不在"
+
+**别用这两个当存在性判断：**
+
+| 写法 | 为什么不行 |
+|---|---|
+| `get_load_sprite(名字)` | 找不到会给**空白占位图**，永不失败（见 11.1） |
+| `VM_LoadSprite(名字) != -1` | 只查**临时缓存 + 本地文件**；永久缓存里有的、本地文件不在的，照样返回 -1 |
+
+用：
+
+```gml
+if (VM_SpriteExists("tex/body.png") == 1) { ... }
+```
+
+它按真正的解析链查（内置资源 → VM 临时缓存 → VM 永久缓存 → 全局缓存），并且**排除占位图**。1=可用，0=不可用。
+
+### 11.4 内置优先 + 外置覆盖：VM_SpriteExists + VM_AliasSpritePerm
+
+想让 mod 卡**统一写内部 spr 名**，内置有就用内置（省性能），内置没有才用本地图覆盖：
+
+```gml
+_OBJECT_CFG {
+    if (VM_SpriteExists("spr_brahma_3") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_brahma_3_0.png", 35, 170, 216)
+        VM_AliasSpritePerm("spr_brahma_3", "tex/spr_brahma_3_0.png")
+    }
+}
+```
+
+```json
+"sprite": "spr_brahma_3"
+```
+
+```gml
+VM_SetProp(self, "sprite_index", "spr_brahma_3")
+```
+
+要点：
+
+- `VM_LoadSpritePerm_Ex` 写**永久缓存** —— 进房间不会被清
+- `VM_AliasSpritePerm` 把内部名指向**同一个精灵 id**，所以 `get_load_sprite("spr_brahma_3")` 返回的是**真 id**，喂给 `sprite_index` 没问题（`sprite_index` 是实例变量，只能放 id，不能放名字）
+- 一张图**只加载一份**
+- `[reloadmod]` 会先释放所有这类别名（底下的真图不动），重跑的 `_OBJECT_CFG` 再挂一次 —— 所以换了图、改了名字，`reloadmod` 就生效
+
+⚠️ **别用 `VM_AliasSprite` 干这件事**：它写的是**临时缓存**、存的是**名字字符串**，而且 `VM_InitRoomEntry` 每次进房间都会把它清掉（见 14.20）。
+
+---
+
 ## 12. 分析和复刻的实际流程
 
 写一个功能前，先输出一份分析表：
@@ -1145,6 +1254,23 @@ mod/weapons/my_gun.bin
 如果编译器参数不明，观察现有 Mod 的 `.txt` 和 `.bin` 配对，保持同名。
 
 一个 `.txt` 文件对应一个 `.bin`。
+
+### 13.1 新增一个 VM 函数（平台侧，不是写 mod）
+
+给 VM 加内建函数要同步**四处**，缺一处就出问题：
+
+| 位置 | 改什么 |
+|---|---|
+| `scripts/scr_command_VM/scr_command_VM.gml` | 函数定义 + 一行 `VM_RegisterFunction(global.__vm, VM_Xxx);` —— **编号必须连续**，插在中间会让后面全部错位 |
+| `LabMapCompiler/compiler_defs.h` | 函数名表：名字、参数个数（变长写 `-1`）、参数类型、返回类型 |
+| `MapEditCreator/vmfuncs_spec.json` | 声明一行，然后跑 `sync_vmfuncs.py` —— 它会自动生成编辑器侧的 `compiler_defs.h` / `linter.go`（签名表 + 悬停描述）/ `lablang.js` / `allfuncs_test.go` |
+| `help.md` + `app.go` 更新日志 | 手工补，sync 不管这两个 |
+
+改完要**重编 `LabMapCompiler.exe`**（`compiler.cpp` 是 `#include "compiler_defs.h"`，所以只改那个头文件 + 重编），并把它拷到所有用到的地方（项目里 4 份 + 编辑器 2 份）。
+
+⚠️ `sync_vmfuncs.py` 给新条目编号时是**从 `compiler_defs.h` 现有注释里取最大值 +1**，所以头文件里的 `// 编号 —` 注释不能乱。历史上出过"一次加多个函数、编号越飘越远"的 bug，已修。
+
+**不想走这套流程，就用 `VM_CallFunc` + `_VM_call_dict`（见 3.10）**：不占函数号，不用动编译器和编辑器，只重编游戏。
 
 ---
 
@@ -1467,6 +1593,86 @@ if($s.IndexOf("VM_IsUndefined") -ge 0){ ...找到了... }
 
 判断"某个东西在不在"之前，**先说清楚问的是哪个分支**。
 
+### 14.15 构建会把 datafiles 整个覆盖到运行目录
+
+打包/构建时，`FVM-Reborn\datafiles\` 会**整个覆盖**到 `bbb\FVM-reborn\` —— mod 目录下所有文件的时间戳都会变成构建时刻。
+
+含义：
+
+- **`bbb` 是产物，不是源码。** 改 `bbb\...\mod\` 里的东西，下次构建就被覆盖回去 —— 要改就改 `datafiles\`。
+- 反过来，只改了 `datafiles\` 而**没重编游戏**，`bbb` 里还是旧的。所以改完 mod 文件，要么重编一次，要么手动把差异拷到 `bbb`。
+
+`datafiles\laboratory\` 不在覆盖范围内（运行目录下没有这个目录），那是本地暂存用的。
+
+### 14.16 VM_GetPlantCountAt 的"类型"是卡名，不是层
+
+```gml
+VM_GetPlantCountAt(列, 行, "all")               // 这格有几张卡
+VM_GetPlantCountAt(列, 行, "xiao_long_bao")     // 这格有几张小笼包
+```
+
+第三个参数筛的是 **`plant_id`（卡名）**。传 `"normal"` 是按"卡名叫 normal"去找，数不到东西 —— 名字容易误导。
+
+要按**层**（`plant_type`：`normal` / `lilypad` / `coffee` / `shield_outer`）筛，用：
+
+```gml
+VM_GetPlantAt(列, 行, "normal")     // 该层第一个实例 id，没有返回 -1
+```
+
+`VM_GetInstancesInRange` 的筛选参数**两头都认**（卡名或层），是唯一能按层批量收集的。
+
+### 14.17 判断"这格能不能种"用 VM_CanPlace；复制类卡还要关掉替换模式
+
+自己拼"格子空不空"是不对的——漏了地形、障碍、水域/莲叶、护盾层、底座卡。用：
+
+```gml
+if (VM_CanPlace(卡名, 列, 行) == 1) { ... }
+```
+
+**但 `VM_CanPlace` 内部会读玩家的 `global.replace_placement`**：替换模式开着时，"格子被占"也算能种。所以复制类卡（要往别人的格子种东西）必须临时关掉、用完还原：
+
+```gml
+rp = VM_GetProp(0, "replace_placement")      // id 传 0 = 读全局
+VM_SetProp(0, "replace_placement", 0)
+... 判定 + 种植 ...
+VM_SetProp(0, "replace_placement", rp)
+```
+
+`VM_GetProp(0, 名字)` / `VM_SetProp(0, 名字, 值)` 是读写**全局变量**的通道（0 永远不是真实实例 id）。
+
+### 14.18 mod 卡不支持金框（is_gold）
+
+界面（强化实验室 / 包裹 / 图鉴 / 卡槽）都读 `card_slot_data["is_gold"]` 决定用金框 `spr_slot_1` 还是普通框 `spr_slot`，但 **mod 卡传不进去**：
+
+- `src_mod_register_card` 构造给 `register_card` 的结构里没有 `is_gold`
+- `register_card` 也只转发固定的十个字段
+
+要让 JSON 里的 `"is_gold": 1` 生效，这两处各得加一行。`is_gold` 唯一的作用就是换边框贴图，没有数值效果。
+
+### 14.19 存档里的"孤儿卡"会变成界面上的透明卡
+
+`unlocked_cards` 里如果有一条 id 在卡池中不存在（mod 卡被删/改名后的残留），强化实验室会画成一个**空框**：
+
+- 格子底图是**无条件画满** 7×20 的，所以那个位置一定有框
+- 卡面在 `if (card_slot_data != noone)` 里，`deck_get_card_data` 返回 `noone` 就整段跳过
+- 而**悬停判定在这个 `if` 外面** —— 所以那张空卡点得中、还能放进强化槽
+
+现在 `load_file` 会在读档时把这类卡摘进内存（`global.save_orphan_cards`），界面看不到；写档时再并回 `unlocked_cards`，**存档结构不变**。走内存而不直接删，是为了避免"mod 没加载起来的会话"把 mod 卡记录一次清空。
+
+### 14.20 临时贴图缓存每次进房间都会被清空
+
+`VM_InitRoomEntry`（`scr_command_VM.gml`）里有这么一句：
+
+```gml
+ds_map_clear(global._VM_sprite_temp_cache);
+```
+
+也就是 **`VM_LoadSprite` / `VM_LoadSpriteFrames*` 加载的贴图、以及 `VM_AliasSprite` 建的别名，一进房间就都没了**。调用点就是开局那条路：`scr_battle_function.gml`、`StageDetail/Create_0.gml`。
+
+后果很隐蔽：在 `_OBJECT_CFG`（开局**之前**执行）里建的别名，等你真进战斗时早没了 —— 表现是**卡面/本体空白**，而且看起来像是"别名函数坏了"，其实不是。
+
+**要在房间里活下来，用永久缓存那一组**：`VM_LoadSpritePerm_Ex`（加载）+ `VM_AliasSpritePerm`（挂名），见 11.4。永久缓存只被 `VM_FreeSpritePerm` 和 `[reloadmod]` 的别名释放动过，不受房间切换影响。
+
 ---
 
 ## 15. 性能：VM 脚本的开销模型
@@ -1579,6 +1785,15 @@ if (prop == "x" || prop == "y") { update_plant_bindings(inst_id); }   // 卡片�
 - [ ] 测试普通模式
 - [ ] 测试联机模式
 - [ ] 记录未实现部分
+
+交付前顺手核一遍（这几条都踩过）：
+
+- [ ] 自带 PNG 的名字，JSON 和 `_OBJECT_CFG` **逐字一致**（子目录前缀也算，见 11.2）
+- [ ] 要判断贴图在不在，用的是 `VM_SpriteExists`，**不是** `get_load_sprite` 或 `VM_LoadSprite`（见 11.3）
+- [ ] "这格能不能种"走的是 `VM_CanPlace`；复制类卡临时关了 `replace_placement`（见 14.17）
+- [ ] 按层筛卡片用的是 `VM_GetPlantAt`，**不是** `VM_GetPlantCountAt`（见 14.16）
+- [ ] 调用的 VM 函数在**目标构建**里真的存在（见 14.13）—— 新加的函数要重编游戏才生效
+- [ ] 改完 mod 文件后，`bbb\FVM-reborn\` 那边同步过了（重编 or 手动拷，见 14.15）
 
 完成标准：
 

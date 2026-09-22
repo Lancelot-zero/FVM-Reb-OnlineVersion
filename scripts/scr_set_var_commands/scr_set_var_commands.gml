@@ -733,6 +733,9 @@ function meta_fps() {
 
 /// @description 命令行：仅重新加载所有 mod 的 bin 代码
 function sh_reloadmod(args) {
+    // 先释放上次挂上的永久贴图别名（内部名 → id），让下面重跑的 _OBJECT_CFG 重新挂一遍。
+    // 底下的真精灵不动，所以不会重复加载。
+    var _alias_n = VM_FreeSpritePermAlias();
     var _n = src_mod_reload();
     src_mod_weapons_reload();
     src_mod_gems_reload();
@@ -741,7 +744,7 @@ function sh_reloadmod(args) {
     src_mod_bullets_reload();
     src_mod_effects_reload();
     if (_n < 0) return "[reloadmod] mod 目录不存在";
-    return "[reloadmod] 已重载 " + string(_n) + " 张 mod 卡的 bin 代码";
+    return "[reloadmod] 已重载 " + string(_n) + " 张 mod 卡的 bin 代码（释放永久别名 " + string(_alias_n) + " 条）";
 }
 
 function meta_reloadmod() {

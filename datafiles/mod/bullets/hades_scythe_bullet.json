@@ -1,5 +1,5 @@
 {
   "name": "冥王镰刀",
   "description": "冥王战镰发射的旋转镰刀，沿∞形轨迹飞行",
-  "sprite": "tex/spr_hades_scythe_bullet_4_0.png"
+  "sprite": "spr_hades_scythe_bullet_4"
 }

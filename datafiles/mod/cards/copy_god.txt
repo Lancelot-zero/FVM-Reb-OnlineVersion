@@ -23,17 +23,25 @@
 //   还是之前种的那些；到 STEP 里读就变成自己了（会无限套娃，踩过）。
 
 _OBJECT_CFG {
+    // 统一写内部 spr 名：内置有就直接用（性能好）；内置没有才把本地图挂到这个名上。
+    // VM_AliasSpritePerm 写的是永久缓存，进房间不会被清；[reloadmod] 时会释放让这里重跑。
     // 卡面图标：1 帧，原点 (170, 215)
-    VM_LoadSpritePerm_Ex("tex/spr_brahma_icon_3_0.png", 1, 170, 215)
+    if (VM_SpriteExists("spr_brahma_icon_3") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_brahma_icon_3_0.png", 1, 170, 215)
+        VM_AliasSpritePerm("spr_brahma_icon_3", "tex/spr_brahma_icon_3_0.png")
+    }
 
     // 本体：35 帧，原点 (170, 216)
-    VM_LoadSpritePerm_Ex("tex/spr_brahma_3_0.png", 35, 170, 216)
+    if (VM_SpriteExists("spr_brahma_3") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_brahma_3_0.png", 35, 170, 216)
+        VM_AliasSpritePerm("spr_brahma_3", "tex/spr_brahma_3_0.png")
+    }
 }
 
 _OBJECT_CREATE {
     self = VM_GetCurCard()
 
-    VM_SetProp(self, "sprite_index", "tex/spr_brahma_3_0.png")
+    VM_SetProp(self, "sprite_index", "spr_brahma_3")
     VM_SetProp(self, "idle_anim", 35)
     VM_SetProp(self, "attack_anim", 0)
     VM_SetProp(self, "flash_speed", 5)

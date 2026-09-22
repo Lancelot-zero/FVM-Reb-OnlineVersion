@@ -19,14 +19,18 @@
 //       每帧扣 damage / dmg_frames（dmg_frames 在 _OBJECT_CREATE 里设）。
 
 _OBJECT_CFG {
+    // 统一写内部 spr 名：内置有就直接用；内置没有才把本地图挂到这个名上
     // 子弹：6 帧，原点 (58,58)
-    VM_LoadSpritePerm_Ex("tex/spr_hades_scythe_bullet_4_0.png", 6, 58, 58)
+    if (VM_SpriteExists("spr_hades_scythe_bullet_4") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_hades_scythe_bullet_4_0.png", 6, 58, 58)
+        VM_AliasSpritePerm("spr_hades_scythe_bullet_4", "tex/spr_hades_scythe_bullet_4_0.png")
+    }
 }
 
 _OBJECT_CREATE {
     self = VM_GetCurCard()
 
-    VM_SetProp(self, "sprite_index", "tex/spr_hades_scythe_bullet_4_0.png")
+    VM_SetProp(self, "sprite_index", "spr_hades_scythe_bullet_4")
     VM_SetProp(self, "image_speed", 2)
     VM_SetProp(self, "image_xscale", 1.2)
     VM_SetProp(self, "image_yscale", 1.2)

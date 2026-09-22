@@ -24,8 +24,15 @@
 //   spr_master_shield_icon  70x70   原点 (35, 35)   1 帧
 
 _OBJECT_CFG {
-    VM_LoadSpritePerm_Ex("tex/spr_master_shield_0.png", 1, 31, 53)
-    VM_LoadSpritePerm_Ex("tex/spr_master_shield_icon_0.png", 1, 35, 35)
+    // 统一写内部 spr 名：内置有就直接用；内置没有才把本地图挂到这个名上
+    if (VM_SpriteExists("spr_master_shield") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_master_shield_0.png", 1, 31, 53)
+        VM_AliasSpritePerm("spr_master_shield", "tex/spr_master_shield_0.png")
+    }
+    if (VM_SpriteExists("spr_master_shield_icon") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_master_shield_icon_0.png", 1, 35, 35)
+        VM_AliasSpritePerm("spr_master_shield_icon", "tex/spr_master_shield_icon_0.png")
+    }
 
 }
 
@@ -33,7 +40,7 @@ _OBJECT_CREATE {
     self = VM_GetCurCard()
 	VM_ShowNotice("王者盾牌")
     // 贴图：显式指定，不依赖 weapon_info.sprite 的解析结果
-    VM_SetProp(self, "sprite_index", "tex/spr_master_shield_0.png")
+    VM_SetProp(self, "sprite_index", "spr_master_shield")
     VM_SetProp(self, "image_xscale", 1.6)
     VM_SetProp(self, "image_yscale", 1.6)
     VM_SetProp(self, "image_alpha", 1)

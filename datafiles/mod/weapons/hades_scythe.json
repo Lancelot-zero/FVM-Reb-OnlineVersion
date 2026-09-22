@@ -1,8 +1,8 @@
 {
   "name": "冥王战镰",
   "description": "冥王战镰：∞形轨迹发射旋转镰刀",
-  "sprite": "tex/spr_hades_scythe_icon_0.png",
-  "icon": "tex/spr_hades_scythe_icon_0.png",
+  "sprite": "spr_hades_scythe_icon",
+  "icon": "spr_hades_scythe_icon",
   "slot": "super_weapon",
   "atk": 1897,
   "cycle": 300,
