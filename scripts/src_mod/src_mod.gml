@@ -123,6 +123,7 @@ function src_mod_bullets_reload() {
         _vm = src_mod_card_vm_fill(global.mod_bullet_vms[? _id], _bin_buf, _dir);
       } else {
         _vm = src_mod_card_vm_load(_bin_buf, _dir);
+        global.mod_bullet_vms[? _id] = _vm;   // 新建的 VM 必须写回，否则这次重载白干
       }
       _vm[$ "card_data"] = _json;
       _vm[$ "mod_dir"] = _dir;
@@ -160,6 +161,7 @@ function src_mod_effects_reload() {
         _vm = src_mod_card_vm_fill(global.mod_effect_vms[? _id], _bin_buf, _dir);
       } else {
         _vm = src_mod_card_vm_load(_bin_buf, _dir);
+        global.mod_effect_vms[? _id] = _vm;   // 新建的 VM 必须写回，否则这次重载白干
       }
       _vm[$ "card_data"] = _json;
       _vm[$ "mod_dir"] = _dir;
@@ -820,6 +822,7 @@ function src_mod_reload() {
 				_vm = src_mod_card_vm_fill(global.mod_card_vms[? _id], _bin_buf, _dir);
 			} else {
 				_vm = src_mod_card_vm_load(_bin_buf, _dir);
+				global.mod_card_vms[? _id] = _vm;   // 新建的 VM 必须写回，否则这次重载白干
 			}
 			_vm[$ "card_data"] = _json;
 			_vm[$ "mod_dir"] = _dir;
@@ -957,6 +960,7 @@ function src_mod_weapons_reload() {
 				_vm = src_mod_card_vm_fill(global.mod_weapon_vms[? _id], _bin_buf, _dir);
 			} else {
 				_vm = src_mod_card_vm_load(_bin_buf, _dir);
+				global.mod_weapon_vms[? _id] = _vm;   // 新建的 VM 必须写回，否则这次重载白干
 			}
 			_vm[$ "card_data"] = _json;
 			_vm[$ "mod_dir"] = _dir;
@@ -1087,6 +1091,7 @@ function src_mod_gems_reload() {
 				_vm = src_mod_card_vm_fill(global.mod_gem_vms[? _id], _bin_buf, _dir);
 			} else {
 				_vm = src_mod_card_vm_load(_bin_buf, _dir);
+				global.mod_gem_vms[? _id] = _vm;   // 新建的 VM 必须写回，否则这次重载白干
 			}
 			_vm[$ "card_data"] = _json;
 			_vm[$ "mod_dir"] = _dir;
@@ -1301,6 +1306,7 @@ function src_mod_enemies_reload() {
 				_vm = src_mod_card_vm_fill(global.mod_enemy_vms[? _id], _bin_buf, _dir);
 			} else {
 				_vm = src_mod_card_vm_load(_bin_buf, _dir);
+				global.mod_enemy_vms[? _id] = _vm;   // 新建的 VM 必须写回，否则这次重载白干
 			}
 			_vm[$ "card_data"] = _json;
 			_vm[$ "mod_dir"] = _dir;

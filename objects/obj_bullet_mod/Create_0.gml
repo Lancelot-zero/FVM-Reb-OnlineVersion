@@ -7,6 +7,10 @@ destroy_timer = -1;
 _mod_initialized = false;
 _mod_vm = undefined;
 image_speed = 0;
+vector_x = 0
+vx = 0
+vy = 0
+
 
 // 当前帧/上一帧格子坐标（用于子弹路径碰撞检测）
 grid_col = -1;
@@ -23,7 +27,7 @@ prev_grid_row = grid_row;
 if (mod_type != "" && variable_global_exists("mod_bullet_vms") && ds_map_exists(global.mod_bullet_vms, mod_type)) {
   _mod_vm = global.mod_bullet_vms[? mod_type];
   _mod_initialized = true;
-  ds_list_add(_mod_vm.instances, id);
+  //ds_list_add(_mod_vm.instances, id);
 
   if (ds_map_exists(_mod_vm.blocks, "_OBJECT_CREATE")) {
     var _bak_last = global._VM_last_created_card;

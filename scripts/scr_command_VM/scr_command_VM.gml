@@ -3663,6 +3663,187 @@ global._VM_ban_weapon        = false;
 global._VM_ban_super_weapon  = false;
 global._VM_ban_shield        = false;
 
+/// @function VM_GetCardSaveInfo(card_id, arr_name)
+/// @param card_id  卡片 id
+/// @param arr_name 命名数组名（先清空再写）
+/// @return 写入的数量（3=成功；-1=卡未解锁 / 名字为空，此时数组是空的）
+/// @desc 把这张卡**存档里**的外形/星级/技能写进命名数组：
+///         数组[0] = shape
+///         数组[1] = level
+///         数组[2] = skill
+///       复制类卡用：先 VM_GetProp(0, "prev_place_id") 拿上一张卡的 id，
+///       再用本函数读出它的存档外形/星级/技能，原样丢给 VM_SpawnPlant。
+///       （原版 obj_magic_chicken 走的是 get_card_info_simple(prev_place_id).shape/.level）
+function VM_GetCardSaveInfo(card_id_addr, arr_addr) {
+    var _id   = vm_arg(card_id_addr);
+    var _name = vm_arg(arr_addr);
+    var _vm = global.__vm;
+    if (!ds_map_exists(_vm.arrays, _name)) ds_map_add(_vm.arrays, _name, []);
+    var _arr = _vm.arrays[? _name];
+    array_resize(_arr, 0);
+    if (!is_string(_id) || _id == "") return -1;
+    var _info = get_card_info_simple(_id);
+    if (!is_struct(_info)) return -1;
+    array_push(_arr, _info[$ "shape"] ?? 0);
+    array_push(_arr, _info[$ "level"] ?? 0);
+    array_push(_arr, _info[$ "skill"] ?? 0);
+    return 3;
+}
+
+/// @function VM_DestroyInstance(inst)
+/// @param inst  目标实例（VM 包装 id 或真实 id）；0（全局哨兵）会被拒绝
+/// @return 1=已销毁；0=没销毁（id 非法 / 实例不存在 / 传了 0）
+/// @desc 直接销毁一个实例，会触发它的 Destroy 事件（mod 对象的 _OBJECT_DESTROY 也会跑）。
+///       ⚠️ 在 _OBJECT_STEP 里销毁自己时，本帧剩下的语句**还会继续执行**，
+///          脚本自己要用 `if (VM_IsDestroyed(self)) { exit }` 或类似的判断兜底。
+function VM_DestroyInstance(inst_addr) {
+    var _inst = vm_arg(inst_addr);
+    if (is_undefined(_inst) || _inst == 0) return 0;   // 0 是 VM_GetProp / VM_SetProp 的全局哨兵
+    if (_inst < 0) {
+        var _real = ds_map_find_value(global._VM_id_to_real, -_inst);
+        if (is_undefined(_real)) return 0;
+        _inst = _real;
+    }
+    if (!instance_exists(_inst)) return 0;
+    instance_destroy(_inst);
+    return 1;
+}
+
+/// @function VM_RunStep(inst, times)
+/// @param inst   目标实例（VM 包装 id 或真实 id）
+/// @param times  额外跑几轮，夹到 1~60
+/// @return 实际跑了几轮；实例不存在 / 正在被重跑（防递归）时返回 0
+/// @desc 让某个实例额外跑若干轮 Step，用来做「加速」（同一帧内多推进几帧）。
+///       一轮 = Begin Step → Step → End Step，三个事件都跑（对象没写的事件会被跳过）。
+///       本质是 `with (inst) event_perform(ev_step, ...)`，所以对 mod 对象来说
+///       **等于把它的 _OBJECT_STEP 再执行一遍**：计时器、冷却、伤害结算都会再推进。
+///       ⚠️ 防递归：同一个实例正在被重跑时，期间它再调 VM_RunStep 会直接返回 0。
+///          所以脚本里写 VM_RunStep(self, 3) 的净效果是「本帧跑 4 轮」，不会失控。
+///       ⚠️ 不碰 global.is_paused：游戏暂停时被重跑的 Step 自己会 exit，等于没加速。
+function VM_RunStep(inst_addr, times_addr) {
+    var _inst = vm_arg(inst_addr);
+    var _times = vm_arg(times_addr);
+    if (_inst < 0) {
+        var _real = ds_map_find_value(global._VM_id_to_real, -_inst);
+        if (is_undefined(_real)) return 0;
+        _inst = _real;
+    }
+    if (!instance_exists(_inst)) return 0;
+    if (is_undefined(_times) || _times < 1) _times = 1;
+    if (_times > 60) _times = 60;
+
+    if (!variable_global_exists("_VM_step_running")) global._VM_step_running = ds_map_create();
+    var _map = global._VM_step_running;
+    if (ds_map_find_value(_map, _inst) != undefined) return 0;   // 正在被重跑 → 拒绝嵌套
+    _map[? _inst] = true;
+
+    var _n = 0;
+    try {
+        for (var _k = 0; _k < _times; _k++) {
+            if (!instance_exists(_inst)) break;
+            with (_inst) event_perform(ev_step, ev_step_begin);
+            if (!instance_exists(_inst)) break;
+            with (_inst) event_perform(ev_step, ev_step_normal);
+            if (!instance_exists(_inst)) break;
+            with (_inst) event_perform(ev_step, ev_step_end);
+            _n += 1;
+        }
+    } finally {
+        ds_map_delete(_map, _inst);
+    }
+    return _n;
+}
+
+/// @function VM_DrawSpriteExt(sprite, subimg, x, y, xscale, yscale, rot, alpha)
+/// @param sprite     贴图：sprite 索引，或资源名/文件名（字符串，走 get_load_sprite 的缓存链）
+/// @param subimg     子图索引（第几帧）
+/// @param x y        屏幕坐标
+/// @param xscale     X 缩放
+/// @param yscale     Y 缩放
+/// @param rot        旋转角度（度）
+/// @param alpha      透明度 0~1
+/// @return 0=画了一张；-1=贴图不存在（什么都不画）
+/// @desc 等价于 draw_sprite_ext(sprite, subimg, x, y, xscale, yscale, rot, c_white, alpha)。
+///       只能在 _OBJECT_DRAW 块里调用——GML 的绘制函数在 Step 事件里调用是画不出东西的。
+///       贴图名解析交给 get_load_sprite()（asset_get_index → VM 临时缓存 → VM 永久缓存 → _sprite_cache），
+///       所以 VM_LoadSpritePerm_Ex / VM_LoadSprite 加载的 mod 贴图直接传文件名就能用。
+function VM_DrawSpriteExt(spr_addr, subimg_addr, x_addr, y_addr, xs_addr, ys_addr, rot_addr, alpha_addr) {
+    var _raw = vm_arg(spr_addr);
+    var _spr = is_string(_raw) ? get_load_sprite(_raw) : _raw;
+    if (!sprite_exists(_spr)) return -1;
+    var _sub = vm_arg(subimg_addr);
+    var _xs  = vm_arg(xs_addr);
+    var _ys  = vm_arg(ys_addr);
+    var _rot = vm_arg(rot_addr);
+    var _alp = vm_arg(alpha_addr);
+    if (is_undefined(_sub)) _sub = 0;
+    if (is_undefined(_xs) || _xs == 0) _xs = 1;
+    if (is_undefined(_ys) || _ys == 0) _ys = 1;
+    if (is_undefined(_rot)) _rot = 0;
+    if (is_undefined(_alp)) _alp = 1;
+    draw_sprite_ext(_spr, _sub, vm_arg(x_addr), vm_arg(y_addr), _xs, _ys, _rot, c_white, _alp);
+    return 0;
+}
+
+/// @function bullet_screen_add(spr, frames, range, scale, anim_speed, x, y, vx, vy, dmg, hits, life, type, death_obj, death_mod)
+/// @param spr        贴图：sprite 索引，或资源名/文件名（字符串，走 get_load_sprite 的缓存链，
+///                   所以 VM_LoadSpritePerm_Ex / VM_LoadSprite 加载的 mod 贴图直接传文件名就能用）
+/// @param frames     总帧数；<=0 或超过贴图实际帧数时取贴图自身帧数
+/// @param range      可打击范围：方格子半径，以子弹所在格为中心上下左右各扩 N 格；0=只算本格
+/// @param scale      缩放（横竖同值）
+/// @param anim_speed 动画速度：每帧 frame 自增多少，可以是小数；1=每帧走一帧
+/// @param hits       伤害计数：正数=最多命中多少个，每命中一个减 1，减到 0 移除（1=打一个就消失；
+///                   同一个敌人每帧最多挨一次，按格子里敌人数组的顺序结算，不按距离排序）；
+///                   -1=不限次数，范围内**所有**可命中敌人都结算
+/// @param life       存活帧数：倒计时，每帧-1，减到 0 移除；<=0 表示不自动移除
+/// @param type       子弹类型：决定能命中哪些敌人（can_hit 的 card_target_type 那一套）
+/// @param death_obj  销毁对象：非空时在这颗子弹销毁的位置创建该对象（字符串资产名）
+/// @param death_mod  销毁对象是 mod 对象时填它的 mod 名字（如 obj_effect_mod + "hades_scythe_hit"）；
+///                   原生对象留空。出界销毁不生成销毁对象
+/// @return 子弹在管理器数组里的下标；管理器或贴图不存在时返回 -1
+/// @desc 往 obj_Bullet_Screen_Management 的数组里塞一颗子弹（该实例由 obj_battle 开局创建）
+function bullet_screen_add(spr, frames, range, scale, anim_speed, x, y, vx, vy, dmg, hits, life, type = "all", death_obj = "", death_mod = "") {
+    var _mgr = instance_find(obj_Bullet_Screen_Management, 0);
+    if (!instance_exists(_mgr)) {
+        show_debug_message("[bullet_screen_add] 找不到 obj_Bullet_Screen_Management（由 obj_battle 开局创建）");
+        return -1;
+    }
+    var _spr = is_string(spr) ? get_load_sprite(spr) : spr;
+    if (!sprite_exists(_spr)) return -1;
+    var _frames = frames;
+    var _spr_frames = sprite_get_number(_spr);
+    if (is_undefined(_frames) || _frames <= 0 || _frames > _spr_frames) _frames = _spr_frames;
+    if (is_undefined(scale) || scale == 0) scale = 1;
+    if (is_undefined(anim_speed)) anim_speed = 1;
+    array_push(_mgr.list, {
+        spr:         _spr,
+        frames:      _frames,
+        cell_range:  range,
+        scale:       scale,
+        anim_speed:  anim_speed,
+        frame:       0,
+        x:           x,
+        y:           y,
+        vx:          vx,
+        vy:          vy,
+        dmg:         dmg,
+        hits:        hits,
+        life:        life,
+        target_type: type,
+        death_obj:   death_obj,
+        death_mod:   death_mod
+    });
+    return array_length(_mgr.list) - 1;
+}
+
+/// @function VM_BulletScreenAdd(spr, frames, range, scale, anim_speed, x, y, vx, vy, dmg, hits, life, type, death_obj, death_mod)
+/// @desc VM 侧接口，参数和返回值和 bullet_screen_add 一致
+function VM_BulletScreenAdd(spr_addr, frames_addr, range_addr, scale_addr, anim_speed_addr, x_addr, y_addr, vx_addr, vy_addr, dmg_addr, hits_addr, life_addr, type_addr, death_obj_addr, death_mod_addr) {
+    return bullet_screen_add(vm_arg(spr_addr), vm_arg(frames_addr), vm_arg(range_addr), vm_arg(scale_addr), vm_arg(anim_speed_addr),
+                             vm_arg(x_addr), vm_arg(y_addr), vm_arg(vx_addr), vm_arg(vy_addr), vm_arg(dmg_addr),
+                             vm_arg(hits_addr), vm_arg(life_addr), vm_arg(type_addr), vm_arg(death_obj_addr), vm_arg(death_mod_addr));
+}
+
 global.__vm = VM_Create();
 global.__vm.rng_state = 0x9E3779B9;   // VM随机种子：服务器生成并随bin同步，客户端收到后覆盖
 VM_RegisterFunction(global.__vm, VM_BanCard);         // 0
@@ -3781,6 +3962,11 @@ VM_RegisterFunction(global.__vm, VM_GetInstancesInRange);// 112
 VM_RegisterFunction(global.__vm, VM_CreateInstance);     // 113
 VM_RegisterFunction(global.__vm, VM_LoadSpritePerm_Ex);  // 114
 VM_RegisterFunction(global.__vm, VM_SetShovelFlameRate); // 115
+VM_RegisterFunction(global.__vm, VM_BulletScreenAdd);    // 116
+VM_RegisterFunction(global.__vm, VM_DrawSpriteExt);      // 117
+VM_RegisterFunction(global.__vm, VM_RunStep);            // 118
+VM_RegisterFunction(global.__vm, VM_DestroyInstance);    // 119
+VM_RegisterFunction(global.__vm, VM_GetCardSaveInfo);    // 120
 ds_map_add(global._VM_remote_funcs, "VM_SwapPlants", VM_SwapPlants);
 ds_map_add(global._VM_remote_funcs, "VM_SwapPlantRects", VM_SwapPlantRects);
 ds_map_add(global._VM_remote_funcs, "VM_CompactColumn", VM_CompactColumn);

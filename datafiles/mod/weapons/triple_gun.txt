@@ -11,23 +11,27 @@ _OBJECT_STEP {
     r = VM_GetProp(self, "grid_row")
     c = VM_GetProp(self, "grid_col")
     // 同行 c..最右列有敌人时开火
-    if (VM_EnemyInRange(r, r, c, 15, "") == 1) {
+    if (VM_EnemyInRange(r-1, r+1, c, 15, "") == 1) {
         cd = VM_GetProp(self, "cd") + 1
         if (cd >= VM_GetProp(self, "cycle")) {
             cd = 0
-            b = VM_CreateInstance("xiaolongbao_bullet", VM_GetProp(self, "x") + 40, VM_GetProp(self, "y") - 75)
+		}
+		if(cd+10>VM_GetProp(self, "cycle")){
+			if(cd%3==0){
+            b = VM_CreateInstance("xiaolongbao_bullet", VM_GetProp(self, "x") + 40, VM_GetProp(self, "y") -50)
             VM_SetProp(b, "damage", VM_GetProp(self, "atk"))
             VM_SetProp(b, "move_speed", 8)
-            VM_SetProp(b, "row", r)
-            b2 = VM_CreateInstance("xiaolongbao_bullet", VM_GetProp(self, "x") + 30, VM_GetProp(self, "y") - 115)
+            VM_SetProp(b, "row", r-1)
+            b2 = VM_CreateInstance("xiaolongbao_bullet", VM_GetProp(self, "x") + 30, VM_GetProp(self, "y") + 50)
             VM_SetProp(b2, "damage", VM_GetProp(self, "atk"))
             VM_SetProp(b2, "move_speed", 8)
-            VM_SetProp(b2, "row", r - 1)
-            b3 = VM_CreateInstance("xiaolongbao_bullet", VM_GetProp(self, "x") + 30, VM_GetProp(self, "y") - 35)
+            VM_SetProp(b2, "row", r )
+            b3 = VM_CreateInstance("xiaolongbao_bullet", VM_GetProp(self, "x") + 30, VM_GetProp(self, "y") + 150)
             VM_SetProp(b3, "damage", VM_GetProp(self, "atk"))
             VM_SetProp(b3, "move_speed", 8)
             VM_SetProp(b3, "row", r + 1)
             VM_PlaySound("snd_shot")
+			}
         }
         VM_SetProp(self, "cd", cd)
     } else {

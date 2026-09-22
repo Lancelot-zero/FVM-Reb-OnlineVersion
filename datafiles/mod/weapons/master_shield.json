@@ -1,0 +1,12 @@
+{
+  "name": "主宰之盾",
+  "description": "主宰之盾：增加800生命值",
+  "sprite": "spr_master_shield_0.png",
+  "icon": "spr_master_shield_icon_0.png",
+  "slot": "secondary_weapon",
+  "hp_increase": 800,
+  "shop": {
+    "cost": "150000",
+    "description": "主宰之盾：增加800生命值"
+  }
+}

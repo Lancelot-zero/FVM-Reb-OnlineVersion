@@ -1,0 +1,184 @@
+// 冥王战镰：超级武器
+// 语法依据 mod/docs/help.md：不支持 && ||；花括号必写；一行一句
+//
+// 动画：武器对象靠 idle_anim / attack_anim / flash_speed 驱动 image_index，
+//       三者默认为 0 会把形象锁在第 0 帧，必须显式设置。
+//
+// 形态：只做一种形态，不再按 ghost_shape 分支。
+//
+// 索敌：原版是 with (obj_enemy_parent) { if (hp > 0) ... }，即"场上有没有活敌人"，
+//       与位置无关。VM_GetEnemyCount() 语义一一对应，且规避了
+//       VM_EnemyInRange / VM_GetInstancesInRange 两处文档签名冲突。
+//
+// 开火时序照原版：攻击开始后第 32 帧首发，之后每 10 帧一发；
+//       attack_anim(16) x flash_speed(5) = 80 帧收招，然后 cooldown = cycle。
+//
+// 数值：按满级配置（原版各 _impact 数组的第 16 项）
+//       atk 1897 / cycle 300 / bullet_amount 5 / ghost_shape 2 / bullet_shape 4
+//       其中 atk 与 cycle 走 JSON（obj_weapon_mod 会读 weapon_info），
+//       其余三个 JSON 自定义字段不上实例，所以在 _OBJECT_CREATE 里自己设。
+//       满级形态正好对应 spr_hades_scythe_2_0.png 与 spr_hades_scythe_bullet_4_0.png。
+//
+// 调试开关 debug_fast（在 _OBJECT_CREATE 里设置）：
+//       0 = 正式节奏（当前）：第 32 帧首发 / 间隔 10 帧 / 打完歇 cycle / 需要场上有敌人
+//       1 = 调试模式：本体一出现就无条件开火，首发第 1 帧、间隔 6 帧、打完只歇 30 帧
+
+// 贴图只在这里加载一次（永久缓存，bin 重载不清除）
+// 内置贴图属于误打包，不能依赖，所以显式加载 mod 目录下的 PNG。
+// 加载后名字就是文件名（含扩展名），脚本里直接把它当 sprite_index 用。
+// 帧数 / 原点取自 removed_sprites.json。
+_OBJECT_CFG {
+    // 商店/背包图标：1 帧，原点 (35,35)
+    // 必须在注册武器之前加载好：src_mod 是按 JSON 的 sprite/icon 名去 get_load_sprite 查的，
+    // 查不到会给一张空白占位图而且不报错（图标就是这么消失的）。
+    VM_LoadSpritePerm_Ex("spr_hades_scythe_icon_0.png", 1, 35, 35)
+
+    // 本体：36 帧，原点 (202,235)
+    VM_LoadSpritePerm_Ex("spr_hades_scythe_2_0.png", 36, 202, 235)
+
+    // 入场特效：16 帧，原点 (202,164)
+    VM_LoadSpritePerm_Ex("spr_hades_scythe_effect_2_0.png", 16, 202, 164)
+
+    // 子弹：6 帧，原点 (58,58)
+    VM_LoadSpritePerm_Ex("spr_hades_scythe_bullet_4_0.png", 6, 58, 58)
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+
+    // 固定位置，不跟随玩家
+    VM_SetProp(self, "parent_player", "")
+    VM_SetProp(self, "x", 500)
+    VM_SetProp(self, "lock_y", 540)
+    VM_SetProp(self, "y", 540)
+    VM_SetProp(self, "depth", -500)
+    VM_SetProp(self, "image_xscale", 1.8)
+    VM_SetProp(self, "image_yscale", 1.8)
+
+    // phase: 0=入场特效 1=本体   state: 0=待机 1=攻击
+    VM_SetProp(self, "phase", 0)
+    VM_SetProp(self, "anim", 0)
+    VM_SetProp(self, "state", 0)
+    VM_SetProp(self, "atk_timer", 0)
+    VM_SetProp(self, "fired", 0)
+    VM_SetProp(self, "cooldown", 0)
+
+    // 每次攻击打几发。满级 = 5（原版 bullet_amount_impact 的末位）。
+    // ⚠️ 必须自己设：JSON 里的自定义字段（bullet_amount）不会挂到实例上
+    //    —— obj_weapon_mod 只设 weapon_id/weapon_info/atk/cycle 那几个固定属性，
+    //    去读没设过的属性只会拿到 undefined，后面的判断就全废了。
+    VM_SetProp(self, "shot_count", 5)
+
+    // 子弹出生点相对镰刀的纵向偏移（原版是 +50，这里调小）。
+    // 想再调高度只改这一个数。
+    VM_SetProp(self, "fire_dy", 0)
+
+    // 调试开关：1 = 本体一出现就无条件开火、打完只歇 30 帧
+    //           0 = 正式节奏（第 32 帧首发 / 间隔 10 / 打完歇 cycle / 需要场上有敌人）
+    VM_SetProp(self, "debug_fast", 0)
+
+    // 入场特效：16 帧，每 2 帧走一格
+    VM_SetProp(self, "sprite_index", "spr_hades_scythe_effect_2_0.png")
+    VM_SetProp(self, "idle_anim", 16)
+    VM_SetProp(self, "attack_anim", 0)
+    VM_SetProp(self, "flash_speed", 2)
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+
+    // 每帧锁定位置（lock_y 在本体出现时变为 640，即整体下移 100）
+    VM_SetProp(self, "x", 500)
+    VM_SetProp(self, "y", VM_GetProp(self, "lock_y"))
+    VM_SetProp(self, "depth", -500)
+
+    phase = VM_GetProp(self, "phase")
+
+    // 第一阶段：入场特效播完（16 帧 x 2）后切成镰刀本体
+    if (phase == 0) {
+        anim = VM_GetProp(self, "anim") + 1
+        VM_SetProp(self, "anim", anim)
+
+        if (anim >= 32) {
+            VM_SetProp(self, "sprite_index", "spr_hades_scythe_2_0.png")
+
+            // 本体出现后整体下移 100
+            VM_SetProp(self, "lock_y", 640)
+
+            // 本体动画：待机 20 帧 + 攻击 16 帧，每 5 帧走一格
+            VM_SetProp(self, "idle_anim", 20)
+            VM_SetProp(self, "attack_anim", 16)
+            VM_SetProp(self, "flash_speed", 5)
+
+            VM_SetProp(self, "phase", 1)
+        }
+    } else {
+        // 每帧读数值，读不到时用原版基准值兜底，避免静默失效
+        ak = VM_GetProp(self, "atk")
+        if (ak < 1) {
+            ak = 230
+        }
+        cyc = VM_GetProp(self, "cycle")
+        if (cyc < 1) {
+            cyc = 900
+        }
+        n = VM_GetProp(self, "shot_count")
+        if (n < 1) {
+            n = 1
+        }
+
+        // 开火节奏：正式版 = 第 32 帧首发 / 间隔 10 / 歇 cycle
+        //           调试版 = 第 1 帧首发 / 间隔 6 / 歇 30
+        dbf = VM_GetProp(self, "debug_fast")
+        first = 32
+        gap = 10
+        rest = cyc
+        if (dbf == 1) {
+            first = 1
+            gap = 6
+            rest = 30
+        }
+
+        if (VM_GetProp(self, "state") == 0) {
+            // ---- 待机 ----
+            if (dbf == 1) {
+                // 调试：不等冷却、不等敌人，直接开火
+                VM_SetProp(self, "state", 1)
+                VM_SetProp(self, "atk_timer", 0)
+                VM_SetProp(self, "fired", 0)
+            } elif (VM_GetProp(self, "cooldown") > 0) {
+                // 冷却中
+                VM_SetProp(self, "cooldown", VM_GetProp(self, "cooldown") - 1)
+            } elif (VM_GetEnemyCount() > 0) {
+                // 场上任意位置有敌人就开火
+                VM_SetProp(self, "state", 1)
+                VM_SetProp(self, "atk_timer", 0)
+                VM_SetProp(self, "fired", 0)
+            }
+        } else {
+            // ---- 攻击中 ----
+            at = VM_GetProp(self, "atk_timer") + 1
+            VM_SetProp(self, "atk_timer", at)
+
+            // 首发 + 后续间隔（数值见上面的 dbf 分支）
+            fidx = VM_GetProp(self, "fired")
+            if (fidx < n) {
+                if (at >= (first + fidx * gap)) {
+                    // 生成 mod 子弹：obj_bullet_mod + mod_type 指定用哪套逻辑
+                    b = VM_CreateInstance("obj_bullet_mod", 620, VM_GetProp(self, "lock_y") + VM_GetProp(self, "fire_dy"))
+                    VM_SetProp(b, "mod_type", "hades_scythe_bullet")
+                    VM_SetProp(b, "damage", ak)
+                    VM_PlaySound("snd_shot")
+                    VM_SetProp(self, "fired", fidx + 1)
+                }
+            }
+
+            // 收招：attack_anim(16) x flash_speed(5) = 80 帧
+            if (at >= 80) {
+                VM_SetProp(self, "state", 0)
+                VM_SetProp(self, "atk_timer", 0)
+                VM_SetProp(self, "cooldown", rest)
+            }
+        }
+    }
+}

@@ -13,7 +13,7 @@ grid_row = _gp.row;
 if (!_mod_initialized && mod_type != "" && variable_global_exists("mod_bullet_vms") && ds_map_exists(global.mod_bullet_vms, mod_type)) {
   _mod_vm = global.mod_bullet_vms[? mod_type];
   _mod_initialized = true;
-  ds_list_add(_mod_vm.instances, id);
+  //ds_list_add(_mod_vm.instances, id);
 
   if (ds_map_exists(_mod_vm.blocks, "_OBJECT_CREATE")) {
     var _bak_last = global._VM_last_created_card;
@@ -50,4 +50,10 @@ if (destroy_timer == 0) {
 if (destroy_timer > 0) {
   destroy_timer -= 1;
   if (destroy_timer <= 0) instance_destroy();
+}
+
+x += vx
+y += vy
+if x > 2200 or y > 1200 or x < 0 or y < 0 {
+    instance_destroy();
 }

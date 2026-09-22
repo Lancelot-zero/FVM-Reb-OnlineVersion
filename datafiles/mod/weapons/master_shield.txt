@@ -1,0 +1,48 @@
+// 主宰之盾：副武器（盾牌）
+//
+// ── 副武器在引擎里是「两个实例」──
+//   Mouse_53.gml 放盾的时候会建两个东西：
+//     ① obj_player_shield  —— 盾牌本体。Create 里 image_alpha = 0，自己不画任何东西，
+//                             负责加血（hp_increase）和原版那 5 个盾宝石
+//                             （产火苗 / 减速 / 流血 / 护盾 / 强化），逻辑全在它 Step 里。
+//     ② obj_weapon_mod     —— 跟随玩家，读 global._mod_pending_weapon_id 拿到副武器 id，
+//                             设 sprite_index = weapon_info.sprite，然后执行本 .bin 的
+//                             _OBJECT_CREATE / _OBJECT_STEP / _OBJECT_DRAW。
+//                             盾牌的形象和自定义逻辑走这个实例。
+//   只有「在 global.mod_weapon_vms 里注册过的 mod 盾」才会挂 ②，
+//   内置盾（cookie_shield / oreo_shield / cut_cake_shield）只建 ①，
+//   免得把它们的图标当盾牌画在玩家身上。
+//
+// ── 这个 .bin 的职责 ──
+//   _OBJECT_CFG    ：把自带 PNG 预加载进永久缓存（注册武器时会按 JSON 的 sprite/icon 去查，
+//                    必须在注册之前加载好，否则 get_load_sprite 会返回空白占位图且不报错）。
+//   _OBJECT_CREATE ：把形象和缩放显式钉死，不依赖 obj_weapon_mod 的默认值。
+//   _OBJECT_STEP / _OBJECT_DRAW ：需要盾牌有额外行为/绘制时在这里加。
+//
+// 帧数 / 原点取自 removed_sprites.json：
+//   spr_master_shield       62x53   原点 (31, 53)   1 帧
+//   spr_master_shield_icon  70x70   原点 (35, 35)   1 帧
+
+_OBJECT_CFG {
+    VM_LoadSpritePerm_Ex("spr_master_shield_0.png", 1, 31, 53)
+    VM_LoadSpritePerm_Ex("spr_master_shield_icon_0.png", 1, 35, 35)
+
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+	VM_ShowNotice("王者盾牌")
+    // 贴图：显式指定，不依赖 weapon_info.sprite 的解析结果
+    VM_SetProp(self, "sprite_index", "spr_master_shield_0.png")
+    VM_SetProp(self, "image_xscale", 1.6)
+    VM_SetProp(self, "image_yscale", 1.6)
+    VM_SetProp(self, "image_alpha", 1)
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+
+    // 盾牌往下挪 140 像素。想更靠下就改大，想往上就写 0 - 140（VM 不支持负数字面量）
+    y = VM_GetProp(self, "y")
+    VM_SetProp(self, "y", y + 100)
+}

@@ -6,6 +6,7 @@ surface_reset_target();
 depth = 50
 
 instance_create_depth(0,0,-900,obj_flame_manager)
+instance_create_depth(0,0,-700,obj_Bullet_Screen_Management)   // 屏幕弹幕管理器：全场弹幕都塞它一个实例
 instance_create_depth(0,0,0,obj_event_manager)
 //instance_create_depth(450,1040,-900,obj_boss_hpbar)
 var mus_inst = instance_create_depth(0,0,0,obj_battle_music_controller)

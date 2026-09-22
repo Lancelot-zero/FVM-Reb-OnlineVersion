@@ -252,7 +252,7 @@ function package_character(plant_inst){
 		if (_mw.id != "") {
 			_eq.main_weapon_id = global.save_data.equipped_items.main_weapon.id;
 			var atk =get_weapon_info(_mw.id).atk
-			if get_gem_index("attack_gem")!= -1{
+			if get_gem_index("attack_gem")!= -1 && variable_struct_exists(get_weapon_info(_mw.id), "atk_impact"){
 				atk = get_weapon_info(_mw.id).atk_impact[get_gem_level("attack_gem")]
 			}
 			_eq.main_weapon_atk = atk;

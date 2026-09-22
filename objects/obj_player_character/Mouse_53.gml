@@ -75,11 +75,38 @@ if not is_placed{
 			s_inst.grid_row = grid_row
 			s_inst.grid_col = grid_col
 			var main_info = get_weapon_info(global.save_data.equipped_items.secondary_weapon.id)
-			hp += main_info.hp_increase
-			max_hp += main_info.hp_increase
+			// hp_increase 是条件字段（JSON 里不写就没有），不能无条件读
+			if (variable_struct_exists(main_info, "hp_increase")) {
+				hp += main_info.hp_increase
+				max_hp += main_info.hp_increase
+			}
 			if get_gem_index("health_gem") != -1{
 				hp += get_gem_info("health_gem").hp_increase * (get_gem_level("health_gem")+1)
 				max_hp += get_gem_info("health_gem").hp_increase * (get_gem_level("health_gem")+1)
+			}
+			// 副武器再挂一个 obj_weapon_mod：
+			//   obj_player_shield 照旧负责加血 + 原版盾宝石（产火苗/减速/流血/护盾/强化）
+			//   这个实例负责跑 mod 盾 .bin 的三个块，并把武器贴图显示出来
+			// 只有真的加载了 mod 盾 .bin 才挂，免得到内置盾（cookie/oreo/cut_cake）头上画个图标
+			var _sec_id = global.save_data.equipped_items.secondary_weapon.id
+			if variable_global_exists("mod_weapon_vms") && ds_map_exists(global.mod_weapon_vms, _sec_id){
+				global._mod_pending_weapon_id = _sec_id
+				var _mod_shield = instance_create_depth(x-10,y-100,depth-1,obj_weapon_mod)
+				_mod_shield.parent_player = id
+				_mod_shield.grid_row = grid_row
+				_mod_shield.grid_col = grid_col
+			}
+			// 副武器自己的宝石也要建对象（原来只建了盾牌本体，宝石一个都不出现）
+			var sec_gem_list = global.save_data.equipped_items.secondary_weapon.gems
+			for(var i = 0 ; i < array_length(sec_gem_list);i++){
+				var gem_id = sec_gem_list[i]
+				if array_get_index(global.banned_gems_online, gem_id) != -1 { continue; }
+				var gem_info = get_gem_info(gem_id)
+				if gem_info.obj != noone{
+					global._mod_pending_gem_id = gem_id;
+					instance_create_depth(390,213+gem_index*80,-500,gem_info.obj);
+					gem_index++
+				}
 			}
 		}
 		if global.save_data.equipped_items.super_weapon.id != ""&&global._VM_ban_super_weapon==false{
@@ -89,6 +116,18 @@ if not is_placed{
 			main_weapon_inst.parent_player = id
 			main_weapon_inst.grid_row = grid_row
 			main_weapon_inst.grid_col = grid_col
+			// 超级武器的宝石同理
+			var sup_gem_list = global.save_data.equipped_items.super_weapon.gems
+			for(var i = 0 ; i < array_length(sup_gem_list);i++){
+				var gem_id = sup_gem_list[i]
+				if array_get_index(global.banned_gems_online, gem_id) != -1 { continue; }
+				var gem_info = get_gem_info(gem_id)
+				if gem_info.obj != noone{
+					global._mod_pending_gem_id = gem_id;
+					instance_create_depth(390,213+gem_index*80,-500,gem_info.obj);
+					gem_index++
+				}
+			}
 		}
 	}
 	

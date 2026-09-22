@@ -1,0 +1,21 @@
+{
+  "name": "冥王战镰",
+  "description": "冥王战镰：∞形轨迹发射旋转镰刀",
+  "sprite": "spr_hades_scythe_icon_0.png",
+  "icon": "spr_hades_scythe_icon_0.png",
+  "slot": "super_weapon",
+  "atk": 1897,
+  "cycle": 300,
+  "ghost_shape": 2,
+  "bullet_shape": 4,
+  "bullet_amount": 5,
+  "atk_impact": [356, 414, 471, 529, 609, 690, 782, 908, 1035, 1161, 1380, 1495, 1575, 1656, 1736, 1897],
+  "cycle_impact": [807, 780, 753, 726, 690, 654, 618, 564, 510, 480, 390, 375, 360, 345, 330, 300],
+  "bullet_amount_impact": [1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 5],
+  "bullet_shape_impact": [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 3, 3, 4, 4],
+  "ghost_shape_impact": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 2, 2],
+  "shop": {
+    "cost": "250000",
+    "description": "冥王战镰：∞形轨迹发射旋转镰刀"
+  }
+}

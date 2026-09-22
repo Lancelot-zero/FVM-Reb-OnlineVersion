@@ -1,0 +1,44 @@
+
+_OBJECT_CFG{
+    VM_LoadSpritePerm_Ex("define_sun_god_3_0.png", 29,55,150)
+    VM_ShellPrint("产火测试插件加载")
+}
+
+// 测试产火卡：每隔攻击间隔产出一朵火苗（与小火炉同款 obj_flame 逻辑）
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+    VM_SetProp(self, "cd", 0)
+    VM_SetProp(self, "sprite_index", "define_sun_god_3_0.png")
+    VM_SetProp(self, "attack_anim", 18)
+    VM_SetProp(self, "idle_anim", 11)
+    VM_SetProp(self, "plant_type", "normal")
+    VM_SetProp(self, "flame_produce", 25)
+    VM_SetProp(self, "first_produce_delay", 60)
+    VM_SetProp(self, "first_produce_time", 1)
+	k=0
+	while(k<12){
+		k=k+1
+		f = VM_CreateInstance("flame", VM_GetProp(self, "x"), VM_GetProp(self, "y") - 60)
+		VM_SetProp(f, "value", 25)
+	}
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+    cd = VM_GetProp(self, "cd") + 1
+    if (cd >= 78) {
+        cd = 0
+		k = 0
+		while(k<12){
+			k=k+1
+			f = VM_CreateInstance("flame", VM_GetProp(self, "x"), VM_GetProp(self, "y") - 60)
+        	VM_SetProp(f, "value", 25)
+   		}
+		 VM_SetProp(self, "first_produce_time", VM_GetProp(self, "first_produce_time")+1)
+		
+		if(VM_GetProp(self, "first_produce_time")>=5){
+			VM_SetProp(self, "hp", 0)
+		}
+    }
+    VM_SetProp(self, "cd", cd)
+}

@@ -1,47 +1,62 @@
 // 包子风暴炮：任意一行有敌人时，按攻击间隔向全屏六行各发射一发包子
 _OBJECT_CREATE {
     self = VM_GetCurCard()
-    VM_SetProp(self, "sprite_index", "spr_howitzer_icon")
+    VM_SetProp(self, "parent_player_history", VM_GetProp(self, "parent_player"))
+    VM_SetProp(self, "parent_player", "")
     VM_SetProp(self, "cd", 0)
     VM_ShellPrint("baozi_storm create")
+	
 }
 
 _OBJECT_STEP {
     self = VM_GetCurCard()
     r = VM_GetProp(self, "grid_row")
     c = VM_GetProp(self, "grid_col")
+
+	VM_SetProp(self, "depth", -400)
+    VM_SetProp(self, "x", 500)
+    VM_SetProp(self, "y", 400)
     // 面前任意位置有敌人时开火
-    if (VM_EnemyInRange(0, 5, c, 15, "") == 1) {
+    if (VM_EnemyInRange(0, 6, c, 15, "") == 1) {
         cd = VM_GetProp(self, "cd") + 1
-        if (cd >= VM_GetProp(self, "cycle")) {
-            cd = 0
-            b0 = VM_CreateInstance("xiaolongbao_bullet", VM_GetProp(self, "x") + 40, VM_GetProp(self, "y") - 75 + 40 * (0 - r))
+        if(cd>70){
+			cd = 0
+		}
+        else if (cd >= 50) {
+			if(cd%6==0){
+            b0 = VM_CreateInstance("xiaolongbao_bullet", 500, VM_GetProp(self, "y") +200 + 107 * (0 - r))
             VM_SetProp(b0, "damage", VM_GetProp(self, "atk"))
             VM_SetProp(b0, "move_speed", 9)
             VM_SetProp(b0, "row", 0)
-            b1 = VM_CreateInstance("xiaolongbao_bullet", VM_GetProp(self, "x") + 40, VM_GetProp(self, "y") - 75 + 40 * (1 - r))
+            b1 = VM_CreateInstance("xiaolongbao_bullet", 500, VM_GetProp(self, "y") +200 + 107 * (1 - r))
             VM_SetProp(b1, "damage", VM_GetProp(self, "atk"))
             VM_SetProp(b1, "move_speed", 9)
             VM_SetProp(b1, "row", 1)
-            b2 = VM_CreateInstance("xiaolongbao_bullet", VM_GetProp(self, "x") + 40, VM_GetProp(self, "y") - 75 + 40 * (2 - r))
+            b2 = VM_CreateInstance("xiaolongbao_bullet", 500, VM_GetProp(self, "y") +200 + 107 * (2 - r))
             VM_SetProp(b2, "damage", VM_GetProp(self, "atk"))
             VM_SetProp(b2, "move_speed", 9)
             VM_SetProp(b2, "row", 2)
-            b3 = VM_CreateInstance("xiaolongbao_bullet", VM_GetProp(self, "x") + 40, VM_GetProp(self, "y") - 75 + 40 * (3 - r))
+            b3 = VM_CreateInstance("xiaolongbao_bullet", 500, VM_GetProp(self, "y") +200 + 107 * (3 - r))
             VM_SetProp(b3, "damage", VM_GetProp(self, "atk"))
             VM_SetProp(b3, "move_speed", 9)
             VM_SetProp(b3, "row", 3)
-            b4 = VM_CreateInstance("xiaolongbao_bullet", VM_GetProp(self, "x") + 40, VM_GetProp(self, "y") - 75 + 40 * (4 - r))
+            b4 = VM_CreateInstance("xiaolongbao_bullet", 500, VM_GetProp(self, "y") +200 + 107 * (4 - r))
             VM_SetProp(b4, "damage", VM_GetProp(self, "atk"))
             VM_SetProp(b4, "move_speed", 9)
             VM_SetProp(b4, "row", 4)
-            b5 = VM_CreateInstance("xiaolongbao_bullet", VM_GetProp(self, "x") + 40, VM_GetProp(self, "y") - 75 + 40 * (5 - r))
+            b5 = VM_CreateInstance("xiaolongbao_bullet", 500, VM_GetProp(self, "y") +200 + 107 * (5 - r))
             VM_SetProp(b5, "damage", VM_GetProp(self, "atk"))
             VM_SetProp(b5, "move_speed", 9)
             VM_SetProp(b5, "row", 5)
             VM_PlaySound("snd_shot")
+	        b5 = VM_CreateInstance("xiaolongbao_bullet", 500, VM_GetProp(self, "y") +200 + 107 * (6 - r))
+            VM_SetProp(b5, "damage", VM_GetProp(self, "atk"))
+            VM_SetProp(b5, "move_speed", 9)
+            VM_SetProp(b5, "row", 6)
+            VM_PlaySound("snd_shot")
+			}
         }
-        VM_SetProp(self, "cd", cd)
+		VM_SetProp(self, "cd", cd)
     } else {
         VM_SetProp(self, "cd", 0)
     }

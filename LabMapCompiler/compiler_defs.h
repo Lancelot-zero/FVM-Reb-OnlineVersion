@@ -323,6 +323,11 @@ static std::vector<FuncDef> FUNC_DEFS = {
     {"VM_CreateInstance",          3,  {PT_STRING, PT_FLOAT, PT_FLOAT},                 PT_INT},          // 113 — 按像素坐标创建实例（子弹等）
     {"VM_LoadSpritePerm_Ex",       4,  {PT_STRING, PT_INT, PT_INT, PT_INT},             PT_INT},          // 114 — 永久缓存贴图带原点，不被 bin 重载清理
     {"VM_SetShovelFlameRate",      1,  {PT_FLOAT},                                       PT_ANY},          // 115 — 铲子返还火苗系数（-1=原逻辑，0~1=直接用）
+    {"VM_BulletScreenAdd",        15,  {PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY}, PT_INT}, // 116 — 屏幕弹幕管理器：贴图,总帧数,打击范围,缩放,动画速度,x,y,vx,vy,伤害,伤害计数,存活帧数,子弹类型,销毁对象,mod名字
+    {"VM_DrawSpriteExt",           8,  {PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY}, PT_INT}, // 117 — 直接 draw_sprite_ext（贴图,子图,x,y,xscale,yscale,rot,alpha；固定 c_white），只能在 _OBJECT_DRAW 里用
+    {"VM_RunStep",                 2,  {PT_INT, PT_INT}, PT_INT}, // 118 — 让实例额外跑 N 轮 Step（实例,轮数），一轮 = Begin Step + Step + End Step，做加速用
+    {"VM_DestroyInstance",         1,  {PT_INT}, PT_INT}, // 119 — 直接销毁一个实例（会触发它的 Destroy 事件）
+    {"VM_GetCardSaveInfo",         2,  {PT_STRING, PT_STRING}, PT_INT}, // 120 — 读卡片存档的外形/星级/技能写进命名数组（数组[0]=shape,[1]=level,[2]=skill）；3=成功，-1=卡未解锁/名字空
 };
 
 // ============================================================

@@ -21,7 +21,7 @@ if (is_struct(weapon_info)) {
 	atk = weapon_info.atk
 	cycle = weapon_info.cycle
 	sprite_index = weapon_info.sprite
-	if (get_gem_index("attack_gem") != -1) {
+	if (get_gem_index("attack_gem") != -1 && variable_struct_exists(weapon_info, "atk_impact")) {
 		atk = weapon_info.atk_impact[get_gem_level("attack_gem")]
 	}
 }

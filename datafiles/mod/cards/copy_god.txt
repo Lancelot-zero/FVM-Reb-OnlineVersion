@@ -1,0 +1,259 @@
+// 至尊创造神（复制卡）：复制 5 张「最近种下、且能复制的那张卡」
+// 按 mod 分支的梵天 shape3（obj_brahma/Step_0.gml）重写。
+//
+// ── 搜格方式：不是十字，是由内向外的螺旋 ──
+//   ① 先放自己那格（无条件）
+//   ② 然后 d = 1,2,3... 一圈圈往外，每圈里的顺序照原版排序结果：
+//        同一列（上/下）  ← priority 0
+//        同一行（左/右）  ← priority 1
+//        其余            ← priority 2，按 row 升序、同一行内 col 升序
+//   ③ 坐标要在场内、且该格没有卡片，才种；凑满 5 张就停
+//
+// ── 目标来源 ──
+//   原版读 global.last_placed_card_id / _shape，这两个全局在当前 main 分支**不存在**。
+//   这里改用 global._recent_card_type_1~5（card_created.gml:218-241 维护，去重、_1 最新），
+//   从 _1 开始依次挑第一个不在黑名单里的。
+//
+// ── ⚠️ 读取时机：必须在 _OBJECT_CREATE 里读 ──
+//   obj_card_slot 是「先建卡(261) → 再 card_created(265)」，所以在 CREATE 里读到的
+//   还是之前种的那些；到 STEP 里读就变成自己了（会无限套娃，踩过）。
+
+_OBJECT_CFG {
+    // 卡面图标：1 帧，原点 (170, 215)
+    VM_LoadSpritePerm_Ex("spr_brahma_icon_3_0.png", 1, 170, 215)
+
+    // 本体：35 帧，原点 (170, 216)
+    VM_LoadSpritePerm_Ex("spr_brahma_3_0.png", 35, 170, 216)
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+
+    VM_SetProp(self, "sprite_index", "spr_brahma_3_0.png")
+    VM_SetProp(self, "idle_anim", 35)
+    VM_SetProp(self, "attack_anim", 0)
+    VM_SetProp(self, "flash_speed", 5)
+
+    // 黑名单数组："" 和几张复制卡 + 自己
+    if (VM_ArraySize("cg_bl") < 1) {
+        VM_ArrayADD("cg_bl", "")
+        VM_ArrayADD("cg_bl", "copy_god")
+        VM_ArrayADD("cg_bl", "brahma")
+        VM_ArrayADD("cg_bl", "magic_chicken")
+        VM_ArrayADD("cg_bl", "ice_cream")
+    }
+
+    // 最近种植的 5 种卡（_1 最新）
+    r1 = VM_GetProp(0, "_recent_card_type_1")
+    r2 = VM_GetProp(0, "_recent_card_type_2")
+    r3 = VM_GetProp(0, "_recent_card_type_3")
+    r4 = VM_GetProp(0, "_recent_card_type_4")
+    r5 = VM_GetProp(0, "_recent_card_type_5")
+    if (VM_IsUndefined(r1)) {
+        r1 = ""
+    }
+    if (VM_IsUndefined(r2)) {
+        r2 = ""
+    }
+    if (VM_IsUndefined(r3)) {
+        r3 = ""
+    }
+    if (VM_IsUndefined(r4)) {
+        r4 = ""
+    }
+    if (VM_IsUndefined(r5)) {
+        r5 = ""
+    }
+    VM_ShellPrint("cg recent=[", r1, "][", r2, "][", r3, "][", r4, "][", r5, "]")
+
+    // 依次试，取第一个不在黑名单里的
+    bln = VM_ArraySize("cg_bl")
+    tg = ""
+    k = 1
+    while (k <= 5) {
+        cand = ""
+        if (k == 1) {
+            cand = r1
+        }
+        if (k == 2) {
+            cand = r2
+        }
+        if (k == 3) {
+            cand = r3
+        }
+        if (k == 4) {
+            cand = r4
+        }
+        if (k == 5) {
+            cand = r5
+        }
+        if (tg == "") {
+            if (cand != "") {
+                bad = 0
+                j = 0
+                while (j < bln) {
+                    if (VM_ArrayGet("cg_bl", j) == cand) {
+                        bad = 1
+                    }
+                    j = j + 1
+                }
+                if (bad == 0) {
+                    tg = cand
+                }
+            }
+        }
+        k = k + 1
+    }
+
+    VM_SetProp(self, "target", tg)
+    VM_ShellPrint("cg create target=[", tg, "]")
+
+    VM_SetProp(self, "copy_timer", 0)
+    VM_SetProp(self, "copied", 0)
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+
+    t = VM_GetProp(self, "copy_timer")
+    if (VM_IsUndefined(t)) {
+        t = 0
+    }
+    t = t + 1
+    VM_SetProp(self, "copy_timer", t)
+
+    if (t == 70) {
+        copied = VM_GetProp(self, "copied")
+        if (VM_IsUndefined(copied)) {
+            copied = 0
+        }
+        if (copied == 0) {
+            VM_SetProp(self, "copied", 1)
+
+            tg = VM_GetProp(self, "target")
+            if (VM_IsUndefined(tg)) {
+                tg = ""
+            }
+            VM_ShellPrint("cg @70 target=[", tg, "]")
+
+            c = VM_GetProp(self, "grid_col")
+            r = VM_GetProp(self, "grid_row")
+            bad = 0
+            if (tg == "") {
+                bad = 1
+            }
+            if (VM_IsUndefined(c)) {
+                bad = 1
+            }
+            if (VM_IsUndefined(r)) {
+                bad = 1
+            }
+
+            if (bad == 1) {
+                VM_ShellPrint("cg @70 SKIP: 没有目标或坐标无效")
+            } else {
+                // 目标卡存档里的外形 / 星级 / 技能（-1 = 读不到，就用 0 / 0 / 0）
+                sh = 0
+                lv = 0
+                sk = 0
+                if (VM_GetCardSaveInfo(tg, "cg_info") == 3) {
+                    sh = VM_ArrayGet("cg_info", 0)
+                    lv = VM_ArrayGet("cg_info", 1)
+                    sk = VM_ArrayGet("cg_info", 2)
+                }
+                gr = VM_GetProp(0, "grid_rows")
+                gc = VM_GetProp(0, "grid_cols")
+                if (VM_IsUndefined(gr)) {
+                    gr = 99
+                }
+                if (VM_IsUndefined(gc)) {
+                    gc = 99
+                }
+                VM_ShellPrint("cg @70 sh=", sh, " lv=", lv, " sk=", sk, " grid=", gc, "x", gr)
+
+                // ① 自己那格，无条件（原版也是优先试自身格）
+                VM_ShellPrint("cg spawn self ret=", VM_SpawnPlant(tg, c, r, sh, lv, sk))
+
+                // ② 按原版顺序把候选格生成到命名数组（cgc = 列, cgr = 行）
+                VM_ArrayClear("cgc")
+                VM_ArrayClear("cgr")
+                n = 0
+                d = 1
+                while (d <= 8) {
+                    // 同一列：上、下
+                    VM_ArraySet("cgc", n, c)
+                    VM_ArraySet("cgr", n, r - d)
+                    n = n + 1
+                    VM_ArraySet("cgc", n, c)
+                    VM_ArraySet("cgr", n, r + d)
+                    n = n + 1
+                    // 同一行：左、右
+                    VM_ArraySet("cgc", n, c - d)
+                    VM_ArraySet("cgr", n, r)
+                    n = n + 1
+                    VM_ArraySet("cgc", n, c + d)
+                    VM_ArraySet("cgr", n, r)
+                    n = n + 1
+                    // 其余：按 row 升序、同行内 col 升序
+                    dr = 0 - d
+                    while (dr <= d) {
+                        if (dr != 0) {
+                            if (dr < 0) {
+                                w = 0 - dr
+                            } else {
+                                w = dr
+                            }
+                            w = d - w
+                            if (w > 0) {
+                                VM_ArraySet("cgc", n, c - w)
+                                VM_ArraySet("cgr", n, r + dr)
+                                n = n + 1
+                                VM_ArraySet("cgc", n, c + w)
+                                VM_ArraySet("cgr", n, r + dr)
+                                n = n + 1
+                            }
+                        }
+                        dr = dr + 1
+                    }
+                    d = d + 1
+                }
+                VM_ShellPrint("cg candidates n=", n)
+
+                // ③ 按顺序填，凑满 5 张（自己那格已占 1 张）
+                made = 1
+                i = 0
+                while (i < n) {
+                    if (made < 5) {
+                        cc = VM_ArrayGet("cgc", i)
+                        rr = VM_ArrayGet("cgr", i)
+                        ok = 1
+                        if (rr < 0) {
+                            ok = 0
+                        }
+                        if (rr >= gr) {
+                            ok = 0
+                        }
+                        if (cc < 0) {
+                            ok = 0
+                        }
+                        if (cc >= gc) {
+                            ok = 0
+                        }
+                        if (ok == 1) {
+                            if (VM_GetPlantCountAt(cc, rr, "all") < 1) {
+                                VM_SpawnPlant(tg, cc, rr, sh, lv, sk)
+                                made = made + 1
+                            }
+                        }
+                    }
+                    i = i + 1
+                }
+                VM_ShellPrint("cg made=", made, " / 5")
+            }
+        }
+    }
+
+    if (t >= 175) {
+        VM_SetProp(self, "hp", 0)
+    }
+}
