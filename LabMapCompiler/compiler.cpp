@@ -28,6 +28,7 @@ enum TokenType {
     TK_ASSIGN, TK_COMMA,
     TK_PLUS, TK_MINUS, TK_STAR, TK_SLASH, TK_MOD,
     TK_GT, TK_LT, TK_EQ, TK_NEQ, TK_GTE, TK_LTE,
+    TK_ANDAND, TK_OROR,
 };
 
 static const char* tk_name(TokenType t) {
@@ -47,6 +48,7 @@ static const char* tk_name(TokenType t) {
         case TK_GT: return ">"; case TK_LT: return "<";
         case TK_EQ: return "=="; case TK_NEQ: return "!=";
         case TK_GTE: return ">="; case TK_LTE: return "<=";
+        case TK_ANDAND: return "&&"; case TK_OROR: return "||";
         default: return "?";
     }
 }
@@ -372,6 +374,20 @@ private:
                 else {
                     t.type = TK_ERROR;
                     error(t.line, "unexpected '!' (this language has no logical-not; use == 0 / != 0)");
+                }
+                return t;
+            case '&':
+                if (pos_ < (int)src_copy_.size() && src_copy_[pos_] == '&') { pos_++; t.type = TK_ANDAND; }
+                else {
+                    t.type = TK_ERROR;
+                    error(t.line, "unexpected '&' (did you mean '&&'?)");
+                }
+                return t;
+            case '|':
+                if (pos_ < (int)src_copy_.size() && src_copy_[pos_] == '|') { pos_++; t.type = TK_OROR; }
+                else {
+                    t.type = TK_ERROR;
+                    error(t.line, "unexpected '|' (did you mean '||'?)");
                 }
                 return t;
             default:
@@ -1091,7 +1107,75 @@ private:
     }
 
     // ========== 表达式 — 返回结果槽位 ==========
-    int gen_expr()  { return gen_cmp(); }
+    int gen_expr()  { return gen_or(); }
+
+    // 逻辑或（短路）：a || b → 1/0。左边为真就不算右边。
+    int gen_or() {
+        int start_line = cur_.line;
+        int left = gen_and();
+        while (check(TK_OROR)) {
+            if (!expr_can_continue(start_line)) break;
+            next();
+            if (!expr_can_continue(start_line)) {
+                error(cur_.line, "expression cannot span lines");
+                return left;
+            }
+            int temp = alloc_temp();
+            set_type(temp, MEM_INT);
+            cur_buf_->u8(OP_ASSIGN); cur_buf_->s32(temp); cur_buf_->u8(MEM_INT); cur_buf_->s32(0);
+            cur_buf_->u8(OP_IF); cur_buf_->s32(left);
+            int t1 = cur_buf_->tell(); cur_buf_->s32(0);   // 真 → 置 1
+            int f1 = cur_buf_->tell(); cur_buf_->s32(0);   // 假 → 继续算右边
+            int ip_next = cur_buf_->tell();
+            int right = gen_and();
+            cur_buf_->u8(OP_IF); cur_buf_->s32(right);
+            int t2 = cur_buf_->tell(); cur_buf_->s32(0);   // 真 → 置 1
+            int f2 = cur_buf_->tell(); cur_buf_->s32(0);   // 假 → 结束（保持 0）
+            int ip_true = cur_buf_->tell();
+            cur_buf_->u8(OP_ASSIGN); cur_buf_->s32(temp); cur_buf_->u8(MEM_INT); cur_buf_->s32(1);
+            int ip_end = cur_buf_->tell();
+            cur_buf_->patch_s32(t1, ip_true);
+            cur_buf_->patch_s32(f1, ip_next);
+            cur_buf_->patch_s32(t2, ip_true);
+            cur_buf_->patch_s32(f2, ip_end);
+            left = temp;
+        }
+        return left;
+    }
+
+    // 逻辑与（短路）：a && b → 1/0。左边为假就不算右边。
+    int gen_and() {
+        int start_line = cur_.line;
+        int left = gen_cmp();
+        while (check(TK_ANDAND)) {
+            if (!expr_can_continue(start_line)) break;
+            next();
+            if (!expr_can_continue(start_line)) {
+                error(cur_.line, "expression cannot span lines");
+                return left;
+            }
+            int temp = alloc_temp();
+            set_type(temp, MEM_INT);
+            cur_buf_->u8(OP_ASSIGN); cur_buf_->s32(temp); cur_buf_->u8(MEM_INT); cur_buf_->s32(0);
+            cur_buf_->u8(OP_IF); cur_buf_->s32(left);
+            int t1 = cur_buf_->tell(); cur_buf_->s32(0);   // 真 → 继续算右边
+            int f1 = cur_buf_->tell(); cur_buf_->s32(0);   // 假 → 结束（保持 0）
+            int ip_next = cur_buf_->tell();
+            int right = gen_cmp();
+            cur_buf_->u8(OP_IF); cur_buf_->s32(right);
+            int t2 = cur_buf_->tell(); cur_buf_->s32(0);   // 真 → 置 1
+            int f2 = cur_buf_->tell(); cur_buf_->s32(0);   // 假 → 结束（保持 0）
+            int ip_true = cur_buf_->tell();
+            cur_buf_->u8(OP_ASSIGN); cur_buf_->s32(temp); cur_buf_->u8(MEM_INT); cur_buf_->s32(1);
+            int ip_end = cur_buf_->tell();
+            cur_buf_->patch_s32(t1, ip_next);
+            cur_buf_->patch_s32(f1, ip_end);
+            cur_buf_->patch_s32(t2, ip_true);
+            cur_buf_->patch_s32(f2, ip_end);
+            left = temp;
+        }
+        return left;
+    }
 
     // 比较
     int gen_cmp() {
@@ -1191,7 +1275,7 @@ private:
             if (check(TK_FLOAT)) {
                 float val = -cur_.float_val;
                 next();
-                int bits; memcpy(&bits, &val, 4);
+                uint32_t bits; memcpy(&bits, &val, 4);   // 必须用 uint32_t：池里的键是 to_string(uint32_t)
                 return lit_slot("f:" + to_string(bits));
             }
             int zero = alloc_temp(); set_type(zero, MEM_INT);
@@ -1209,7 +1293,7 @@ private:
         if (check(TK_FLOAT)) {
             float val = cur_.float_val;
             next();
-            int bits; memcpy(&bits, &val, 4);
+            uint32_t bits; memcpy(&bits, &val, 4);   // 必须用 uint32_t：池里的键是 to_string(uint32_t)
             return lit_slot("f:" + to_string(bits));
         }
         if (check(TK_STRING)) {
