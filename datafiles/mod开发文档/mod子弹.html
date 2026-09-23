@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mod子弹</title>
+<style>
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+body { margin:0; background:#f6f7f9; color:#24292f;
+  font:16px/1.75 -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif; }
+main { max-width:920px; margin:0 auto; padding:36px 28px 90px; background:#fff; min-height:100vh;
+  box-shadow:0 0 24px rgba(0,0,0,.06); }
+.nav { font-size:.88em; margin:0 0 1.4em; padding-bottom:.6em; border-bottom:1px dashed #e5e7eb; color:#6b7280; }
+.nav a { text-decoration:none; }
+h1,h2,h3,h4 { line-height:1.3; margin:1.6em 0 .6em; }
+h1 { font-size:1.8em; border-bottom:2px solid #e5e7eb; padding-bottom:.3em; margin-top:.2em; }
+h2 { font-size:1.35em; border-bottom:1px solid #eceef1; padding-bottom:.25em; }
+h3 { font-size:1.12em; }
+p { margin:.7em 0; }
+code { background:#f2f3f5; padding:.15em .38em; border-radius:4px;
+  font-family:Consolas,"Courier New",monospace; font-size:.9em; }
+pre { background:#1f2430; color:#e8e8e8; padding:14px 16px; border-radius:8px; overflow:auto; }
+pre code { background:none; color:inherit; padding:0; font-size:.88em; }
+table { border-collapse:collapse; width:100%; margin:1em 0; font-size:.93em; display:block; overflow-x:auto; }
+th,td { border:1px solid #dfe3e8; padding:6px 10px; text-align:left; vertical-align:top; }
+th { background:#f3f5f7; white-space:nowrap; }
+blockquote { margin:1em 0; padding:.5em 1em; border-left:4px solid #cbd5e1; background:#f8fafc; color:#475569; }
+blockquote p { margin:.3em 0; }
+a { color:#0969da; }
+ul,ol { padding-left:1.7em; margin:.7em 0; }
+li { margin:.2em 0; }
+hr { border:none; border-top:1px solid #e5e7eb; margin:2em 0; }
+.idx { list-style:none; padding-left:0; }
+.idx li { margin:.35em 0; }
+</style>
+</head>
+<body>
+<main>
+<div class="nav"><a href="index.html">&larr; 文档目录</a></div>
+<h1>子弹 Mod</h1>
+<blockquote>
+<p>通用前提（文件命名、块名与时机、贴图、生效方式）见 <a href="mod%E5%BC%80%E5%8F%91%E5%B7%A5%E5%85%B7%E8%AF%B4%E6%98%8E.html">mod开发工具说明.md</a>；
+VM 语言与全部函数见 <code>help.md</code>。</p>
+</blockquote>
+<h2>文件</h2>
+<pre><code class="language-text">mod/bullets/my_bullet.json   ← 可以就是 {}
+mod/bullets/my_bullet.bin    ← 逻辑全在这里
+mod/bullets/my_bullet.txt    ← 源码（建议保留）
+mod/bullets/tex/...          ← 自带贴图
+</code></pre>
+<p>子弹<strong>不进任何池</strong>，只是给 <code>obj_bullet_mod</code> 提供一套同名逻辑（<code>mod_type</code> 就是文件名）。
+所以 json 没有固定字段，<code>{}</code> 也行，但<strong>必须有这个 json</strong>，否则扫描不到。</p>
+<hr>
+<h2>一、怎么创建（两步）</h2>
+<pre><code class="language-gml">// ① 先创建通用对象
+b = VM_CreateInstance(&quot;obj_bullet_mod&quot;, x, y)
+// ② 再设 mod_type（= mod/bullets/ 下的文件名，去掉 .json）
+VM_SetProp(b, &quot;mod_type&quot;, &quot;my_bullet&quot;)
+VM_SetProp(b, &quot;sprite_index&quot;, &quot;spr_my_bullet&quot;)
+VM_SetProp(b, &quot;vx&quot;, 8)              // ⚠️ 必须显式设速度
+VM_SetProp(b, &quot;vy&quot;, 0)
+VM_SetProp(b, &quot;damage&quot;, 60)
+</code></pre>
+<p>也可以&quot;先写全局再创建&quot;（Create 时就初始化，见下面的时机表）：</p>
+<pre><code class="language-gml">VM_SetProp(0, &quot;_mod_pending_bullet_id&quot;, &quot;my_bullet&quot;)
+b = VM_CreateInstance(&quot;obj_bullet_mod&quot;, x, y)
+</code></pre>
+<hr>
+<h2>二、子弹实例上的内置字段</h2>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>初值</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>mod_type</code></td>
+<td>全局 <code>_mod_pending_bullet_id</code>（默认 <code>&quot;&quot;</code>）</td>
+<td>跑哪套逻辑</td>
+</tr>
+<tr>
+<td><code>destroy_timer</code></td>
+<td><code>-1</code></td>
+<td><code>-1</code>=不自动销毁；<code>0</code>=立即销毁；<code>&gt;0</code>=每帧 −1，到 0 销毁</td>
+</tr>
+<tr>
+<td><code>vx</code> / <code>vy</code></td>
+<td><code>0</code> / <code>0</code></td>
+<td><strong>每帧位移，必须显式设</strong>（不设就停在原地）</td>
+</tr>
+<tr>
+<td><code>vector_x</code></td>
+<td><code>0</code></td>
+<td>备用字段（不影响自带走位）</td>
+</tr>
+<tr>
+<td><code>grid_col</code> / <code>grid_row</code></td>
+<td>创建时算一次</td>
+<td><strong>当前</strong>所在格（每帧 Step 开头更新）</td>
+</tr>
+<tr>
+<td><code>prev_grid_col</code> / <code>prev_grid_row</code></td>
+<td>同上</td>
+<td><strong>上一帧</strong>所在格（判跨越用）</td>
+</tr>
+<tr>
+<td><code>image_speed</code></td>
+<td><code>0</code></td>
+<td>要帧动画自己设</td>
+</tr>
+<tr>
+<td><code>x</code> / <code>y</code> / <code>sprite_index</code> / <code>image_alpha</code> / <code>image_angle</code> / <code>image_xscale</code> / <code>image_yscale</code></td>
+<td>普通实例属性</td>
+<td>直接读写</td>
+</tr>
+<tr>
+<td><code>damage</code> / <code>row</code> / …</td>
+<td>没有</td>
+<td><strong>插件自己设的</strong>属性（<code>VM_SetProp</code> 设过才有）</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>三、STEP 的时机与执行顺序</h2>
+<h3>创建当帧 vs 下一帧（重要）</h3>
+<p><code>VM_CreateInstance</code> 只是&quot;创建一个 <code>obj_bullet_mod</code>&quot;，它不认 <code>mod_type</code>。所以：</p>
+<table>
+<thead>
+<tr>
+<th>时机</th>
+<th>发生什么</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>创建当帧</strong></td>
+<td><code>obj_bullet_mod</code> 的 Create 跑，<code>mod_type</code> 还是空 → <strong>不初始化</strong>；随后你的 <code>VM_SetProp</code> 把 <code>mod_type</code> / 数值写进去。这帧还没有本体精灵，看不见是正常的</td>
+</tr>
+<tr>
+<td><strong>下一帧</strong></td>
+<td>Step 开头发现 <code>mod_type</code> 有了 → <strong>延迟初始化</strong>：跑该子弹的 <code>_OBJECT_CREATE</code>，紧接着<strong>同帧</strong>跑 <code>_OBJECT_STEP</code></td>
+</tr>
+<tr>
+<td>用 <code>_mod_pending_bullet_id</code> 提前写好再创建</td>
+<td>Create 里就直接初始化，<strong>当帧</strong>就能动</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p>所以：在&quot;创建前设好类型&quot;就能当帧生效；只设 <code>mod_type</code> 也行，代价是下一帧才开始动。</p>
+</blockquote>
+<h3>每帧顺序（<code>obj_bullet_mod/Step_0.gml</code>）</h3>
+<pre><code class="language-text">1. 暂停 → exit
+2. prev_grid_col/row = 当前格子；再用 get_grid_position_from_world 更新 grid_col/row
+3. 延迟初始化（mod_type 有了就跑 _OBJECT_CREATE）
+4. 跑子弹 .bin 的 _OBJECT_STEP
+5. 实例没了（你在 VM 里销毁了自己）→ exit
+6. 自动销毁：destroy_timer == 0 → 立即销毁；&gt; 0 每帧 −1，到 0 销毁
+7. 位移：x += vx; y += vy
+8. 出界销毁：x &gt; 2200 / y &gt; 1200 / x &lt; 0 / y &lt; 0
+</code></pre>
+<p>两个由此而来的要点：</p>
+<ul>
+<li><strong>位移在第 7 步</strong>，也就是<strong>在你的 <code>_OBJECT_STEP</code> 之后</strong>。所以 VM 里读到的 <code>x</code> / <code>y</code> 是<strong>本帧移动前</strong>的位置；
+想抛物线/自转就每帧改写 <code>vx</code> / <code>vy</code>（也可以直接改 <code>x</code> / <code>y</code>）</li>
+<li><strong>出界自动销毁</strong>是第 8 步做好的，不用自己判（<code>destroy_timer = -1</code> 也不会飞出屏幕外赖着）</li>
+<li><strong>绘制</strong>：<code>_OBJECT_DRAW</code> 写了就跑 VM 的绘制块（<strong>不再自动画 sprite</strong>），没写就 <code>draw_self()</code>；
+Draw 里也会补做一次延迟初始化，所以&quot;还没 Step 就先画一帧&quot;也不会漏</li>
+</ul>
+<hr>
+<h2>四、demo</h2>
+<h3>Demo 1：直线穿透弹（命中不消失）</h3>
+<pre><code class="language-gml">_OBJECT_CFG {
+    if (VM_SpriteExists(&quot;spr_my_bullet&quot;) == 0) {
+        VM_LoadSpritePerm_Ex(&quot;tex/spr_my_bullet_0.png&quot;, 5, 87, 45)
+        VM_AliasSpritePerm(&quot;spr_my_bullet&quot;, &quot;tex/spr_my_bullet_0.png&quot;)
+    }
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+    VM_SetProp(self, &quot;destroy_timer&quot;, 0 - 1)      // 不自动销毁（出界由对象处理）
+    VM_SetProp(self, &quot;image_xscale&quot;, 1.6)
+    VM_SetProp(self, &quot;image_yscale&quot;, 1.6)
+
+    // sprite_index 是内置实例变量，永远&quot;已定义&quot;（没设时是 -1）→ 不能用 undefined 兜底
+    spr = VM_GetProp(self, &quot;sprite_index&quot;)
+    if (VM_IsUndefined(spr) == 1) { spr = 0 - 1 }
+    if (spr == 0 - 1) { VM_SetProp(self, &quot;sprite_index&quot;, &quot;spr_my_bullet&quot;) }
+
+    // 别人没给的速度/伤害，这里给默认
+    if (VM_IsUndefined(VM_GetProp(self, &quot;vx&quot;)) == 1) { VM_SetProp(self, &quot;vx&quot;, 8) }
+    if (VM_IsUndefined(VM_GetProp(self, &quot;vy&quot;)) == 1) { VM_SetProp(self, &quot;vy&quot;, 0) }
+    if (VM_IsUndefined(VM_GetProp(self, &quot;damage&quot;)) == 1) { VM_SetProp(self, &quot;damage&quot;, 0) }
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+    r = VM_GetProp(self, &quot;row&quot;)
+    bc = VM_GetProp(self, &quot;grid_col&quot;)
+
+    // 打本行、子弹周围 3 格内的敌人；命中不销毁（穿透）
+    n = VM_GetInstancesInRange(&quot;pb_hit&quot;, r, r, bc - 1, bc + 1, &quot;enemy&quot;, &quot;&quot;)
+    k = 0
+    while (k &lt; n) {
+        e = VM_ArrayGet(&quot;pb_hit&quot;, k)
+        if (VM_GetProp(e, &quot;hp&quot;) &gt; 0) {
+            VM_SetProp(e, &quot;hp&quot;, VM_GetProp(e, &quot;hp&quot;) - VM_GetProp(self, &quot;damage&quot;))
+        }
+        k = k + 1
+    }
+}
+</code></pre>
+<p>（完整版见 <code>mod/bullets/pierce_bullet.txt</code>：还带&quot;目标行渐变&quot;和&quot;过火盆点燃&quot;两段。）</p>
+<h3>Demo 2：命中即消失（走敌人受击事件）</h3>
+<pre><code class="language-gml">_OBJECT_STEP {
+    self = VM_GetCurCard()
+    r = VM_GetProp(self, &quot;grid_row&quot;)
+    c = VM_GetProp(self, &quot;grid_col&quot;)
+    n = VM_GetInstancesInRange(&quot;hit&quot;, r, r, c, c, &quot;enemy&quot;, &quot;&quot;)
+    if (n &gt; 0) {
+        e = VM_ArrayGet(&quot;hit&quot;, 0)
+        VM_DamageEnemy(e, VM_GetProp(self, &quot;damage&quot;), &quot;normal&quot;)   // 闪白/音效/护盾都对
+        // 命中处放个特效（也可以直接用弹幕管理的&quot;销毁对象&quot;参数）
+        fx = VM_CreateInstance(&quot;obj_effect_mod&quot;, VM_GetProp(self, &quot;x&quot;), VM_GetProp(self, &quot;y&quot;))
+        VM_SetProp(fx, &quot;mod_type&quot;, &quot;my_hit_fx&quot;)
+        VM_SetProp(fx, &quot;destroy_timer&quot;, 20)
+        VM_DestroyInstance(self)
+    }
+}
+</code></pre>
+<h3>Demo 3：抛物线 / 自转</h3>
+<pre><code class="language-gml">_OBJECT_CREATE {
+    self = VM_GetCurCard()
+    VM_SetProp(self, &quot;vy&quot;, 0 - 8)         // 先往上
+    VM_SetProp(self, &quot;spin&quot;, 0)
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+    // 重力：每帧把 vy 往下拉（位移由对象在跑完本块后做）
+    VM_SetProp(self, &quot;vy&quot;, VM_GetProp(self, &quot;vy&quot;) + 0.4)
+    // 自转（画面）
+    VM_SetProp(self, &quot;image_angle&quot;, VM_GetProp(self, &quot;image_angle&quot;) + 12)
+}
+</code></pre>
+<hr>
+<h2>五、要点（踩过的坑）</h2>
+<ul>
+<li><strong><code>vx</code> / <code>vy</code> 必须显式设</strong>：Create 里就是 0，&quot;不设就用默认&quot;不成立（子弹一动不动）</li>
+<li><strong><code>sprite_index</code> 永远&quot;已定义&quot;</strong>（没设时是 <code>-1</code>），判断&quot;别人给没给贴图&quot;要用 <code>== -1</code>，不能用 undefined</li>
+<li><strong>默认不会自己消失</strong>（<code>destroy_timer = -1</code>）：出界会自动销毁，但命中后要自己 <code>VM_DestroyInstance(self)</code>
+或者给自己一个寿命 <code>VM_SetProp(self, &quot;destroy_timer&quot;, 90)</code></li>
+<li><strong>碰撞要自己写</strong>：<code>obj_bullet_mod</code> 没有碰撞事件（原版那些 <code>Collision_*</code> 联动一个都没有），
+常用 <code>VM_GetInstancesInRange(..., &quot;card&quot;, &quot;brazier&quot;)</code> / <code>(..., &quot;enemy&quot;, &quot;&quot;)</code> / <code>VM_EnemyInRange</code></li>
+<li><strong>大量同质子弹别用实例子弹</strong>：改用屏幕弹幕管理器，不占实例、统一迭代绘制：<ul>
+<li><code>VM_BulletScreenAdd_Ex(贴图,总帧数,打击范围,缩放,动画速度,x,y,vx,vy,伤害,伤害计数,存活帧数,子弹类型,销毁对象,mod名字,伤害类型,标志数值,角度)</code>（18 个参数，带卡片效果位掩码）</li>
+<li><code>VM_BulletScreenAdd_Exs(...)</code>（多两个<strong>行渐变</strong>参数：目标行世界 y、靠拢比例 0.15）</li>
+<li><code>VM_HomingBulletAdd(...)</code>（会拐弯的追踪弹：每帧重新索敌、自转 6 度）</li>
+</ul>
+</li>
+<li><strong>ID 与参数</strong>：<code>子弹类型</code>（<code>can_hit</code>）= <code>all</code> / <code>normal</code> / <code>air</code> / <code>air_only</code> / <code>pierce</code> / <code>track</code> / <code>throw</code> / <code>rotate</code> / <code>d_fruit</code>；
+<code>伤害类型</code> = <code>normal</code>（有盾只打盾）/ <code>pierce</code>（盾血一起掉）/ 其它（无视护盾）</li>
+</ul>
+
+</main>
+</body>
+</html>

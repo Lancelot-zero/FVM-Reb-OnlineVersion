@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mod地图</title>
+<style>
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+body { margin:0; background:#f6f7f9; color:#24292f;
+  font:16px/1.75 -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif; }
+main { max-width:920px; margin:0 auto; padding:36px 28px 90px; background:#fff; min-height:100vh;
+  box-shadow:0 0 24px rgba(0,0,0,.06); }
+.nav { font-size:.88em; margin:0 0 1.4em; padding-bottom:.6em; border-bottom:1px dashed #e5e7eb; color:#6b7280; }
+.nav a { text-decoration:none; }
+h1,h2,h3,h4 { line-height:1.3; margin:1.6em 0 .6em; }
+h1 { font-size:1.8em; border-bottom:2px solid #e5e7eb; padding-bottom:.3em; margin-top:.2em; }
+h2 { font-size:1.35em; border-bottom:1px solid #eceef1; padding-bottom:.25em; }
+h3 { font-size:1.12em; }
+p { margin:.7em 0; }
+code { background:#f2f3f5; padding:.15em .38em; border-radius:4px;
+  font-family:Consolas,"Courier New",monospace; font-size:.9em; }
+pre { background:#1f2430; color:#e8e8e8; padding:14px 16px; border-radius:8px; overflow:auto; }
+pre code { background:none; color:inherit; padding:0; font-size:.88em; }
+table { border-collapse:collapse; width:100%; margin:1em 0; font-size:.93em; display:block; overflow-x:auto; }
+th,td { border:1px solid #dfe3e8; padding:6px 10px; text-align:left; vertical-align:top; }
+th { background:#f3f5f7; white-space:nowrap; }
+blockquote { margin:1em 0; padding:.5em 1em; border-left:4px solid #cbd5e1; background:#f8fafc; color:#475569; }
+blockquote p { margin:.3em 0; }
+a { color:#0969da; }
+ul,ol { padding-left:1.7em; margin:.7em 0; }
+li { margin:.2em 0; }
+hr { border:none; border-top:1px solid #e5e7eb; margin:2em 0; }
+.idx { list-style:none; padding-left:0; }
+.idx li { margin:.35em 0; }
+</style>
+</head>
+<body>
+<main>
+<div class="nav"><a href="index.html">&larr; 文档目录</a></div>
+<h1>地图 Mod</h1>
+<blockquote>
+<p>通用前提（文件命名、生效方式）见 <a href="mod%E5%BC%80%E5%8F%91%E5%B7%A5%E5%85%B7%E8%AF%B4%E6%98%8E.html">mod开发工具说明.md</a>；
+关卡脚本的 VM 语言与全部函数见 <code>help.md</code>。</p>
+</blockquote>
+<h2>目录</h2>
+<pre><code class="language-text">mod/maps/&lt;地图id&gt;/
+  world.json              大地图 + 关卡列表
+  share/                  这一张图共享的资源（可选）
+  level_1/
+    &lt;关卡名&gt;.json          关卡配置（实验室格式，编辑器导出）
+    &lt;关卡名&gt;.bin           关卡脚本（LabMapCompiler 编译产物）
+    xx.png / xx.ogg        关卡自带图片、音乐
+</code></pre>
+<p><code>mod/maps/____shared____/</code> 放公共资源（默认背景、图标），所有 mod 地图都能用。</p>
+<h2>world.json</h2>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>必填</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td></td>
+<td>地图 id，默认用目录名</td>
+</tr>
+<tr>
+<td><code>name</code></td>
+<td>✅</td>
+<td>大地图显示名</td>
+</tr>
+<tr>
+<td><code>sprite</code></td>
+<td></td>
+<td>大地图贴图</td>
+</tr>
+<tr>
+<td><code>icon</code></td>
+<td></td>
+<td>大地图图标</td>
+</tr>
+<tr>
+<td><code>share</code></td>
+<td></td>
+<td>共享资源目录名（如 <code>&quot;share&quot;</code>）</td>
+</tr>
+<tr>
+<td><code>levels</code></td>
+<td>✅</td>
+<td>关卡数组</td>
+</tr>
+<tr>
+<td><code>levels[].name</code></td>
+<td></td>
+<td>关卡显示名</td>
+</tr>
+<tr>
+<td><code>levels[].button_x</code> / <code>button_y</code></td>
+<td></td>
+<td>关卡按钮在大地图上的位置</td>
+</tr>
+<tr>
+<td><code>levels[].stage_json</code></td>
+<td>✅</td>
+<td>关卡配置相对路径，如 <code>&quot;level_1/level.json&quot;</code></td>
+</tr>
+<tr>
+<td><code>levels[].sprite</code> / <code>icon</code></td>
+<td></td>
+<td>关卡预览贴图 / 图标（可选）</td>
+</tr>
+</tbody></table>
+<pre><code class="language-json">{
+  &quot;id&quot;: &quot;my_island&quot;,
+  &quot;name&quot;: &quot;我的大地图&quot;,
+  &quot;icon&quot;: &quot;spr_laboratory_icon&quot;,
+  &quot;share&quot;: &quot;share&quot;,
+  &quot;levels&quot;: [
+    { &quot;name&quot;: &quot;第一关&quot;, &quot;button_x&quot;: 400, &quot;button_y&quot;: 400, &quot;stage_json&quot;: &quot;level_1/level.json&quot; }
+  ]
+}
+</code></pre>
+<h2>关卡两部分</h2>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>作用</th>
+<th>怎么来</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>&lt;关卡名&gt;.json</code></td>
+<td>关卡配置：地图尺寸、地形、波次敌人、奖励、事件…</td>
+<td><strong>实验室关卡格式</strong>（<code>version</code> / <code>level_name</code> / <code>map_cols</code> / <code>map_rows</code> / <code>enemy_list</code> / <code>rewards</code> / <code>events</code>…），用实验室或地图编辑器导出/编辑，<strong>不用手写</strong></td>
+</tr>
+<tr>
+<td><code>&lt;关卡名&gt;.bin</code></td>
+<td>关卡脚本：摆地图、刷怪、设规则</td>
+<td>VM 脚本（<code>_VM_BATTLE_START</code> / <code>_VM_WAVE_START</code> / <code>_VM_FRAME</code> …），用 <code>LabMapCompiler</code> 或编辑器编译</td>
+</tr>
+</tbody></table>
+<p>关卡脚本常用块：</p>
+<pre><code class="language-text">_VM_ROOM_READY_ENTRY   进准备室时（设规则：禁卡、等级上限、卡槽数…）
+_VM_BATTLE_START       战斗开始（造地图：地形、平台、物件）
+_VM_WAVE_START/END     每波开始/结束
+_VM_SUBWAVE_START/END  每个子波
+_VM_ENEMY_KILLED       杀敌（奖励/惩罚）
+_VM_FRAME              每帧（⚠️ 别写复杂逻辑）
+</code></pre>
+<h2>进图流程</h2>
+<pre><code class="language-text">mod 地图文件被复制到 laboratory/____mod_map____/
+→ CustomStage
+→ 关卡详情 → 进关
+</code></pre>
+<h2>要点</h2>
+<ul>
+<li>关卡 json 里的 <code>enemy_list</code> 可以直接引用 mod 敌人（<code>mod/enemies/</code> 下的 id）</li>
+<li>关卡脚本里也能用 mod 的东西：<code>VM_SpawnPlant(&quot;mod卡id&quot;, ...)</code>、<code>VM_SpawnEnemy(&quot;mod敌人id&quot;, ...)</code></li>
+<li>自带图片/音乐直接放在关卡文件夹里，json 里写文件名；<code>share/</code> 里的是整张图共享</li>
+<li>关卡脚本报错会<strong>静默吞掉</strong>（<code>VM_Execute</code> 的已知行为），调不出效果时先在 <code>_VM_BATTLE_START</code> 里
+<code>VM_ShellPrint(...)</code> 打一行确认块跑了</li>
+</ul>
+
+</main>
+</body>
+</html>

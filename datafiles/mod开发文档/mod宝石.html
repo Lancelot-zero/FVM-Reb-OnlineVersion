@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mod宝石</title>
+<style>
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+body { margin:0; background:#f6f7f9; color:#24292f;
+  font:16px/1.75 -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif; }
+main { max-width:920px; margin:0 auto; padding:36px 28px 90px; background:#fff; min-height:100vh;
+  box-shadow:0 0 24px rgba(0,0,0,.06); }
+.nav { font-size:.88em; margin:0 0 1.4em; padding-bottom:.6em; border-bottom:1px dashed #e5e7eb; color:#6b7280; }
+.nav a { text-decoration:none; }
+h1,h2,h3,h4 { line-height:1.3; margin:1.6em 0 .6em; }
+h1 { font-size:1.8em; border-bottom:2px solid #e5e7eb; padding-bottom:.3em; margin-top:.2em; }
+h2 { font-size:1.35em; border-bottom:1px solid #eceef1; padding-bottom:.25em; }
+h3 { font-size:1.12em; }
+p { margin:.7em 0; }
+code { background:#f2f3f5; padding:.15em .38em; border-radius:4px;
+  font-family:Consolas,"Courier New",monospace; font-size:.9em; }
+pre { background:#1f2430; color:#e8e8e8; padding:14px 16px; border-radius:8px; overflow:auto; }
+pre code { background:none; color:inherit; padding:0; font-size:.88em; }
+table { border-collapse:collapse; width:100%; margin:1em 0; font-size:.93em; display:block; overflow-x:auto; }
+th,td { border:1px solid #dfe3e8; padding:6px 10px; text-align:left; vertical-align:top; }
+th { background:#f3f5f7; white-space:nowrap; }
+blockquote { margin:1em 0; padding:.5em 1em; border-left:4px solid #cbd5e1; background:#f8fafc; color:#475569; }
+blockquote p { margin:.3em 0; }
+a { color:#0969da; }
+ul,ol { padding-left:1.7em; margin:.7em 0; }
+li { margin:.2em 0; }
+hr { border:none; border-top:1px solid #e5e7eb; margin:2em 0; }
+.idx { list-style:none; padding-left:0; }
+.idx li { margin:.35em 0; }
+</style>
+</head>
+<body>
+<main>
+<div class="nav"><a href="index.html">&larr; 文档目录</a></div>
+<h1>宝石 Mod</h1>
+<blockquote>
+<p>通用前提（文件命名、块名与时机、贴图、生效方式）见 <a href="mod%E5%BC%80%E5%8F%91%E5%B7%A5%E5%85%B7%E8%AF%B4%E6%98%8E.html">mod开发工具说明.md</a>；
+VM 语言与全部函数见 <code>help.md</code>。</p>
+</blockquote>
+<h2>文件</h2>
+<pre><code class="language-text">mod/gems/my_gem.json / .bin / .txt / tex/
+</code></pre>
+<hr>
+<h2>一、JSON 字段</h2>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>必填</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>name</code> / <code>description</code></td>
+<td>✅</td>
+<td>名字 / 说明（鼠标悬停时直接显示 <code>description</code>）</td>
+</tr>
+<tr>
+<td><code>icon</code></td>
+<td>✅</td>
+<td>图标精灵名（建议自带 <strong>82×82</strong> 的 PNG、原点 40,40）</td>
+</tr>
+<tr>
+<td><code>slot</code></td>
+<td></td>
+<td>装在哪种武器上：<code>main_weapon</code>（默认）/ <code>super_weapon</code> / <code>secondary_weapon</code></td>
+</tr>
+<tr>
+<td><code>passive</code></td>
+<td></td>
+<td><code>true</code> = 纯被动宝石，<strong>不创建实体</strong>（<code>.bin</code> 不会被跑）</td>
+</tr>
+<tr>
+<td><code>cooldown</code></td>
+<td></td>
+<td>冷却数组（<strong>按等级取、单位帧</strong>）；主动宝石和&quot;自己走冷却&quot;的宝石都要</td>
+</tr>
+<tr>
+<td><code>max_level</code></td>
+<td></td>
+<td>最高等级（默认 15）</td>
+</tr>
+<tr>
+<td><code>first_cooldown</code></td>
+<td></td>
+<td>首次冷却（没有 <code>cooldown</code> 数组时用）</td>
+</tr>
+<tr>
+<td><code>shop</code></td>
+<td></td>
+<td>商店</td>
+</tr>
+</tbody></table>
+<p>除 <code>name</code> / <code>description</code> / <code>icon</code> / <code>slot</code> / <code>shop</code> / <code>passive</code> 以外的字段会<strong>原样透传</strong>进宝石数据
+（要在 <code>.bin</code> 里用就自己 <code>VM_SetProp</code> 设一份到实例上，或者读实例上现成的那几个，见下）。</p>
+<hr>
+<h2>二、宝石实例上的内置字段</h2>
+<p><code>obj_gem_mod</code> 的 Create 建好这些：</p>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>初值</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>gem_id</code></td>
+<td>全局 <code>_mod_pending_gem_id</code></td>
+<td>宝石 id（= 文件名）</td>
+</tr>
+<tr>
+<td><code>gem_info</code></td>
+<td><code>get_gem_info(gem_id)</code></td>
+<td>注册数据（<code>description</code> / <code>icon</code> / <code>cooldown</code> / 透传字段…）</td>
+</tr>
+<tr>
+<td><code>cooldown</code></td>
+<td><code>gem_info.cooldown[等级]</code></td>
+<td><strong>按等级取好的冷却帧数</strong>（没有数组时用 <code>first_cooldown</code>，再没有就 60）</td>
+</tr>
+<tr>
+<td><code>sprite_index</code></td>
+<td><code>gem_info.icon</code></td>
+<td>默认是图标；战场形象自己 <code>VM_SetProp</code> 覆盖</td>
+</tr>
+<tr>
+<td><code>parent_player</code></td>
+<td><code>noone</code></td>
+<td><strong>保持 noone</strong>（原版语义，别占用）</td>
+</tr>
+<tr>
+<td><code>mod_point_parent_player</code></td>
+<td>放置它的角色实例</td>
+<td>插件宝石定位用（放置逻辑挂的）</td>
+</tr>
+<tr>
+<td><code>mod_point_grid_row</code> / <code>mod_point_grid_col</code></td>
+<td>放置方所在格子</td>
+<td>同上</td>
+</tr>
+<tr>
+<td><code>mod_point_gem_level</code></td>
+<td>存档等级</td>
+<td>同上</td>
+</tr>
+<tr>
+<td><code>image_speed</code> / <code>timer</code> / <code>flash_speed</code></td>
+<td><code>0</code> / <code>0</code> / <code>5</code></td>
+<td>动画（同卡片那套 <code>state</code>/<code>idle_anim</code>/<code>attack_anim</code>）</td>
+</tr>
+<tr>
+<td><code>state</code> / <code>idle_anim</code> / <code>attack_anim</code></td>
+<td>IDLE / 0 / 0</td>
+<td>动画状态</td>
+</tr>
+</tbody></table>
+<p><strong>预留显示属性</strong>（核心负责渲染，插件写值就行）：</p>
+<table>
+<thead>
+<tr>
+<th>属性</th>
+<th>谁写</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>clickable</code></td>
+<td>插件（<code>_OBJECT_CREATE</code> 置 1）</td>
+<td>声明&quot;我是主动宝石&quot;；不置（默认 0）＝点击无效</td>
+</tr>
+<tr>
+<td><code>clicked</code></td>
+<td>核心置 1，插件处理完清 0</td>
+<td>&quot;刚被有效点击&quot;；<strong>冷却中不会置</strong></td>
+</tr>
+<tr>
+<td><code>cooldown_timer</code></td>
+<td>核心每帧自减；点击时自动设回 <code>cooldown</code></td>
+<td>剩余冷却帧；&gt;0 时画遮罩 + 秒数、说明里加「正在冷却中」</td>
+</tr>
+<tr>
+<td><code>on_click</code></td>
+<td>核心（鼠标进 / 出）</td>
+<td>显示说明框用；也可以自己置</td>
+</tr>
+<tr>
+<td><code>gem_level</code></td>
+<td>存档等级</td>
+<td>&gt;0 时画等级星星</td>
+</tr>
+<tr>
+<td><code>tooltip_text</code></td>
+<td>插件</td>
+<td>追加在说明后面的自定义文本</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>三、STEP 的时机与执行顺序</h2>
+<h3>什么时候跑</h3>
+<ul>
+<li><strong><code>_OBJECT_CREATE</code></strong>：宝石对象被放置逻辑创建时立刻执行</li>
+<li><strong><code>_OBJECT_STEP</code></strong>：每帧（暂停时整块不跑）</li>
+<li><strong><code>_OBJECT_DRAW</code></strong>：写了就跑 VM 的绘制块（<strong>不再自动画 sprite</strong>）；没写则由核心画：
+半透明冷却遮罩 + 剩余秒数、悬停说明框、等级星星</li>
+<li><strong><code>_OBJECT_DESTROY</code></strong>：宝石对象<strong>不支持</strong>（写了不会执行）</li>
+</ul>
+<h3>每帧顺序（<code>obj_gem_mod/Step_0.gml</code>）</h3>
+<pre><code class="language-text">1. 暂停 → 整个 exit
+2. cooldown_timer 每帧自减 1（到 0 停）
+3. 动画自动播放（timer/flash_speed 驱动 image_index，state 选待机/攻击区间）
+4. 跑宝石 .bin 的 _OBJECT_STEP
+</code></pre>
+<blockquote>
+<p>动画和武器一样是<strong>核心自动推</strong>的：<code>image_speed</code> 固定 0，别去改；待机/攻击不会自动切，<code>state</code> 自己改。
+想自己控制就在 <code>_OBJECT_STEP</code> 里直接写 <code>image_index</code>（VM 在核心动画之后跑，当帧生效）。</p>
+</blockquote>
+<h3>鼠标事件（核心挂的，插件不用写）</h3>
+<table>
+<thead>
+<tr>
+<th>事件</th>
+<th>核心做什么</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>Mouse_10</code>（鼠标进入）</td>
+<td><code>on_click = 1</code> → 显示说明框</td>
+</tr>
+<tr>
+<td><code>Mouse_11</code>（鼠标离开）</td>
+<td><code>on_click = 0</code></td>
+</tr>
+<tr>
+<td><code>Mouse_4</code>（左键按下）</td>
+<td><code>clickable</code> 为 1 且 <code>cooldown_timer &lt;= 0</code> 时：<code>clicked = 1</code>，并自动 <code>cooldown_timer = cooldown</code></td>
+</tr>
+</tbody></table>
+<p>所以<strong>主动宝石</strong>只要在 <code>_OBJECT_STEP</code> 里读 <code>clicked</code>；<strong>被动宝石</strong>（<code>clickable</code> 不置）点击完全没反应，
+<code>cooldown_timer</code> 由插件自己写。</p>
+<hr>
+<h2>四、demo</h2>
+<h3>Demo 1：主动宝石（点击放技能 → 自动冷却）</h3>
+<pre><code class="language-gml">_OBJECT_CREATE {
+    self = VM_GetCurCard()
+    VM_SetProp(self, &quot;clickable&quot;, 1)                  // 声明主动宝石
+    VM_SetProp(self, &quot;sprite_index&quot;, &quot;spr_my_gem&quot;)    // 战场形象（背包图标用 JSON 的 icon）
+    VM_SetProp(self, &quot;image_xscale&quot;, 1.8)
+    VM_SetProp(self, &quot;image_yscale&quot;, 1.8)
+    VM_SetProp(self, &quot;image_speed&quot;, 0)
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+    if (VM_GetProp(self, &quot;clicked&quot;) == 1) {
+        VM_SetProp(self, &quot;clicked&quot;, 0)                // 自己清掉
+        // ↓ 放技能（这里示例：全场敌人各吃一发伤害）
+        r = 0
+        while (r &lt; 7) {
+            n = VM_GetInstancesInRange(&quot;g_hit&quot;, r, r, 0, 15, &quot;enemy&quot;, &quot;&quot;)
+            k = 0
+            while (k &lt; n) {
+                e = VM_ArrayGet(&quot;g_hit&quot;, k)
+                VM_DamageEnemy(e, 300, &quot;normal&quot;)
+                k = k + 1
+            }
+            r = r + 1
+        }
+        VM_PlaySound(&quot;snd_shot&quot;)
+        // 冷却不用管：点下去已经自动按 JSON 的 cooldown[等级] 重新走了
+    }
+}
+</code></pre>
+<h3>Demo 2：被动宝石（自己走节奏 + 自己管冷却）</h3>
+<p>适合&quot;有敌人就自动开火&quot;这类；<code>cooldown</code> 数组照写，冷却自己设：</p>
+<pre><code class="language-gml">_OBJECT_CREATE {
+    self = VM_GetCurCard()
+    VM_SetProp(self, &quot;sprite_index&quot;, &quot;spr_attack_gem_icon&quot;)
+    VM_SetProp(self, &quot;cd&quot;, 0)
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+    // 场上有敌人时累计冷却；到点就发射
+    if (VM_EnemyInRange(0, 5, 0, 15, &quot;&quot;) == 1) {
+        cd = VM_GetProp(self, &quot;cd&quot;) + 1
+        if (cd &gt;= VM_GetProp(self, &quot;cooldown&quot;)) {
+            cd = 0
+            b = VM_CreateInstance(&quot;xiaolongbao_bullet&quot;, VM_GetProp(self, &quot;x&quot;) + 30, VM_GetProp(self, &quot;y&quot;))
+            VM_SetProp(b, &quot;damage&quot;, 25)
+            VM_SetProp(b, &quot;move_speed&quot;, 8)
+            VM_SetProp(b, &quot;row&quot;, 2)
+            VM_PlaySound(&quot;snd_shot&quot;)
+            // 想让图标上也显示冷却，就顺手写：
+            VM_SetProp(self, &quot;cooldown_timer&quot;, VM_GetProp(self, &quot;cooldown&quot;))
+        }
+        VM_SetProp(self, &quot;cd&quot;, cd)
+    } else {
+        VM_SetProp(self, &quot;cd&quot;, 0)
+    }
+}
+</code></pre>
+<p>（这就是 <code>dev_test/gems/sentry_gem.txt</code> 的写法。）</p>
+<h3>Demo 3：给宝石挂一个跟随光环</h3>
+<p>宝石侧创建<strong>特效</strong>（<code>mod/effects/</code> 那一套），把角色实例交给它跟着走：</p>
+<pre><code class="language-gml">_OBJECT_CREATE {
+    self = VM_GetCurCard()
+    VM_SetProp(self, &quot;fx&quot;, 0)          // 记光环实例
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+    p = VM_GetProp(self, &quot;mod_point_parent_player&quot;)
+    fx = VM_GetProp(self, &quot;fx&quot;)
+
+    // 拿到角色、且光环还没建（0 或已被销毁）→ 建一个
+    need = 0
+    if (VM_IsUndefined(p) == 0) {
+        if (VM_IsDestroyed(p) == 0) {
+            if (fx == 0) { need = 1 }
+            if (VM_IsDestroyed(fx) == 1) { need = 1 }
+            if (need == 1) {
+                VM_SetProp(0, &quot;_mod_pending_effect_id&quot;, &quot;my_aura&quot;)     // 特效类型名
+                fx = VM_CreateInstance(&quot;obj_effect_mod&quot;, VM_GetProp(p, &quot;x&quot;), VM_GetProp(p, &quot;y&quot;))
+                VM_SetProp(0, &quot;_mod_pending_effect_id&quot;, &quot;&quot;)            // 用完清掉
+                VM_SetProp(fx, &quot;parent_inst&quot;, p)                       // 交给特效自己跟随
+                VM_SetProp(fx, &quot;sprite_index&quot;, &quot;spr_my_aura&quot;)
+                VM_SetProp(fx, &quot;rel_x&quot;, 0 - 15)
+                VM_SetProp(fx, &quot;rel_y&quot;, 0 - 5)
+                VM_SetProp(self, &quot;fx&quot;, fx)
+            }
+        }
+    }
+}
+</code></pre>
+<p>特效侧怎么跟随，见 <a href="mod%E7%89%B9%E6%95%88.html">mod特效.md</a> 的 Demo 1。</p>
+<hr>
+<h2>五、要点</h2>
+<ul>
+<li><strong>图标有两道静默失败</strong>：槽位列表没遍历到 → 图标栏里完全不出现；<code>icon</code> 名字解析不到 →
+出现了但是空白（<code>get_load_sprite</code> 会给占位图、不报错）。自带 PNG 要在 <code>_OBJECT_CFG</code> 里预加载，
+而且<strong>要在注册之前</strong>挂好</li>
+<li><code>cooldown</code> 数组<strong>按等级取、单位是帧</strong>；<code>cooldown_timer</code> 每帧自减</li>
+<li>战场形象自己设（<code>sprite_index</code> + <code>image_xscale/yscale</code>），背包/槽位图标用 JSON 的 <code>icon</code></li>
+<li>宝石实例由<strong>放置逻辑</strong>创建，插件创建不了宝石；要跟角色/格子就靠 <code>mod_point_*</code></li>
+<li><code>parent_player</code> 保持 <code>noone</code>（原版语义），别拿它当&quot;发射方&quot;</li>
+</ul>
+
+</main>
+</body>
+</html>

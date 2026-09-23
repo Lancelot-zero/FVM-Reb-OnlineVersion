@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mod卡片</title>
+<style>
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+body { margin:0; background:#f6f7f9; color:#24292f;
+  font:16px/1.75 -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif; }
+main { max-width:920px; margin:0 auto; padding:36px 28px 90px; background:#fff; min-height:100vh;
+  box-shadow:0 0 24px rgba(0,0,0,.06); }
+.nav { font-size:.88em; margin:0 0 1.4em; padding-bottom:.6em; border-bottom:1px dashed #e5e7eb; color:#6b7280; }
+.nav a { text-decoration:none; }
+h1,h2,h3,h4 { line-height:1.3; margin:1.6em 0 .6em; }
+h1 { font-size:1.8em; border-bottom:2px solid #e5e7eb; padding-bottom:.3em; margin-top:.2em; }
+h2 { font-size:1.35em; border-bottom:1px solid #eceef1; padding-bottom:.25em; }
+h3 { font-size:1.12em; }
+p { margin:.7em 0; }
+code { background:#f2f3f5; padding:.15em .38em; border-radius:4px;
+  font-family:Consolas,"Courier New",monospace; font-size:.9em; }
+pre { background:#1f2430; color:#e8e8e8; padding:14px 16px; border-radius:8px; overflow:auto; }
+pre code { background:none; color:inherit; padding:0; font-size:.88em; }
+table { border-collapse:collapse; width:100%; margin:1em 0; font-size:.93em; display:block; overflow-x:auto; }
+th,td { border:1px solid #dfe3e8; padding:6px 10px; text-align:left; vertical-align:top; }
+th { background:#f3f5f7; white-space:nowrap; }
+blockquote { margin:1em 0; padding:.5em 1em; border-left:4px solid #cbd5e1; background:#f8fafc; color:#475569; }
+blockquote p { margin:.3em 0; }
+a { color:#0969da; }
+ul,ol { padding-left:1.7em; margin:.7em 0; }
+li { margin:.2em 0; }
+hr { border:none; border-top:1px solid #e5e7eb; margin:2em 0; }
+.idx { list-style:none; padding-left:0; }
+.idx li { margin:.35em 0; }
+</style>
+</head>
+<body>
+<main>
+<div class="nav"><a href="index.html">&larr; 文档目录</a></div>
+<h1>卡片 Mod</h1>
+<blockquote>
+<p>通用前提（文件命名、块名与时机、贴图、生效方式）见 <a href="mod%E5%BC%80%E5%8F%91%E5%B7%A5%E5%85%B7%E8%AF%B4%E6%98%8E.html">mod开发工具说明.md</a>；
+VM 语言与全部函数见 <code>help.md</code>。</p>
+</blockquote>
+<h2>文件</h2>
+<pre><code class="language-text">mod/cards/my_card.json     卡配置（数值、形态、图标）
+mod/cards/my_card.bin      逻辑（VM 脚本编译产物）
+mod/cards/my_card.txt      源码（建议保留）
+mod/cards/tex/...          自带贴图（可选）
+</code></pre>
+<h2>一、JSON 字段</h2>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>必填</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>name</code></td>
+<td>✅</td>
+<td>卡名（图鉴 / 商店显示）</td>
+</tr>
+<tr>
+<td><code>shapes</code></td>
+<td>✅</td>
+<td>形态数组，至少 1 个；里面每个形态是一档&quot;外形&quot;</td>
+</tr>
+<tr>
+<td><code>shapes[].sprite</code></td>
+<td>✅</td>
+<td>卡面 / 预览贴图名（走 <code>get_load_sprite</code>）</td>
+</tr>
+<tr>
+<td><code>shapes[].shape</code></td>
+<td></td>
+<td>形态序号，默认按数组下标</td>
+</tr>
+<tr>
+<td><code>shapes[].name</code> / <code>shapes[].description</code></td>
+<td></td>
+<td>形态名 / 形态说明，默认用卡名</td>
+</tr>
+<tr>
+<td><code>shapes[].plant_type</code></td>
+<td></td>
+<td>层级：<code>normal</code>（默认）/ <code>shield_inner</code> / <code>lilypad</code> / <code>shield_outer</code> / <code>coffee</code></td>
+</tr>
+<tr>
+<td><code>shapes[].feature_type</code></td>
+<td></td>
+<td>特性，默认 <code>normal</code>（水、替换类卡等会看它）</td>
+</tr>
+<tr>
+<td><code>shapes[].target_card</code></td>
+<td></td>
+<td>要选目标卡时填卡名，默认 <code>none</code></td>
+</tr>
+<tr>
+<td><code>shapes[].hp</code> / <code>atk</code> / <code>range</code> / <code>cooldown</code> / <code>cycle</code></td>
+<td></td>
+<td>数值，<strong>17 档数组</strong>（从最低等级往上排），也可以写单个数字＝所有等级一样</td>
+</tr>
+<tr>
+<td><code>shapes[].flame_produce</code></td>
+<td></td>
+<td>可选，产火苗量（17 档）</td>
+</tr>
+<tr>
+<td><code>skill</code></td>
+<td></td>
+<td><code>{ &quot;attr&quot;: &quot;flame_produce&quot;, &quot;values&quot;: [...] }</code> 技能每级加成（<code>attr</code> 可以是 <code>cycle</code> / <code>flame_produce</code> / <code>atk</code> …）</td>
+</tr>
+<tr>
+<td><code>shop</code></td>
+<td></td>
+<td>商店</td>
+</tr>
+<tr>
+<td><code>info_island</code></td>
+<td></td>
+<td>图鉴说明文本</td>
+</tr>
+</tbody></table>
+<ul>
+<li><strong>17 档</strong>：写不满就用最后一个补齐（<code>[50, 60]</code> → 后面 15 档全是 60）</li>
+<li>JSON 只管卡面 / 数值；<strong>本体形象要在 <code>_OBJECT_CREATE</code> 里自己设</strong>：<code>VM_SetProp(self, &quot;sprite_index&quot;, &quot;xxx&quot;)</code></li>
+</ul>
+<p>最小例子：</p>
+<pre><code class="language-json">{
+  &quot;name&quot;: &quot;我的卡片&quot;,
+  &quot;shapes&quot;: [
+    {
+      &quot;shape&quot;: 0,
+      &quot;sprite&quot;: &quot;spr_small_fire&quot;,
+      &quot;hp&quot;: 50, &quot;cost&quot;: 50, &quot;atk&quot;: 0, &quot;range&quot;: 0,
+      &quot;cooldown&quot;: 420, &quot;cycle&quot;: 1500
+    }
+  ]
+}
+</code></pre>
+<hr>
+<h2>二、卡片实例上的内置字段</h2>
+<p>卡片实例（<code>obj_card_mod</code>，继承 <code>obj_card_parent</code>）一建出来就带这些属性，<strong>大部分可以直接读写</strong>。</p>
+<h3>基础（来自 <code>obj_card_parent</code>）</h3>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>plant_id</code></td>
+<td>卡 id（= 文件名）</td>
+</tr>
+<tr>
+<td><code>name</code> / <code>description</code> / <code>cost</code> / <code>cooldown</code></td>
+<td>卡名 / 说明 / 阳光 / 冷却</td>
+</tr>
+<tr>
+<td><code>hp</code> / <code>max_hp</code></td>
+<td>当前 / 最大血量（<code>hp &lt;= 0</code> 会被父对象销毁）</td>
+</tr>
+<tr>
+<td><code>atk</code> / <code>range</code></td>
+<td>攻击力 / 攻击范围（格）</td>
+</tr>
+<tr>
+<td><code>cycle</code> / <code>attack_cycle</code> / <code>origin_cycle</code></td>
+<td>攻击周期 / 当前周期（减速翻倍）/ 原始周期</td>
+</tr>
+<tr>
+<td><code>attack_timer</code></td>
+<td>攻击计时器（自己推进，父对象不管）</td>
+</tr>
+<tr>
+<td><code>attack_type</code></td>
+<td><code>ATTACK_TYPE</code> 枚举（<code>PRODUCER</code> 等）</td>
+</tr>
+<tr>
+<td><code>plant_type</code> / <code>feature_type</code> / <code>target_card</code> / <code>target_type</code></td>
+<td>层级 / 特性 / 目标卡 / 可打的敌人类型</td>
+</tr>
+<tr>
+<td><code>shape</code> / <code>skill</code> / <code>current_level</code></td>
+<td>外形 / 技能等级 / 星级</td>
+</tr>
+<tr>
+<td><code>state</code></td>
+<td><code>0</code>=待机 <code>1</code>=攻击（也见 <code>CARD_STATE</code>）</td>
+</tr>
+<tr>
+<td><code>timer</code> / <code>first_produce</code> / <code>first_produce_delay</code></td>
+<td>帧计时 / 是否已首产 / 首产延时</td>
+</tr>
+<tr>
+<td><code>flame_produce</code></td>
+<td>产火苗量（来自 JSON / 技能表，可直接读）</td>
+</tr>
+<tr>
+<td><code>is_frozen</code> / <code>frozen_timer</code> / <code>ice_timer</code> / <code>is_slowdown</code> / <code>awake_buff_timer</code></td>
+<td>冰冻 / 减速 / 唤醒状态</td>
+</tr>
+<tr>
+<td><code>invincible</code> / <code>can_shovel_remove</code></td>
+<td>无敌 / 能被铲</td>
+</tr>
+<tr>
+<td><code>grid_col</code> / <code>grid_row</code></td>
+<td>所在格子（列, 行）</td>
+</tr>
+<tr>
+<td><code>x</code> / <code>y</code></td>
+<td>世界坐标（像素）</td>
+</tr>
+<tr>
+<td><code>depth_value</code> / <code>depth_group</code></td>
+<td>绘制深度 / 分组（0 前景 1 中景 2 背景）</td>
+</tr>
+<tr>
+<td><code>image_index</code> / <code>image_speed</code> / <code>flash_speed</code> / <code>idle_anim</code> / <code>attack_anim</code></td>
+<td>动画</td>
+</tr>
+<tr>
+<td><code>pre_hp</code></td>
+<td>上一帧血量（受伤判定用）</td>
+</tr>
+</tbody></table>
+<h3>mod 专用（来自 <code>obj_card_mod</code>，进 VM 时机/索敌/批量改属性都靠它们）</h3>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>读写</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>mod_tick_cycle</code></td>
+<td>只读</td>
+<td>一轮计时：每帧 +1，到一轮长度归零</td>
+</tr>
+<tr>
+<td><code>mod_tick_max</code></td>
+<td>可写</td>
+<td>一轮多少帧；<strong>不设 = 用卡的 <code>cycle</code></strong>（技能改 cycle 会自动跟上）</td>
+</tr>
+<tr>
+<td><code>mod_tick_enemy</code></td>
+<td>只读</td>
+<td>有敌人才 +1（没敌人清 0）</td>
+</tr>
+<tr>
+<td><code>mod_has_enemy</code></td>
+<td>只读</td>
+<td>索敌区域里有没有敌人（0/1）</td>
+</tr>
+<tr>
+<td><code>mod_enemy_check</code></td>
+<td>可写</td>
+<td><code>1</code> = 让对象每帧帮这张卡索敌（<code>norm_attack</code> 会自动开）</td>
+</tr>
+<tr>
+<td><code>mod_step_enemy_area</code></td>
+<td>可写（数组）</td>
+<td>索敌区域，<strong>每 4 个值一组</strong> <code>[上, 下, 左, 右]</code>（以自己那格为中心各扩几格）；可写多组，任一组有敌人就算有。不设 = <code>[1,1,0,99]</code>（本行 ±1、自己那格往右）</td>
+</tr>
+<tr>
+<td><code>mod_enemy_types</code></td>
+<td>可写（数组）</td>
+<td>索敌只看哪几类：<code>normal</code> / <code>obstacle</code> / <code>diver</code> / <code>air</code> / <code>dance</code> / <code>underground</code>；空 = 任意</td>
+</tr>
+<tr>
+<td><code>mod_step_enter_condition</code></td>
+<td>可写</td>
+<td>什么时候进 VM，见下节</td>
+</tr>
+<tr>
+<td><code>mod_step_enter_var</code></td>
+<td>可写</td>
+<td><code>&quot;mod&quot;</code> = 间隔帧数；<code>&quot;wait&quot;</code> = 还要等几帧</td>
+</tr>
+<tr>
+<td><code>mod_step_enter_arr</code></td>
+<td>可写（数组）</td>
+<td>开火窗口表（<code>&quot;norm&quot;</code> / <code>&quot;norm_attack&quot;</code> 用）；<strong>负数 = 从一轮末尾倒数</strong>（<code>-35</code> → 一轮长度-35）</td>
+</tr>
+<tr>
+<td><code>mod_step_enter_index</code></td>
+<td>只读</td>
+<td>这帧命中的窗口下标（0 起）；不是窗口 = <code>-1</code></td>
+</tr>
+<tr>
+<td><code>mod_set_on</code> / <code>mod_set_id</code> / <code>mod_set_prop</code> / <code>mod_set_val</code></td>
+<td>可写</td>
+<td><strong>批量改属性</strong>：开关开着时每帧把第 i 个 id 的 <code>prop[i]</code> 设成 <code>val[i]</code>（三个数组按最短长度配对）</td>
+</tr>
+<tr>
+<td><code>mod_set2_on</code> / <code>mod_set2_id</code> / <code>mod_set2_prop</code> / <code>mod_set2_val</code></td>
+<td>可写</td>
+<td>第二套，行为一样，各自独立</td>
+</tr>
+</tbody></table>
+<p>写数组只能用 VM 的实例数组接口：</p>
+<pre><code class="language-gml">_OBJECT_CREATE {
+    self = VM_GetCurCard()
+    // 索敌：只看本行往右 → 区域 [0,0,0,99]
+    VM_InstArrayClear(self, &quot;mod_step_enemy_area&quot;)
+    VM_InstArrayAdd(self, &quot;mod_step_enemy_area&quot;, 0)
+    VM_InstArrayAdd(self, &quot;mod_step_enemy_area&quot;, 0)
+    VM_InstArrayAdd(self, &quot;mod_step_enemy_area&quot;, 0)
+    VM_InstArrayAdd(self, &quot;mod_step_enemy_area&quot;, 99)
+    // 只看空中敌人
+    VM_InstArrayClear(self, &quot;mod_enemy_types&quot;)
+    VM_InstArrayAdd(self, &quot;mod_enemy_types&quot;, &quot;air&quot;)
+    // 开火窗口：一轮里第 0 帧和第 (一轮-35) 帧（负数从末尾倒数）
+    VM_InstArrayClear(self, &quot;mod_step_enter_arr&quot;)
+    VM_InstArrayAdd(self, &quot;mod_step_enter_arr&quot;, 0)
+    VM_InstArrayAdd(self, &quot;mod_step_enter_arr&quot;, 0 - 35)
+    VM_SetProp(self, &quot;mod_step_enter_condition&quot;, &quot;norm_attack&quot;)
+}
+</code></pre>
+<hr>
+<h2>三、STEP 的时机与执行顺序</h2>
+<h3>什么时候跑</h3>
+<ul>
+<li><strong><code>_OBJECT_CREATE</code></strong>：卡片被种下时，在 <code>obj_card_mod</code> 的 Create 里<strong>立刻执行</strong>（当帧）</li>
+<li><strong><code>_OBJECT_STEP</code></strong>：从这张卡第一个 Step 阶段开始，每帧一次，<strong>但会被下面的条件挡住</strong></li>
+<li><strong><code>_OBJECT_DESTROY</code></strong>：实例销毁时（血量归零、被铲、被清场）</li>
+<li>暂停（<code>global.is_paused</code>）时<strong>整块不跑</strong>；冻住（<code>is_frozen</code>）时<strong>不进 VM</strong>；<code>hp &lt;= 0</code>、实例已销毁也不进</li>
+</ul>
+<blockquote>
+<p>手牌点下去种的卡：鼠标事件在 Step 之前，所以<strong>当帧就会跑第一次 STEP</strong>。
+用 <code>VM_SpawnPlant</code> 在别的卡 / 地图脚本的 Step 里种下来的卡，Step 阶段里新建的实例当帧不再跑自己的 Step，
+<strong>第一次 STEP 落在下一帧</strong> —— 需要&quot;种下就立刻发生效果&quot;的逻辑，写进 <code>_OBJECT_CREATE</code> 更稳。</p>
+</blockquote>
+<h3>每帧顺序（<code>obj_card_mod/Step_0.gml</code>）</h3>
+<pre><code class="language-text">1. 暂停就整个 exit
+2. event_inherited()      → 跑父对象那一套（动画 / 攻击 / 生产等）
+3. 实例没了 / hp&lt;=0 / is_frozen → exit（冻住不进 VM）
+4. 一轮计时 mod_tick_cycle +1，到一轮长度（mod_tick_max，不设用 cycle）归零
+5. 索敌（仅当 mod_enemy_check=1 或条件为 norm_attack）
+   → 算 mod_has_enemy；没敌人时顺手把 state 收回 IDLE
+6. mod_tick_enemy：有敌人才 +1
+7. 判断这一帧进不进 VM（mod_step_enter_condition）
+   → 命中开火窗口且确实有敌人时，自动把 state 切成 ATTACK
+8. 进 VM：执行卡的 _OBJECT_STEP
+9. 批量改属性：mod_set_on / mod_set2_on（在 VM 之后，所以卡当帧写的数组当帧就生效）
+</code></pre>
+<p>也就是说：<strong>卡的 <code>_OBJECT_STEP</code> 里不用自己判&quot;有没有敌人&quot;、也不用自己切攻击动画</strong>
+（索敌和切动画由第 5、7 步做），只要设置好索敌区域和进 VM 条件。</p>
+<h3>进 VM 的时机（<code>mod_step_enter_condition</code>）</h3>
+<table>
+<thead>
+<tr>
+<th>值</th>
+<th>什么时候进</th>
+<th>配合字段</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>&quot;&quot;</code>（默认，写错也按这个兜底）</td>
+<td><strong>每帧进</strong></td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>&quot;mod&quot;</code></td>
+<td><code>battle_time % 间隔 == 0</code>（全场共享，同间隔的卡同帧进）</td>
+<td><code>mod_step_enter_var</code> = 间隔帧数</td>
+</tr>
+<tr>
+<td><code>&quot;norm&quot;</code></td>
+<td><code>mod_tick_cycle</code> 命中窗口表（<strong>不看敌人</strong>）</td>
+<td><code>mod_step_enter_arr</code> 窗口表</td>
+</tr>
+<tr>
+<td><code>&quot;norm_attack&quot;</code></td>
+<td><strong>有敌人</strong> 且命中窗口表；窗口表空 = 有敌人就每帧进</td>
+<td><code>mod_step_enter_arr</code> + 索敌字段</td>
+</tr>
+<tr>
+<td><code>&quot;wait&quot;</code></td>
+<td><code>mod_step_enter_var</code> 每帧自减，减到 0 进（进之前保持 0，需自己再设）</td>
+<td><code>mod_step_enter_var</code> = 剩余帧数</td>
+</tr>
+</tbody></table>
+<ul>
+<li>命中窗口时 <code>mod_step_enter_index</code> = <strong>窗口下标</strong>（0 起，一轮里有多个窗口时用它区分是第几次），否则 <code>-1</code></li>
+<li>窗口表里的负数从一轮末尾倒数：一轮 1500 帧时 <code>-35</code> = 第 1465 帧</li>
+<li>怎么选：<ul>
+<li><strong>普通射手</strong>（有敌人才打、按 cycle 节奏）→ <code>&quot;norm_attack&quot;</code> + 一条窗口表</li>
+<li><strong>生产者 / 每帧逻辑</strong>（火苗、光环）→ 不设（每帧进）或 <code>&quot;norm&quot;</code></li>
+<li><strong>全场统一节奏 / 想省性能</strong>（大量同类卡）→ <code>&quot;mod&quot;</code> + 间隔</li>
+<li><strong>一次性延时</strong>（种下 60 帧后做某事）→ <code>&quot;wait&quot;</code> + 60</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h2>四、三个常用 demo</h2>
+<h3>Demo 1：产火苗</h3>
+<p>两种写法，按需要选：</p>
+<pre><code class="language-gml">_OBJECT_CREATE {
+    self = VM_GetCurCard()
+    VM_SetProp(self, &quot;sprite_index&quot;, &quot;spr_my_producer&quot;)
+    VM_SetProp(self, &quot;idle_anim&quot;, 12)
+    VM_SetProp(self, &quot;attack_anim&quot;, 20)
+    VM_SetProp(self, &quot;flash_speed&quot;, 5)
+    VM_SetProp(self, &quot;attack_timer&quot;, 0)
+    VM_SetProp(self, &quot;first_produce&quot;, 0)
+    // 不设 mod_step_enter_condition → 每帧进 VM
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+    at = VM_GetProp(self, &quot;attack_timer&quot;)
+    cyc = VM_GetProp(self, &quot;cycle&quot;)
+    fp = VM_GetProp(self, &quot;first_produce&quot;)
+    fire = 0
+
+    if (fp == 0) {
+        // 种下 60 帧先产一次
+        at = at + 1
+        if (at &gt;= 60) { fire = 1; fp = 1; at = 0 }
+    } else {
+        at = at + 1
+        if (at &gt;= cyc) { fire = 1; at = 0 }
+    }
+
+    if (fire == 1) {
+        n = VM_GetProp(self, &quot;flame_produce&quot;)
+        if (VM_IsUndefined(n) == 1) { n = 25 }
+        // ① 真实火苗实例（会飘、会自动拾取，和原版一样）
+        fx = VM_GetProp(self, &quot;x&quot;)
+        fy = VM_GetProp(self, &quot;y&quot;) - 60
+        i = 0
+        while (i &lt; 12) {
+            fi = VM_CreateInstance(&quot;flame&quot;, fx, fy)
+            VM_SetProp(fi, &quot;value&quot;, n)
+            i = i + 1
+        }
+        // ② 想要&quot;直接入账、没有飞行动画&quot;就换成一句：
+        // VM_SetFlame(VM_GetFlame() + n * 12)
+    }
+
+    VM_SetProp(self, &quot;attack_timer&quot;, at)
+    VM_SetProp(self, &quot;first_produce&quot;, fp)
+}
+</code></pre>
+<ul>
+<li>产量读 <code>flame_produce</code>（JSON / 技能表给的），火苗实例的 <code>value</code> 就是每朵的火苗数</li>
+<li>想连开火动画一起演，就在产的那一帧 <code>VM_SetProp(self, &quot;state&quot;, 1)</code>（<code>norm_attack</code> 会自动切）</li>
+</ul>
+<h3>Demo 2：实例子弹（<code>obj_bullet_mod</code>）</h3>
+<p>适合需要<strong>自己控制运动/碰撞</strong>的子弹（抛物线、追踪、弹跳…）。</p>
+<pre><code class="language-gml">_OBJECT_CREATE {
+    self = VM_GetCurCard()
+    VM_SetProp(self, &quot;sprite_index&quot;, &quot;spr_my_shooter&quot;)
+    VM_SetProp(self, &quot;idle_anim&quot;, 8)
+    VM_SetProp(self, &quot;attack_anim&quot;, 12)
+    VM_SetProp(self, &quot;flash_speed&quot;, 5)
+    VM_SetProp(self, &quot;attack_timer&quot;, 0)
+
+    // 有敌人才进 VM，一轮里第 0 帧和第 (一轮-35) 帧开火
+    VM_InstArrayClear(self, &quot;mod_step_enter_arr&quot;)
+    VM_InstArrayAdd(self, &quot;mod_step_enter_arr&quot;, 0)
+    VM_InstArrayAdd(self, &quot;mod_step_enter_arr&quot;, 0 - 35)
+    VM_SetProp(self, &quot;mod_step_enter_condition&quot;, &quot;norm_attack&quot;)
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+    bx = VM_GetProp(self, &quot;x&quot;) + 20
+    by = VM_GetProp(self, &quot;y&quot;) - 40
+    dmg = VM_GetProp(self, &quot;atk&quot;)
+
+    b = VM_CreateInstance(&quot;obj_bullet_mod&quot;, bx, by)
+    VM_SetProp(b, &quot;mod_type&quot;, &quot;my_bullet&quot;)        // = mod/bullets/my_bullet
+    VM_SetProp(b, &quot;sprite_index&quot;, &quot;spr_my_bullet&quot;)
+    VM_SetProp(b, &quot;image_xscale&quot;, 1.8)
+    VM_SetProp(b, &quot;image_yscale&quot;, 1.8)
+    VM_SetProp(b, &quot;damage&quot;, dmg)
+    VM_SetProp(b, &quot;vx&quot;, 8)                        // ⚠️ 必须显式给速度
+    VM_SetProp(b, &quot;vy&quot;, 0)
+
+    VM_PlaySound(&quot;snd_shot&quot;)
+    VM_SetProp(self, &quot;state&quot;, 1)
+}
+</code></pre>
+<p>子弹那一侧（<code>mod/bullets/my_bullet.txt</code>）负责运动与命中：</p>
+<pre><code class="language-gml">_OBJECT_STEP {
+    self = VM_GetCurCard()
+    // 每帧位移由 obj_bullet_mod 自己做（x += vx）——这里只管碰撞
+    row = VM_GetProp(self, &quot;grid_row&quot;)
+    col = VM_GetProp(self, &quot;grid_col&quot;)
+    n = VM_GetInstancesInRange(&quot;hit&quot;, row, row, col, col, &quot;enemy&quot;, &quot;&quot;)
+    if (n &gt; 0) {
+        e = VM_ArrayGet(&quot;hit&quot;, 0)
+        VM_DamageEnemy(e, VM_GetProp(self, &quot;damage&quot;), &quot;normal&quot;)
+        VM_DestroyInstance(self)
+    }
+}
+</code></pre>
+<blockquote>
+<p>子弹默认<strong>不会自己消失</strong>（<code>destroy_timer = -1</code>），要出界/命中后销毁自己用 <code>VM_DestroyInstance(self)</code>，
+或者 <code>VM_SetProp(self, &quot;destroy_timer&quot;, 90)</code> 定个寿命。</p>
+</blockquote>
+<h3>Demo 3：弹幕子弹（屏幕弹幕管理器）</h3>
+<p>比实例子弹省很多（不占实例、统一迭代与绘制），适合<strong>大量同质子弹</strong>。</p>
+<pre><code class="language-gml">_OBJECT_STEP {
+    self = VM_GetCurCard()
+    bx = VM_GetProp(self, &quot;x&quot;) + 30
+    by = VM_GetProp(self, &quot;y&quot;) - 50
+    dmg = VM_GetProp(self, &quot;atk&quot;)
+
+    // VM_BulletScreenAdd_Ex(贴图,总帧数,打击范围,缩放,动画速度,x,y,vx,vy,伤害,伤害计数,
+    //                       存活帧数,子弹类型,销毁对象,mod名字,伤害类型,标志数值,角度)
+    // 三发平射（打击范围 0 = 只算本格；伤害计数 -1 = 不限次数；存活帧数 -1 = 不自动消失）
+    VM_BulletScreenAdd_Ex(&quot;spr_my_bullet&quot;, 1, 0, 1.8, 1, bx, by,  8,    0, dmg, 1, 0 - 1, &quot;normal&quot;, &quot;&quot;, &quot;&quot;, &quot;normal&quot;, 5, 0)
+    VM_BulletScreenAdd_Ex(&quot;spr_my_bullet&quot;, 1, 0, 1.8, 1, bx, by,  6,  5.6, dmg, 1, 0 - 1, &quot;normal&quot;, &quot;&quot;, &quot;&quot;, &quot;normal&quot;, 5, 0)
+    VM_BulletScreenAdd_Ex(&quot;spr_my_bullet&quot;, 1, 0, 1.8, 1, bx, by,  6, 0 - 5.6, dmg, 1, 0 - 1, &quot;normal&quot;, &quot;&quot;, &quot;&quot;, &quot;normal&quot;, 5, 0)
+
+    // 会拐到目标行的（原版水管弹那种）：用 _Exs，最后多两个参数（目标行世界 y、靠拢比例）
+    ty = 0 - 1                                   // -1 = 不渐变
+    VM_BulletScreenAdd_Exs(&quot;spr_my_bullet&quot;, 1, 0, 1.8, 1, bx, by, 8, 0, dmg, 1, 0 - 1, &quot;normal&quot;, &quot;&quot;, &quot;&quot;, &quot;normal&quot;, 5, 0, ty, 0.15)
+
+    VM_PlaySound(&quot;snd_shot&quot;)
+    VM_SetProp(self, &quot;state&quot;, 1)
+}
+</code></pre>
+<ul>
+<li><strong><code>标志数值</code>（bit 掩码）</strong>：这颗子弹还能接受哪些卡片效果（<code>bit1</code>=过火、<code>bit2</code>=解冻、<code>4/8/16…</code>=自定义），
+要和卡片侧 <code>bullet_flag</code> 对上才生效；不想要卡片联动就写 <code>0</code></li>
+<li><strong><code>伤害计数</code></strong>：<code>1</code> = 命中一个就消失，<code>-1</code> = 不限次数（范围内所有可命中敌人都结算）</li>
+<li><strong><code>销毁对象</code></strong>：非空时在子弹消失处创建它（<code>mod名字</code> 指定 mod 特效的 <code>mod_type</code>），做命中特效最省事</li>
+<li>要会拐弯追人的，用 <code>VM_HomingBulletAdd(...)</code>（每帧重新索敌、自转）</li>
+</ul>
+<hr>
+<h2>五、其它要点</h2>
+<ul>
+<li><strong>动画</strong>：<code>idle_anim</code>（待机帧数）、<code>attack_anim</code>（攻击帧数）、<code>flash_speed</code>（几帧走一格，默认 6）、
+<code>state</code>（0/1）驱动 <code>image_index</code>；默认 <code>idle_anim = 0</code> 会<strong>锁在第 0 帧不动</strong>，
+<code>idle_anim + attack_anim</code> 别超过精灵总帧数<ul>
+<li><strong>动画是核心自动推的，别碰 <code>image_speed</code></strong>（固定为 0）；想自己控制就在 <code>_OBJECT_STEP</code> 里直接写 <code>image_index</code></li>
+<li>卡片比武器多一条：<code>mod_step_enter_condition = &quot;norm_attack&quot;</code> 时，<strong>命中开火窗口且有敌人会自动切 <code>state = 1</code></strong>，
+没敌人时自动收回待机 —— 用这套的卡不用自己管 <code>state</code></li>
+</ul>
+</li>
+<li><strong>联动 / 计数</strong>用本卡 VM 的命名数组（<code>VM_ArrayGet</code> / <code>VM_ArraySet</code> / <code>VM_ArrayADD</code>，每局重置），
+别依赖全局变量 —— 命名数组是<strong>整个 mod 单元共享</strong>的：</li>
+</ul>
+<pre><code class="language-gml">_OBJECT_CREATE {
+    self = VM_GetCurCard()
+    VM_ArraySet(&quot;my_count&quot;, 0, VM_ArrayGet(&quot;my_count&quot;, 0) + 1)
+}
+
+_OBJECT_DESTROY {
+    self = VM_GetCurCard()
+    n = VM_ArrayGet(&quot;my_count&quot;, 0) - 1
+    if (n &lt; 0) { n = 0 }
+    VM_ArraySet(&quot;my_count&quot;, 0, n)
+}
+</code></pre>
+<ul>
+<li>常用查询：<code>VM_GetPlantAt(列,行,&quot;层级&quot;)</code>、<code>VM_GetInstancesInRange(...)</code>、<code>VM_EnemyInRange(...)</code>、
+<code>VM_CanPlace(&quot;卡名&quot;,列,行)</code>、<code>VM_EnemyInRange</code> 判&quot;这一行有没有敌人&quot;</li>
+<li>⚠️ <strong>不要读自己没设过的属性</strong>（会报错并中断整个块），要用先在 <code>_OBJECT_CREATE</code> 里设一份
+（<code>flame_produce</code> / <code>cycle</code> / <code>atk</code> / <code>x</code> / <code>y</code> / <code>grid_row</code> 这些是现成的，可以直接读）</li>
+<li>「上一张种下的卡」用 <code>VM_GetLastCreatedCard()</code>（CREATE 里读到的还是上一张）</li>
+</ul>
+
+</main>
+</body>
+</html>

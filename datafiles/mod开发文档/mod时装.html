@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mod时装</title>
+<style>
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+body { margin:0; background:#f6f7f9; color:#24292f;
+  font:16px/1.75 -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif; }
+main { max-width:920px; margin:0 auto; padding:36px 28px 90px; background:#fff; min-height:100vh;
+  box-shadow:0 0 24px rgba(0,0,0,.06); }
+.nav { font-size:.88em; margin:0 0 1.4em; padding-bottom:.6em; border-bottom:1px dashed #e5e7eb; color:#6b7280; }
+.nav a { text-decoration:none; }
+h1,h2,h3,h4 { line-height:1.3; margin:1.6em 0 .6em; }
+h1 { font-size:1.8em; border-bottom:2px solid #e5e7eb; padding-bottom:.3em; margin-top:.2em; }
+h2 { font-size:1.35em; border-bottom:1px solid #eceef1; padding-bottom:.25em; }
+h3 { font-size:1.12em; }
+p { margin:.7em 0; }
+code { background:#f2f3f5; padding:.15em .38em; border-radius:4px;
+  font-family:Consolas,"Courier New",monospace; font-size:.9em; }
+pre { background:#1f2430; color:#e8e8e8; padding:14px 16px; border-radius:8px; overflow:auto; }
+pre code { background:none; color:inherit; padding:0; font-size:.88em; }
+table { border-collapse:collapse; width:100%; margin:1em 0; font-size:.93em; display:block; overflow-x:auto; }
+th,td { border:1px solid #dfe3e8; padding:6px 10px; text-align:left; vertical-align:top; }
+th { background:#f3f5f7; white-space:nowrap; }
+blockquote { margin:1em 0; padding:.5em 1em; border-left:4px solid #cbd5e1; background:#f8fafc; color:#475569; }
+blockquote p { margin:.3em 0; }
+a { color:#0969da; }
+ul,ol { padding-left:1.7em; margin:.7em 0; }
+li { margin:.2em 0; }
+hr { border:none; border-top:1px solid #e5e7eb; margin:2em 0; }
+.idx { list-style:none; padding-left:0; }
+.idx li { margin:.35em 0; }
+</style>
+</head>
+<body>
+<main>
+<div class="nav"><a href="index.html">&larr; 文档目录</a></div>
+<h1>时装 Mod</h1>
+<blockquote>
+<p>通用前提（文件命名、生效方式）见 <a href="mod%E5%BC%80%E5%8F%91%E5%B7%A5%E5%85%B7%E8%AF%B4%E6%98%8E.html">mod开发工具说明.md</a>。</p>
+</blockquote>
+<h2>文件</h2>
+<pre><code class="language-text">mod/attires/my_attire.json     ← 只有 json，没有 bin / 没有逻辑
+</code></pre>
+<p>时装是<strong>纯外观</strong>，没有任何逻辑块可写。</p>
+<h2>JSON 字段</h2>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>必填</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>target_card</code></td>
+<td></td>
+<td><code>&quot;player&quot;</code>（默认，角色时装）/ 卡片 id（卡片时装）</td>
+</tr>
+<tr>
+<td><code>name</code></td>
+<td></td>
+<td>名字</td>
+</tr>
+<tr>
+<td><code>icon</code></td>
+<td></td>
+<td>商店 / 列表图标</td>
+</tr>
+<tr>
+<td><code>spr</code></td>
+<td>✅</td>
+<td>贴图：单个名字，<strong>或名字数组</strong>（多帧逐张加载）</td>
+</tr>
+<tr>
+<td><code>card_slot_icon</code></td>
+<td></td>
+<td>可选，卡槽图标名字数组（卡片时装用）</td>
+</tr>
+<tr>
+<td><code>shop</code></td>
+<td></td>
+<td>商店（角色时装进 tab5，卡片时装进 tab4）</td>
+</tr>
+</tbody></table>
+<p>例子（角色时装）：</p>
+<pre><code class="language-json">{
+  &quot;name&quot;: &quot;mod测试时装&quot;,
+  &quot;target_card&quot;: &quot;player&quot;,
+  &quot;icon&quot;: &quot;spr_player_attire_1&quot;,
+  &quot;spr&quot;: &quot;spr_player_attire_1&quot;,
+  &quot;shop&quot;: { &quot;cost&quot;: &quot;1000&quot;, &quot;description&quot;: &quot;mod时装演示&quot; }
+}
+</code></pre>
+<h2>要点</h2>
+<ul>
+<li>贴图同样可以在 <code>_OBJECT_CFG</code> 里预加载（时装没有实例，但 <code>.bin</code> 的 CFG 依然会跑）
+—— 不过时装一般只有 json，直接引用<strong>内置精灵名</strong>最省事</li>
+<li>多帧写法：<code>&quot;spr&quot;: [&quot;spr_a&quot;, &quot;spr_b&quot;, &quot;spr_c&quot;]</code></li>
+<li>时装 id 就是文件名；想改外观名/价格改 json 即可，<code>[reloadmod]</code> 生效</li>
+</ul>
+
+</main>
+</body>
+</html>
