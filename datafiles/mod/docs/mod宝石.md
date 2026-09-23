@@ -78,6 +78,9 @@ mod/gems/my_gem.json / .bin / .txt / tex/
 4. 跑宝石 .bin 的 _OBJECT_STEP
 ```
 
+> 动画和武器一样是**核心自动推**的：`image_speed` 固定 0，别去改；待机/攻击不会自动切，`state` 自己改。
+> 想自己控制就在 `_OBJECT_STEP` 里直接写 `image_index`（VM 在核心动画之后跑，当帧生效）。
+
 ### 鼠标事件（核心挂的，插件不用写）
 
 | 事件 | 核心做什么 |

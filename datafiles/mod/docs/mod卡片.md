@@ -331,6 +331,9 @@ _OBJECT_STEP {
 - **动画**：`idle_anim`（待机帧数）、`attack_anim`（攻击帧数）、`flash_speed`（几帧走一格，默认 6）、
   `state`（0/1）驱动 `image_index`；默认 `idle_anim = 0` 会**锁在第 0 帧不动**，
   `idle_anim + attack_anim` 别超过精灵总帧数
+  - **动画是核心自动推的，别碰 `image_speed`**（固定为 0）；想自己控制就在 `_OBJECT_STEP` 里直接写 `image_index`
+  - 卡片比武器多一条：`mod_step_enter_condition = "norm_attack"` 时，**命中开火窗口且有敌人会自动切 `state = 1`**，
+    没敌人时自动收回待机 —— 用这套的卡不用自己管 `state`
 - **联动 / 计数**用本卡 VM 的命名数组（`VM_ArrayGet` / `VM_ArraySet` / `VM_ArrayADD`，每局重置），
   别依赖全局变量 —— 命名数组是**整个 mod 单元共享**的：
 

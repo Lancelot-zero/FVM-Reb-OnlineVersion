@@ -285,6 +285,12 @@ _OBJECT_STEP {
 - **动画四属性必须自己喂**，否则形象卡在第 0 帧：
   `idle_anim`（待机帧数）、`attack_anim`（攻击帧数）、`flash_speed`（几帧走一格）、`state`（0/1）；
   `idle_anim + attack_anim` 别超过精灵总帧数
+- **动画是核心自动推的，别碰 `image_speed`**：`image_speed` 固定为 0，`image_index` 由核心每 `flash_speed`
+  帧往前走一格；改 `image_speed` 只会和核心抢 `image_index`。想完全自己控制，就在 `_OBJECT_STEP` 里直接写
+  `image_index`（VM 在核心动画之后跑，当帧覆盖）
+- **待机 / 攻击不会自动切**：武器没有卡片那套"命中开火窗口自动切 ATTACK"，`state` 必须自己改
+  （开火时设 1、收招时设回 0）。而且**攻击动画是循环的**，不是"播一遍停住" —— 要"播完歇冷却"就自己数帧
+  （参考 `hades_scythe`：`at >= 80` 收招）
 - **本体贴图**：`sprite_index` 已经由 JSON 的 `sprite` 设好；换形态/换贴图在自己的逻辑里覆盖
 - **贴图预加载**：自带 PNG 要在 `_OBJECT_CFG` 里 `VM_LoadSpritePerm_Ex` + `VM_AliasSpritePerm`
   （注册武器时就会去查名字，晚一步就变成空白图）
