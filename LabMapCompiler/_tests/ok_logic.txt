@@ -1,0 +1,22 @@
+// && / || 回归用例：优先级、短路、if / while 里的复合条件
+_VM_BATTLE_START {
+    a = 1
+    b = 0
+    hit = 0
+    if (a == 1 || b == 1) {
+        hit = 1
+    }
+    if (a == 1 && b == 0) {
+        hit = hit + 1
+    }
+    if (a == 1 && b == 1 || hit == 2) {
+        hit = hit + 1
+    }
+    cnt = 0
+    while (cnt < 3 && (a == 1 || b == 1)) {
+        cnt = cnt + 1
+    }
+    while ((cnt < 9) || (cnt < 11 && (b == 0))) {
+        cnt = cnt + 1
+    }
+}

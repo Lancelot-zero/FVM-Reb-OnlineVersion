@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include <vector>
+#include <cstring>
 
 // ============================================================
 // 操作码 — 和 VM 端保持一致
@@ -361,6 +362,21 @@ inline int find_block(const std::string& name) {
     for (int i = 0; i < (int)BLOCK_NAMES.size(); i++)
         if (name == BLOCK_NAMES[i]) return i;
     return -1;
+}
+
+// 自定义块名：_DEFINE_BLOCK_xxxx（xxxx = 字母/数字/下划线，至少一个字符）
+inline bool is_custom_block_name(const std::string& s) {
+    static const char* PRE = "_DEFINE_BLOCK_";
+    const size_t n = strlen(PRE);
+    if (s.size() <= n) return false;
+    if (s.compare(0, n, PRE) != 0) return false;
+    for (size_t i = n; i < s.size(); i++) {
+        char c = s[i];
+        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+            (c >= '0' && c <= '9') || c == '_') continue;
+        return false;
+    }
+    return true;
 }
 
 inline int find_func(const std::string& name) {

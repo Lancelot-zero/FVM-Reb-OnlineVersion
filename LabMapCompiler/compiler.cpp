@@ -210,6 +210,21 @@ private:
     };
     vector<LoopCtx> loops_;
 
+    // ---- 自定义块 _DEFINE_BLOCK_xxx ----
+    //   只有内部块（_OBJECT_* / _VM_*）能调用；调用处把被调块的字节码内联到本块末尾，
+    //   调用点跳到拷贝开头，拷贝执行完（或 exit）再跳回调用点的下一条。
+    struct LexState { int pos; int line; Token cur; };
+    struct CustomDef { LexState def; int line; };
+    map<string, CustomDef> custom_defs_;   // 名字 → 定义点词法现场（第一遍记录，第二遍回放展开）
+    int  collect_custom_depth_ = 0;        // 第一遍：正在收集自定义块体的层数（>0 时禁止再调用块）
+    bool in_custom_ = false;               // 第二遍：正在展开自定义块体
+    int  custom_ret_ip_ = 0;               // 第二遍：展开中 exit/末尾跳回的地址
+    struct PendingCall { string name; int patch; int ret_ip; int line; };
+    vector<PendingCall> pending_calls_;    // 当前块里待展开的调用（块生成完统一内联）
+
+    LexState lex_save() const { return LexState{pos_, line_, cur_}; }
+    void lex_restore(const LexState& s) { pos_ = s.pos; line_ = s.line; cur_ = s.cur; }
+
     // ---- 字面量池：每个不同的裸字面量分配一个常驻槽，在 _VM_CONST_INIT 中统一初始化，
     //      之后任何引用直接传池槽（VM 参数槽只读前提） ----
     // 键按内容（与字符串池索引无关，避免两遍扫描入池顺序不同导致索引错位）
@@ -507,6 +522,7 @@ private:
             if (check(TK_IDENT)) {
                 string name = cur_.str_val;
                 if (find_block(name) >= 0) { collect_block(); continue; }
+                if (is_custom_block_name(name)) { collect_custom_block(name); continue; }
                 if (name == "_VM_CONST_INIT")
                     error(cur_.line, "_VM_CONST_INIT is generated automatically — constants are detected from repeated identical definitions");
                 else
@@ -554,6 +570,17 @@ private:
             error(cur_.line, "unexpected token after block — start a new line or use ;");
     }
 
+    // 自定义块定义：记下定义点的词法现场（第二遍按调用次数回放展开），再按普通块收集一遍
+    void collect_custom_block(const string& name) {
+        LexState st = lex_save();          // cur_ = 块名
+        int line = cur_.line;
+        if (custom_defs_.count(name)) error(line, "duplicate custom block '" + name + "'");
+        custom_defs_[name] = CustomDef{st, line};
+        collect_custom_depth_++;
+        collect_block();
+        collect_custom_depth_--;
+    }
+
     void collect_statement() {
         if (check(TK_EOF) || check(TK_RBRACE)) return;
         if (check(TK_ERROR)) { next(); return; }
@@ -584,6 +611,8 @@ private:
                     error(start_line, "cannot assign to function name '" + name + "'");
                 if (is_keyword(name))
                     error(start_line, "'" + name + "' is a keyword and cannot be assigned");
+                if (is_custom_block_name(name))
+                    error(start_line, "cannot assign to custom block name '" + name + "'");
                 next();  // =
                 vars_.alloc(name);
                 string canon;
@@ -597,6 +626,17 @@ private:
                 return;
             }
             if (check(TK_LPAREN)) {
+                if (is_custom_block_name(name)) {
+                    if (collect_custom_depth_ > 0)
+                        error(start_line, "custom block '" + name + "' cannot be called from another custom block");
+                    next();  // (
+                    paren_++;
+                    collect_args();
+                    paren_--;
+                    if (!expect(TK_RPAREN, ")")) return;
+                    check_eol(start_line);
+                    return;
+                }
                 int fi = find_func(name);
                 if (fi < 0) error(start_line, "unknown function '" + name + "'");
                 next();  // (
@@ -605,6 +645,11 @@ private:
                 paren_--;
                 if (!expect(TK_RPAREN, ")")) return;
                 check_eol(start_line);
+                return;
+            }
+            if (is_custom_block_name(name)) {
+                error(start_line, "unexpected custom block name '" + name +
+                                  "' — define it at top level, or call it as " + name + "()");
                 return;
             }
             error(cur_.line, "unexpected identifier '" + name + "'");
@@ -729,7 +774,8 @@ private:
             } else if (t == TK_IDENT) {
                 string name = cur_.str_val;
                 if (literal_only) *literal_only = false;
-                if (find_func(name) < 0 && find_block(name) < 0 && !is_keyword(name))
+                if (find_func(name) < 0 && find_block(name) < 0 && !is_keyword(name) &&
+                    !is_custom_block_name(name))
                     vars_.alloc(name);
                 single = false;
                 if (canon) { *canon += 'v'; *canon += name; *canon += ';'; }
@@ -801,6 +847,8 @@ private:
                 string name = cur_.str_val;
                 int bi = find_block(name);
                 if (bi >= 0) { gen_block(bi); continue; }
+                // 自定义块只在被调用处展开，这里跳过定义本身
+                if (is_custom_block_name(name)) { skip_custom_block_tokens(); continue; }
             }
             next();
         }
@@ -844,9 +892,91 @@ private:
         if (!check(TK_EOF) && !check(TK_RBRACE) && cur_.line == brace_line)
             error(cur_.line, "unexpected token after block");
 
+        gen_inline_calls();         // 本块调用的自定义块内联到本块末尾
+
         int name_str_idx = strings_.add(BLOCK_NAMES[block_name_idx]);
         blocks_.push_back({name_str_idx, bb.buf});
         cur_buf_ = nullptr;
+    }
+
+    // 跳过自定义块定义的 token（第二遍不生成它）
+    void skip_custom_block_tokens() {
+        next();                     // 块名
+        if (!match(TK_LBRACE)) return;
+        int depth = 1;
+        while (depth > 0 && !check(TK_EOF)) {
+            if (check(TK_LBRACE)) depth++;
+            else if (check(TK_RBRACE)) depth--;
+            next();
+        }
+    }
+
+    // 调用点的跳转占位（第二遍记下，块生成完统一展开）
+    void gen_custom_call(const string& name, int start_line) {
+        next();                                        // (
+        if (!expect(TK_RPAREN, ")")) return;           // 自定义块无参数
+        if (in_custom_) {
+            error(start_line, "custom block '" + name + "' cannot be called from another custom block");
+            check_eol(start_line);
+            return;
+        }
+        if (!custom_defs_.count(name)) {
+            error(start_line, "unknown custom block '" + name + "'");
+            check_eol(start_line);
+            return;
+        }
+        cur_buf_->u8(OP_JMP);
+        int patch = cur_buf_->tell();
+        cur_buf_->s32(0);                              // 占位：拷贝开头，展开时回填
+        pending_calls_.push_back({name, patch, cur_buf_->tell(), start_line});
+        check_eol(start_line);
+    }
+
+    // 内部块末尾：为每个调用点拷一份被调块的字节码，前后各一条跳转
+    //   调用点 --JMP--> 拷贝开头 ... 拷贝末尾/exit --JMP--> 调用点下一条
+    void gen_inline_calls() {
+        if (pending_calls_.empty()) return;
+        vector<PendingCall> calls;
+        calls.swap(pending_calls_);
+
+        cur_buf_->u8(OP_JMP);                          // 块本体执行完跳过所有拷贝
+        int skip_patch = cur_buf_->tell();
+        cur_buf_->s32(0);
+
+        for (auto& c : calls) {
+            int start = cur_buf_->tell();
+            cur_buf_->patch_s32(c.patch, start);
+            gen_custom_body(c.name, c.ret_ip);
+            cur_buf_->u8(OP_JMP);
+            cur_buf_->s32(c.ret_ip);
+        }
+        cur_buf_->patch_s32(skip_patch, cur_buf_->tell());
+    }
+
+    // 回放某个自定义块的定义现场，生成一份拷贝（exit 跳 ret_ip）
+    void gen_custom_body(const string& name, int ret_ip) {
+        auto it = custom_defs_.find(name);
+        if (it == custom_defs_.end()) return;
+
+        LexState caller = lex_save();
+        lex_restore(it->second.def);
+
+        bool bak_in = in_custom_;
+        int  bak_ret = custom_ret_ip_;
+        vector<LoopCtx> bak_loops;
+        bak_loops.swap(loops_);                        // 自定义块里的 break/continue 只认自己的循环
+        in_custom_ = true;
+        custom_ret_ip_ = ret_ip;
+
+        next();                                        // 块名
+        match(TK_LBRACE);
+        while (!check(TK_RBRACE) && !check(TK_EOF)) gen_statement();
+        match(TK_RBRACE);
+
+        in_custom_ = bak_in;
+        custom_ret_ip_ = bak_ret;
+        bak_loops.swap(loops_);
+        lex_restore(caller);
     }
 
     // ========== 语句 ==========
@@ -861,7 +991,12 @@ private:
 
             if (name == "halt" || name == "exit") {  // exit 与 halt 同义
                 next();
-                cur_buf_->u8(OP_HALT);
+                if (in_custom_) {                    // 自定义块：exit = 跳回调用处
+                    cur_buf_->u8(OP_JMP);
+                    cur_buf_->s32(custom_ret_ip_);
+                } else {
+                    cur_buf_->u8(OP_HALT);           // 内部块：exit = 结束整个块
+                }
                 check_eol(start_line);
                 return;
             }
@@ -954,6 +1089,7 @@ private:
                 return;
             }
             if (check(TK_LPAREN)) {
+                if (is_custom_block_name(name)) { gen_custom_call(name, start_line); return; }
                 // 函数调用（语句级，丢弃返回值）
                 int fid = find_func(name);
                 if (fid < 0) { error(start_line, "unknown function '" + name + "'"); next(); return; }
@@ -1320,6 +1456,11 @@ private:
             }
             if (is_keyword(name)) {
                 error(cur_.line, "'" + name + "' is a keyword and cannot appear in an expression");
+                next();
+                return alloc_temp();
+            }
+            if (is_custom_block_name(name)) {
+                error(cur_.line, "custom block '" + name + "' can only be called as a statement");
                 next();
                 return alloc_temp();
             }
