@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mod开发工具说明</title>
+<style>
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+body { margin:0; background:#f6f7f9; color:#24292f;
+  font:16px/1.75 -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif; }
+main { max-width:920px; margin:0 auto; padding:36px 28px 90px; background:#fff; min-height:100vh;
+  box-shadow:0 0 24px rgba(0,0,0,.06); }
+.nav { font-size:.88em; margin:0 0 1.4em; padding-bottom:.6em; border-bottom:1px dashed #e5e7eb; color:#6b7280; }
+.nav a { text-decoration:none; }
+h1,h2,h3,h4 { line-height:1.3; margin:1.6em 0 .6em; }
+h1 { font-size:1.8em; border-bottom:2px solid #e5e7eb; padding-bottom:.3em; margin-top:.2em; }
+h2 { font-size:1.35em; border-bottom:1px solid #eceef1; padding-bottom:.25em; }
+h3 { font-size:1.12em; }
+p { margin:.7em 0; }
+code { background:#f2f3f5; padding:.15em .38em; border-radius:4px;
+  font-family:Consolas,"Courier New",monospace; font-size:.9em; }
+pre { background:#1f2430; color:#e8e8e8; padding:14px 16px; border-radius:8px; overflow:auto; }
+pre code { background:none; color:inherit; padding:0; font-size:.88em; }
+table { border-collapse:collapse; width:100%; margin:1em 0; font-size:.93em; display:block; overflow-x:auto; }
+th,td { border:1px solid #dfe3e8; padding:6px 10px; text-align:left; vertical-align:top; }
+th { background:#f3f5f7; white-space:nowrap; }
+blockquote { margin:1em 0; padding:.5em 1em; border-left:4px solid #cbd5e1; background:#f8fafc; color:#475569; }
+blockquote p { margin:.3em 0; }
+a { color:#0969da; }
+ul,ol { padding-left:1.7em; margin:.7em 0; }
+li { margin:.2em 0; }
+hr { border:none; border-top:1px solid #e5e7eb; margin:2em 0; }
+.idx { list-style:none; padding-left:0; }
+.idx li { margin:.35em 0; }
+</style>
+</head>
+<body>
+<main>
+<div class="nav"><a href="index.html">&larr; 文档目录</a></div>
+<h1>Mod 开发工具说明</h1>
+<p>写给&quot;做 mod 的人&quot;的总说明。<strong>先看本文</strong>（能做哪些、通用流程与约定），再按类别看对应的分文件。</p>
+<table>
+<thead>
+<tr>
+<th>文档</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>本文</strong></td>
+<td>能做哪几种、通用流程、块名与贴图约定、<em><em>实例字段（x/y/image_</em> 等）</em>*、常见坑</td>
+</tr>
+<tr>
+<td><a href="mod%E5%8D%A1%E7%89%87.html">mod卡片.md</a></td>
+<td>卡片：JSON 字段（17 档数值等）、动画、联动计数</td>
+</tr>
+<tr>
+<td><a href="mod%E6%AD%A6%E5%99%A8.html">mod武器.md</a></td>
+<td>武器：三种槽位、JSON 字段、动画四属性</td>
+</tr>
+<tr>
+<td><a href="mod%E5%AE%9D%E7%9F%B3.html">mod宝石.md</a></td>
+<td>宝石：被动/主动、点击与冷却契约、图标两道静默失败</td>
+</tr>
+<tr>
+<td><a href="mod%E6%95%8C%E4%BA%BA.html">mod敌人.md</a></td>
+<td>敌人：JSON 字段、行为要自己写</td>
+</tr>
+<tr>
+<td><a href="mod%E5%AD%90%E5%BC%B9.html">mod子弹.md</a></td>
+<td>子弹：两步创建、<code>vx/vy</code>、碰撞自己写、更省的两个弹幕接口</td>
+</tr>
+<tr>
+<td><a href="mod%E7%89%B9%E6%95%88.html">mod特效.md</a></td>
+<td>特效：跟随实例、自动销毁</td>
+</tr>
+<tr>
+<td><a href="mod%E6%97%B6%E8%A3%85.html">mod时装.md</a></td>
+<td>时装：只有 json 的纯外观</td>
+</tr>
+<tr>
+<td><a href="mod%E5%9C%B0%E5%9B%BE.html">mod地图.md</a></td>
+<td>地图：<code>world.json</code> 与关卡（实验室格式 + 关卡脚本）</td>
+</tr>
+<tr>
+<td><code>help.md</code></td>
+<td>VM 脚本语言：语法、事件块、<strong>全部 VM 函数</strong></td>
+</tr>
+</tbody></table>
+<p><strong>配套工具</strong>：编辑器（<code>MapEditCreator.exe</code>）内置了 <code>help.md</code>（点「帮助」看语法与函数表），
+带语法检查、函数补全与悬停说明、代码折叠、一键编译（<code>Ctrl+B</code> / <code>F5</code>）；
+编译器 <code>LabMapCompiler.exe</code> 也可以单独命令行用（<code>LabMapCompiler.exe 你的脚本.txt</code>）。
+写脚本时的分工：<strong>语言和函数查 help.md / 编辑器帮助，各类 mod 怎么组查这几份文档</strong>。
+旁边的 <code>.html</code> 是转出来的（仓库里 <code>node tools/md2html.js</code>，用编辑器前端的 marked 渲染，不联网）——
+<strong>改了 md 记得重跑一次</strong>，html 要和 md 一起提交（yyp 里两种都登记了）。
+卡片 / 武器 / 宝石 / 敌人 / 子弹 / 特效这几份都按同一格式写：<strong>文件结构 → JSON 字段 →
+实例上的内置字段 → 块执行时机与顺序 → 可直接抄的 demo → 要点</strong>。</p>
+<p>源文件都在 <code>FVM-Reborn/datafiles/mod/</code>；构建时整个 <code>datafiles/</code> 会覆盖到游戏运行目录，
+所以游戏实际读的是 <code>&lt;游戏目录&gt;/mod/</code>（两棵树内容应保持一致）。</p>
+<hr>
+<h2>一、能做哪几种 Mod</h2>
+<table>
+<thead>
+<tr>
+<th>类别</th>
+<th>目录</th>
+<th>需要的文件</th>
+<th>注册成什么</th>
+<th>逻辑对象</th>
+<th>分文件</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>卡片</strong></td>
+<td><code>mod/cards/</code></td>
+<td><code>.json</code> + <code>.bin</code>（+<code>tex/</code>）</td>
+<td>卡池 + 植物数据</td>
+<td><code>obj_card_mod</code></td>
+<td><a href="mod%E5%8D%A1%E7%89%87.html">mod卡片.md</a></td>
+</tr>
+<tr>
+<td><strong>武器</strong></td>
+<td><code>mod/weapons/</code></td>
+<td><code>.json</code> + <code>.bin</code>（+<code>tex/</code>）</td>
+<td>主武器 / 超级武器 / 副武器</td>
+<td>主·超武用 <code>obj_weapon_mod</code>；副武是 <code>obj_player_shield</code> + 额外一个 <code>obj_weapon_mod</code></td>
+<td><a href="mod%E6%AD%A6%E5%99%A8.html">mod武器.md</a></td>
+</tr>
+<tr>
+<td><strong>宝石</strong></td>
+<td><code>mod/gems/</code></td>
+<td><code>.json</code> + <code>.bin</code>（+<code>tex/</code>）</td>
+<td>宝石（按装备槽位）</td>
+<td><code>obj_gem_mod</code>（<code>passive</code> 为真则没有实体）</td>
+<td><a href="mod%E5%AE%9D%E7%9F%B3.html">mod宝石.md</a></td>
+</tr>
+<tr>
+<td><strong>敌人</strong></td>
+<td><code>mod/enemies/</code></td>
+<td><code>.json</code> + <code>.bin</code>（+<code>tex/</code>）</td>
+<td>敌人池</td>
+<td><code>obj_enemy_mod</code></td>
+<td><a href="mod%E6%95%8C%E4%BA%BA.html">mod敌人.md</a></td>
+</tr>
+<tr>
+<td><strong>子弹</strong></td>
+<td><code>mod/bullets/</code></td>
+<td><code>.json</code> + <code>.bin</code></td>
+<td>不进任何池，只提供逻辑</td>
+<td><code>obj_bullet_mod</code></td>
+<td><a href="mod%E5%AD%90%E5%BC%B9.html">mod子弹.md</a></td>
+</tr>
+<tr>
+<td><strong>特效</strong></td>
+<td><code>mod/effects/</code></td>
+<td><code>.json</code> + <code>.bin</code></td>
+<td>同上</td>
+<td><code>obj_effect_mod</code></td>
+<td><a href="mod%E7%89%B9%E6%95%88.html">mod特效.md</a></td>
+</tr>
+<tr>
+<td><strong>时装</strong></td>
+<td><code>mod/attires/</code></td>
+<td>只要 <code>.json</code></td>
+<td>角色 / 卡片时装（纯外观）</td>
+<td>无</td>
+<td><a href="mod%E6%97%B6%E8%A3%85.html">mod时装.md</a></td>
+</tr>
+<tr>
+<td><strong>地图</strong></td>
+<td><code>mod/maps/&lt;地图id&gt;/</code></td>
+<td><code>world.json</code> + 每关 <code>json</code>/<code>bin</code></td>
+<td>实验室大地图</td>
+<td>无（关卡脚本用 LabMapCompiler）</td>
+<td><a href="mod%E5%9C%B0%E5%9B%BE.html">mod地图.md</a></td>
+</tr>
+</tbody></table>
+<p>三条硬规则：</p>
+<ol>
+<li><strong>文件名（去掉扩展名）就是 id</strong>：<code>&lt;id&gt;.json</code> / <code>&lt;id&gt;.bin</code> / <code>&lt;id&gt;.txt</code> 是一组</li>
+<li><strong>子弹 / 特效的 json 可以只是 <code>{}</code></strong>，但<strong>必须有 json</strong> —— 扫描入口是 json，没有它就找不到同名 bin</li>
+<li><strong>时装只有 json</strong>，没有逻辑块</li>
+</ol>
+<hr>
+<h2>二、大概怎么做（五步）</h2>
+<ol>
+<li><strong>建文件</strong>：<code>mod/&lt;类别&gt;/&lt;id&gt;.json</code>、<code>&lt;id&gt;.txt</code>，要自带贴图再加 <code>tex/</code></li>
+<li><strong>写 txt</strong>（VM 脚本，只用 VM 语言 + <code>help.md</code> 里的 <code>VM_*</code> 函数）→ <strong>编译出 <code>&lt;id&gt;.bin</code></strong><ul>
+<li>编辑器：<code>Ctrl+B</code> / <code>F5</code>；命令行：<code>LabMapCompiler.exe &lt;id&gt;.txt</code></li>
+<li><code>.txt</code> 只是源码，游戏只读 <code>.bin</code></li>
+</ul>
+</li>
+<li><strong>写 json</strong>：字段见对应分文件</li>
+<li><strong>贴图</strong>：内置名直接用，自带 PNG 放 <code>tex/</code>（见下）</li>
+<li><strong>生效方式</strong>：<ul>
+<li>改<strong>已有文件</strong> → 控制台 <code>[reloadmod]</code>（只重载载入的 bin，不动注册表）</li>
+<li>只改某一个 mod → <code>[reloadmod &lt;数字id | id | 名称&gt;]</code>（数字id 就是 <code>[listmod]</code> 里那个编号；重读那个 json/bin，数值重新注册；<strong>贴图换了还是要用全量 <code>reloadmod</code></strong>，因为贴图别名是所有 mod 共用一批登记的）</li>
+<li><strong>新增文件</strong> → <code>[reloadallmod]</code>（重扫所有目录，只注册新增的；不用重开游戏了）</li>
+<li>看现在加载了什么 → <code>[listmod]</code>（每行：<code>[数字id] [类别] id  名称  路径  简介</code>，简介取 json 的 <code>description</code>，没有就取 <code>shop.description</code>）</li>
+<li>改<strong>核心 GML</strong> → 要 GM 重编译（mod 层改动不需要）</li>
+</ul>
+</li>
+</ol>
+<p>建议起手方式：从 <code>datafiles/mod/dev_test/</code> 里抄一份最接近的样例改，
+或者在编辑器里新建文件（模板里事件块都摆好了，删掉行首注释即启用）。</p>
+<hr>
+<h2>三、通用约定</h2>
+<h3>块名与执行时机</h3>
+<table>
+<thead>
+<tr>
+<th>块</th>
+<th>什么时候跑</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>_OBJECT_CFG</code></td>
+<td><code>.bin</code> <strong>加载时</strong>执行一次（不在任何实例上，只适合预加载贴图/常量），执行完就删掉</td>
+</tr>
+<tr>
+<td><code>_OBJECT_CREATE</code></td>
+<td>实例创建时</td>
+</tr>
+<tr>
+<td><code>_OBJECT_STEP</code></td>
+<td>每帧</td>
+</tr>
+<tr>
+<td><code>_OBJECT_DRAW</code></td>
+<td>绘制时（不写就自动 <code>draw_self()</code>）</td>
+</tr>
+<tr>
+<td><code>_OBJECT_DESTROY</code></td>
+<td>实例销毁时</td>
+</tr>
+</tbody></table>
+<p>各对象实际支持：</p>
+<pre><code class="language-text">obj_card_mod     CREATE / STEP / DRAW / DESTROY
+obj_weapon_mod   CREATE / STEP / DRAW
+obj_bullet_mod   CREATE / STEP / DRAW / DESTROY
+obj_effect_mod   CREATE / STEP / DRAW / DESTROY
+obj_enemy_mod    CREATE / STEP / DRAW / DESTROY
+obj_gem_mod      CREATE / STEP / DRAW（另外还有鼠标事件，见 mod宝石.md）
+</code></pre>
+<ul>
+<li>写块之前先确认对应对象支持它 —— 写了没人执行的块等于没写</li>
+<li>取当前实例：<code>self = VM_GetCurCard()</code>（名字叫 Card，实际指&quot;当前对象实例&quot;）</li>
+<li>碰撞没有通用块（不存在 <code>_OBJECT_HIT</code>），要在 <code>_OBJECT_STEP</code> 里自己判</li>
+</ul>
+<h3>实例字段（GML 内置，读写都用 VM_GetProp / VM_SetProp）</h3>
+<pre><code class="language-gml">x = VM_GetProp(self, &quot;x&quot;)          // 读
+VM_SetProp(self, &quot;x&quot;, x + 40)      // 写（浮点直接写，如 1.8）
+</code></pre>
+<p><strong>位置 / 尺寸</strong></p>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>x</code> / <code>y</code></td>
+<td>实例坐标（像素）。<strong>武器每帧跟玩家、宝石停在创建点</strong>——这些是核心写的，想偏移就在 STEP 里自己加（<code>VM_SetProp(self,&quot;y&quot;,VM_GetProp(self,&quot;y&quot;)+50)</code>）</td>
+</tr>
+<tr>
+<td><code>depth</code></td>
+<td>深度，越小越靠前（武器默认跟随玩家 -1）</td>
+</tr>
+<tr>
+<td><code>grid_col</code> / <code>grid_row</code></td>
+<td>所在格子；卡/武器/宝石由核心写，子弹还有 <code>prev_grid_col</code> / <code>prev_grid_row</code></td>
+</tr>
+<tr>
+<td><code>sprite_width</code> / <code>sprite_height</code></td>
+<td>贴图尺寸，<strong>已经乘过 image_xscale/yscale</strong>，别再乘一次</td>
+</tr>
+</tbody></table>
+<p><strong>外观</strong></p>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>sprite_index</code></td>
+<td>贴图。可以直接写<strong>字符串名</strong>（内置名，或 <code>VM_AliasSpritePerm</code> 挂的名字）。⚠️ 它永远&quot;已定义&quot;（没设时是 <code>-1</code>），判断&quot;别人给没给贴图&quot;要用 <code>== -1</code>，不能用 undefined</td>
+</tr>
+<tr>
+<td><code>image_index</code></td>
+<td>当前帧（0 起）。核心动画会自动推，想自己控制就直接写（VM 在核心动画之后跑，当帧生效）</td>
+</tr>
+<tr>
+<td><code>image_speed</code></td>
+<td><strong>固定 0，别碰</strong>——核心自己推 <code>image_index</code>，改了只会互相抢</td>
+</tr>
+<tr>
+<td><code>image_xscale</code> / <code>image_yscale</code></td>
+<td>缩放。武器默认 1.6、宝石默认 1（<code>obj_gem_mod</code> 里常设 1.8）、子弹按各自对象默认</td>
+</tr>
+<tr>
+<td><code>image_angle</code></td>
+<td>旋转角度（度）。子弹/光环自转就靠它，如 <code>image_angle = 0 - timer * 6</code></td>
+</tr>
+<tr>
+<td><code>image_alpha</code></td>
+<td>透明度 0~1</td>
+</tr>
+<tr>
+<td><code>visible</code></td>
+<td>是否绘制（<code>false</code> = 不画但还在跑逻辑）</td>
+</tr>
+</tbody></table>
+<p><strong>动画配置</strong>（核心读这几个来推 <code>image_index</code>，各类文档里有详表）</p>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>timer</code> / <code>flash_speed</code></td>
+<td>每帧计数 / 每格停留几帧</td>
+</tr>
+<tr>
+<td><code>idle_anim</code> / <code>attack_anim</code></td>
+<td>待机帧范围、攻击帧范围（<code>idle_anim</code> = 待机最后一帧的下标）</td>
+</tr>
+<tr>
+<td><code>state</code></td>
+<td><code>0</code> = 待机、<code>1</code> = 攻击（走 <code>attack_anim</code> 那段）</td>
+</tr>
+</tbody></table>
+<p><strong>这些字段是核心在维护的，别硬覆盖</strong>（想改就在对应文档里找&quot;允许改&quot;的写法）：</p>
+<ul>
+<li>武器 / 副武器：<code>x</code> / <code>y</code> / <code>depth</code> / <code>grid_*</code>（每帧跟玩家）</li>
+<li>卡 / 敌人：<code>hp</code> / <code>maxhp</code>（敌人还含 <code>shield_hp</code> / <code>move_speed</code> / <code>atk_cycle</code>…，来自注册表或服务器）</li>
+<li>宝石：<code>cooldown_timer</code> 每帧自减（插件触发后自己重写，见 mod宝石.md）</li>
+<li>子弹：<code>x += vx</code>、<code>y += vy</code> 是<strong>核心在 VM 之后</strong>做的，所以它们在 VM 里读到的是&quot;这一帧移动前&quot;的位置</li>
+</ul>
+<h3>贴图</h3>
+<p><strong>方式 A：用内置精灵名</strong>（数量最多、最省事）</p>
+<pre><code class="language-json">&quot;sprite&quot;: &quot;spr_small_fire&quot;
+</code></pre>
+<p><strong>方式 B：自带 PNG</strong>（放 <code>mod/&lt;类别&gt;/tex/</code>，在 <code>_OBJECT_CFG</code> 里加载并挂别名）</p>
+<pre><code class="language-gml">_OBJECT_CFG {
+    if (VM_SpriteExists(&quot;spr_my_card&quot;) == 0) {
+        VM_LoadSpritePerm_Ex(&quot;tex/spr_my_card_0.png&quot;, 1, 40, 40)
+        VM_AliasSpritePerm(&quot;spr_my_card&quot;, &quot;tex/spr_my_card_0.png&quot;)
+    }
+}
+</code></pre>
+<ul>
+<li>多帧就写帧数（<code>VM_LoadSpritePerm_Ex(文件, 帧数, 原点X, 原点Y)</code>），图按横向均分</li>
+<li>原点是图里的像素坐标，居中就是 <code>宽/2, 高/2</code></li>
+<li>文件命名习惯 <code>&lt;精灵名&gt;_0.png</code>（和内置一致）</li>
+<li>内置优先 + 外置覆盖：先 <code>VM_SpriteExists</code> 判断，内置有就不覆盖</li>
+</ul>
+<h3>商店与解锁（卡片 / 武器 / 宝石 / 时装通用）</h3>
+<pre><code class="language-json">&quot;shop&quot;: { &quot;cost&quot;: &quot;50000&quot;, &quot;description&quot;: &quot;商店里显示的文字&quot; }
+</code></pre>
+<p>写了才进商店；<code>cost</code> 是字符串。</p>
+<h3>数值档位</h3>
+<p>卡片数值是 <strong>17 档数组</strong>（从最低等级往上排），写不满就用最后一个补齐。</p>
+<hr>
+<h2>四、常见坑速查</h2>
+<table>
+<thead>
+<tr>
+<th>现象</th>
+<th>原因 / 处理</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>新加的 mod 在游戏里找不到</td>
+<td>控制台 <code>[reloadallmod]</code> 重扫注册；<code>[reloadmod]</code> 只重载<strong>已有</strong>文件</td>
+</tr>
+<tr>
+<td>改了某个 mod 想单独生效</td>
+<td><code>[reloadmod &lt;数字id&gt;]</code>（数字id 见 <code>[listmod]</code>）；改了贴图仍要用全量 <code>[reloadmod]</code></td>
+</tr>
+<tr>
+<td>不知道现在加载了哪些 mod</td>
+<td><code>[listmod]</code> 列出来（数字id / 类别 / id / 名称 / 路径 / 简介）</td>
+</tr>
+<tr>
+<td>卡片/武器形象卡在第 0 帧不动</td>
+<td>没喂 <code>idle_anim</code> / <code>attack_anim</code> / <code>flash_speed</code> / <code>state</code></td>
+</tr>
+<tr>
+<td>设了 <code>x</code> / <code>y</code> 但位置没变</td>
+<td>武器每帧跟玩家、宝石停在创建点——核心会覆盖，要在 <code>_OBJECT_STEP</code> 里自己加偏移（见「实例字段」一节）</td>
+</tr>
+<tr>
+<td>改了 <code>image_speed</code> 动画反而乱</td>
+<td>核心固定 <code>image_speed = 0</code> 自己推 <code>image_index</code>；要自己控制就直接写 <code>image_index</code></td>
+</tr>
+<tr>
+<td>遮罩/判定框比贴图大一截</td>
+<td><code>sprite_width</code> / <code>sprite_height</code> <strong>已含缩放</strong>，再乘一次 <code>image_xscale</code> 就放大了</td>
+</tr>
+<tr>
+<td>子弹/实例一动不动</td>
+<td><code>vx</code> / <code>vy</code> 默认就是 0，<strong>必须显式设</strong></td>
+</tr>
+<tr>
+<td>脚本跑到一半就不执行了</td>
+<td>读了没设过的属性会报错并中断<strong>整个块</strong>；要用先在 CREATE 里设一份</td>
+</tr>
+<tr>
+<td>两个卡加的同一个全局计数串了</td>
+<td>命名数组是<strong>整个 mod 单元共享</strong>的，不是实例级；同名注册还会互相覆盖</td>
+</tr>
+<tr>
+<td>贴图空白但不报错</td>
+<td><code>get_load_sprite</code> 找不到会给占位图；用 <code>VM_SpriteExists</code> 判断，自带图记得在 <code>_OBJECT_CFG</code> 预加载</td>
+</tr>
+<tr>
+<td>每次进房间临时贴图没了</td>
+<td>临时缓存（<code>VM_LoadSprite</code>）进房间会清；常驻用 <code>VM_LoadSpritePerm_Ex</code></td>
+</tr>
+<tr>
+<td><code>VM_CallFunc</code> 那批工具函数叫不动</td>
+<td>走字典的动态调用<strong>较慢</strong>，且只适合低频；先 <code>VM_FuncExists(&quot;名字&quot;)</code> 判断</td>
+</tr>
+<tr>
+<td>某些 mod 函数叫不动</td>
+<td>确认<strong>目标构建</strong>里有没有这个函数（编辑器帮助 / <code>help.md</code> 能查），主线与 mod 分支的函数表不一定一样</td>
+</tr>
+<tr>
+<td>存档里的旧 mod 变成透明卡 / 空位</td>
+<td>卸载或改名后，存档里还留着那个 id；游戏会把它当&quot;未注册&quot;处理（摘出来不写坏档）</td>
+</tr>
+<tr>
+<td>掉帧</td>
+<td>瓶颈是<strong>进 VM 解释器的次数</strong>：别在 <code>_VM_FRAME</code> / 每帧每实例里写重逻辑；大量同质子弹改用屏幕弹幕管理器（<code>VM_BulletScreenAdd_Ex</code>），少用 <code>VM_CallFunc</code></td>
+</tr>
+</tbody></table>
+<p>遇到&quot;原版是怎么做的&quot;这类问题，可以直接翻 <code>datafiles/mod/dev_test/</code> 里的样例，
+或对照游戏源码里对应的 <code>obj_*</code> 对象事件。</p>
+
+</main>
+</body>
+</html>

@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mod敌人</title>
+<style>
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+body { margin:0; background:#f6f7f9; color:#24292f;
+  font:16px/1.75 -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif; }
+main { max-width:920px; margin:0 auto; padding:36px 28px 90px; background:#fff; min-height:100vh;
+  box-shadow:0 0 24px rgba(0,0,0,.06); }
+.nav { font-size:.88em; margin:0 0 1.4em; padding-bottom:.6em; border-bottom:1px dashed #e5e7eb; color:#6b7280; }
+.nav a { text-decoration:none; }
+h1,h2,h3,h4 { line-height:1.3; margin:1.6em 0 .6em; }
+h1 { font-size:1.8em; border-bottom:2px solid #e5e7eb; padding-bottom:.3em; margin-top:.2em; }
+h2 { font-size:1.35em; border-bottom:1px solid #eceef1; padding-bottom:.25em; }
+h3 { font-size:1.12em; }
+p { margin:.7em 0; }
+code { background:#f2f3f5; padding:.15em .38em; border-radius:4px;
+  font-family:Consolas,"Courier New",monospace; font-size:.9em; }
+pre { background:#1f2430; color:#e8e8e8; padding:14px 16px; border-radius:8px; overflow:auto; }
+pre code { background:none; color:inherit; padding:0; font-size:.88em; }
+table { border-collapse:collapse; width:100%; margin:1em 0; font-size:.93em; display:block; overflow-x:auto; }
+th,td { border:1px solid #dfe3e8; padding:6px 10px; text-align:left; vertical-align:top; }
+th { background:#f3f5f7; white-space:nowrap; }
+blockquote { margin:1em 0; padding:.5em 1em; border-left:4px solid #cbd5e1; background:#f8fafc; color:#475569; }
+blockquote p { margin:.3em 0; }
+a { color:#0969da; }
+ul,ol { padding-left:1.7em; margin:.7em 0; }
+li { margin:.2em 0; }
+hr { border:none; border-top:1px solid #e5e7eb; margin:2em 0; }
+.idx { list-style:none; padding-left:0; }
+.idx li { margin:.35em 0; }
+</style>
+</head>
+<body>
+<main>
+<div class="nav"><a href="index.html">&larr; 文档目录</a></div>
+<h1>敌人 Mod</h1>
+<blockquote>
+<p>通用前提（文件命名、块名与时机、贴图、生效方式）见 <a href="mod%E5%BC%80%E5%8F%91%E5%B7%A5%E5%85%B7%E8%AF%B4%E6%98%8E.html">mod开发工具说明.md</a>；
+VM 语言与全部函数见 <code>help.md</code>。</p>
+</blockquote>
+<h2>文件</h2>
+<pre><code class="language-text">mod/enemies/my_mouse.json / .bin / .txt / tex/
+</code></pre>
+<hr>
+<h2>一、JSON 字段</h2>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>必填</th>
+<th>默认</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>spr</code></td>
+<td>✅</td>
+<td></td>
+<td>贴图名</td>
+</tr>
+<tr>
+<td><code>name</code></td>
+<td></td>
+<td>文件名</td>
+<td>名字</td>
+</tr>
+<tr>
+<td><code>hp</code></td>
+<td></td>
+<td>100</td>
+<td>血量（同时设 <code>maxhp</code>）</td>
+</tr>
+<tr>
+<td><code>shield</code></td>
+<td></td>
+<td>0</td>
+<td>护盾值（同时设 <code>shield_max_hp</code>）</td>
+</tr>
+<tr>
+<td><code>speed</code></td>
+<td></td>
+<td>0.3</td>
+<td>移动速度 → 实例的 <code>move_speed</code></td>
+</tr>
+<tr>
+<td><code>atk</code></td>
+<td></td>
+<td>10</td>
+<td>攻击力</td>
+</tr>
+<tr>
+<td><code>cycle</code></td>
+<td></td>
+<td>36</td>
+<td>攻击间隔（帧）→ 实例的 <code>atk_cycle</code></td>
+</tr>
+<tr>
+<td><code>range</code></td>
+<td></td>
+<td>90</td>
+<td>攻击距离 → 实例的 <code>attack_range</code></td>
+</tr>
+<tr>
+<td><code>ash_proof</code></td>
+<td></td>
+<td>false</td>
+<td>免疫灰烬 → 实例的 <code>immune_to_ash</code></td>
+</tr>
+<tr>
+<td><code>feature</code></td>
+<td></td>
+<td><code>&quot;land&quot;</code></td>
+<td><code>&quot;land&quot;</code>=陆行 / <code>&quot;water&quot;</code>=水生；其它值＝不限行列类型</td>
+</tr>
+<tr>
+<td><code>description</code></td>
+<td></td>
+<td>&quot;&quot;</td>
+<td>说明</td>
+</tr>
+</tbody></table>
+<p>最小例子：</p>
+<pre><code class="language-json">{
+  &quot;name&quot;: &quot;我的老鼠&quot;,
+  &quot;spr&quot;: &quot;spr_mouse&quot;,
+  &quot;hp&quot;: 100, &quot;shield&quot;: 0, &quot;speed&quot;: 0.3,
+  &quot;atk&quot;: 10, &quot;cycle&quot;: 36, &quot;range&quot;: 90,
+  &quot;ash_proof&quot;: false, &quot;feature&quot;: &quot;land&quot;
+}
+</code></pre>
+<hr>
+<h2>二、敌人实例上的内置字段</h2>
+<p>mod 敌人用 <code>obj_enemy_mod</code>（<strong>继承 <code>obj_enemy_parent</code></strong>，移动 / 攻击 / 死亡 / 受击这些基础行为全部复用父类）。
+Create 时按上面 JSON 套用数值，所以实例上一建出来就有：</p>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>来源</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>enemy_id</code></td>
+<td>全局 <code>_mod_pending_enemy_id</code></td>
+<td>敌人 id（= 文件名）</td>
+</tr>
+<tr>
+<td><code>sprite_index</code></td>
+<td>JSON <code>spr</code></td>
+<td>贴图</td>
+</tr>
+<tr>
+<td><code>hp</code> / <code>maxhp</code></td>
+<td>JSON <code>hp</code></td>
+<td>当前 / 最大血量（<code>hp &lt;= 0</code> 由父类走死亡流程）</td>
+</tr>
+<tr>
+<td><code>shield_hp</code> / <code>shield_max_hp</code></td>
+<td>JSON <code>shield</code></td>
+<td>护盾</td>
+</tr>
+<tr>
+<td><code>move_speed</code></td>
+<td>JSON <code>speed</code></td>
+<td>移动速度（父类用它推进 <code>x</code>）</td>
+</tr>
+<tr>
+<td><code>atk</code></td>
+<td>JSON <code>atk</code></td>
+<td>攻击力</td>
+</tr>
+<tr>
+<td><code>atk_cycle</code></td>
+<td>JSON <code>cycle</code></td>
+<td>攻击间隔（帧）</td>
+</tr>
+<tr>
+<td><code>attack_range</code></td>
+<td>JSON <code>range</code></td>
+<td>攻击距离</td>
+</tr>
+<tr>
+<td><code>immune_to_ash</code></td>
+<td>JSON <code>ash_proof</code></td>
+<td>免疫灰烬</td>
+</tr>
+<tr>
+<td><code>feature</code></td>
+<td>JSON <code>feature</code></td>
+<td>陆行 / 水生</td>
+</tr>
+<tr>
+<td><code>x</code> / <code>y</code> / <code>grid_col</code> / <code>grid_row</code></td>
+<td>父类</td>
+<td>位置与所在格（每帧更新）</td>
+</tr>
+<tr>
+<td><code>state</code></td>
+<td>父类</td>
+<td><code>ENEMY_STATE</code>（移动 / 攻击 / 死亡…）</td>
+</tr>
+<tr>
+<td><code>target_plant</code> / <code>target_type</code> / <code>mouse_id</code> / <code>is_boss</code></td>
+<td>父类</td>
+<td>索敌与身份</td>
+</tr>
+<tr>
+<td><code>ice_timer</code> / <code>is_frozen</code> / <code>is_stun</code> / <code>stun_timer</code> / <code>hurt_rate</code></td>
+<td>父类</td>
+<td>冰冻 / 眩晕 / 受伤状态</td>
+</tr>
+<tr>
+<td><code>helmet_hp</code> / <code>helmet_max_hp</code></td>
+<td>父类</td>
+<td>头盔</td>
+</tr>
+</tbody></table>
+<p><strong>父类已经做好的事</strong>：按 <code>move_speed</code> 往左推进、到卡片旁边停下攻击（走 <code>atk_cycle</code>）、
+掉血 / 死亡动画 / 灰烬判定。所以 mod 敌人<strong>基本只需要写&quot;额外行为&quot;</strong>。</p>
+<hr>
+<h2>三、STEP 的时机与执行顺序</h2>
+<h3>什么时候跑</h3>
+<ul>
+<li><strong><code>_OBJECT_CREATE</code></strong>：实例创建时立刻执行（刷怪时）</li>
+<li><strong><code>_OBJECT_STEP</code></strong>：每帧；暂停时不跑</li>
+<li><strong><code>_OBJECT_DRAW</code></strong>：父类先画，然后跑 VM 的绘制块（<strong>叠加绘制</strong>，不会替代父类的画）</li>
+<li><strong><code>_OBJECT_DESTROY</code></strong>：父类处理完，再跑 VM 的 <code>_OBJECT_DESTROY</code>，最后把实例移出列表</li>
+</ul>
+<h3>每帧顺序</h3>
+<pre><code class="language-text">1. 暂停 → exit
+2. event_inherited()   → 父类：移动 / 攻击 / 死亡 / 受击状态推进
+3. 跑敌人 .bin 的 _OBJECT_STEP       ← 每帧，没有条件门槛
+</code></pre>
+<blockquote>
+<p>因为父类先跑，VM 里读到的是<strong>父类推进之后</strong>的位置/状态；想改速度就改 <code>move_speed</code>（下一帧生效），
+想改位置直接写 <code>x</code> / <code>y</code>。</p>
+</blockquote>
+<hr>
+<h2>四、demo</h2>
+<h3>Demo 1：冲刺型敌人（改速度做节奏）</h3>
+<p>父类管移动，VM 只做节奏（<code>dev_test/enemies/mod_dash_mouse.txt</code>）：</p>
+<pre><code class="language-gml">_OBJECT_CREATE {
+    self = VM_GetCurCard()
+    VM_SetProp(self, &quot;dash_timer&quot;, 0)
+    VM_SetProp(self, &quot;move_speed&quot;, 0.9)
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+    t = VM_GetProp(self, &quot;dash_timer&quot;) + 1
+    if (t == 180) {                       // 每 180 帧（3 秒）冲一次
+        VM_SetProp(self, &quot;move_speed&quot;, 1.6)
+    }
+    if (t == 330) {                       // 冲 150 帧后回普通速度
+        VM_SetProp(self, &quot;move_speed&quot;, 0.9)
+        t = 0
+    }
+    VM_SetProp(self, &quot;dash_timer&quot;, t)
+}
+</code></pre>
+<h3>Demo 2：远程 / 投掷攻击</h3>
+<p>父类的攻击是&quot;贴身打卡片&quot;；想远程就自己找目标、自己发子弹：</p>
+<pre><code class="language-gml">_OBJECT_CREATE {
+    self = VM_GetCurCard()
+    VM_SetProp(self, &quot;throw_cd&quot;, 0)
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+    r = VM_GetProp(self, &quot;grid_row&quot;)
+    c = VM_GetProp(self, &quot;grid_col&quot;)
+    // 左边这一行有没有卡片（列 0..c）
+    n = VM_GetInstancesInRange(&quot;e_tgt&quot;, r, r, 0, c, &quot;card&quot;, &quot;&quot;)
+    if (n &gt; 0) {
+        cd = VM_GetProp(self, &quot;throw_cd&quot;) + 1
+        if (cd &gt;= 120) {
+            cd = 0
+            b = VM_CreateInstance(&quot;obj_bullet_mod&quot;, VM_GetProp(self, &quot;x&quot;), VM_GetProp(self, &quot;y&quot;) - 20)
+            VM_SetProp(b, &quot;mod_type&quot;, &quot;my_enemy_shot&quot;)
+            VM_SetProp(b, &quot;damage&quot;, VM_GetProp(self, &quot;atk&quot;))
+            VM_SetProp(b, &quot;vx&quot;, 0 - 5)          // 往左飞
+            VM_SetProp(b, &quot;vy&quot;, 0)
+            VM_PlaySound(&quot;snd_throw&quot;)
+        }
+        VM_SetProp(self, &quot;throw_cd&quot;, cd)
+    } else {
+        VM_SetProp(self, &quot;throw_cd&quot;, 0)
+    }
+}
+</code></pre>
+<p>子弹侧照 <a href="mod%E5%AD%90%E5%BC%B9.html">mod子弹.md</a> 写；打<strong>卡片</strong>用 <code>VM_SetProp(卡片实例, &quot;hp&quot;, ...)</code> 或让子弹自己判。</p>
+<h3>Demo 3：被打时的额外反应</h3>
+<pre><code class="language-gml">_OBJECT_STEP {
+    self = VM_GetCurCard()
+    // 血量掉到一半以下 → 换贴图 / 加速（父类负责真正的死亡）
+    if (VM_GetProp(self, &quot;hp&quot;) &lt;= VM_GetProp(self, &quot;maxhp&quot;) / 2) {
+        VM_SetProp(self, &quot;sprite_index&quot;, &quot;spr_my_mouse_angry&quot;)
+        VM_SetProp(self, &quot;move_speed&quot;, 0.6)
+    }
+}
+
+_OBJECT_DESTROY {
+    self = VM_GetCurCard()
+    // 死亡时掉一地特效（VM_GetInstancesInRange 之类的清理记得别在这里做，实例马上就没了）
+    fx = VM_CreateInstance(&quot;obj_effect_mod&quot;, VM_GetProp(self, &quot;x&quot;), VM_GetProp(self, &quot;y&quot;))
+    VM_SetProp(fx, &quot;mod_type&quot;, &quot;my_death_fx&quot;)
+    VM_SetProp(fx, &quot;destroy_timer&quot;, 30)
+}
+</code></pre>
+<hr>
+<h2>五、要点</h2>
+<ul>
+<li><strong>刷敌人</strong>：地图脚本里 <code>VM_SpawnEnemy(&quot;敌人id&quot;, 行, 血量)</code>（id 就是 <code>mod/enemies/</code> 下的文件名）；
+关卡 JSON 的 <code>enemy_list</code> 也能直接引用</li>
+<li><strong>别重复实现父类已有的东西</strong>（移动、贴身攻击、死亡动画）；VM 里改 <code>move_speed</code> / <code>hp</code> / <code>state</code> 就行</li>
+<li>敌人受伤走自己的受击事件（闪白 / 音效 / 护盾判定）；插件主动给别人伤害用
+<code>VM_DamageEnemy(敌人id, 伤害, 伤害类型)</code>，灰烬那套用 <code>VM_DamageEnemyAsh(...)</code></li>
+<li><code>feature</code> 只有 <code>land</code> / <code>water</code> 有意义（决定刷在哪种行），其它值＝不限</li>
+<li>敌人<strong>没有</strong>卡片的 <code>mod_tick_*</code> / <code>mod_step_enter_*</code> 那套；要节奏就自己设计时器属性</li>
+</ul>
+
+</main>
+</body>
+</html>

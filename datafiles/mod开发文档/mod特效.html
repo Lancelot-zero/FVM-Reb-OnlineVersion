@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mod特效</title>
+<style>
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+body { margin:0; background:#f6f7f9; color:#24292f;
+  font:16px/1.75 -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif; }
+main { max-width:920px; margin:0 auto; padding:36px 28px 90px; background:#fff; min-height:100vh;
+  box-shadow:0 0 24px rgba(0,0,0,.06); }
+.nav { font-size:.88em; margin:0 0 1.4em; padding-bottom:.6em; border-bottom:1px dashed #e5e7eb; color:#6b7280; }
+.nav a { text-decoration:none; }
+h1,h2,h3,h4 { line-height:1.3; margin:1.6em 0 .6em; }
+h1 { font-size:1.8em; border-bottom:2px solid #e5e7eb; padding-bottom:.3em; margin-top:.2em; }
+h2 { font-size:1.35em; border-bottom:1px solid #eceef1; padding-bottom:.25em; }
+h3 { font-size:1.12em; }
+p { margin:.7em 0; }
+code { background:#f2f3f5; padding:.15em .38em; border-radius:4px;
+  font-family:Consolas,"Courier New",monospace; font-size:.9em; }
+pre { background:#1f2430; color:#e8e8e8; padding:14px 16px; border-radius:8px; overflow:auto; }
+pre code { background:none; color:inherit; padding:0; font-size:.88em; }
+table { border-collapse:collapse; width:100%; margin:1em 0; font-size:.93em; display:block; overflow-x:auto; }
+th,td { border:1px solid #dfe3e8; padding:6px 10px; text-align:left; vertical-align:top; }
+th { background:#f3f5f7; white-space:nowrap; }
+blockquote { margin:1em 0; padding:.5em 1em; border-left:4px solid #cbd5e1; background:#f8fafc; color:#475569; }
+blockquote p { margin:.3em 0; }
+a { color:#0969da; }
+ul,ol { padding-left:1.7em; margin:.7em 0; }
+li { margin:.2em 0; }
+hr { border:none; border-top:1px solid #e5e7eb; margin:2em 0; }
+.idx { list-style:none; padding-left:0; }
+.idx li { margin:.35em 0; }
+</style>
+</head>
+<body>
+<main>
+<div class="nav"><a href="index.html">&larr; 文档目录</a></div>
+<h1>特效 Mod</h1>
+<blockquote>
+<p>通用前提（文件命名、块名与时机、贴图、生效方式）见 <a href="mod%E5%BC%80%E5%8F%91%E5%B7%A5%E5%85%B7%E8%AF%B4%E6%98%8E.html">mod开发工具说明.md</a>；
+VM 语言与全部函数见 <code>help.md</code>。</p>
+</blockquote>
+<h2>文件</h2>
+<pre><code class="language-text">mod/effects/my_fx.json / .bin / .txt / tex/
+</code></pre>
+<p>和子弹同一套路：<strong>不进任何池，只提供逻辑</strong>，json 可以是 <code>{}</code>（但必须有 json 才会被扫描）。
+特效一般用在三处：<strong>卡片/宝石/武器身上的光环</strong>、<strong>命中或死亡特效</strong>、<strong>纯表现（文字提示、爆炸）</strong>。</p>
+<hr>
+<h2>一、怎么创建</h2>
+<pre><code class="language-gml">fx = VM_CreateInstance(&quot;obj_effect_mod&quot;, x, y)
+VM_SetProp(fx, &quot;mod_type&quot;, &quot;my_fx&quot;)          // = mod/effects/ 下的文件名
+VM_SetProp(fx, &quot;sprite_index&quot;, &quot;spr_my_fx&quot;)
+VM_SetProp(fx, &quot;destroy_timer&quot;, 30)          // 30 帧后自动销毁
+</code></pre>
+<p>也可以&quot;先写全局再创建&quot;（Create 时就初始化）：</p>
+<pre><code class="language-gml">VM_SetProp(0, &quot;_mod_pending_effect_id&quot;, &quot;my_fx&quot;)
+fx = VM_CreateInstance(&quot;obj_effect_mod&quot;, x, y)
+VM_SetProp(0, &quot;_mod_pending_effect_id&quot;, &quot;&quot;)
+</code></pre>
+<hr>
+<h2>二、特效实例上的内置字段</h2>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>初值</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>mod_type</code></td>
+<td>全局 <code>_mod_pending_effect_id</code>（默认 <code>&quot;&quot;</code>）</td>
+<td>跑哪套逻辑</td>
+</tr>
+<tr>
+<td><code>destroy_timer</code></td>
+<td><code>-1</code></td>
+<td><code>-1</code>=不自动销毁；<code>0</code>=立即销毁；<code>&gt;0</code>=每帧 −1，到 0 销毁</td>
+</tr>
+<tr>
+<td><code>image_speed</code></td>
+<td><code>0</code></td>
+<td>要帧动画自己设（或自己在 STEP 里推 <code>image_index</code>）</td>
+</tr>
+<tr>
+<td><code>x</code> / <code>y</code> / <code>sprite_index</code> / <code>image_alpha</code> / <code>image_angle</code> / <code>image_xscale</code> / <code>image_yscale</code> / <code>depth</code></td>
+<td>普通实例属性</td>
+<td>直接读写</td>
+</tr>
+<tr>
+<td><code>parent_inst</code> / <code>rel_x</code> / <code>rel_y</code> / <code>frames</code> / <code>anim</code></td>
+<td>没有</td>
+<td><strong>插件自己设的</strong>（跟随类特效常用这套命名）</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p>特效<strong>没有</strong> <code>vx</code>/<code>vy</code>、也没有出界销毁（那是子弹才有的）；位置完全由你自己控制。</p>
+</blockquote>
+<hr>
+<h2>三、STEP 的时机与执行顺序</h2>
+<p>和子弹一样也有<strong>延迟初始化</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>时机</th>
+<th>发生什么</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>创建当帧</strong></td>
+<td>Create 跑，<code>mod_type</code> 还是空 → 不初始化；随后你的 <code>VM_SetProp</code> 写进类型和数值</td>
+</tr>
+<tr>
+<td><strong>下一帧</strong></td>
+<td>Step 开头发现 <code>mod_type</code> 有了 → 跑该特效的 <code>_OBJECT_CREATE</code>，紧接着<strong>同帧</strong>跑 <code>_OBJECT_STEP</code></td>
+</tr>
+<tr>
+<td>用 <code>_mod_pending_effect_id</code> 提前写好再创建</td>
+<td>Create 里直接初始化，<strong>当帧</strong>就生效（宝石挂光环就是这么写的）</td>
+</tr>
+</tbody></table>
+<p>每帧顺序（<code>obj_effect_mod/Step_0.gml</code>）：</p>
+<pre><code class="language-text">1. 暂停 → exit
+2. 延迟初始化（mod_type 有了就跑 _OBJECT_CREATE）
+3. 跑特效 .bin 的 _OBJECT_STEP
+4. 实例没了（你在 VM 里销毁了自己）→ exit
+5. 自动销毁：destroy_timer == 0 → 立即销毁；&gt; 0 每帧 −1，到 0 销毁
+</code></pre>
+<p>绘制：<code>_OBJECT_DRAW</code> 写了就跑 VM 的绘制块（<strong>不再自动画 sprite</strong>），没写就 <code>draw_self()</code>。</p>
+<hr>
+<h2>四、demo</h2>
+<h3>Demo 1：跟随光环（挂在卡片 / 宝石 / 角色身上）</h3>
+<pre><code class="language-gml">_OBJECT_CREATE {
+    self = VM_GetCurCard()
+    VM_SetProp(self, &quot;rel_x&quot;, 0 - 15)      // 相对主人的偏移
+    VM_SetProp(self, &quot;rel_y&quot;, 0 - 5)
+    VM_SetProp(self, &quot;frames&quot;, 9)          // 贴图帧数（自己推 image_index 用）
+    VM_SetProp(self, &quot;anim&quot;, 0)
+    VM_SetProp(self, &quot;image_speed&quot;, 0)
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+    p = VM_GetProp(self, &quot;parent_inst&quot;)
+    if (VM_IsUndefined(p) == 1) { VM_DestroyInstance(self) exit }
+    if (VM_IsDestroyed(p) == 1) { VM_DestroyInstance(self) exit }
+
+    // 跟着主人走
+    VM_SetProp(self, &quot;x&quot;, VM_GetProp(p, &quot;x&quot;) + VM_GetProp(self, &quot;rel_x&quot;))
+    VM_SetProp(self, &quot;y&quot;, VM_GetProp(p, &quot;y&quot;) + VM_GetProp(self, &quot;rel_y&quot;))
+
+    // 自己推帧动画（image_speed = 0 时手工推进）
+    a = VM_GetProp(self, &quot;anim&quot;) + 1
+    if (a &gt;= VM_GetProp(self, &quot;frames&quot;)) { a = 0 }
+    VM_SetProp(self, &quot;anim&quot;, a)
+    VM_SetProp(self, &quot;image_index&quot;, a)
+}
+</code></pre>
+<p>主人侧怎么创建它（先写 <code>_mod_pending_effect_id</code>，当帧就初始化）见
+<a href="mod%E5%AE%9D%E7%9F%B3.html">mod宝石.md</a> 的 Demo 3。</p>
+<h3>Demo 2：一次性命中特效（放完就销毁）</h3>
+<pre><code class="language-gml">_OBJECT_CREATE {
+    self = VM_GetCurCard()
+    VM_SetProp(self, &quot;image_speed&quot;, 0)
+    VM_SetProp(self, &quot;image_index&quot;, 0)
+    VM_SetProp(self, &quot;destroy_timer&quot;, 20)      // 20 帧后自动消失
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+    i = VM_GetProp(self, &quot;image_index&quot;) + 1
+    if (i &gt;= 6) { i = 5 }                      // 6 帧一次性播完，停在最后一帧
+    VM_SetProp(self, &quot;image_index&quot;, i)
+    VM_SetProp(self, &quot;image_alpha&quot;, 1 - i / 6) // 顺便淡出
+}
+</code></pre>
+<p>创建处一般直接挂在弹幕/子弹上更省：屏幕弹幕的 <code>销毁对象</code> + <code>mod名字</code> 两个参数会在子弹消失处自动生成它。</p>
+<h3>Demo 3：不占实例的表现（推荐做法）</h3>
+<p>纯表现、大量重复的特效，优先用<strong>绘制槽</strong>而不是特效实例：</p>
+<pre><code class="language-gml">// 在任意事件块的 _VM_FRAME 里：把图贴到屏幕某处
+VM_SetDrawSlot(0, &quot;spr_my_fx&quot;, 500, 300, 0.8)     // 槽位 0~63，alpha
+// 不需要了就清掉
+VM_SetDrawSlot(0, &quot;&quot;, 0, 0, 1)
+</code></pre>
+<ul>
+<li><code>VM_SetDrawSlot(槽位,贴图,x,y,alpha)</code> = 背景层；<code>VM_SetDrawSlot_front(...)</code> = 前景层
+（都在 <code>_VM_FRAME</code> 里用，见 <code>help.md</code> 的「绘制」）</li>
+<li>这条路的代价是&quot;没有独立生命周期&quot;，适合跟着 UI / 场景常驻的东西</li>
+</ul>
+<hr>
+<h2>五、要点</h2>
+<ul>
+<li><strong>跟随类特效一定要判主人还在不在</strong>（<code>VM_IsUndefined</code> / <code>VM_IsDestroyed</code>），否则主人没了光环还在原地</li>
+<li><strong><code>_mod_pending_effect_id</code> 创建前写、创建后清</strong>（不清的话下一个特效会被套上同一个类型）</li>
+<li><code>destroy_timer = -1</code> 是<strong>不自动销毁</strong>，跟随类特效一般靠&quot;主人没了就销毁&quot;来控制，别忘了这条出路</li>
+<li>大量同质表现优先用 <code>VM_SetDrawSlot</code> / 弹幕的 <code>销毁对象</code>，别堆一堆特效实例</li>
+</ul>
+
+</main>
+</body>
+</html>
