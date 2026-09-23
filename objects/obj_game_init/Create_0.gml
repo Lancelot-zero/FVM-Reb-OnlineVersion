@@ -170,6 +170,8 @@ window_set_fullscreen(global.fullscreen)
 gpu_set_tex_filter(global.tex_fliter)
 window_enable_borderless_fullscreen(global.borderless_window)
 
+
+Music_Init()
 // 设置初始静音状态
 global.music_volume_before_mute = global.music_volume > 0 ? global.music_volume : 0.7;
 global.sound_volume_before_mute = global.sound_volume > 0 ? global.sound_volume : 0.7;

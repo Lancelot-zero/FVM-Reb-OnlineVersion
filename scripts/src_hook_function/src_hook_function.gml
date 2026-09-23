@@ -105,8 +105,9 @@ function instance_destroy_define() {
 
 
 
+// 链路：调用点 → global.audio.play（Music_Init 限流/爆音抑制）→ audio_play_sound_define（音量）→ 内置
 #macro audio_play_sound_origfunc		audio_play_sound
-#macro audio_play_sound				audio_play_sound_define
+#macro audio_play_sound				global.audio.play
 
 function audio_play_sound_define(_index, _priority, _loop) {
 	var _ret = audio_play_sound_origfunc(_index, _priority, _loop);
