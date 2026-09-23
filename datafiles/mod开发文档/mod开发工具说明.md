@@ -4,7 +4,7 @@
 
 | 文档 | 内容 |
 |---|---|
-| **本文** | 能做哪几种、通用流程、块名与贴图约定、常见坑 |
+| **本文** | 能做哪几种、通用流程、块名与贴图约定、**实例字段（x/y/image_* 等）**、常见坑 |
 | [mod卡片.md](mod卡片.md) | 卡片：JSON 字段（17 档数值等）、动画、联动计数 |
 | [mod武器.md](mod武器.md) | 武器：三种槽位、JSON 字段、动画四属性 |
 | [mod宝石.md](mod宝石.md) | 宝石：被动/主动、点击与冷却契约、图标两道静默失败 |
@@ -57,8 +57,10 @@
 3. **写 json**：字段见对应分文件
 4. **贴图**：内置名直接用，自带 PNG 放 `tex/`（见下）
 5. **生效方式**：
-   - 改**已有文件** → 控制台 `[reloadmod]`
-   - **新增文件** → **必须重开游戏**（各 `src_mod_*_init` 只在 `obj_game_init` 里跑一次）
+   - 改**已有文件** → 控制台 `[reloadmod]`（只重载载入的 bin，不动注册表）
+   - 只改某一个 mod → `[reloadmod <数字id | id | 名称>]`（数字id 就是 `[listmod]` 里那个编号；重读那个 json/bin，数值重新注册；**贴图换了还是要用全量 `reloadmod`**，因为贴图别名是所有 mod 共用一批登记的）
+   - **新增文件** → `[reloadallmod]`（重扫所有目录，只注册新增的；不用重开游戏了）
+   - 看现在加载了什么 → `[listmod]`（每行：`[数字id] [类别] id  名称  路径  简介`，简介取 json 的 `description`，没有就取 `shop.description`）
    - 改**核心 GML** → 要 GM 重编译（mod 层改动不需要）
 
 建议起手方式：从 `datafiles/mod/dev_test/` 里抄一份最接近的样例改，
@@ -92,6 +94,49 @@ obj_gem_mod      CREATE / STEP / DRAW（另外还有鼠标事件，见 mod宝石
 - 写块之前先确认对应对象支持它 —— 写了没人执行的块等于没写
 - 取当前实例：`self = VM_GetCurCard()`（名字叫 Card，实际指"当前对象实例"）
 - 碰撞没有通用块（不存在 `_OBJECT_HIT`），要在 `_OBJECT_STEP` 里自己判
+
+### 实例字段（GML 内置，读写都用 VM_GetProp / VM_SetProp）
+
+```gml
+x = VM_GetProp(self, "x")          // 读
+VM_SetProp(self, "x", x + 40)      // 写（浮点直接写，如 1.8）
+```
+
+**位置 / 尺寸**
+
+| 字段 | 说明 |
+|---|---|
+| `x` / `y` | 实例坐标（像素）。**武器每帧跟玩家、宝石停在创建点**——这些是核心写的，想偏移就在 STEP 里自己加（`VM_SetProp(self,"y",VM_GetProp(self,"y")+50)`） |
+| `depth` | 深度，越小越靠前（武器默认跟随玩家 -1） |
+| `grid_col` / `grid_row` | 所在格子；卡/武器/宝石由核心写，子弹还有 `prev_grid_col` / `prev_grid_row` |
+| `sprite_width` / `sprite_height` | 贴图尺寸，**已经乘过 image_xscale/yscale**，别再乘一次 |
+
+**外观**
+
+| 字段 | 说明 |
+|---|---|
+| `sprite_index` | 贴图。可以直接写**字符串名**（内置名，或 `VM_AliasSpritePerm` 挂的名字）。⚠️ 它永远"已定义"（没设时是 `-1`），判断"别人给没给贴图"要用 `== -1`，不能用 undefined |
+| `image_index` | 当前帧（0 起）。核心动画会自动推，想自己控制就直接写（VM 在核心动画之后跑，当帧生效） |
+| `image_speed` | **固定 0，别碰**——核心自己推 `image_index`，改了只会互相抢 |
+| `image_xscale` / `image_yscale` | 缩放。武器默认 1.6、宝石默认 1（`obj_gem_mod` 里常设 1.8）、子弹按各自对象默认 |
+| `image_angle` | 旋转角度（度）。子弹/光环自转就靠它，如 `image_angle = 0 - timer * 6` |
+| `image_alpha` | 透明度 0~1 |
+| `visible` | 是否绘制（`false` = 不画但还在跑逻辑） |
+
+**动画配置**（核心读这几个来推 `image_index`，各类文档里有详表）
+
+| 字段 | 说明 |
+|---|---|
+| `timer` / `flash_speed` | 每帧计数 / 每格停留几帧 |
+| `idle_anim` / `attack_anim` | 待机帧范围、攻击帧范围（`idle_anim` = 待机最后一帧的下标） |
+| `state` | `0` = 待机、`1` = 攻击（走 `attack_anim` 那段） |
+
+**这些字段是核心在维护的，别硬覆盖**（想改就在对应文档里找"允许改"的写法）：
+
+- 武器 / 副武器：`x` / `y` / `depth` / `grid_*`（每帧跟玩家）
+- 卡 / 敌人：`hp` / `maxhp`（敌人还含 `shield_hp` / `move_speed` / `atk_cycle`…，来自注册表或服务器）
+- 宝石：`cooldown_timer` 每帧自减（插件触发后自己重写，见 mod宝石.md）
+- 子弹：`x += vx`、`y += vy` 是**核心在 VM 之后**做的，所以它们在 VM 里读到的是"这一帧移动前"的位置
 
 ### 贴图
 
@@ -135,8 +180,13 @@ _OBJECT_CFG {
 
 | 现象 | 原因 / 处理 |
 |---|---|
-| 新加的 mod 在游戏里找不到 | 新增文件要**重开游戏**（`[reloadmod]` 只重载已有文件） |
+| 新加的 mod 在游戏里找不到 | 控制台 `[reloadallmod]` 重扫注册；`[reloadmod]` 只重载**已有**文件 |
+| 改了某个 mod 想单独生效 | `[reloadmod <数字id>]`（数字id 见 `[listmod]`）；改了贴图仍要用全量 `[reloadmod]` |
+| 不知道现在加载了哪些 mod | `[listmod]` 列出来（数字id / 类别 / id / 名称 / 路径 / 简介） |
 | 卡片/武器形象卡在第 0 帧不动 | 没喂 `idle_anim` / `attack_anim` / `flash_speed` / `state` |
+| 设了 `x` / `y` 但位置没变 | 武器每帧跟玩家、宝石停在创建点——核心会覆盖，要在 `_OBJECT_STEP` 里自己加偏移（见「实例字段」一节） |
+| 改了 `image_speed` 动画反而乱 | 核心固定 `image_speed = 0` 自己推 `image_index`；要自己控制就直接写 `image_index` |
+| 遮罩/判定框比贴图大一截 | `sprite_width` / `sprite_height` **已含缩放**，再乘一次 `image_xscale` 就放大了 |
 | 子弹/实例一动不动 | `vx` / `vy` 默认就是 0，**必须显式设** |
 | 脚本跑到一半就不执行了 | 读了没设过的属性会报错并中断**整个块**；要用先在 CREATE 里设一份 |
 | 两个卡加的同一个全局计数串了 | 命名数组是**整个 mod 单元共享**的，不是实例级；同名注册还会互相覆盖 |

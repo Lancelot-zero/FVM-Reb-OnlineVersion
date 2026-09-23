@@ -666,7 +666,13 @@ function parse_network_message(buf, _sock) {
                     case "spawn":
 						var obj_index = asset_get_index(_act.obj);
 						if(obj_index==-1){obj_index=obj_paratrooper_mouse_shield;}
+						// mod 敌人：身份要赶在 Create 之前塞进 pending 全局（props 里带 enemy_id）
+						var _bak_pending_eid = variable_global_exists("_mod_pending_enemy_id") ? global._mod_pending_enemy_id : "";
+						if (is_struct(_act.props) && variable_struct_exists(_act.props, "enemy_id")) {
+							global._mod_pending_enemy_id = _act.props[$ "enemy_id"];
+						}
                         var _inst = instance_create_depth(_act.x, _act.y, _act.depth, obj_index);
+						global._mod_pending_enemy_id = _bak_pending_eid;
                         set_net_id(_inst.id, _act.net_id);
 						
                         with (_inst) {

@@ -294,10 +294,26 @@ if wave_data.boss_wave && level_stage != "boss" && global.save_data.unlocked_ite
 			var _socket = _list[_i];
 			send_message(_socket, MSG_SPAWN_BOSS, _boss1_net, enemy_pos.x-80, enemy_pos.y+30, object_get_name(global.enemy_map[? wave_data.boss]._obj), boss_inst.hp, boss_inst.maxhp, enemy_row, boss_inst.random_seed);
 		}
+		// mod boss：创建后补发身份（enemy_id）
+		var _eid1 = variable_instance_exists(boss_inst, "enemy_id") ? boss_inst.enemy_id : "";
+		if (_eid1 != "") {
+			var _eid1_json = json_stringify({enemy_id: _eid1});
+			for (var _k = 0; _k < _size; _k++) {
+				send_message(_list[_k], MSG_MODIFY_PROP, _boss1_net, _eid1_json);
+			}
+		}
 		if (is_real(global.level_file.version) && wave_data.boss2 != "") {
 			for (var _i = 0; _i < _size; _i++) {
 				var _socket = _list[_i];
 				send_message(_socket, MSG_SPAWN_BOSS, _boss2_net, enemy_pos_2.x-80, enemy_pos_2.y+30, object_get_name(global.enemy_map[? wave_data.boss2]._obj), boss_2_inst.hp, boss_2_inst.maxhp, enemy_row_2, boss_2_inst.random_seed);
+			}
+			// mod boss2：同上
+			var _eid2 = variable_instance_exists(boss_2_inst, "enemy_id") ? boss_2_inst.enemy_id : "";
+			if (_eid2 != "") {
+				var _eid2_json = json_stringify({enemy_id: _eid2});
+				for (var _k = 0; _k < _size; _k++) {
+					send_message(_list[_k], MSG_MODIFY_PROP, _boss2_net, _eid2_json);
+				}
 			}
 		}
 	}

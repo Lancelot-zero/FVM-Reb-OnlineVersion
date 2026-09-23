@@ -1,0 +1,118 @@
+// 宙斯神弩（mod 主武器）：一轮连发多枚追踪雷矢
+// 贴图取自 sprites_join_mod 的 spr_zeus_bolt 一套：
+//   本体 14 帧（720x576，弩身实际只占 x414..494 / y371..430，所以原点取弩身中心 454,400）
+//   图标 70x70（原点 35,35）  子弹 4 帧（160x184，原点 81,104）
+// 弹道走【追踪弹管理器】VM_HomingBulletAdd，模式 1 = 先打本体所在行正前方，再退回全场最左。
+// 数值：atk / cycle 走 JSON（obj_weapon_mod 会读，攻击宝石还能换成 atk_impact）；
+//       齐射发数是脚本里的 shot_count（JSON 自定义字段不会挂到实例上，读不到）。
+
+_OBJECT_CFG {
+    // 图标必须在注册武器之前加载好：src_mod 是按 JSON 里的 sprite/icon 名查的
+    if (VM_SpriteExists("spr_zeus_bolt_icon") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_zeus_bolt_icon_0.png", 1, 35, 35)
+        VM_AliasSpritePerm("spr_zeus_bolt_icon", "tex/spr_zeus_bolt_icon_0.png")
+    }
+
+    // 本体：14 帧
+    if (VM_SpriteExists("spr_zeus_bolt") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_zeus_bolt_0.png", 14, 454, 400)
+        VM_AliasSpritePerm("spr_zeus_bolt", "tex/spr_zeus_bolt_0.png")
+    }
+
+    // 子弹：4 帧
+    if (VM_SpriteExists("spr_zeus_bolt_bullet_4") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_zeus_bolt_bullet_4_0.png", 4, 81, 104)
+        VM_AliasSpritePerm("spr_zeus_bolt_bullet_4", "tex/spr_zeus_bolt_bullet_4_0.png")
+    }
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+
+    VM_SetProp(self, "sprite_index", "spr_zeus_bolt")
+    VM_SetProp(self, "image_xscale", 1.6)
+    VM_SetProp(self, "image_yscale", 1.6)
+    // 动画：待机 0..7，攻击 8..13；flash_speed 是每帧停留的帧数
+    VM_SetProp(self, "idle_anim", 7)
+    VM_SetProp(self, "attack_anim", 6)
+    VM_SetProp(self, "flash_speed", 4)
+    VM_SetProp(self, "state", 0)
+
+    // 一轮齐射几发、每发间隔几帧、打完歇 cycle
+    VM_SetProp(self, "shot_count", 5)
+    VM_SetProp(self, "shot_gap", 6)
+    VM_SetProp(self, "atk_timer", 0)
+    VM_SetProp(self, "fired", 0)
+    VM_SetProp(self, "cooldown", 0)
+    VM_ShellPrint("[weapon] 宙斯神弩 create")
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+
+    // 显示位置微调：核心每帧把本体锁在 (玩家.x-10, 玩家.y-100)，这里往右下挪
+    // （子弹出生点是按本体算的，所以会跟着一起挪；只想动本体就把子弹的偏移改回去）
+    VM_SetProp(self, "x", VM_GetProp(self, "x") + 40)
+    VM_SetProp(self, "y", VM_GetProp(self, "y") + 50)
+
+    cyc = VM_GetProp(self, "cycle")
+    if (cyc < 1) { cyc = 120 }
+    ak = VM_GetProp(self, "atk")
+    if (ak < 1) { ak = 65 }
+    n = VM_GetProp(self, "shot_count")
+    if (n < 1) { n = 5 }
+    gap = VM_GetProp(self, "shot_gap")
+    if (gap < 1) { gap = 6 }
+
+    // 索敌：只看"场上有能打的目标"，具体打谁由追踪弹自己挑
+    tgt = VM_GetHomingTarget("normal")
+    if (tgt < 0) { tgt = VM_GetHomingTarget("diver") }
+    if (tgt < 0) { tgt = VM_GetHomingTarget("air") }
+
+    if (VM_GetProp(self, "cooldown") > 0) {
+        VM_SetProp(self, "cooldown", VM_GetProp(self, "cooldown") - 1)
+    }
+
+    if (VM_GetProp(self, "state") == 0) {
+        // 待机：有目标且不在冷却就起一轮
+        if (tgt >= 0) {
+            if (VM_GetProp(self, "cooldown") <= 0) {
+                VM_SetProp(self, "state", 1)
+                VM_SetProp(self, "atk_timer", 0)
+                VM_SetProp(self, "fired", 0)
+            }
+        }
+    } else {
+        // 齐射中
+        at = VM_GetProp(self, "atk_timer") + 1
+        VM_SetProp(self, "atk_timer", at)
+
+        f = VM_GetProp(self, "fired")
+        if (f < n) {
+            if (at >= 1 + f * gap) {
+                bx = VM_GetProp(self, "x") + 40
+                by = VM_GetProp(self, "y")
+                // 实体子弹：直接用章鱼烧那颗 obj_takoyaki_bullet，只换贴图和数值
+                // （它自带索敌：先打发射卡右侧范围里的敌人，再退回全场最左；自转 image_angle = -timer*6）
+                // target_enemy 不设，保持 Create 里的 noone，让它自己找目标
+                b = VM_CreateInstance("obj_takoyaki_bullet", bx, by)
+                VM_SetProp(b, "sprite_index", "spr_zeus_bolt_bullet_4")
+                VM_SetProp(b, "image_xscale", 1.0)
+                VM_SetProp(b, "image_yscale", 1.0)
+                VM_SetProp(b, "damage", ak)
+                VM_SetProp(b, "move_speed", 10)
+                VM_SetProp(b, "banding_card_obj", self)
+                VM_SetProp(b, "row", VM_GetProp(self, "grid_row"))
+                VM_PlaySound("snd_shot")
+                VM_SetProp(self, "fired", f + 1)
+            }
+        }
+
+        // 收招：最后一发之后再走 10 帧，然后进冷却
+        if (at >= 1 + n * gap + 10) {
+            VM_SetProp(self, "state", 0)
+            VM_SetProp(self, "atk_timer", 0)
+            VM_SetProp(self, "cooldown", cyc)
+        }
+    }
+}

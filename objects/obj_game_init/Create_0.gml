@@ -52,6 +52,9 @@ global.debug = 0
 // mod 开关：运行目录下存在 mod_enable.txt 时开启（扫描 mod/cards/ 注册自定义卡）
 global.mod_enabled = file_exists(working_directory + "mod_enable.txt")
 
+// 联机开关：运行目录下存在 connection_enable.txt 时，mod 模式下也强制允许连公共服
+global.connection_forced = file_exists(working_directory + "connection_enable.txt")
+
 global._mod_pending_card_id = ""   // 创建 mod 卡实例前传入的卡 id
 global._VM_cur_card = noone        // mod 卡 VM 块执行时的"当前实例"上下文
 global.laboretory_room = false

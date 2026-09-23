@@ -6,6 +6,8 @@ global.network_game_version = "2.3.2.0920";
 // ---- 普通属性白名单 ----
 // 帧末通过 MSG_EVENT_ACTIONS / modify 自动采集同步
 global._sync_keys = [
+	// mod 对象身份（接收端建实例前靠它认出是哪个 mod 敌人）
+	"enemy_id",
 	// 网格位置
 	"target_col",
 	"target_row",

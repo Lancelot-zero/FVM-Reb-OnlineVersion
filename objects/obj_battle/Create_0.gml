@@ -373,6 +373,14 @@ function enemy_subwave_summon(){
 					var _socket = _list[_i];
 					send_message(_socket, MSG_SPAWN_ENEMY, _net_id, grid_pos.x+30, grid_pos.y + 3, object_get_name(enemy_obj));
 				}
+				// mod 敌人：创建后补发身份（enemy_id），客户端靠它套注册表数值 + 跑插件创建块
+				var _eid = variable_instance_exists(new_enemy, "enemy_id") ? new_enemy.enemy_id : "";
+				if (_eid != "") {
+					var _eid_json = json_stringify({enemy_id: _eid});
+					for (var _k = 0; _k < _size; _k++) {
+						send_message(_list[_k], MSG_MODIFY_PROP, _net_id, _eid_json);
+					}
+				}
 			}
             // 更新统计信息
             current_total_hp += global.enemy_map[? enemy_list[i].type].hp;

@@ -234,6 +234,14 @@ function network_spawn_enemy(_x, _y, _inst) {
         for (var _j = 0; _j < array_length(_cl); _j++) {
 			send_message(_cl[_j], MSG_SPAWN_ENEMY, _nid, _x, _y, object_get_name(_inst.object_index));
         }
+        // mod 敌人：创建后补发身份（enemy_id）
+        var _eid = variable_instance_exists(_inst, "enemy_id") ? _inst.enemy_id : "";
+        if (_eid != "") {
+            var _eid_json = json_stringify({enemy_id: _eid});
+            for (var _j = 0; _j < array_length(_cl); _j++) {
+                send_message(_cl[_j], MSG_MODIFY_PROP, _nid, _eid_json);
+            }
+        }
     }
 }
 

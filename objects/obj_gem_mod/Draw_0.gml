@@ -15,9 +15,12 @@ if (gem_id != "" && variable_global_exists("mod_gem_vms") && ds_map_exists(globa
 }
 if (!_drawn) draw_self();
 
-// 缩放后的半径（悬停判定和冷却遮罩都用）
-var _hw = sprite_width * image_xscale / 2;
-var _hh = sprite_height * image_yscale / 2;
+// 冷却遮罩 / 悬停判定用贴图的实际可见外框
+// ⚠️ sprite_width 本身已经乘过 image_xscale，再乘一次遮罩会大 1.8 倍（bbox 已含缩放和原点）
+var _bl = bbox_left;
+var _bt = bbox_top;
+var _br = bbox_right;
+var _bb = bbox_bottom;
 
 // 预留属性 cooldown_timer：冷却遮罩 + 剩余秒数（照原版宝石）
 if (cooldown_timer > 0) {
@@ -26,14 +29,14 @@ if (cooldown_timer > 0) {
 	draw_set_font(font_hei);
 	draw_set_alpha(0.5);
 	draw_set_colour(c_black);
-	draw_roundrect(x - _hw, y - _hh, x + _hw - 3, y + _hh - 3, false);
+	draw_roundrect(_bl, _bt, _br - 3, _bb - 3, false);
 	draw_set_alpha(1);
 	draw_set_colour(c_white);
 	draw_text(x, y, string(floor(cooldown_timer / 60)));
 }
 
 // 说明框：鼠标悬停，或插件把 on_click 置 true
-if (is_struct(gem_info) && (on_click || point_in_rectangle(mouse_x, mouse_y, x - _hw, y - _hh, x + _hw, y + _hh))) {
+if (is_struct(gem_info) && (on_click || point_in_rectangle(mouse_x, mouse_y, _bl, _bt, _br, _bb))) {
 	var _desc = string(gem_info.description);
 	if (cooldown_timer > 0) _desc += "\n正在冷却中";
 	if (tooltip_text != "") _desc += "\n" + tooltip_text;

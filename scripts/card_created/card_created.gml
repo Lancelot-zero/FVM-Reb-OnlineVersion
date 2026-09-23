@@ -11,6 +11,8 @@ function card_created(plant_inst, col, row) {
 		var shape = variable_instance_get(plant_inst, "shape") ?? 0;
 		var level = variable_instance_get(plant_inst, "current_level") ?? 0;
 		var _meta = package_character(plant_inst);
+		// mod 卡：身份随 meta 一起走（服务器/其他客户端建实例前靠它写 global._mod_pending_card_id）
+		if (plant_inst.object_index == obj_card_mod) { _meta[$ "plant_id"] = plant_inst.plant_id; }
 		var _sid = plant_inst.sprite_index;
 		var _sprite_name = ds_map_exists(global._pid_reverse, _sid) ? global._pid_reverse[? _sid] : sprite_get_name(_sid);
 
@@ -161,6 +163,8 @@ function card_created(plant_inst, col, row) {
 		} else {
 			_meta = package_character(plant_inst);
 		}
+		// mod 卡：身份随 meta 一起走（客户端建实例前靠它写 global._mod_pending_card_id）
+		if (plant_inst.object_index == obj_card_mod) { _meta[$ "plant_id"] = plant_inst.plant_id; }
 		_meta[$ "_net_card_equipped_attire_id"]  = _equipped_attire;
 		_meta[$ "cycle"] = plant_inst.cycle
 		_meta[$ "hp"] = plant_inst.hp

@@ -1327,3 +1327,298 @@ function src_mod_enemies_reload() {
 	file_find_close();
 	return _count;
 }
+
+// ══════════════════════════════════════════════════════════════════════════
+// mod 管理（shell 命令 listmod / reloadallmod / reloadmod <id|名称> 用）
+// ══════════════════════════════════════════════════════════════════════════
+
+/// @function src_mod_categories()
+/// @desc mod 类别表（顺序即 listmod 的显示顺序）
+///       label=显示名 / vmap=虚拟机全局 map / folder=目录名 / kind=注册分支
+function src_mod_categories() {
+	return [
+		{ label: "卡",   vmap: "mod_card_vms",   folder: "cards",   kind: "card"   },
+		{ label: "武器", vmap: "mod_weapon_vms", folder: "weapons", kind: "weapon" },
+		{ label: "宝石", vmap: "mod_gem_vms",    folder: "gems",    kind: "gem"    },
+		{ label: "敌人", vmap: "mod_enemy_vms",  folder: "enemies", kind: "enemy"  },
+		{ label: "子弹", vmap: "mod_bullet_vms", folder: "bullets", kind: "bullet" },
+		{ label: "特效", vmap: "mod_effect_vms", folder: "effects", kind: "effect" },
+	];
+}
+
+/// @function src_mod_desc_of(_json, _id)
+/// @desc 取简介：json 的 description，没有就退回 shop.description
+function src_mod_desc_of(_json, _id) {
+	if (!is_struct(_json)) return "";
+	var _d = _json[$ "description"] ?? "";
+	if (_d == "" && variable_struct_exists(_json, "shop")) {
+		var _sp = _json[$ "shop"];
+		if (is_struct(_sp)) _d = _sp[$ "description"] ?? "";
+	}
+	return string(_d);
+}
+
+/// @function src_mod_num(_kind, _id)
+/// @desc 给一个 mod 分数字 id（= 第几个登记的 mod，1 起）。分过就返回原来的，
+///       所以后加进来的 mod 不会把已有的编号挤走
+function src_mod_num(_kind, _id) {
+	if (!variable_global_exists("_mod_num_map")) {
+		global._mod_num_map = ds_map_create();
+		global._mod_num_list = [];
+	}
+	var _key = _kind + ":" + _id;
+	if (ds_map_exists(global._mod_num_map, _key)) return global._mod_num_map[? _key];
+	var _n = array_length(global._mod_num_list) + 1;
+	global._mod_num_map[? _key] = _n;
+	array_push(global._mod_num_list, { kind: _kind, id: _id });
+	return _n;
+}
+
+/// @function src_mod_by_num(_n)
+/// @desc 数字 id → { kind, id }；越界返回 undefined
+function src_mod_by_num(_n) {
+	if (!variable_global_exists("_mod_num_list")) return undefined;
+	if (_n < 1 || _n > array_length(global._mod_num_list)) return undefined;
+	return global._mod_num_list[_n - 1];
+}
+
+/// @function src_mod_all_ids()
+/// @desc 所有已加载 mod 的 id（给 shell 补全用）
+function src_mod_all_ids() {
+	var _cats = src_mod_categories();
+	var _ids = [];
+	for (var _c = 0; _c < array_length(_cats); _c++) {
+		if (!variable_global_exists(_cats[_c].vmap)) continue;
+		var _m = variable_global_get(_cats[_c].vmap);
+		var _keys = ds_map_keys_to_array(_m);
+		for (var _i = 0; _i < array_length(_keys); _i++) array_push(_ids, _keys[_i]);
+	}
+	array_sort(_ids, true);
+	return _ids;
+}
+
+/// @function src_mod_list()
+/// @desc 列出当前已加载的 mod：每条 = [类别] id  名称  路径  简介
+/// @return 多行字符串
+function src_mod_list() {
+	var _cats = src_mod_categories();
+	var _lines = [];
+	var _total = 0;
+	for (var _c = 0; _c < array_length(_cats); _c++) {
+		if (!variable_global_exists(_cats[_c].vmap)) continue;
+		var _m = variable_global_get(_cats[_c].vmap);
+		var _keys = ds_map_keys_to_array(_m);
+		array_sort(_keys, true);   // ds_map 的 key 顺序不定，排一下
+		for (var _i = 0; _i < array_length(_keys); _i++) {
+			var _id = _keys[_i];
+			var _vm = _m[? _id];
+			var _jd = _vm[$ "card_data"];
+			var _nm = is_struct(_jd) ? string(_jd[$ "name"] ?? _id) : _id;
+			var _dir = string_replace(_vm[$ "mod_dir"] ?? "", working_directory, "");
+			var _num = src_mod_num(_cats[_c].kind, _id);
+			array_push(_lines, "[" + string(_num) + "] [" + _cats[_c].label + "] " + _id + "  " + _nm + "  " + _dir + "  " + src_mod_desc_of(_jd, _id));
+			_total++;
+		}
+	}
+	// 时装：只有 json + 贴图，没 bin/VM
+	var _adir = working_directory + "mod/attires/";
+	if (directory_exists(_adir)) {
+		var _f = file_find_first(_adir + "*.json", 0);
+		while (_f != "") {
+			var _an = filename_name(_f);
+			var _aid = string_copy(_an, 1, string_length(_an) - 5);
+			if (variable_global_exists("attire_pool") && ds_map_exists(global.attire_pool, _aid)) {
+				var _aj = json_parse(src_mod_read_text(_adir + _f));
+				var _anm = is_struct(_aj) ? string(_aj[$ "name"] ?? _aid) : _aid;
+				var _anum = src_mod_num("attire", _aid);
+				array_push(_lines, "[" + string(_anum) + "] [时装] " + _aid + "  " + _anm + "  mod/attires/  " + src_mod_desc_of(_aj, _aid));
+				_total++;
+			}
+			_f = file_find_next();
+		}
+		file_find_close();
+	}
+	if (_total == 0) return "[listmod] 没有已加载的 mod";
+	var _out = "[listmod] 共 " + string(_total) + " 项（格式：[数字id] [类别] id  名称  路径  简介）\n";
+	for (var _i = 0; _i < array_length(_lines); _i++) _out += _lines[_i] + "\n";
+	return _out;
+}
+
+/// @function src_mod_register_new()
+/// @desc 重扫所有 mod 目录，只注册**还没加载过**的（已在 VM map 里的跳过）
+///       卡的卡池是单向注册（重复注册会在卡池里塞出两条），所以这里必须跳过已注册的
+/// @return 汇总字符串
+function src_mod_register_new() {
+	var _cats = src_mod_categories();
+	var _sum = "";
+	var _total = 0;
+	for (var _c = 0; _c < array_length(_cats); _c++) {
+		var _cat = _cats[_c];
+		var _dir = working_directory + "mod/" + _cat.folder + "/";
+		if (!directory_exists(_dir) || !variable_global_exists(_cat.vmap)) {
+			_sum += _cat.label + "0 ";
+			continue;
+		}
+		var _m = variable_global_get(_cat.vmap);
+		var _n = 0;
+		var _f = file_find_first(_dir + "*.json", 0);
+		while (_f != "") {
+			var _fn = filename_name(_f);
+			var _id = string_copy(_fn, 1, string_length(_fn) - 5);
+			if (!ds_map_exists(_m, _id)) {           // 已加载过的跳过
+				var _jd = json_parse(src_mod_read_text(_dir + _f));
+				if (is_struct(_jd)) {
+					var _bin_path = _dir + _id + ".bin";
+					var _buf = file_exists(_bin_path) ? buffer_load(_bin_path) : undefined;
+					var _vm = src_mod_card_vm_load(_buf, _dir);
+					_vm[$ "card_data"] = _jd;
+					_vm[$ "mod_dir"] = _dir;
+					_m[? _id] = _vm;
+					switch (_cat.kind) {
+						case "card":   src_mod_register_card(_id, _jd);   break;
+						case "weapon": src_mod_register_weapon(_id, _jd); break;
+						case "gem":    src_mod_register_gem(_id, _jd);    break;
+						case "enemy":  src_mod_register_enemy(_id, _jd);  break;
+					}
+					show_debug_message("src_mod: 新增注册 " + _cat.folder + "/" + _id);
+					_n++;
+				}
+			}
+			_f = file_find_next();
+		}
+		file_find_close();
+		_total += _n;
+		_sum += _cat.label + string(_n) + " ";
+	}
+	// 时装（无 bin）：没注册过的才注册
+	var _an = 0;
+	var _adir = working_directory + "mod/attires/";
+	if (directory_exists(_adir)) {
+		var _f2 = file_find_first(_adir + "*.json", 0);
+		while (_f2 != "") {
+			var _fn2 = filename_name(_f2);
+			var _aid = string_copy(_fn2, 1, string_length(_fn2) - 5);
+			var _has = variable_global_exists("attire_pool") && ds_map_exists(global.attire_pool, _aid);
+			if (!_has) {
+				var _aj = json_parse(src_mod_read_text(_adir + _f2));
+				if (is_struct(_aj) && src_mod_register_attire(_aid, _aj)) _an++;
+			}
+			_f2 = file_find_next();
+		}
+		file_find_close();
+	}
+	_total += _an;
+	_sum += "时装" + string(_an);
+	return "[reloadallmod] 新增 " + string(_total) + " 项（卡/武器/宝石/敌人/子弹/特效/时装）：" + _sum;
+}
+
+/// @function src_mod_reload_id(_cat, _id)
+/// @desc 重载单个 VM 类别的 mod：重读同名 .json/.bin 灌进原 VM（会重跑 _VM_CONST_INIT/_OBJECT_CFG）
+/// @return true=成功
+function src_mod_reload_id(_cat, _id) {
+	var _m = variable_global_get(_cat.vmap);
+	var _vm = _m[? _id];
+	if (!is_struct(_vm)) return false;
+	var _dir = _vm[$ "mod_dir"] ?? "";
+	if (_dir == "") _dir = working_directory + "mod/" + _cat.folder + "/";
+	var _json_path = _dir + _id + ".json";
+	if (!file_exists(_json_path)) return false;
+	var _jd = json_parse(src_mod_read_text(_json_path));
+	var _bin_path = _dir + _id + ".bin";
+	var _buf = file_exists(_bin_path) ? buffer_load(_bin_path) : undefined;
+	_vm = src_mod_card_vm_fill(_vm, _buf, _dir);
+	_m[? _id] = _vm;
+	if (is_struct(_jd)) _vm[$ "card_data"] = _jd;
+	// 数值重新注册（卡的卡池是单向注册，卡的数值改动要靠 reloadallmod/重开）
+	switch (_cat.kind) {
+		case "card":
+			if (is_struct(_jd) && variable_global_exists("mod_cards")) global.mod_cards[? _id] = _jd;
+			break;
+		case "weapon": if (is_struct(_jd)) src_mod_register_weapon(_id, _jd); break;
+		case "gem":    if (is_struct(_jd)) src_mod_register_gem(_id, _jd);    break;
+		case "enemy":  if (is_struct(_jd)) src_mod_register_enemy(_id, _jd);  break;
+	}
+	return true;
+}
+
+/// @function src_mod_reload_attire(_key)
+/// @desc 时装没有 bin，只能按 id 或名称重读 json 再注册一遍（贴图/数值改动生效）
+/// @return true=成功
+function src_mod_reload_attire(_key) {
+	var _adir = working_directory + "mod/attires/";
+	if (!directory_exists(_adir)) return false;
+	var _by_id = _adir + _key + ".json";
+	if (file_exists(_by_id)) {
+		var _jd = json_parse(src_mod_read_text(_by_id));
+		if (is_struct(_jd)) return src_mod_register_attire(_key, _jd);
+		return false;
+	}
+	var _f = file_find_first(_adir + "*.json", 0);
+	while (_f != "") {
+		var _jd2 = json_parse(src_mod_read_text(_adir + _f));
+		if (is_struct(_jd2) && string(_jd2[$ "name"] ?? "") == _key) {
+			var _fn = filename_name(_f);
+			var _id2 = string_copy(_fn, 1, string_length(_fn) - 5);
+			file_find_close();
+			return src_mod_register_attire(_id2, _jd2);
+		}
+		_f = file_find_next();
+	}
+	file_find_close();
+	return false;
+}
+
+/// @function src_mod_reload_one(_key)
+/// @desc 按 id 或名称重载单个 mod（卡/武器/宝石/敌人/子弹/特效/时装）
+/// @return 结果字符串（给 shell 显示）
+function src_mod_reload_one(_key) {
+	if (_key == "") return "[reloadmod] 用法: reloadmod <数字id | mod id | 名称>";
+	var _cats = src_mod_categories();
+	// ① 数字 id（listmod 打印的那个）
+	if (string_digits(_key) == _key) {
+		var _hit = src_mod_by_num(real(_key));
+		if (is_undefined(_hit)) return "[reloadmod] 没有这个编号: " + _key;
+		if (_hit.kind == "attire") {
+			if (src_mod_reload_attire(_hit.id)) return "[reloadmod] 已重注册时装 " + _hit.id + "（#" + _key + "）";
+			return "[reloadmod] 重载失败: " + _hit.id;
+		}
+		for (var _cn = 0; _cn < array_length(_cats); _cn++) {
+			if (_cats[_cn].kind == _hit.kind) {
+				if (src_mod_reload_id(_cats[_cn], _hit.id)) {
+					return "[reloadmod] 已重载 [" + _cats[_cn].label + "] " + _hit.id + "（#" + _key + "）";
+				}
+				return "[reloadmod] 重载失败: " + _hit.id;
+			}
+		}
+		return "[reloadmod] 编号 " + _key + " 对应的类别未知";
+	}
+	// ② 按 id（文件名）
+	for (var _c = 0; _c < array_length(_cats); _c++) {
+		if (!variable_global_exists(_cats[_c].vmap)) continue;
+		var _m = variable_global_get(_cats[_c].vmap);
+		if (ds_map_exists(_m, _key)) {
+			if (src_mod_reload_id(_cats[_c], _key)) return "[reloadmod] 已重载 [" + _cats[_c].label + "] " + _key;
+			return "[reloadmod] 重载失败（同名 .json 找不到？）: " + _key;
+		}
+	}
+	// ③ 按 json 里的 name
+	for (var _c2 = 0; _c2 < array_length(_cats); _c2++) {
+		if (!variable_global_exists(_cats[_c2].vmap)) continue;
+		var _m2 = variable_global_get(_cats[_c2].vmap);
+		var _keys = ds_map_keys_to_array(_m2);
+		array_sort(_keys, true);
+		for (var _i = 0; _i < array_length(_keys); _i++) {
+			var _jd = _m2[? _keys[_i]][$ "card_data"];
+			if (is_struct(_jd) && string(_jd[$ "name"] ?? "") == _key) {
+				if (src_mod_reload_id(_cats[_c2], _keys[_i])) {
+					return "[reloadmod] 已重载 [" + _cats[_c2].label + "] " + _keys[_i] + "（" + _key + "）";
+				}
+				return "[reloadmod] 重载失败: " + _keys[_i];
+			}
+		}
+	}
+	// ④ 时装
+	if (src_mod_reload_attire(_key)) return "[reloadmod] 已重注册时装 " + _key;
+	return "[reloadmod] 没找到 mod: " + _key;
+}
+

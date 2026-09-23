@@ -2,6 +2,9 @@ if global.is_paused{
 	exit
 }
 
+// enemy_id 晚到（联机：服务器建完后补发 MSG_MODIFY_PROP）：补跑一次初始化
+if (enemy_id != "" && mod_enemy_inited_id != enemy_id) mod_enemy_init();
+
 // 父类处理移动/攻击/死亡等基础行为
 event_inherited();
 

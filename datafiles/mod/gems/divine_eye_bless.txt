@@ -1,5 +1,5 @@
 // 神佑之眼（纯插件复刻）：首次 60 帧后开始产火苗，之后每 cycle×60 帧一次，产量按等级
-// ⚠️ 火苗不生成火苗特效实体，直接 VM_SetFlame 入账（火苗本来就会自动拾取，收益等价，少了粒子动画）
+// 产火是生成火苗【实例】（obj_flame，落到地上等玩家捡），产量写在实例的 value 上
 // 等级取 self.mod_point_gem_level（由 obj_player_character 创建宝石时挂上）
 
 // 图标从 mod 目录带过来（注册宝石时就要能解析，所以放在 _OBJECT_CFG 里先加载）
@@ -52,24 +52,25 @@ _OBJECT_CREATE {
     VM_ArrayADD("dvb_cy", 10)
     VM_ArrayADD("dvb_cy", 10)
 
-    // 每档产量（原版 flame_value）
+    // 每档【单朵】产量（一次出 6~13 朵，朵朵一样多；星级越高单朵越大）
+    // 单朵 25 → 50 线性递增
     VM_ArrayClear("dvb_fv")
-    VM_ArrayADD("dvb_fv", 20)
+    VM_ArrayADD("dvb_fv", 25)
+    VM_ArrayADD("dvb_fv", 27)
+    VM_ArrayADD("dvb_fv", 28)
     VM_ArrayADD("dvb_fv", 30)
+    VM_ArrayADD("dvb_fv", 32)
+    VM_ArrayADD("dvb_fv", 33)
+    VM_ArrayADD("dvb_fv", 35)
+    VM_ArrayADD("dvb_fv", 37)
+    VM_ArrayADD("dvb_fv", 38)
     VM_ArrayADD("dvb_fv", 40)
+    VM_ArrayADD("dvb_fv", 42)
+    VM_ArrayADD("dvb_fv", 43)
+    VM_ArrayADD("dvb_fv", 45)
+    VM_ArrayADD("dvb_fv", 47)
+    VM_ArrayADD("dvb_fv", 48)
     VM_ArrayADD("dvb_fv", 50)
-    VM_ArrayADD("dvb_fv", 60)
-    VM_ArrayADD("dvb_fv", 75)
-    VM_ArrayADD("dvb_fv", 90)
-    VM_ArrayADD("dvb_fv", 105)
-    VM_ArrayADD("dvb_fv", 120)
-    VM_ArrayADD("dvb_fv", 135)
-    VM_ArrayADD("dvb_fv", 150)
-    VM_ArrayADD("dvb_fv", 170)
-    VM_ArrayADD("dvb_fv", 190)
-    VM_ArrayADD("dvb_fv", 210)
-    VM_ArrayADD("dvb_fv", 230)
-    VM_ArrayADD("dvb_fv", 260)
 }
 
 _OBJECT_STEP {
@@ -111,21 +112,58 @@ _OBJECT_STEP {
     }
     lv = VM_GetProp(self, "mod_point_gem_level")
     if (lv > 15) { lv = 15 }
+
+    // 产火：生成火苗【实例】（和原版产火卡一样，弹一下落到地上等玩家捡）
+    // 出生点跟角色走 —— 宝石实例自己停在 UI 坐标上，不能拿来当出生点
+    flx = VM_GetProp(self, "x")
+    fly = VM_GetProp(self, "y")
+    if (VM_IsUndefined(p) == 0) {
+        if (VM_IsDestroyed(p) == 0) {
+            flx = VM_GetProp(p, "x")
+            fly = VM_GetProp(p, "y")
+        }
+    }
+
     t = VM_GetProp(self, "t") + 1
     f = VM_GetProp(self, "first")
+    fire_now = 0
     if (f == 0) {
         if (t >= 60) {
             t = 0
             f = 1
-            VM_SetFlame(VM_GetFlame() + VM_ArrayGet("dvb_fv", lv))
-            VM_SetProp(self, "cooldown_timer", VM_ArrayGet("dvb_cy", lv) * 60)
+            fire_now = 1
         }
     } else {
         if (t >= VM_ArrayGet("dvb_cy", lv) * 60) {
             t = 0
-            VM_SetFlame(VM_GetFlame() + VM_ArrayGet("dvb_fv", lv))
-            VM_SetProp(self, "cooldown_timer", VM_ArrayGet("dvb_cy", lv) * 60)
+            fire_now = 1
         }
+    }
+
+    // 一次产几朵：基础 6 朵，星级每高 2 级多 1 朵（等级 0-1 → 6 朵，……，14-15 → 13 朵）
+    n = 6
+    if (lv >= 2) { n = n + 1 }
+    if (lv >= 4) { n = n + 1 }
+    if (lv >= 6) { n = n + 1 }
+    if (lv >= 8) { n = n + 1 }
+    if (lv >= 10) { n = n + 1 }
+    if (lv >= 12) { n = n + 1 }
+    if (lv >= 14) { n = n + 1 }
+
+    if (fire_now == 1) {
+        VM_SetProp(self, "cooldown_timer", VM_ArrayGet("dvb_cy", lv) * 60)
+        i = 0
+        while (i < n) {
+            fl = VM_CreateInstance("obj_flame", flx, fly - 50)
+            VM_SetProp(fl, "value", VM_ArrayGet("dvb_fv", lv))
+            i = i + 1
+        }
+    }
+    // 每帧把"剩余帧"写给图标 —— 显示和实际触发严格同步（只在触发时写一次会有偏差）
+    if (f == 0) {
+        VM_SetProp(self, "cooldown_timer", 60 - t)
+    } else {
+        VM_SetProp(self, "cooldown_timer", VM_ArrayGet("dvb_cy", lv) * 60 - t)
     }
     VM_SetProp(self, "t", t)
     VM_SetProp(self, "first", f)

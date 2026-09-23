@@ -305,7 +305,8 @@ function sh_queryroom(args) {
 }
 
 function sh_connectpubserver(args) {
-	if(global.mod_enabled){
+	// mod 模式下默认禁止联机；运行目录放了 connection_enable.txt 就强制打开
+	if(global.mod_enabled && !global.connection_forced){
 		return "mod模式下不能联机"
 	}
     // 如果在 room_ready 界面，先清理再退出（对齐 obj_quit_confirm 逻辑）

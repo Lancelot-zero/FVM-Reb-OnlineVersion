@@ -44,7 +44,11 @@ function spawn_plant(col, row, plant_obj, props) {
 	if(variable_struct_exists(props,"current_level"))global._net_before_plant_current_level = props[$ "current_level"];
 	if(variable_struct_exists(props,"skill"))global._net_before_plant_skill = props[$ "skill"];
 	if(variable_struct_exists(props,"_net_card_equipped_attire_id"))global._net_card_equipped_attire_id = props[$ "_net_card_equipped_attire_id"]
+	// mod 卡：身份也要赶在 Create 之前给（联机时随 meta/props 传过来）
+	var _bak_pending_card = variable_global_exists("_mod_pending_card_id") ? global._mod_pending_card_id : "";
+	global._mod_pending_card_id = variable_struct_exists(props, "plant_id") ? props[$ "plant_id"] : "";
     var _plant = instance_create_depth(_grid_pos.x+add_x, _grid_pos.y+add_y, 0, plant_obj);
+	global._mod_pending_card_id = _bak_pending_card;
 	global._net_before_plant_shape = noone;
 	global._net_before_plant_skill = noone;
 	global._net_before_plant_current_level = noone;
@@ -731,8 +735,14 @@ function meta_fps() {
     };
 }
 
-/// @description 命令行：仅重新加载所有 mod 的 bin 代码
+/// @description 命令行：重新加载 mod 的 bin 代码；带参数时只重载指定的那一个
 function sh_reloadmod(args) {
+    // 带参数：只重载指定的 mod（数字id / id / json 里的 name）
+    // ⚠️ 单个重载不动贴图别名（别名是所有 mod 共用一批登记的，全清会让其它 mod 的新实例丢图），
+    //    所以改了贴图还是走不带参数的全量 reloadmod
+    if (array_length(args) > 1 && string(args[1]) != "") {
+        return src_mod_reload_one(string(args[1]));
+    }
     // 先释放上次挂上的永久贴图别名（内部名 → id），让下面重跑的 _OBJECT_CFG 重新挂一遍。
     // 底下的真精灵不动，所以不会重复加载。
     var _alias_n = VM_FreeSpritePermAlias();
@@ -749,7 +759,73 @@ function sh_reloadmod(args) {
 
 function meta_reloadmod() {
     return {
-        description: "仅重新加载所有 mod 的 bin 代码（不动注册表，不影响场上已放置的卡）",
+        description: "重新加载 mod 的 bin 代码；带 数字id/id/名称 时只重载那一个（不动注册表，不影响场上已放置的卡）",
+        arguments: ["[数字id | mod id | 名称]"],
+        suggestions: [ src_mod_all_ids() ],
+        hidden: false,
+        deferred: false
+    };
+}
+
+/// @description 命令行：列出当前已加载的 mod
+function sh_listmod(args) {
+    return src_mod_list();
+}
+
+function meta_listmod() {
+    return {
+        description: "列出当前已加载的 mod（卡/武器/宝石/敌人/子弹/特效/时装：id、名称、路径、简介）",
+        arguments: [],
+        suggestions: [],
+        hidden: false,
+        deferred: false
+    };
+}
+
+/// @description 命令行：重扫 mod 目录，只注册新增（还没加载过）的 mod
+function sh_reloadallmod(args) {
+    return src_mod_register_new();
+}
+
+function meta_reloadallmod() {
+    return {
+        description: "重扫所有 mod 目录，把新增（还没注册）的 mod 注册进来；已加载的会跳过",
+        arguments: [],
+        suggestions: [],
+        hidden: false,
+        deferred: false
+    };
+}
+
+/// @description 命令行：取消暂停（等价于点暂停菜单的"继续游戏"）
+function sh_unpause(args) {
+    var _was = false;
+    if (variable_global_exists("is_paused")) { _was = global.is_paused; }
+
+    // 关掉暂停菜单和它的子菜单
+    with (obj_pause_menu)       { instance_destroy(); }
+    with (obj_config_menu)      { instance_destroy(); }
+    with (obj_quit_confirm)     { instance_destroy(); }
+    with (obj_restart_confirm)  { instance_destroy(); }
+
+    global.is_paused = false;
+    global.show_menu = false;
+
+    // 联机：服务器要通知客户端一起继续（和继续游戏按钮一致）
+    if (variable_global_exists("network") && is_struct(global.network) && global.network.mode == "server") {
+        var _cl = global.network.connected_clients;
+        for (var _i = 0; _i < array_length(_cl); _i++) {
+            send_message(_cl[_i], MSG_SERVER_ACTION, 3);
+        }
+    }
+
+    if (_was) { return "[unpause] 已取消暂停"; }
+    return "[unpause] 本来就没暂停（菜单已关闭）";
+}
+
+function meta_unpause() {
+    return {
+        description: "取消暂停：关掉暂停菜单、is_paused 置 false（联机时服务器会广播继续）",
         arguments: [],
         suggestions: [],
         hidden: false,

@@ -1,6 +1,11 @@
 
 
 
+// ── 输出上限：太长了把最早的内容丢掉，别让 shell 无限增长 ──
+if (array_length(output) > outputMaxLines) {
+	array_delete(output, 0, array_length(output) - outputMaxLines);
+}
+
 // ── 精灵异步加载：每帧处理3个 ──
 var _loader_q = global._loader_sprite_queue;
 for(var _i=0;_i<3;_i++){

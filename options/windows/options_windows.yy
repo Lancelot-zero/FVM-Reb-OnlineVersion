@@ -11,7 +11,7 @@
   "option_windows_description_info":"A GameMaker Game",
   "option_windows_disable_sandbox":true,
   "option_windows_display_cursor":true,
-  "option_windows_display_name":"美食大战老鼠：重生",
+  "option_windows_display_name":"美食大战老鼠：重生 \\(//∇//)\\)",
   "option_windows_enable_steam":false,
   "option_windows_executable_name":"FVM_Reborn.exe",
   "option_windows_icon":"${options_dir}/windows/icons/icon.ico",

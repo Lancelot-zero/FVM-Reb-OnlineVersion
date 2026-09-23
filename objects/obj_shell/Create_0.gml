@@ -22,6 +22,7 @@ insertMode = true;
 historyPos = 0;
 history = [];
 output = [];
+outputMaxLines = 2000;   // 输出行数上限，超了就在 Step 里丢掉最早的（别让 shell 无限长）
 outputHeight = 0;
 
 filteredSuggestions = [];

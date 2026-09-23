@@ -126,5 +126,7 @@ _OBJECT_STEP {
             k = k + 1
         }
     }
+    // 每帧把"剩余帧"写给图标 —— 显示和实际触发严格同步（只在触发时写一次会有偏差）
+    VM_SetProp(self, "cooldown_timer", 150 - t)
     VM_SetProp(self, "t", t)
 }

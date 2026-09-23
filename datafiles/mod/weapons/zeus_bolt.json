@@ -1,0 +1,15 @@
+{
+  "name": "宙斯神弩",
+  "description": "宙斯神弩：一轮连发多枚追踪雷矢（满级 7 发），雷矢自动咬人",
+  "sprite": "spr_zeus_bolt",
+  "icon": "spr_zeus_bolt_icon",
+  "slot": "main_weapon",
+  "atk": 65,
+  "cycle": 120,
+  "atk_impact": [78, 91, 104, 117, 130, 143, 156, 169, 182, 195, 227, 240, 253, 266, 279, 292],
+  "bullet_amount_impact": [2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 7],
+  "shop": {
+    "cost": "120000",
+    "description": "宙斯神弩：一轮连发多枚追踪雷矢（满级 7 发）"
+  }
+}
