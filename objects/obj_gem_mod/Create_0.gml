@@ -13,8 +13,9 @@ mod_point_grid_col      = 0
 mod_point_gem_level     = 0
 // ---- 预留显示属性：插件在 .bin 里用 VM_SetProp(self,"名",值) 改，核心只负责按值渲染 ----
 on_click       = false   // 鼠标进来/离开时由 Mouse_10/Mouse_11 置位（插件也可以自己置）
-clicked        = false   // 左键点了一下（Mouse_4 置 true），插件处理完自己设回 0
-cooldown_timer = 0       // 剩余冷却帧：>0 画冷却遮罩+秒数、说明里加「正在冷却中」，每帧自减
+clickable      = false   // 主动宝石：插件在 _OBJECT_CREATE 里置 1；置 1 后点击才有效，点一下自动重新走冷却
+clicked        = false   // 左键点了一下且当时不在冷却（Mouse_4 置 true），插件处理完自己设回 0
+cooldown_timer = 0       // 剩余冷却帧：>0 画冷却遮罩+秒数、说明里加「正在冷却中」，每帧自减（点击时 Mouse_4 设回 cooldown）
 gem_level      = 0       // >0 画等级星星，默认取存档等级
 tooltip_text   = ""      // 追加在宝石说明后面的自定义文本
 if (gem_id != "") {

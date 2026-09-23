@@ -1650,6 +1650,7 @@
     {"id":{"name":"register_card","path":"scripts/register_card/register_card.yy",},},
     {"id":{"name":"save_file","path":"scripts/save_file/save_file.yy",},},
     {"id":{"name":"scr_battle_function","path":"scripts/scr_battle_function/scr_battle_function.yy",},},
+    {"id":{"name":"scr_command_VM_callFunction","path":"scripts/scr_command_VM_callFunction/scr_command_VM_callFunction.yy",},},
     {"id":{"name":"scr_command_VM","path":"scripts/scr_command_VM/scr_command_VM.yy",},},
     {"id":{"name":"scr_network_aux_function","path":"scripts/scr_network_aux_function/scr_network_aux_function.yy",},},
     {"id":{"name":"scr_network_commands","path":"scripts/scr_network_commands/scr_network_commands.yy",},},

@@ -24,6 +24,11 @@
 // 以下两个不来自编译器，是 VM_Decode 给热函数生成的快捷码：dst(s32) [addr(s32)*]
 #macro VM_OP_CALL_GETPROP 18   // addr(s32) addr(s32)
 #macro VM_OP_CALL_SETPROP 19   // addr(s32) addr(s32) addr(s32)
+// 热函数直通（解码期由 VM_Decode 把 CALL 换掉，参数一律传内存地址，函数内部自己 vm_arg 解析）
+#macro VM_OP_CALL_ISUNDEF    20   // dst(s32) addr(s32)                              — VM_IsUndefined
+#macro VM_OP_CALL_GETCURCARD 21   // dst(s32)                                        — VM_GetCurCard
+#macro VM_OP_CALL_ARRAYGET   22   // dst(s32) addr(s32) addr(s32)                    — VM_ArrayGet
+#macro VM_OP_CALL_CREATEINST 23   // dst(s32) addr(s32) addr(s32) addr(s32)          — VM_CreateInstance
 
 // 内存类型 (u8)
 #macro VM_TYPE_INT    0
@@ -3053,6 +3058,31 @@ function vm_arg(_addr) {
     return vm_read_mem(global.__vm, _addr);
 }
 
+/// @function vm_store_result(vm, _mt, _mv, _dst, _result)
+/// @desc 把 VM 函数返回值写回内存槽：字符串登记进字符串池、整数/浮点分类型。
+///       通用 CALL 与热函数直通（操作码 18~23）共用；_dst == VM_DST_VOID 时丢弃返回值。
+function vm_store_result(vm, _mt, _mv, _dst, _result) {
+    if (_dst == VM_DST_VOID) return;
+    if (is_string(_result)) {
+        _mt[_dst] = VM_TYPE_STRING;
+        var _idx;
+        if (ds_map_exists(vm.str_map, _result)) {
+            _idx = vm.str_map[? _result];
+        } else {
+            _idx = array_length(vm.strings);
+            array_push(vm.strings, _result);
+            vm.str_map[? _result] = _idx;
+        }
+        _mv[_dst] = _idx;
+    } else if (is_real(_result)) {
+        _mt[_dst] = (floor(_result) == _result) ? VM_TYPE_INT : VM_TYPE_FLOAT;
+        _mv[_dst] = _result;
+    } else {
+        _mt[_dst] = VM_TYPE_INT;
+        _mv[_dst] = _result;
+    }
+}
+
 /// @function VM_Decode(buf)
 /// @desc 把一块字节码**一次性**解码成"值数组"，供 VM_Execute_code 用下标直接取指。
 ///       原始字节码里每条指令要 3~5 次 buffer_read（原生调用），爱神卡一次 Step 就是 647 次、
@@ -3112,6 +3142,25 @@ function VM_Decode(buf) {
                     array_push(_code, buffer_read(buf, buffer_s32));
                 } else if (_fid == global._VMfn_SetProp && _argc == 3) {
                     _code[array_length(_code) - 1] = VM_OP_CALL_SETPROP;
+                    array_push(_code, _dst);
+                    for (var _i = 0; _i < 3; _i++) {
+                        array_push(_code, buffer_read(buf, buffer_s32));
+                    }
+                } else if (_fid == global._VMfn_IsUndefined && _argc == 1) {
+                    _code[array_length(_code) - 1] = VM_OP_CALL_ISUNDEF;
+                    array_push(_code, _dst);
+                    array_push(_code, buffer_read(buf, buffer_s32));
+                } else if (_fid == global._VMfn_GetCurCard && _argc == 0) {
+                    _code[array_length(_code) - 1] = VM_OP_CALL_GETCURCARD;
+                    array_push(_code, _dst);
+                } else if (_fid == global._VMfn_ArrayGet && _argc == 2) {
+                    _code[array_length(_code) - 1] = VM_OP_CALL_ARRAYGET;
+                    array_push(_code, _dst);
+                    for (var _i = 0; _i < 2; _i++) {
+                        array_push(_code, buffer_read(buf, buffer_s32));
+                    }
+                } else if (_fid == global._VMfn_CreateInstance && _argc == 3) {
+                    _code[array_length(_code) - 1] = VM_OP_CALL_CREATEINST;
                     array_push(_code, _dst);
                     for (var _i = 0; _i < 3; _i++) {
                         array_push(_code, buffer_read(buf, buffer_s32));
@@ -3254,6 +3303,35 @@ function VM_Execute_code(vm, code, name) {
                             _mv[_dst] = _result;
                         }
                     }
+                    break;
+                }
+
+                // ==================== 热函数直通（解码期由 CALL 换来的） ====================
+                case VM_OP_CALL_ISUNDEF: {
+                    var _dst = code[_ip]; _ip += 1;
+                    var _result = VM_IsUndefined(code[_ip]); _ip += 1;
+                    vm_store_result(vm, _mt, _mv, _dst, _result);
+                    break;
+                }
+
+                case VM_OP_CALL_GETCURCARD: {
+                    var _dst = code[_ip]; _ip += 1;
+                    var _result = VM_GetCurCard();
+                    vm_store_result(vm, _mt, _mv, _dst, _result);
+                    break;
+                }
+
+                case VM_OP_CALL_ARRAYGET: {
+                    var _dst = code[_ip]; _ip += 1;
+                    var _result = VM_ArrayGet(code[_ip], code[_ip + 1]); _ip += 2;
+                    vm_store_result(vm, _mt, _mv, _dst, _result);
+                    break;
+                }
+
+                case VM_OP_CALL_CREATEINST: {
+                    var _dst = code[_ip]; _ip += 1;
+                    var _result = VM_CreateInstance(code[_ip], code[_ip + 1], code[_ip + 2]); _ip += 3;
+                    vm_store_result(vm, _mt, _mv, _dst, _result);
                     break;
                 }
 
@@ -5211,7 +5289,7 @@ VM_RegisterFunction(global.__vm, VM_LoadSpriteFrames_Ex); // 75
 VM_RegisterFunction(global.__vm, VM_GetLastBossStateChangeId); // 76
 VM_RegisterFunction(global.__vm, VM_GetLastBossOldState);      // 77
 VM_RegisterFunction(global.__vm, VM_GetLastBossNewState);      // 78
-VM_RegisterFunction(global.__vm, VM_ArrayGet);   // 79
+global._VMfn_ArrayGet = VM_RegisterFunction(global.__vm, VM_ArrayGet);   // 79
 VM_RegisterFunction(global.__vm, VM_ArraySet);   // 80
 VM_RegisterFunction(global.__vm, VM_ArrayDel);   // 81
 VM_RegisterFunction(global.__vm, VM_ArrayADD);   // 82
@@ -5229,7 +5307,7 @@ VM_RegisterFunction(global.__vm, VM_BanShield);          // 93
 VM_RegisterFunction(global.__vm, VM_SetCardShapeCap);    // 94
 VM_RegisterFunction(global.__vm, VM_SetCardSkillCap);    // 95
 VM_RegisterFunction(global.__vm, VM_GetKilledProp);      // 96
-VM_RegisterFunction(global.__vm, VM_IsUndefined);        // 97
+global._VMfn_IsUndefined = VM_RegisterFunction(global.__vm, VM_IsUndefined);        // 97
 VM_RegisterFunction(global.__vm, VM_IsDestroyed);        // 98
 VM_RegisterFunction(global.__vm, VM_LoadSound);          // 99
 VM_RegisterFunction(global.__vm, VM_Floor);              // 100
@@ -5241,11 +5319,11 @@ VM_RegisterFunction(global.__vm, VM_SetDrawSlotEx);        // 105
 VM_RegisterFunction(global.__vm, VM_SetDrawSlotEx_front);  // 106
 VM_RegisterFunction(global.__vm, VM_SetWaveAuto);    // 107
 VM_RegisterFunction(global.__vm, VM_SetWave);        // 108
-VM_RegisterFunction(global.__vm, VM_GetCurCard);         // 109
+global._VMfn_GetCurCard = VM_RegisterFunction(global.__vm, VM_GetCurCard);         // 109
 VM_RegisterFunction(global.__vm, VM_EnemyInRange);       // 110
 VM_RegisterFunction(global.__vm, VM_GetHomingTarget);    // 111
 VM_RegisterFunction(global.__vm, VM_GetInstancesInRange);// 112
-VM_RegisterFunction(global.__vm, VM_CreateInstance);     // 113
+global._VMfn_CreateInstance = VM_RegisterFunction(global.__vm, VM_CreateInstance);     // 113
 VM_RegisterFunction(global.__vm, VM_LoadSpritePerm_Ex);  // 114
 VM_RegisterFunction(global.__vm, VM_SetShovelFlameRate); // 115
 VM_RegisterFunction(global.__vm, VM_BulletScreenAdd);    // 116
@@ -5299,6 +5377,8 @@ ds_map_add(global._VM_remote_funcs, "VM_SetTimeLimit", VM_SetTimeLimit);
 //     raw = false → VM 那套：函数用 vm_read_mem(global.__vm, addr) 收内存地址（VM_* 全是这种）
 //     raw = true  → 普通 GML 函数：直接收真值，参数就是普通参数，写起来不用管地址
 global._VM_call_dict = ds_map_create();
+// 清单写在 scripts/scr_command_VM_callFunction 里（那边只管登记，重复调安全）
+scr_command_VM_callFunction();
 
 // ── 清单（想开放哪个写哪个）──
 // 示例：ds_map_add(global._VM_call_dict, "VM_SpawnPlant", { fn: VM_SpawnPlant, raw: false, desc: "种下植物（卡名,列,行,形态,星级,技能）" });

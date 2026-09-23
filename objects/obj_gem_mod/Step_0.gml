@@ -2,7 +2,7 @@ if global.is_paused {
 	exit
 }
 
-// 预留属性 cooldown_timer：每帧自减（插件在触发时把它设回 秒数*60）
+// 预留属性 cooldown_timer：每帧自减（点击时由 Mouse_4 设回 cooldown；插件触发时也可以自己重写）
 if (cooldown_timer > 0) cooldown_timer--;
 
 // 动画自动播放：与 obj_card_parent 同款，配置属性由 .bin 通过 VM_SetProp 设置
