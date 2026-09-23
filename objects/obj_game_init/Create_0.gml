@@ -147,6 +147,14 @@ global.ime_block = ini_read_bool("settings", "ime_block", true); // 输入法屏
 if (ini_read_string("settings", "ime_block", "") == "") {
     ini_write_bool("settings", "ime_block", true);
 }
+
+// 鼠标输入限频频率（Hz）：高回报率鼠标掉帧修复。默认 500，设 0 = 完全关闭。
+// 兼容旧配置：键缺失时补写，玩家可手改 %LOCALAPPDATA%\FVM_Reborn\config.ini 调整。
+// 注意：必须在 ini_open / ini_close 区间内读取，否则会报 INI 文件未定义。
+global.mouse_limit_hz = ini_read_real("settings", "mouse_limit_hz", 500);
+if (ini_read_string("settings", "mouse_limit_hz", "") == "") {
+    ini_write_real("settings", "mouse_limit_hz", 500);
+}
 for (var i = 0; i < array_length(global.keybind_config); i++) {
 	    var kb = global.keybind_config[i];
 	    var key_val = ini_read_real("keybinds", kb.name, kb.default1);
@@ -172,3 +180,19 @@ show_debug_message(working_directory)
 if (global.ime_block && native_disable_ime != undefined) {
     native_disable_ime(window_handle());
 }
+
+// ═══ 鼠标输入限频（高回报率鼠标掉帧修复）═════════════════════════════════════
+// 问题：高回报率鼠标（如 8 kHz）每帧向窗口灌入数千条 WM_MOUSEMOVE，帧内 draw 阻塞最高
+//       380 ms，而 CPU 占用很低 —— runner 在等待消息，不是在计算。
+// 做法：native 侧（mouse_limit.h）用系统级 WH_MOUSE_LL 钩子，跑在独立线程上；快于目标
+//       频率的移动被吞掉，被吞掉的位移以"上次注入位置"为基准累加，到时间点再以绝对
+//       坐标一次性补发 —— 补回的是 100% 位移，与注入频率无关。
+// 范围：只对快于目标频率的输入生效；等于或低于目标频率的鼠标逐条通过，不会变顿。
+// 安全：① 启停由 GML 按 window_has_focus() 决定（native 不做任何前台/几何判断）；
+//       ② 注入线程心跳超过 300 ms 未刷新则全部放行，不会冻结系统鼠标。
+// 开关：[settings] mouse_limit_hz（默认 500，0 = 关闭）。该值已在上方
+//       ini_open / ini_close 区间读取，此处仅负责启用。
+// ═════════════════════════════════════════════════════════════════════════════
+// 注意：这里【不能】直接调 native_start_mouse_limit —— 否则 ml_on 与 native 的真实状态
+// 会不一致，Stop 分支永不触发，限频会一直挂在桌面上。启停统一由
+// obj_file_manager/Step_0.gml 管。
