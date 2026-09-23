@@ -1,0 +1,115 @@
+// 神圣之眼（纯插件复刻）：5×5 内敌人挨打 + 减速，同一个敌人 600 帧才吃一次
+// 命中时间戳直接记在敌人身上（mod_eye_hit_t），不用额外容器
+
+// 图标从 mod 目录带过来（注册宝石时就要能解析，所以放在 _OBJECT_CFG 里先加载）
+_OBJECT_CFG {
+    if (VM_SpriteExists("spr_divine_holy_gem_icon") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_divine_holy_gem_icon_0.png", 1, 40, 40)
+        VM_AliasSpritePerm("spr_divine_holy_gem_icon", "tex/spr_divine_holy_gem_icon_0.png")
+    }
+    // 战场贴图（45x45、原点居中；按 1.8 放大 ≈81px。背包用的是上面那张 82x82 的 icon）
+    if (VM_SpriteExists("spr_divine_holy_gem") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_divine_holy_gem_0.png", 1, 22, 22)
+        VM_AliasSpritePerm("spr_divine_holy_gem", "tex/spr_divine_holy_gem_0.png")
+    }
+    // 光环贴图：开局加载一次（图在 effects/tex/，所以路径带 ../）
+    if (VM_SpriteExists("spr_master_shield_effect_4") == 0) {
+        VM_LoadSpritePerm_Ex("../effects/tex/spr_master_shield_effect_4_0.png", 25, 152, 160)
+        VM_AliasSpritePerm("spr_master_shield_effect_4", "../effects/tex/spr_master_shield_effect_4_0.png")
+    }
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+    // 战场贴图 45×45 按 1.8 放大；背包图标是 82×82 那张
+    VM_SetProp(self, "sprite_index", "spr_divine_holy_gem")
+    VM_SetProp(self, "image_xscale", 1.8)
+    VM_SetProp(self, "image_yscale", 1.8)
+    VM_SetProp(self, "t", 0)
+    VM_SetProp(self, "fx", 0)
+
+    VM_ArrayClear("dvh_atk")
+    VM_ArrayADD("dvh_atk", 150)
+    VM_ArrayADD("dvh_atk", 200)
+    VM_ArrayADD("dvh_atk", 250)
+    VM_ArrayADD("dvh_atk", 300)
+    VM_ArrayADD("dvh_atk", 350)
+    VM_ArrayADD("dvh_atk", 400)
+    VM_ArrayADD("dvh_atk", 450)
+    VM_ArrayADD("dvh_atk", 500)
+    VM_ArrayADD("dvh_atk", 550)
+    VM_ArrayADD("dvh_atk", 600)
+    VM_ArrayADD("dvh_atk", 650)
+    VM_ArrayADD("dvh_atk", 700)
+    VM_ArrayADD("dvh_atk", 750)
+    VM_ArrayADD("dvh_atk", 800)
+    VM_ArrayADD("dvh_atk", 850)
+    VM_ArrayADD("dvh_atk", 1000)
+
+    // 每档减速（秒，原版 ice_timer）
+    VM_ArrayClear("dvh_ice")
+    VM_ArrayADD("dvh_ice", 3)
+    VM_ArrayADD("dvh_ice", 3)
+    VM_ArrayADD("dvh_ice", 3)
+    VM_ArrayADD("dvh_ice", 3.5)
+    VM_ArrayADD("dvh_ice", 3.5)
+    VM_ArrayADD("dvh_ice", 3.5)
+    VM_ArrayADD("dvh_ice", 4)
+    VM_ArrayADD("dvh_ice", 4)
+    VM_ArrayADD("dvh_ice", 4)
+    VM_ArrayADD("dvh_ice", 4.5)
+    VM_ArrayADD("dvh_ice", 4.5)
+    VM_ArrayADD("dvh_ice", 4.5)
+    VM_ArrayADD("dvh_ice", 5)
+    VM_ArrayADD("dvh_ice", 5)
+    VM_ArrayADD("dvh_ice", 5)
+    VM_ArrayADD("dvh_ice", 6)
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+    p = VM_GetProp(self, "mod_point_parent_player")
+    fx = VM_GetProp(self, "fx")
+    if (VM_IsUndefined(p) == 0) {
+        if (VM_IsDestroyed(p) == 0) {
+            need = 0
+            if (fx == 0) { need = 1 }
+            if (VM_IsDestroyed(fx) == 1) { need = 1 }
+            if (need == 1) {
+                VM_SetProp(0, "_mod_fx_sprite", 4)
+                VM_SetProp(0, "_mod_pending_effect_id", "divine_eye_aura")
+                fx = VM_CreateInstance("obj_effect_mod", VM_GetProp(p, "x"), VM_GetProp(p, "y"))
+                VM_SetProp(0, "_mod_pending_effect_id", "")
+                VM_SetProp(fx, "parent_inst", p)
+                VM_SetProp(fx, "sprite_index", "spr_master_shield_effect_4")
+                VM_SetProp(fx, "frames", 25)
+                VM_SetProp(fx, "rel_x", 0 - 15)
+                VM_SetProp(fx, "rel_y", 0 - 5)
+                VM_SetProp(self, "fx", fx)
+            }
+        }
+    }
+    lv = VM_GetProp(self, "mod_point_gem_level")
+    if (lv > 15) { lv = 15 }
+    t = VM_GetProp(self, "t") + 1
+    r = VM_GetProp(self, "mod_point_grid_row")
+    c = VM_GetProp(self, "mod_point_grid_col")
+    n = VM_GetInstancesInRange("dvh_arr", r - 2, r + 2, c - 2, c + 2, "enemy", "")
+    k = 0
+    while (k < n) {
+        e = VM_ArrayGet("dvh_arr", k)
+        ok = 1
+        last = VM_GetProp(e, "mod_eye_hit_t")
+        if (VM_IsUndefined(last) == 0) {
+            if (t - last < 600) { ok = 0 }
+        }
+        if (ok == 1) {
+            VM_DamageEnemy(e, VM_ArrayGet("dvh_atk", lv), "normal")
+            VM_SetProp(e, "ice_timer", VM_ArrayGet("dvh_ice", lv) * 60)
+            VM_SetProp(e, "is_slowdown", 1)
+            VM_SetProp(e, "mod_eye_hit_t", t)
+        }
+        k = k + 1
+    }
+    VM_SetProp(self, "t", t)
+}

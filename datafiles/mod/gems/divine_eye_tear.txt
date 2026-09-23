@@ -1,0 +1,130 @@
+// 神忌之眼（纯插件复刻）：每 150 帧撕裂以自己为中心 5×5 内的敌人
+// 伤害 = floor(maxhp × rate + atk)，上限 max_damage（和原版 obj_player_shield 里那段一致）
+// 中心取自 self.mod_point_grid_row / mod_point_grid_col（创建宝石时挂的发射方格子）
+
+// 图标从 mod 目录带过来（注册宝石时就要能解析，所以放在 _OBJECT_CFG 里先加载）
+_OBJECT_CFG {
+    if (VM_SpriteExists("spr_divine_forbidden_gem_icon") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_divine_forbidden_gem_icon_0.png", 1, 40, 40)
+        VM_AliasSpritePerm("spr_divine_forbidden_gem_icon", "tex/spr_divine_forbidden_gem_icon_0.png")
+    }
+    // 战场贴图：神忌没有专属战场图，用宝石原图（44x44、原点居中）
+    if (VM_SpriteExists("spr_divine_forbidden_gem") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_divine_forbidden_gem_0.png", 1, 22, 22)
+        VM_AliasSpritePerm("spr_divine_forbidden_gem", "tex/spr_divine_forbidden_gem_0.png")
+    }
+    // 光环贴图：开局加载一次（图在 effects/tex/，所以路径带 ../）
+    if (VM_SpriteExists("spr_master_shield_effect_2") == 0) {
+        VM_LoadSpritePerm_Ex("../effects/tex/spr_master_shield_effect_2_0.png", 18, 100, 102)
+        VM_AliasSpritePerm("spr_master_shield_effect_2", "../effects/tex/spr_master_shield_effect_2_0.png")
+    }
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+    // 战场贴图 45×45 按 1.8 放大；背包图标是 82×82 那张
+    VM_SetProp(self, "sprite_index", "spr_divine_forbidden_gem")
+    VM_SetProp(self, "image_xscale", 1.8)
+    VM_SetProp(self, "image_yscale", 1.8)
+    VM_SetProp(self, "t", 0)
+    VM_SetProp(self, "fx", 0)
+    VM_SetProp(self, "cooldown_timer", 150)   // 预留属性：给图标显示冷却用
+
+    VM_ArrayClear("dvt_atk")
+    VM_ArrayADD("dvt_atk", 8)
+    VM_ArrayADD("dvt_atk", 16)
+    VM_ArrayADD("dvt_atk", 24)
+    VM_ArrayADD("dvt_atk", 32)
+    VM_ArrayADD("dvt_atk", 40)
+    VM_ArrayADD("dvt_atk", 50)
+    VM_ArrayADD("dvt_atk", 60)
+    VM_ArrayADD("dvt_atk", 75)
+    VM_ArrayADD("dvt_atk", 90)
+    VM_ArrayADD("dvt_atk", 105)
+    VM_ArrayADD("dvt_atk", 120)
+    VM_ArrayADD("dvt_atk", 140)
+    VM_ArrayADD("dvt_atk", 160)
+    VM_ArrayADD("dvt_atk", 180)
+    VM_ArrayADD("dvt_atk", 200)
+    VM_ArrayADD("dvt_atk", 220)
+
+    VM_ArrayClear("dvt_rate")
+    VM_ArrayADD("dvt_rate", 0.02)
+    VM_ArrayADD("dvt_rate", 0.03)
+    VM_ArrayADD("dvt_rate", 0.03)
+    VM_ArrayADD("dvt_rate", 0.04)
+    VM_ArrayADD("dvt_rate", 0.05)
+    VM_ArrayADD("dvt_rate", 0.06)
+    VM_ArrayADD("dvt_rate", 0.08)
+    VM_ArrayADD("dvt_rate", 0.1)
+    VM_ArrayADD("dvt_rate", 0.12)
+    VM_ArrayADD("dvt_rate", 0.15)
+    VM_ArrayADD("dvt_rate", 0.18)
+    VM_ArrayADD("dvt_rate", 0.19)
+    VM_ArrayADD("dvt_rate", 0.2)
+    VM_ArrayADD("dvt_rate", 0.23)
+    VM_ArrayADD("dvt_rate", 0.24)
+    VM_ArrayADD("dvt_rate", 0.26)
+
+    VM_ArrayClear("dvt_max")
+    VM_ArrayADD("dvt_max", 150)
+    VM_ArrayADD("dvt_max", 250)
+    VM_ArrayADD("dvt_max", 350)
+    VM_ArrayADD("dvt_max", 500)
+    VM_ArrayADD("dvt_max", 650)
+    VM_ArrayADD("dvt_max", 800)
+    VM_ArrayADD("dvt_max", 950)
+    VM_ArrayADD("dvt_max", 1100)
+    VM_ArrayADD("dvt_max", 1300)
+    VM_ArrayADD("dvt_max", 1500)
+    VM_ArrayADD("dvt_max", 1700)
+    VM_ArrayADD("dvt_max", 1950)
+    VM_ArrayADD("dvt_max", 2200)
+    VM_ArrayADD("dvt_max", 2500)
+    VM_ArrayADD("dvt_max", 2800)
+    VM_ArrayADD("dvt_max", 3200)
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+    p = VM_GetProp(self, "mod_point_parent_player")
+    fx = VM_GetProp(self, "fx")
+    if (VM_IsUndefined(p) == 0) {
+        if (VM_IsDestroyed(p) == 0) {
+            need = 0
+            if (fx == 0) { need = 1 }
+            if (VM_IsDestroyed(fx) == 1) { need = 1 }
+            if (need == 1) {
+                VM_SetProp(0, "_mod_fx_sprite", 2)
+                VM_SetProp(0, "_mod_pending_effect_id", "divine_eye_aura")
+                fx = VM_CreateInstance("obj_effect_mod", VM_GetProp(p, "x"), VM_GetProp(p, "y"))
+                VM_SetProp(0, "_mod_pending_effect_id", "")
+                VM_SetProp(fx, "parent_inst", p)
+                VM_SetProp(fx, "sprite_index", "spr_master_shield_effect_2")
+                VM_SetProp(fx, "frames", 18)
+                VM_SetProp(fx, "rel_x", 0 - 15)
+                VM_SetProp(fx, "rel_y", 0 - 5)
+                VM_SetProp(self, "fx", fx)
+            }
+        }
+    }
+    lv = VM_GetProp(self, "mod_point_gem_level")
+    if (lv > 15) { lv = 15 }
+    t = VM_GetProp(self, "t") + 1
+    if (t >= 150) {
+        t = 0
+        VM_SetProp(self, "cooldown_timer", 150)
+        r = VM_GetProp(self, "mod_point_grid_row")
+        c = VM_GetProp(self, "mod_point_grid_col")
+        n = VM_GetInstancesInRange("dvt_arr", r - 2, r + 2, c - 2, c + 2, "enemy", "")
+        k = 0
+        while (k < n) {
+            e = VM_ArrayGet("dvt_arr", k)
+            dmg = VM_Floor(VM_GetProp(e, "maxhp") * VM_ArrayGet("dvt_rate", lv) + VM_ArrayGet("dvt_atk", lv) + 0.5)
+            if (dmg > VM_ArrayGet("dvt_max", lv)) { dmg = VM_ArrayGet("dvt_max", lv) }
+            VM_DamageEnemy(e, dmg, "normal")
+            k = k + 1
+        }
+    }
+    VM_SetProp(self, "t", t)
+}

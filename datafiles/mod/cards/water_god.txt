@@ -34,10 +34,12 @@ _OBJECT_CREATE {
     VM_SetProp(self, "state", 0)
 
     // 弹幕卡片效果：bit4 = 自定义类（反弹）
-    // 管理器里的子弹进到本格中心带时：伤害 + 本卡攻击力、x 方向反向、画面转 180°
+    // 管理器里的子弹进到本格中心带时：伤害 + 本卡攻击力、飞行方向掉头、画面转 180°
+    // 两个轴都反：横向弹 vy≈0、竖向弹 vx≈0，各自只有主导轴起作用；斜弹整体掉头
     VM_SetProp(self, "bullet_flag", 4)
     VM_SetProp(self, "bullet_add_dmg", VM_GetProp(self, "atk"))
     VM_SetProp(self, "bullet_flip_x", 1)
+    VM_SetProp(self, "bullet_flip_y", 1)
     VM_SetProp(self, "bullet_angle_add", 180)
 }
 

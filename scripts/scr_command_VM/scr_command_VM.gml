@@ -4767,6 +4767,93 @@ function VM_DrawSpriteExt(spr_addr, subimg_addr, x_addr, y_addr, xs_addr, ys_add
     return 0;
 }
 
+// 命中位掩码：等价 can_target_on，但判定变成一次位与（省掉每帧每弹每敌的字符串比较）
+// 敌人按自己的 target_type 占一位（obj_battle 每帧写进 tbit），子弹按"能打哪些类型"或起来（创建时写进 ttype）
+#macro HIT_NORMAL      1
+#macro HIT_AIR         2
+#macro HIT_DANCE       4
+#macro HIT_OBSTACLE    8
+#macro HIT_DIVER       16
+#macro HIT_UNDERGROUND 32
+#macro HIT_OTHER       64   // 其它/未知敌人类型：只有子弹类型 "all" 能打（can_target_on 的兜底行为）
+
+/// @function bullet_type_mask(type)
+/// @desc 子弹 type 字符串 → 命中位掩码，和 can_target_on 一一对应
+function bullet_type_mask(_t) {
+    switch (_t) {
+        case "normal":   return HIT_NORMAL | HIT_OBSTACLE;
+        case "air":      return HIT_NORMAL | HIT_AIR;
+        case "air_only": return HIT_AIR;
+        case "pierce":   return HIT_NORMAL | HIT_DANCE | HIT_OBSTACLE;
+        case "track":    return HIT_NORMAL | HIT_DIVER | HIT_AIR;
+        case "throw":    return HIT_NORMAL | HIT_DIVER;
+        case "rotate":   return HIT_NORMAL | HIT_AIR | HIT_DANCE | HIT_OBSTACLE | HIT_DIVER | HIT_UNDERGROUND;
+        case "d_fruit":  return HIT_NORMAL | HIT_DANCE | HIT_OBSTACLE | HIT_DIVER | HIT_UNDERGROUND;
+        case "all":      return HIT_NORMAL | HIT_AIR | HIT_DANCE | HIT_OBSTACLE | HIT_DIVER | HIT_UNDERGROUND | HIT_OTHER;
+    }
+    return 0;
+}
+
+/// @function bullet_merge_find(mgr, x, y, spr, scale, vx, vy, dmg, hits, life, range, type,
+///                             damage_type, flag, angle, ty, lk, ignore_dist)
+/// @desc 在新弹的出生格里找一颗"完全同类"的子弹来合并（表由 Step 每帧重建，每格 16 槽）
+///       字段必须全等才合并（同一贴图 = 同一种子弹），只有距离要求分档：
+///       ignore_dist = false（一阶段）要求 |dx|、|dy| ≤ 8；true（二/三阶段）不限距离，取最近的
+/// @return 候选下标；没有可合并的返回 -1
+function bullet_merge_find(mgr, x, y, spr, scale, vx, vy, dmg, hits, life, range, type,
+                           damage_type, flag, angle, ty, lk, ignore_dist) {
+    if (!variable_global_exists("grid_cols") || !variable_global_exists("grid_rows")) return -1;
+    var _cw = global.grid_cell_size_x;
+    var _ch = global.grid_cell_size_y;
+    if (_cw <= 0 || _ch <= 0) return -1;
+    var _gc = floor((x - global.grid_offset_x) / _cw);
+    if (_gc < 0 || _gc >= global.grid_cols) return -1;
+    var _gr = floor((y - global.grid_offset_y) / _ch);
+    if (_gr < 0 || _gr >= global.grid_rows) return -1;
+    var _k = _gr * global.grid_cols + _gc;
+    if (_k >= array_length(mgr.cell_n)) return -1;
+    var _n = mgr.cell_n[_k];
+    if (_n <= 0) return -1;
+
+    var _ttype  = bullet_type_mask(type);
+    var _pierce = (hits < 0);
+    var _base   = _k * 16;
+    var _cnt    = mgr.count;
+    var _best   = -1;
+    var _bestd  = 999999;
+    for (var _j = 0; _j < _n; _j++) {
+        var _idx = mgr.bullet_grid[_base + _j];
+        if (_idx < 0 || _idx >= _cnt) continue;          // 已死（交换删除会把它挪到 >= count）
+        var _b = mgr.list[_idx];
+        if (_b.spr != spr || _b.scale != scale) continue;
+        if (_b.vx != vx || _b.vy != vy) continue;
+        if (_b.dmg != dmg) continue;
+        if ((_b.hits < 0) != _pierce) continue;          // 穿透 / 非穿透不能混（合并规则不同）
+        if (_b.life != life || _b.cell_range != range) continue;
+        if (_b.ttype != _ttype) continue;
+        if (_b.damage_type != damage_type) continue;
+        if (_b.flag != flag || _b.angle != angle) continue;
+        if (_b.ty != ty || _b.lk != lk) continue;
+        var _dx = abs(_b.x - x);
+        var _dy = abs(_b.y - y);
+        if (!ignore_dist && (_dx > 8 || _dy > 8)) continue;
+        var _d = _dx + _dy;
+        if (_d < _bestd) { _bestd = _d; _best = _idx; }
+    }
+    return _best;
+}
+
+/// @function bullet_merge_into(mgr, idx, dmg, hits)
+/// @desc 把一发新弹并进既有子弹：穿透（hits < 0）伤害累加，非穿透命中次数累加
+function bullet_merge_into(mgr, idx, dmg, hits) {
+    var _b = mgr.list[idx];
+    if (_b.hits < 0) {
+        _b.dmg += dmg;
+    } else {
+        _b.hits += hits;
+    }
+}
+
 /// @function bullet_screen_add(spr, frames, range, scale, anim_speed, x, y, vx, vy, dmg, hits, life, type, death_obj, death_mod)
 /// @param spr        贴图：sprite 索引，或资源名/文件名（字符串，走 get_load_sprite 的缓存链，
 ///                   所以 VM_LoadSpritePerm_Ex / VM_LoadSprite 加载的 mod 贴图直接传文件名就能用）
@@ -4784,7 +4871,9 @@ function VM_DrawSpriteExt(spr_addr, subimg_addr, x_addr, y_addr, xs_addr, ys_add
 ///                   原生对象留空。出界销毁不生成销毁对象
 /// @return 子弹在管理器数组里的下标；管理器或贴图不存在时返回 -1
 /// @desc 往 obj_Bullet_Screen_Management 的数组里塞一颗子弹（该实例由 obj_battle 开局创建）
-function bullet_screen_add(spr, frames, range, scale, anim_speed, x, y, vx, vy, dmg, hits, life, type = "all", death_obj = "", death_mod = "") {
+function bullet_screen_add(spr, frames, range, scale, anim_speed, x, y, vx, vy, dmg, hits, life,
+                           type = "all", death_obj = "", death_mod = "",
+                           damage_type = "normal", flag = 0, angle = 0, ty = -1, lk = 0.15, death_spr = "") {
     var _mgr = instance_find(obj_Bullet_Screen_Management, 0);
     if (!instance_exists(_mgr)) {
         show_debug_message("[bullet_screen_add] 找不到 obj_Bullet_Screen_Management（由 obj_battle 开局创建）");
@@ -4792,20 +4881,51 @@ function bullet_screen_add(spr, frames, range, scale, anim_speed, x, y, vx, vy, 
     }
     var _spr = is_string(spr) ? get_load_sprite(spr) : spr;
     if (!sprite_exists(_spr)) return -1;
-    if (_mgr.count >= _mgr.bullet_max) return -1;   // 表满了：直接不生成（静默丢弃）
     var _frames = frames;
     var _spr_frames = sprite_get_number(_spr);
     if (is_undefined(_frames) || _frames <= 0 || _frames > _spr_frames) _frames = _spr_frames;
     if (is_undefined(scale) || scale == 0) scale = 1;
     if (is_undefined(anim_speed)) anim_speed = 1;
+    if (is_undefined(damage_type) || damage_type == "") damage_type = "normal";
+    if (is_undefined(flag)) flag = 0;
+    if (is_undefined(angle)) angle = 0;
+    if (is_undefined(ty)) ty = -1;
+    if (is_undefined(lk)) lk = 0.15;
+
+    // ── 合并三阶段（按当前弹数分档，参数见 Create_0 的 merge_lv1 / merge_lv2）──
+    //    一阶段：字段全等 + 距离 8px 内；二/三阶段：字段全等即可，取最近的
+    //    merge_enable = false 时整段跳过 = 原逻辑（能加就加，满了就丢）
+    var _mn = _mgr.count;
+    var _mi = -1;
+    if (_mgr.merge_enable) {
+    if (_mn >= _mgr.merge_lv1) {
+        _mi = bullet_merge_find(_mgr, x, y, _spr, scale, vx, vy, dmg, hits, life, range,
+                                type, damage_type, flag, angle, ty, lk, true);
+        if (_mi >= 0) {
+            bullet_merge_into(_mgr, _mi, dmg, hits);
+            _mgr.merge2_n += 1; _mgr.merge_n += 1;
+            return _mi;
+        }
+        if (_mn > _mgr.merge_lv2) { _mgr.drop_n += 1; return -1; }   // 三阶段：合并不了就丢弃
+    } else {
+        _mi = bullet_merge_find(_mgr, x, y, _spr, scale, vx, vy, dmg, hits, life, range,
+                                type, damage_type, flag, angle, ty, lk, false);
+        if (_mi >= 0) {
+            bullet_merge_into(_mgr, _mi, dmg, hits);
+            _mgr.merge1_n += 1; _mgr.merge_n += 1;
+            return _mi;
+        }
+    }
+    }
+    if (_mn >= _mgr.bullet_max) { _mgr.drop_n += 1; return -1; }     // 满了：丢弃（原逻辑）
 
     // 原地填 list[count] 那个现成的"空子弹"结构体（不新建，省掉每颗一次的分配）
-    var _b = _mgr.list[_mgr.count];
+    var _b = _mgr.list[_mn];
     _b.spr         = _spr;
     _b.frames      = _frames;
     _b.cell_range  = range;
     _b.scale       = scale;
-    _b.angle       = 0;        // 绘制角度：默认不转，只有卡片效果翻转方向时才 +180
+    _b.angle       = angle;    // 出生角度（度）：后向子弹传 180，和原版 image_angle = 180 一致
     _b.anim_speed  = anim_speed;
     _b.frame       = 0;
     _b.x           = x;
@@ -4816,13 +4936,19 @@ function bullet_screen_add(spr, frames, range, scale, anim_speed, x, y, vx, vy, 
     _b.hits        = hits;
     _b.life        = life;
     _b.target_type = type;
-    _b.damage_type = "normal"; // 命中走 damage_enemy（闪白/音效/护盾 + 各敌人的 Other_10）
-    _b.flag        = 0;        // 卡片效果位：普通版本固定"什么都不吃"，只有 _Ex 加的子弹才参与
-    _b.freeze      = 0;        // 累计冰冻帧数：命中时写给敌人的 ice_timer
+    _b.ttype       = bullet_type_mask(type);   // 命中掩码：命中判定只做一次位与，不再比字符串
+    _b.damage_type = damage_type;              // 命中走 damage_enemy（闪白/音效/护盾 + 各敌人的 Other_10）
+    _b.flag        = flag;                     // 卡片效果位：普通版本固定"什么都不吃"，只有 _Ex 加的子弹才参与
+    _b.freeze      = 0;                        // 累计冰冻帧数：命中时写给敌人的 ice_timer
     _b.death_obj   = death_obj;
     _b.death_mod   = death_mod;
+    _b.death_spr   = death_spr;
+    // ⚠️ 槽位是回收复用的，这两个必须每次重置，否则新弹会继承上一颗的渐变目标
+    _b.ty          = ty;
+    _b.lk          = lk;
 
-    _mgr.count += 1;
+    _mgr.count = _mn + 1;
+    _mgr.add_n += 1;
     return _mgr.count - 1;
 }
 
@@ -4846,18 +4972,11 @@ function VM_BulletScreenAdd(spr_addr, frames_addr, range_addr, scale_addr, anim_
 /// @return 子弹在管理器数组里的下标；管理器或贴图不存在时返回 -1
 function bullet_screen_add_Ex(spr, frames, range, scale, anim_speed, x, y, vx, vy, dmg, hits, life,
                               type = "all", death_obj = "", death_mod = "",
-                              damage_type = "normal", flag = 0, angle = 0) {
-    var _idx = bullet_screen_add(spr, frames, range, scale, anim_speed, x, y, vx, vy,
-                                 dmg, hits, life, type, death_obj, death_mod);
-    if (_idx < 0) return -1;
-    var _mgr = instance_find(obj_Bullet_Screen_Management, 0);
-    var _b   = _mgr.list[_idx];
-    if (!is_undefined(damage_type) && damage_type != "") _b.damage_type = damage_type;
-    if (is_undefined(flag)) flag = 0;
-    _b.flag = flag;
-    if (is_undefined(angle)) angle = 0;
-    _b.angle = angle;          // 出生角度（度）：后向子弹传 180，和原版 image_angle = 180 一致
-    return _idx;
+                              damage_type = "normal", flag = 0, angle = 0, ty = -1, lk = 0.15, death_spr = "") {
+    // 全部参数一次传下去（合并判定要能看全这些字段，所以不再"先加进去再改写"）
+    return bullet_screen_add(spr, frames, range, scale, anim_speed, x, y, vx, vy,
+                             dmg, hits, life, type, death_obj, death_mod,
+                             damage_type, flag, angle, ty, lk, death_spr);
 }
 
 /// @function VM_BulletScreenAdd_Ex(spr, frames, range, scale, anim_speed, x, y, vx, vy, dmg, hits, life,
@@ -4885,18 +5004,10 @@ function VM_BulletScreenAdd_Ex(spr_addr, frames_addr, range_addr, scale_addr, an
 /// @return 子弹在管理器数组里的下标；管理器或贴图不存在、表满返回 -1
 function bullet_screen_add_Exs(spr, frames, range, scale, anim_speed, x, y, vx, vy, dmg, hits, life,
                                type = "all", death_obj = "", death_mod = "",
-                               damage_type = "normal", flag = 0, angle = 0, ty = -1, lk = 0.15) {
-    var _idx = bullet_screen_add_Ex(spr, frames, range, scale, anim_speed, x, y, vx, vy,
-                                    dmg, hits, life, type, death_obj, death_mod,
-                                    damage_type, flag, angle);
-    if (_idx < 0) return -1;
-    var _mgr = instance_find(obj_Bullet_Screen_Management, 0);
-    var _b   = _mgr.list[_idx];
-    if (is_undefined(ty)) ty = -1;
-    if (is_undefined(lk)) lk = 0.15;
-    _b.ty = ty;
-    _b.lk = lk;
-    return _idx;
+                               damage_type = "normal", flag = 0, angle = 0, ty = -1, lk = 0.15, death_spr = "") {
+    return bullet_screen_add_Ex(spr, frames, range, scale, anim_speed, x, y, vx, vy,
+                                dmg, hits, life, type, death_obj, death_mod,
+                                damage_type, flag, angle, ty, lk, death_spr);
 }
 
 /// @function VM_BulletScreenAdd_Exs(spr, frames, range, scale, anim_speed, x, y, vx, vy, dmg, hits, life,
@@ -4924,9 +5035,10 @@ function homing_bullet_instant_hit(mgr, type, dmg) {
     var _best    = noone;
     var _best_x  = 999999;
     var _best_hp = -1;
+    var _mask    = bullet_type_mask(type);
     for (var _qt = 0; _qt < 6; _qt++) {
         if (mgr.scan_id[_qt] == noone) continue;
-        if (!can_hit(type, mgr.scan_types[_qt])) continue;
+        if ((_mask & mgr.scan_bit[_qt]) == 0) continue;
         if (mgr.scan_x[_qt] < _best_x || (mgr.scan_x[_qt] == _best_x && mgr.scan_hp[_qt] > _best_hp)) {
             _best_x  = mgr.scan_x[_qt];
             _best_hp = mgr.scan_hp[_qt];
@@ -4999,6 +5111,7 @@ function homing_bullet_add(spr, scale, x, y, spd, dmg, type = "all", death_obj =
         hits:        1,          // 固定：打一下就消失
         life:        0 - 1,      // 固定：不自动到期，出界才没
         target_type: type,
+        ttype:       bullet_type_mask(type),   // 命中掩码：判定只做一次位与
         damage_type: "normal",   // 固定：伤害类型不再当参数（四个调用点本来就全是 normal）
         death_obj:   death_obj,
         death_mod:   death_mod,

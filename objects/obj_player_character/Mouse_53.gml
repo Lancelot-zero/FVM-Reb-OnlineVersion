@@ -30,8 +30,14 @@ if not is_placed{
 					var gem_id = gem_list[i]
 					if array_get_index(global.banned_gems_online, gem_id) != -1 { continue; }
 					var gem_info = get_gem_info(gem_id)
-					if gem_info.obj != noone{
-						global._mod_pending_gem_id = gem_id; instance_create_depth(390,213+gem_index*80,-500,gem_info.obj);
+					if (is_struct(gem_info) && gem_info.obj != noone){
+						global._mod_pending_gem_id = gem_id;
+						var _gi = instance_create_depth(390,213+gem_index*80,-500,gem_info.obj);
+						// 给 mod 宝石挂"发射方"的信息：插件宝石脚本靠这几个变量定位（别用 parent_player，会和原版语义打架）
+						_gi.mod_point_parent_player = id;
+						_gi.mod_point_grid_row      = grid_row;
+						_gi.mod_point_grid_col      = grid_col;
+						_gi.mod_point_gem_level     = get_gem_level(gem_id);
 						gem_index++
 					}
 				}
@@ -61,10 +67,14 @@ if not is_placed{
 				var gem_id = gem_list[i]
 				if array_get_index(global.banned_gems_online, gem_id) != -1 { continue; }
 				var gem_info = get_gem_info(gem_id)
-				if gem_info.obj != noone{
+				if (is_struct(gem_info) && gem_info.obj != noone){
 					global._mod_pending_gem_id = gem_id;
-					var _gem_inst = instance_create_depth(390,213+gem_index*80,-500,gem_info.obj); 
-					//_gem_inst.parent_player = id;
+					var _gem_inst = instance_create_depth(390,213+gem_index*80,-500,gem_info.obj);
+					// 发射方信息（插件宝石靠它定位；不用 parent_player，免得和原版语义打架）
+					_gem_inst.mod_point_parent_player = id;
+					_gem_inst.mod_point_grid_row      = grid_row;
+					_gem_inst.mod_point_grid_col      = grid_col;
+					_gem_inst.mod_point_gem_level     = get_gem_level(gem_id);
 					gem_index++
 				}
 			}
@@ -102,9 +112,14 @@ if not is_placed{
 				var gem_id = sec_gem_list[i]
 				if array_get_index(global.banned_gems_online, gem_id) != -1 { continue; }
 				var gem_info = get_gem_info(gem_id)
-				if gem_info.obj != noone{
+				if (is_struct(gem_info) && gem_info.obj != noone){
 					global._mod_pending_gem_id = gem_id;
-					instance_create_depth(390,213+gem_index*80,-500,gem_info.obj);
+					var _gi = instance_create_depth(390,213+gem_index*80,-500,gem_info.obj);
+					// 发射方信息（插件宝石靠它定位；不用 parent_player，免得和原版语义打架）
+					_gi.mod_point_parent_player = id;
+					_gi.mod_point_grid_row      = grid_row;
+					_gi.mod_point_grid_col      = grid_col;
+					_gi.mod_point_gem_level     = get_gem_level(gem_id);
 					gem_index++
 				}
 			}
@@ -122,9 +137,14 @@ if not is_placed{
 				var gem_id = sup_gem_list[i]
 				if array_get_index(global.banned_gems_online, gem_id) != -1 { continue; }
 				var gem_info = get_gem_info(gem_id)
-				if gem_info.obj != noone{
+				if (is_struct(gem_info) && gem_info.obj != noone){
 					global._mod_pending_gem_id = gem_id;
-					instance_create_depth(390,213+gem_index*80,-500,gem_info.obj);
+					var _gi = instance_create_depth(390,213+gem_index*80,-500,gem_info.obj);
+					// 发射方信息（插件宝石靠它定位；不用 parent_player，免得和原版语义打架）
+					_gi.mod_point_parent_player = id;
+					_gi.mod_point_grid_row      = grid_row;
+					_gi.mod_point_grid_col      = grid_col;
+					_gi.mod_point_gem_level     = get_gem_level(gem_id);
 					gem_index++
 				}
 			}

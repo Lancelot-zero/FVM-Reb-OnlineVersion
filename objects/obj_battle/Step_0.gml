@@ -461,6 +461,20 @@ for(var _e = 0; _e < global.grid_rows; _e++){
 var stride = global.grid_cols + 2;
 
 with obj_enemy_parent{
+	// 命中位掩码：子弹判定只用一次位与（省掉每帧每弹每敌的 can_hit 字符串比较）
+	// 位定义在 scr_command_VM 的 bullet_type_mask 上面，两边必须一致
+	switch(target_type)
+	{
+		case "normal":      tbit = HIT_NORMAL;      break;
+		case "air":         tbit = HIT_AIR;         break;
+		case "dance":       tbit = HIT_DANCE;       break;
+		case "obstacle":    tbit = HIT_OBSTACLE;    break;
+		case "diver":       tbit = HIT_DIVER;       break;
+		case "underground": tbit = HIT_UNDERGROUND; break;
+		default:            tbit = HIT_OTHER;       break;
+	}
+	// 冰冻：顺手记住这个敌人吃不吃冰冻，子弹那边就不用每颗弹每帧再 variable_instance_exists
+	ice_ok = variable_instance_exists(self, "ice_timer");
 	if(grid_row >= 0 && grid_row < global.grid_rows && grid_col >= 0 && grid_col < stride)
 	{
 		var idx = grid_row * stride + grid_col;

@@ -1,0 +1,9 @@
+{
+  "name": "神忌之眼",
+  "description": "神忌之眼：撕裂5x5范围内的敌人",
+  "icon": "spr_divine_forbidden_gem_icon",
+  "slot": "secondary_weapon",
+  "max_level": 15,
+  "cooldown": [60],
+  "shop": { "cost": "25000", "description": "神忌之眼：撕裂5x5范围内的敌人" }
+}

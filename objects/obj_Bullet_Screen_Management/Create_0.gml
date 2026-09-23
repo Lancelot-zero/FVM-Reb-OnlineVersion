@@ -48,7 +48,7 @@
 //   新增：拿 list[count] 这个现成结构体原地填字段，然后 count += 1（不再新建结构体）
 //   删除：list[i] = list[count-1]（末尾那颗挪过来顶替），再把死掉的那颗放回末尾当回收池
 //   全程不 array_push / array_delete（数组长度永远不变）
-bullet_max = 400;                        // 容量：改这个数就行
+bullet_max = 2000;                        // 容量：改这个数就行
 list       = array_create(bullet_max);
 for (var _i = 0; _i < bullet_max; _i++) {
     list[_i] = {
@@ -67,16 +67,45 @@ for (var _i = 0; _i < bullet_max; _i++) {
         hits:        0,
         life:        -1,
         target_type: "all",
+        ttype:       127,  // 命中掩码（bullet_type_mask 算好写进来的），判定时和敌人的 tbit 位与
         damage_type: "normal",
         flag:        0,
         freeze:      0,
         death_obj:   "",
         death_mod:   "",
+        death_spr:   "",   // 销毁对象要换成的贴图（皮肤特效用；空 = 用对象自带贴图）
         ty:          -1,   // 行渐变的目标 y（世界坐标）；-1 = 不渐变（纯直线）
         lk:          0.15  // 行渐变的每帧靠拢比例（同原版水管弹）
     };
 }
 count = 0;
+
+// 格子加成快照：每格所有卡片 bullet_flag 的按位或（Step 每帧重建），子弹先做一次位测试
+cell_flag = [];
+
+// ── 子弹合并（默认关闭 = 原逻辑：加不进去就丢）──
+//    打开后按当前弹数分三个阶段：
+//      < merge_lv1  一阶段：字段全等 + 距离 8px 内，找不到就新建子弹
+//      ≤ merge_lv2  二阶段：字段全等 + 距离不限（取最近的），找不到就新建子弹
+//      > merge_lv2  三阶段：同二阶段，找不到就丢弃
+merge_enable = false;
+bullet_grid  = [];
+cell_n       = [];
+merge_lv1 = 500;
+merge_lv2 = 800;
+
+// ── 合并统计（临时调试；debug_merge = false 就只计数不打印）──
+debug_merge = false;
+merge_n  = 0;   // 累计合并次数
+merge1_n = 0;   //   其中一阶段（严格：距离 8px 内）
+merge2_n = 0;   //   其中二/三阶段（不限距离）
+add_n    = 0;   // 累计新建子弹次数
+drop_n   = 0;   // 累计因"三阶段合并不了"而丢弃的次数
+count_max = 0;  // 弹数峰值
+_stat_frame = 0;
+_stat_merge = 0;
+_stat_add   = 0;
+_stat_drop  = 0;
 
 
 // 画在敌人（0 / -200）前面，但仍在 UI（-2900 以下）后面

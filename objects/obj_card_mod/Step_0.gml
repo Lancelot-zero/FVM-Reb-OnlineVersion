@@ -78,7 +78,8 @@ if (mod_enemy_check == 1 || mod_step_enter_condition == "norm_attack") {
 
 			var _r1 = grid_row - _up;    if (_r1 < 0) _r1 = 0;
 			var _r2 = grid_row + _down;  if (_r2 > global.grid_rows - 1) _r2 = global.grid_rows - 1;
-			var _c1 = grid_col - _left;  if (_c1 < 0) _c1 = 0;
+			var _c1raw = grid_col - _left;                       // 可能是负数（场外左列 -1 / -2 …）
+			var _c1 = _c1raw;            if (_c1 < 0) _c1 = 0;
 			var _c2 = grid_col + _right; if (_c2 > global.grid_cols + 1) _c2 = global.grid_cols + 1;
 			var _before = _c1 - 1;   // -1 = 左边界外，前缀和按 0 算
 			if (array_length(global.has_enemy_normal) > _r2 * _stride + _c2) {
@@ -95,6 +96,31 @@ if (mod_enemy_check == 1 || mod_step_enter_condition == "norm_attack") {
 						mod_has_enemy = 1;
 						break;
 					}
+				}
+			}
+			// 场外左列（-1 / -2 …）：has_enemy_* 只统计 grid_col >= 0，负列敌人被 obj_battle
+			// 按行收在 enemy_array_left[row] 里，所以窗口越过左边界时要另查一遍
+			if (mod_has_enemy == 0 && _c1raw < 0 && variable_global_exists("enemy_array_left")) {
+				var _wmask = 0;
+				if (_w_n) _wmask = _wmask | HIT_NORMAL;
+				if (_w_o) _wmask = _wmask | HIT_OBSTACLE;
+				if (_w_d) _wmask = _wmask | HIT_DIVER;
+				if (_w_a) _wmask = _wmask | HIT_AIR;
+				if (_w_c) _wmask = _wmask | HIT_DANCE;
+				if (_w_u) _wmask = _wmask | HIT_UNDERGROUND;
+				for (var _lr = _r1; _lr <= _r2; _lr++) {
+					if (_lr >= array_length(global.enemy_array_left)) break;
+					var _llst = global.enemy_array_left[_lr];
+					var _ln   = array_length(_llst);
+					for (var _lk = 0; _lk < _ln; _lk++) {
+						var _le = _llst[_lk];
+						if (!instance_exists(_le) || _le.hp <= 0) continue;
+						if (_le.grid_col < _c1raw) continue;      // 比窗口左界还远的不算
+						if ((_le.tbit & _wmask) == 0) continue;   // 类型不在窗口里
+						mod_has_enemy = 1;
+						break;
+					}
+					if (mod_has_enemy == 1) break;
 				}
 			}
 			if (mod_has_enemy == 1) break;

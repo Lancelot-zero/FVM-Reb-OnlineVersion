@@ -25,6 +25,38 @@ if (_has_grid) {
     if (_gcsx <= 0 || _gcsz <= 0) _has_grid = false;
 }
 
+// 格子加成快照：每格把卡的 bullet_flag 或起来（每帧一次，9x7 格可以忽略）
+// 子弹只用一次位测试就能排除掉绝大多数"这一格根本没卡能吃我"的情况，
+// 命中掩码才走下面那套逐卡循环（吃位、换贴图、加伤）
+var _cols = 0;
+var _snap_ok = false;
+if (_has_grid && variable_global_exists("grid_plants")) {
+    _cols = global.grid_cols;
+    var _ncells = _cols * _rows;
+    // 尺寸变了（换图）就重建；下面两个循环会把每一格都写一遍，不用先清零
+    if (array_length(cell_flag) != _ncells) cell_flag = array_create(_ncells, 0);
+    for (var _sr = 0; _sr < _rows; _sr++) {
+        var _srow = _sr * _cols;
+        for (var _sc = 0; _sc < _cols; _sc++) {
+            var _cardlist = ds_grid_get(global.grid_plants, _sc, _sr);
+            var _cnum = ds_list_size(_cardlist);
+            var _mask = 0;
+            for (var _sk = 0; _sk < _cnum; _sk++) {
+                var _card = ds_list_find_value(_cardlist, _sk);
+                if (!instance_exists(_card)) continue;
+                if (!variable_instance_exists(_card, "bullet_flag")) continue;
+                _mask = _mask | _card.bullet_flag;
+            }
+            cell_flag[_srow + _sc] = _mask;
+        }
+    }
+    _snap_ok = true;
+}
+
+
+if(obj_battle.battle_time%20==0){
+	show_notice("弹幕数量"+string(_len),20)
+}
 var _i = _len - 1;
 while (_i >= 0) {
 
@@ -76,13 +108,14 @@ while (_i >= 0) {
         //       bullet_mul_dmg    伤害倍率（默认 1）     bullet_add_dmg    伤害加值（默认 0）
         //       bullet_flip_x     反向 x（0/1）           bullet_flip_y     反向 y（0/1）
         //       bullet_freeze_mul 冰冻帧数倍率（默认 1）   bullet_freeze_add 冰冻帧数加值（默认 0）
-        if (_has_grid && _b.flag > 0) {
+        if (_snap_ok && _b.flag > 0) {
             var _fx = (_b.x - _gox) / _gcsx;
             var _pc = floor(_fx);
             var _pr = floor((_b.y - _goy) / _gcsz);
             // 中心带：和 obj_battle 收录 bullet_array_special 同一口径（格子中间 50%）
-            if (_pc >= 0 && _pc < global.grid_cols && _pr >= 0 && _pr < _rows
-                && (_fx - _pc) >= 0.25 && (_fx - _pc) <= 0.75) {
+            if (_pc >= 0 && _pc < _cols && _pr >= 0 && _pr < _rows
+                && (_fx - _pc) >= 0.15 && (_fx - _pc) <= 0.85
+                && (_b.flag & cell_flag[_pr * _cols + _pc]) != 0) {
                 var _cards = ds_grid_get(global.grid_plants, _pc, _pr);
                 var _ncard = ds_list_size(_cards);
                 for (var _ci = 0; _ci < _ncard; _ci++) {
@@ -144,6 +177,27 @@ while (_i >= 0) {
                 var _left = _b.hits;
                 var _cr = _b.cell_range;
                 if (_cr < 0) _cr = 0;
+
+                // ── 快路：cell_range = 0（绝大多数子弹）只扫自己那一格，两道循环全免 ──
+                if (_cr == 0 && _col < _stride && (_col >= 0 || variable_global_exists("enemy_array_left"))) {
+                    var _cell = (_col < 0) ? global.enemy_array_left[_row] : global.enemy_array[_row * _stride + _col];
+                    var _cn   = array_length(_cell);
+                    for (var _k = 0; _k < _cn; _k++) {
+                        var _e = _cell[_k];
+                        if (!instance_exists(_e)) continue;
+                        if (_e.hp <= 0) continue;
+                        if ((_b.ttype & _e.tbit) == 0) continue;
+                        damage_enemy(_e, _b.dmg, _b.damage_type);
+                        if (_b.freeze > 0 && _e.ice_ok) {
+                            if (_e.ice_timer < _b.freeze) _e.ice_timer = _b.freeze;
+                        }
+                        if (!_all) {
+                            _left -= 1;
+                            if (_left <= 0) break;
+                        }
+                    }
+                } else {
+                // ── 慢路：cell_range > 0，扫 (2r+1) 行的格子（逻辑和上面快路一样，只是格子多）──
                 var _r1 = _row - _cr;  if (_r1 < 0)         _r1 = 0;
                 var _r2 = _row + _cr;  if (_r2 >= _rows)    _r2 = _rows - 1;
 
@@ -159,9 +213,9 @@ while (_i >= 0) {
                                 var _e = _cell[_k];
                                 if (!instance_exists(_e)) continue;
                                 if (_e.hp <= 0) continue;
-                                if (!can_hit(_b.target_type, _e.target_type)) continue;
+                                if ((_b.ttype & _e.tbit) == 0) continue;
                                 damage_enemy(_e, _b.dmg, _b.damage_type);
-                                if (_b.freeze > 0 && variable_instance_exists(_e, "ice_timer")) {
+                                if (_b.freeze > 0 && _e.ice_ok) {
                                     if (_e.ice_timer < _b.freeze) _e.ice_timer = _b.freeze;
                                 }
                                 if (!_all) {
@@ -185,13 +239,13 @@ while (_i >= 0) {
                                 var _e = _cell[_k];
                                 if (!instance_exists(_e)) continue;
                                 if (_e.hp <= 0) continue;
-                                if (!can_hit(_b.target_type, _e.target_type)) continue;
+                                if ((_b.ttype & _e.tbit) == 0) continue;
                                 // 走敌人自己的受击事件（闪白 + 音效 + 护盾，含各敌人自己重写的 Other_10），
                                 // 和原版子弹命中一样 —— 不再直接 _e.hp -= dmg 手抄父对象那 16 行。
                                 // 伤害类型固定在 bullet_screen_add 里（normal），和追踪弹管理器同一口径。
                                 damage_enemy(_e, _b.dmg, _b.damage_type);
                                 // 冰冻：子弹累计的冰冻帧数写给敌人（只加不减，同原版 ice_timer）
-                                if (_b.freeze > 0 && variable_instance_exists(_e, "ice_timer")) {
+                                if (_b.freeze > 0 && _e.ice_ok) {
                                     if (_e.ice_timer < _b.freeze) _e.ice_timer = _b.freeze;
                                 }
                                 if (!_all) {
@@ -204,6 +258,7 @@ while (_i >= 0) {
                         if (!_all && _left <= 0) break;
                     }
                 }
+                }
                 if (!_all) _b.hits = _left;
             }
         }
@@ -214,13 +269,22 @@ while (_i >= 0) {
 
         // 6. 到期（伤害次数用完 或 存活帧数走完）→ 生成销毁对象
         if (_b.hits == 0 || _b.life == 0) {
-            if (_b.death_obj != "") {
+            // 被卡片点燃过的弹（spr 已被换成火焰弹）走原版的火焰命中特效
+            if (_b.death_obj != "" && _b.spr == spr_fire_bullet) {
+                var _fo = asset_get_index("obj_fire_bullet_effect");
+                if (_fo != -1) {
+                    var _fd = instance_create_depth(_b.x, _b.y, depth - 1, _fo);
+                    _fd.sprite_index = spr_fire_bullet_effect;
+                }
+            } else if (_b.death_obj != "") {
                 var _obj = asset_get_index(_b.death_obj);
                 if (_obj == -1) _obj = asset_get_index("obj_" + _b.death_obj);
                 if (_obj != -1) {
                     var _d = instance_create_depth(_b.x, _b.y, depth - 1, _obj);
                     // mod 对象（obj_bullet_mod / obj_effect_mod / obj_enemy_mod 等）还要指定 mod 名字
                     if (_b.death_mod != "") _d.mod_type = _b.death_mod;
+                    // 皮肤特效：同一个销毁对象换贴图（原版三线酒架/机枪小笼包就是这么做的）
+                    if (_b.death_spr != "") _d.sprite_index = get_load_sprite(_b.death_spr);
                 }
             }
             _gone = true;
@@ -238,5 +302,48 @@ while (_i >= 0) {
     }
 
     _i -= 1;
+}
+
+// 8. 合并索引重建（只在合并打开时做；关闭时这一步完全跳过，零开销）
+//    主循环里的交换删除会改下标，所以必须等循环跑完、下标稳定了再写一遍
+//    每格 16 槽，只登记"这一帧还活着且还能命中"的弹（hits == 0 / life == 0 的马上要消失）
+//    ⚠️ 上面两条 exit（暂停 / 没子弹）会跳过这里，此时表是上一帧的：检索侧靠 idx < count 判定，安全
+if (_snap_ok && merge_enable) {
+    var _cells = _cols * _rows;
+    if (array_length(cell_n) != _cells) {
+        cell_n      = array_create(_cells, 0);
+        bullet_grid = array_create(_cells * 16, -1);
+    } else {
+        for (var _ci = 0; _ci < _cells; _ci++) cell_n[_ci] = 0;
+    }
+    for (var _gi = 0; _gi < count; _gi++) {
+        var _gb = list[_gi];
+        if (_gb.hits == 0 || _gb.life == 0) continue;
+        var _gc = floor((_gb.x - _gox) / _gcsx);
+        if (_gc < 0 || _gc >= _cols) continue;
+        var _gr = floor((_gb.y - _goy) / _gcsz);
+        if (_gr < 0 || _gr >= _rows) continue;
+        var _gk = _gr * _cols + _gc;
+        var _gn = cell_n[_gk];
+        if (_gn < 16) {
+            bullet_grid[_gk * 16 + _gn] = _gi;
+            cell_n[_gk] = _gn + 1;
+        }
+    }
+}
+
+// 9. 合并统计（临时调试：每秒一行；debug_merge = false 就只计数不打印）
+if (count > count_max) count_max = count;
+_stat_frame += 1;
+if (debug_merge && _stat_frame >= 60) {
+    show_debug_message("[弹幕] 合并=" + string(merge_n - _stat_merge)
+                     + " (累计 严" + string(merge1_n) + "/宽" + string(merge2_n) + ")"
+                     + " 新建=" + string(add_n - _stat_add)
+                     + " 丢弃=" + string(drop_n - _stat_drop)
+                     + " 当前=" + string(count) + " 峰值=" + string(count_max));
+    _stat_merge = merge_n;
+    _stat_add   = add_n;
+    _stat_drop  = drop_n;
+    _stat_frame = 0;
 }
 

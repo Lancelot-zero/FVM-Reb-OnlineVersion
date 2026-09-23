@@ -1,0 +1,9 @@
+{
+  "name": "神圣之眼",
+  "description": "神圣之眼：减速5×5范围内敌人并造成高额伤害",
+  "icon": "spr_divine_holy_gem_icon",
+  "slot": "secondary_weapon",
+  "max_level": 15,
+  "cooldown": [60],
+  "shop": { "cost": "25000", "description": "神圣之眼：减速5×5范围内敌人并造成高额伤害" }
+}

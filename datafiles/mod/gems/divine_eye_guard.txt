@@ -1,0 +1,125 @@
+// 神护之眼（纯插件复刻）：给 5×5 内的卡片加攻击力，3×3 内用内圈系数、其余用外圈系数
+// 每张卡只加一次（用实例数组记名单），黑名单卡跳过（和原版 shield 的 blacklist 一致）
+
+// 图标从 mod 目录带过来（注册宝石时就要能解析，所以放在 _OBJECT_CFG 里先加载）
+_OBJECT_CFG {
+    if (VM_SpriteExists("spr_divine_protect_gem_icon") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_divine_protect_gem_icon_0.png", 1, 40, 40)
+        VM_AliasSpritePerm("spr_divine_protect_gem_icon", "tex/spr_divine_protect_gem_icon_0.png")
+    }
+    // 战场贴图（45x45、原点居中；按 1.8 放大 ≈81px。背包用的是上面那张 82x82 的 icon）
+    if (VM_SpriteExists("spr_divine_protect_gem") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_divine_protect_gem_0.png", 1, 22, 22)
+        VM_AliasSpritePerm("spr_divine_protect_gem", "tex/spr_divine_protect_gem_0.png")
+    }
+    // 光环贴图：开局加载一次（图在 effects/tex/，所以路径带 ../）
+    if (VM_SpriteExists("spr_master_shield_effect_3") == 0) {
+        VM_LoadSpritePerm_Ex("../effects/tex/spr_master_shield_effect_3_0.png", 30, 181, 210)
+        VM_AliasSpritePerm("spr_master_shield_effect_3", "../effects/tex/spr_master_shield_effect_3_0.png")
+    }
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+    // 战场贴图 45×45 按 1.8 放大；背包图标是 82×82 那张
+    VM_SetProp(self, "sprite_index", "spr_divine_protect_gem")
+    VM_SetProp(self, "image_xscale", 1.8)
+    VM_SetProp(self, "image_yscale", 1.8)
+
+    // 每档内圈系数（3×3，原版 ratio_inner）
+    VM_ArrayClear("dvg_in")
+    VM_ArrayADD("dvg_in", 0.07)
+    VM_ArrayADD("dvg_in", 0.08)
+    VM_ArrayADD("dvg_in", 0.09)
+    VM_ArrayADD("dvg_in", 0.11)
+    VM_ArrayADD("dvg_in", 0.14)
+    VM_ArrayADD("dvg_in", 0.17)
+    VM_ArrayADD("dvg_in", 0.2)
+    VM_ArrayADD("dvg_in", 0.23)
+    VM_ArrayADD("dvg_in", 0.26)
+    VM_ArrayADD("dvg_in", 0.29)
+    VM_ArrayADD("dvg_in", 0.32)
+    VM_ArrayADD("dvg_in", 0.35)
+    VM_ArrayADD("dvg_in", 0.38)
+    VM_ArrayADD("dvg_in", 0.42)
+    VM_ArrayADD("dvg_in", 0.46)
+    VM_ArrayADD("dvg_in", 0.5)
+
+    // 每档外圈系数（5×5 去掉 3×3）
+    VM_ArrayClear("dvg_out")
+    VM_ArrayADD("dvg_out", 0.035)
+    VM_ArrayADD("dvg_out", 0.04)
+    VM_ArrayADD("dvg_out", 0.045)
+    VM_ArrayADD("dvg_out", 0.055)
+    VM_ArrayADD("dvg_out", 0.07)
+    VM_ArrayADD("dvg_out", 0.085)
+    VM_ArrayADD("dvg_out", 0.1)
+    VM_ArrayADD("dvg_out", 0.115)
+    VM_ArrayADD("dvg_out", 0.13)
+    VM_ArrayADD("dvg_out", 0.145)
+    VM_ArrayADD("dvg_out", 0.16)
+    VM_ArrayADD("dvg_out", 0.175)
+    VM_ArrayADD("dvg_out", 0.19)
+    VM_ArrayADD("dvg_out", 0.21)
+    VM_ArrayADD("dvg_out", 0.23)
+    VM_ArrayADD("dvg_out", 0.25)
+
+    // 黑名单（原版 shield 的 blacklist）
+    VM_ArrayClear("dvg_bl")
+    VM_ArrayADD("dvg_bl", "loki")
+    VM_ArrayADD("dvg_bl", "aurora")
+    VM_ArrayADD("dvg_bl", "player")
+    VM_ArrayADD("dvg_bl", "cherry_pudding")
+    VM_ArrayADD("dvg_bl", "brazier")
+
+    VM_InstArrayClear(self, "done")
+    VM_SetProp(self, "fx", 0)
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+    p = VM_GetProp(self, "mod_point_parent_player")
+    fx = VM_GetProp(self, "fx")
+    if (VM_IsUndefined(p) == 0) {
+        if (VM_IsDestroyed(p) == 0) {
+            need = 0
+            if (fx == 0) { need = 1 }
+            if (VM_IsDestroyed(fx) == 1) { need = 1 }
+            if (need == 1) {
+                VM_SetProp(0, "_mod_fx_sprite", 3)
+                VM_SetProp(0, "_mod_pending_effect_id", "divine_eye_aura")
+                fx = VM_CreateInstance("obj_effect_mod", VM_GetProp(p, "x"), VM_GetProp(p, "y"))
+                VM_SetProp(0, "_mod_pending_effect_id", "")
+                VM_SetProp(fx, "parent_inst", p)
+                VM_SetProp(fx, "sprite_index", "spr_master_shield_effect_3")
+                VM_SetProp(fx, "frames", 30)
+                VM_SetProp(fx, "rel_x", 0 - 15)
+                VM_SetProp(fx, "rel_y", 0 - 5)
+                VM_SetProp(self, "fx", fx)
+            }
+        }
+    }
+    lv = VM_GetProp(self, "mod_point_gem_level")
+    if (lv > 15) { lv = 15 }
+    r = VM_GetProp(self, "mod_point_grid_row")
+    c = VM_GetProp(self, "mod_point_grid_col")
+    n = VM_GetInstancesInRange("dvg_arr", r - 2, r + 2, c - 2, c + 2, "card", "")
+    k = 0
+    while (k < n) {
+        p = VM_ArrayGet("dvg_arr", k)
+        skip = 0
+        if (VM_InstArrayContains(self, "done", p) != -1) { skip = 1 }
+        if (VM_ArrayContains("dvg_bl", VM_GetProp(p, "plant_id")) != -1) { skip = 1 }
+        if (skip == 0) {
+            dr = VM_GetProp(p, "grid_row") - r
+            if (dr < 0) { dr = 0 - dr }
+            dc = VM_GetProp(p, "grid_col") - c
+            if (dc < 0) { dc = 0 - dc }
+            rt = VM_ArrayGet("dvg_out", lv)
+            if (dr <= 1) { if (dc <= 1) { rt = VM_ArrayGet("dvg_in", lv) } }
+            VM_SetProp(p, "atk", VM_GetProp(p, "atk") * (1 + rt))
+            VM_InstArrayAdd(self, "done", p)
+        }
+        k = k + 1
+    }
+}

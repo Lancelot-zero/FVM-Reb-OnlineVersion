@@ -70,19 +70,24 @@ _OBJECT_STEP {
     bx  = VM_GetProp(self, "x")
     r   = VM_GetProp(self, "grid_row")
 
-    // 三行的行号与出生点：上一行 r-1、本行 r、下一行 r+1
-    // 越界（最上行往上 / 最下行往下）→ 改打本行、出生点从 x+40 收到 x+20
-    up = r - 1
-    ux = bx + 40
+    // 三行：都从本行出生，再拐到目标行（原版三线酒架那种变道弹）
+    // 越界（最上行往上 / 最下行往下）→ 打本行、出生点从 x+40 收到 x+20、不渐变
+    cy  = gy + gcs * r + 10
+    up  = r - 1
+    ux  = bx + 40
+    tyu = gy + gcs * up + 10
     if (up < 0) {
-        up = r
-        ux = bx + 20
+        up  = r
+        ux  = bx + 20
+        tyu = 0 - 1
     }
-    dn = r + 1
-    dx = bx + 40
+    dn  = r + 1
+    dx  = bx + 40
+    tyd = gy + gcs * dn + 10
     if (dn >= grows) {
-        dn = r
-        dx = bx + 20
+        dn  = r
+        dx  = bx + 20
+        tyd = 0 - 1
     }
 
     if (wi == 0) {
@@ -90,17 +95,17 @@ _OBJECT_STEP {
         sb = VM_GetProp(self, "super_bullet") + 1
         if (sb >= 4) {
             VM_SetProp(self, "super_bullet", 0)
-            VM_BulletScreenAdd_Ex("spr_pierce_bullet", 5, 0, 1.6, 1, ux, gy + gcs * up + 10, 8, 0, 6 * atk / 13, 0 - 1, 0 - 1, "all", "", "", "explosion", 1, 0)
-            VM_BulletScreenAdd_Ex("spr_pierce_bullet", 5, 0, 1.6, 1, bx + 40, gy + gcs * r + 10, 8, 0, 6 * atk / 13, 0 - 1, 0 - 1, "all", "", "", "explosion", 1, 0)
-            VM_BulletScreenAdd_Ex("spr_pierce_bullet", 5, 0, 1.6, 1, dx, gy + gcs * dn + 10, 8, 0, 6 * atk / 13, 0 - 1, 0 - 1, "all", "", "", "explosion", 1, 0)
+            VM_BulletScreenAdd_Exs("spr_pierce_bullet", 5, 0, 1.6, 1, ux, cy, 8, 0, 6 * atk / 13, 0 - 1, 0 - 1, "all", "", "", "explosion", 1, 0, tyu, 0.15)
+            VM_BulletScreenAdd_Exs("spr_pierce_bullet", 5, 0, 1.6, 1, bx + 40, cy, 8, 0, 6 * atk / 13, 0 - 1, 0 - 1, "all", "", "", "explosion", 1, 0, 0 - 1, 0.15)
+            VM_BulletScreenAdd_Exs("spr_pierce_bullet", 5, 0, 1.6, 1, dx, cy, 8, 0, 6 * atk / 13, 0 - 1, 0 - 1, "all", "", "", "explosion", 1, 0, tyd, 0.15)
         } else {
             VM_SetProp(self, "super_bullet", sb)
         }
     } else {
         // 1~3 号窗口 = 普通齐射：三行各一发（命中一个敌人就消失）
         VM_PlaySound("snd_shot")
-        VM_BulletScreenAdd_Ex("spr_love_god_bullet_3", 5, 0, 1.6, 1, ux, gy + gcs * up + 10, 8, 0, atk, 1, 0 - 1, "normal", "", "", "normal", 5, 0)
-        VM_BulletScreenAdd_Ex("spr_love_god_bullet_3", 5, 0, 1.6, 1, bx + 40, gy + gcs * r + 10, 8, 0, atk, 1, 0 - 1, "normal", "", "", "normal", 5, 0)
-        VM_BulletScreenAdd_Ex("spr_love_god_bullet_3", 5, 0, 1.6, 1, dx, gy + gcs * dn + 10, 8, 0, atk, 1, 0 - 1, "normal", "", "", "normal", 5, 0)
+        VM_BulletScreenAdd_Exs("spr_love_god_bullet_3", 5, 0, 1.6, 1, ux, cy, 8, 0, atk, 1, 0 - 1, "normal", "", "", "normal", 5, 0, tyu, 0.15)
+        VM_BulletScreenAdd_Exs("spr_love_god_bullet_3", 5, 0, 1.6, 1, bx + 40, cy, 8, 0, atk, 1, 0 - 1, "normal", "", "", "normal", 5, 0, 0 - 1, 0.15)
+        VM_BulletScreenAdd_Exs("spr_love_god_bullet_3", 5, 0, 1.6, 1, dx, cy, 8, 0, atk, 1, 0 - 1, "normal", "", "", "normal", 5, 0, tyd, 0.15)
     }
 }

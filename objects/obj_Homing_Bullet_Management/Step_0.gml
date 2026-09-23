@@ -81,7 +81,7 @@ while (_i >= 0) {
                         var _fe = _farr[_fk];
                         if (!instance_exists(_fe)) continue;
                         if (_fe.hp <= 0 || _fe.y <= 0) continue;
-                        if (!can_hit(_b.target_type, _fe.target_type)) continue;
+                        if ((_b.ttype & _fe.tbit) == 0) continue;
                         if (_fe.x < _ax || _fe.x > _ax + 150) continue;
                         if (_fe.hp > _bhp) { _bhp = _fe.hp; _best = _fe; }
                     }
@@ -95,7 +95,7 @@ while (_i >= 0) {
             var _best_hp = -1;
             for (var _qt = 0; _qt < 6; _qt++) {
                 if (scan_id[_qt] == noone) continue;
-                if (!can_hit(_b.target_type, scan_types[_qt])) continue;
+                if ((_b.ttype & scan_bit[_qt]) == 0) continue;
                 if (scan_x[_qt] < _best_x || (scan_x[_qt] == _best_x && scan_hp[_qt] > _best_hp)) {
                     _best_x = scan_x[_qt];
                     _best_hp = scan_hp[_qt];
@@ -138,13 +138,13 @@ while (_i >= 0) {
         //    `if other.hp > 0 and target_enemy == other.id and can_hit(...)`）。
         //    判定用像素距离（贴图重叠口径）：糖葫芦弹 103x82（半宽 51 / 半高 41），
         //    一般敌人半宽 30~60、半高 40，所以重叠大约在 |dx| <= 90 / |dy| <= 85。
-        //    ⚠️ can_hit 必须再查一次：敌人的 target_type 运行时会变（蝙蝠鼠 normal<->air、
+        //    ⚠️ 命中类型必须再查一次（现在是一次 tbit 位与）：敌人的 target_type 运行时会变（蝙蝠鼠 normal<->air、
         //       潜水鼠 normal<->diver、幽灵鼠变暗 -> invisible、铁人鼠 normal<->air），
         //       锁定之后再改类型就不再是"可打"的了 —— 原版这里同样会重新判一次。
         //    ⚠️ 代价：子弹穿过"非目标"的敌人时不会掉血（原版也只认 target_enemy）；
         //       追踪弹本来就直奔目标，正常情况看不出来。
         if (_b.hits != 0 && instance_exists(_b.target) && _b.target.hp > 0) {
-            if (can_hit(_b.target_type, _b.target.target_type)
+            if ((_b.ttype & _b.target.tbit) != 0
              && abs(_b.target.x - _b.x) <= 90 && abs(_b.target.y - _b.y) <= 85) {
                 // 走敌人自己的受击事件（闪白 + 音效 + 护盾，含各敌人自己重写的 Other_10），
                 // 和原版子弹命中一样 —— 不再在这儿手抄父对象那 16 行。

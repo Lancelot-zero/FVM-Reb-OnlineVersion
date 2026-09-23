@@ -1,0 +1,66 @@
+// 神之眼光环（mod 特效）：由四颗神之眼宝石创建，挂在角色身上跟着走
+// 宝石侧创建前会设置：
+//   global._mod_fx_sprite = 1..4   → 本颗宝石用哪张光环
+// 创建后设置：
+//   parent_inst（角色实例）、sprite_index（贴图名）、frames（帧数）、rel_x / rel_y（相对角色的偏移）
+// 贴图是横条多帧，从 mod 分支的 spr_master_shield_effect_1..4 导出（帧数/原点按原版）
+//
+// 贴图加载有两条路，都在下面：
+//   ① 宝石的 _OBJECT_CFG 在开局预载（只有该宝石被装备时才加载，见 src_mod_gem_preload_equipped）
+//   ② 这里按需兜底 —— 万一①没跑（比如核心还没重编译），第一次生成光环时自己加载，至少能看见
+//   VM_SpriteExists 判断保证不会重复加载
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+    VM_SetProp(self, "rel_x", 0 - 15)
+    VM_SetProp(self, "rel_y", 0 - 5)
+    VM_SetProp(self, "frames", 1)
+    VM_SetProp(self, "anim", 0)
+
+    k = VM_GetProp(0, "_mod_fx_sprite")
+    if (k == 1) {
+        if (VM_SpriteExists("spr_master_shield_effect_1") == 0) {
+            VM_LoadSpritePerm_Ex("tex/spr_master_shield_effect_1_0.png", 9, 70, 40)
+            VM_AliasSpritePerm("spr_master_shield_effect_1", "tex/spr_master_shield_effect_1_0.png")
+        }
+    }
+    if (k == 2) {
+        if (VM_SpriteExists("spr_master_shield_effect_2") == 0) {
+            VM_LoadSpritePerm_Ex("tex/spr_master_shield_effect_2_0.png", 18, 100, 102)
+            VM_AliasSpritePerm("spr_master_shield_effect_2", "tex/spr_master_shield_effect_2_0.png")
+        }
+    }
+    if (k == 3) {
+        if (VM_SpriteExists("spr_master_shield_effect_3") == 0) {
+            VM_LoadSpritePerm_Ex("tex/spr_master_shield_effect_3_0.png", 30, 181, 210)
+            VM_AliasSpritePerm("spr_master_shield_effect_3", "tex/spr_master_shield_effect_3_0.png")
+        }
+    }
+    if (k == 4) {
+        if (VM_SpriteExists("spr_master_shield_effect_4") == 0) {
+            VM_LoadSpritePerm_Ex("tex/spr_master_shield_effect_4_0.png", 25, 152, 160)
+            VM_AliasSpritePerm("spr_master_shield_effect_4", "tex/spr_master_shield_effect_4_0.png")
+        }
+    }
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+    p = VM_GetProp(self, "parent_inst")
+    if (VM_IsUndefined(p) == 1) {
+        VM_DestroyInstance(self)
+        exit
+    }
+    if (VM_IsDestroyed(p) == 1) {
+        VM_DestroyInstance(self)
+        exit
+    }
+    // 跟着角色走（偏移由宝石给）
+    VM_SetProp(self, "x", VM_GetProp(p, "x") + VM_GetProp(self, "rel_x"))
+    VM_SetProp(self, "y", VM_GetProp(p, "y") + VM_GetProp(self, "rel_y"))
+    // 自己推帧（obj_effect_mod 的 image_speed 是 0）
+    a = VM_GetProp(self, "anim") + 1
+    if (a >= VM_GetProp(self, "frames")) { a = 0 }
+    VM_SetProp(self, "image_index", a)
+    VM_SetProp(self, "anim", a)
+}

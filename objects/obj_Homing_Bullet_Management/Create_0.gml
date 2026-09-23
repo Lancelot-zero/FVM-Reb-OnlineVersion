@@ -48,3 +48,5 @@ scan_id    = array_create(6, noone);
 scan_x     = array_create(6, 0);
 scan_hp    = array_create(6, -1);
 scan_types = ["normal", "air", "dance", "obstacle", "diver", "underground"];
+// 桶序号 → 命中位（顺序必须和上面 scan_types 一致；位定义见 scr_command_VM 的 bullet_type_mask）
+scan_bit   = [HIT_NORMAL, HIT_AIR, HIT_DANCE, HIT_OBSTACLE, HIT_DIVER, HIT_UNDERGROUND];

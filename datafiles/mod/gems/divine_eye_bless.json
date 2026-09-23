@@ -1,0 +1,9 @@
+{
+  "name": "神佑之眼",
+  "description": "神佑之眼：持续生产火苗",
+  "icon": "spr_divine_blessing_gem_icon",
+  "slot": "secondary_weapon",
+  "max_level": 15,
+  "cooldown": [60],
+  "shop": { "cost": "25000", "description": "神佑之眼：持续生产火苗" }
+}

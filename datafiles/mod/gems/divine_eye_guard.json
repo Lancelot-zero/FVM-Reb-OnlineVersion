@@ -1,0 +1,9 @@
+{
+  "name": "神护之眼",
+  "description": "神护之眼：为5×5范围内的卡片大幅提升攻击力",
+  "icon": "spr_divine_protect_gem_icon",
+  "slot": "secondary_weapon",
+  "max_level": 15,
+  "cooldown": [60],
+  "shop": { "cost": "25000", "description": "神护之眼：为5×5范围内的卡片大幅提升攻击力" }
+}

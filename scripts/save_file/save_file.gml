@@ -17,11 +17,50 @@ function save_file(file_slot) {
 		global.save_data.unlocked_cards = _merged;
 	}
 
+    // 未注册的宝石同理：宝石表 + 装备栏 gems 写盘时并回，写完恢复内存状态
+	var _og  = variable_global_exists("save_orphan_gems") ? global.save_orphan_gems : undefined;
+	var _oeg = variable_global_exists("save_orphan_equipped_gems") ? global.save_orphan_equipped_gems : undefined;
+	var _liveg  = undefined;   // 宝石表（干净版）
+	var _liveeg = {};          // 槽位 → gems（干净版）
+	var _slots  = ["main_weapon", "secondary_weapon", "super_weapon"];
+	if (is_array(_og) && array_length(_og) > 0 && is_array(global.save_data.unlocked_gems)) {
+		_liveg = global.save_data.unlocked_gems;
+		var _mg = [];
+		for (var _i = 0; _i < array_length(_liveg); _i++) array_push(_mg, _liveg[_i]);
+		for (var _j = 0; _j < array_length(_og);    _j++) array_push(_mg, _og[_j]);
+		global.save_data.unlocked_gems = _mg;
+	}
+	if (is_struct(_oeg) && is_struct(global.save_data.equipped_items)) {
+		for (var _s = 0; _s < array_length(_slots); _s++) {
+			var _slot = _slots[_s];
+			if (!variable_struct_exists(_oeg, _slot)) continue;
+			var _w = global.save_data.equipped_items[$ _slot];
+			if (!is_struct(_w)) continue;
+			var _gl = _w[$ "gems"];
+			if (!is_array(_gl)) continue;
+			_liveeg[$ _slot] = _gl;
+			var _mg2 = [];
+			for (var _i = 0; _i < array_length(_gl); _i++) array_push(_mg2, _gl[_i]);
+			var _add = _oeg[$ _slot];
+			for (var _j = 0; _j < array_length(_add); _j++) array_push(_mg2, _add[_j]);
+			_w[$ "gems"] = _mg2;
+		}
+	}
+
     // 将数据转换为JSON字符串
     var json_string = json_stringify(global.save_data);
 
 	// 恢复内存状态
 	if (!is_undefined(_live)) global.save_data.unlocked_cards = _live;
+	if (!is_undefined(_liveg)) global.save_data.unlocked_gems = _liveg;
+	if (is_struct(global.save_data.equipped_items)) {
+		for (var _s = 0; _s < array_length(_slots); _s++) {
+			var _slot = _slots[_s];
+			if (!variable_struct_exists(_liveeg, _slot)) continue;
+			var _w = global.save_data.equipped_items[$ _slot];
+			if (is_struct(_w)) _w[$ "gems"] = _liveeg[$ _slot];
+		}
+	}
     
     // 打开文件进行写入
     var file = file_text_open_write(file_path);

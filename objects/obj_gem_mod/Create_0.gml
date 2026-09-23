@@ -5,6 +5,22 @@ gem_id = variable_global_exists("_mod_pending_gem_id") ? global._mod_pending_gem
 gem_info = get_gem_info(gem_id)
 cooldown = 60
 parent_player = noone
+// 发射方信息（给插件宝石脚本定位用；创建宝石的地方会覆盖这几个值）
+// ⚠️ parent_player 保持 noone 时，obj_battle/Step_2 那边已经有 instance_exists 守卫，不会再读 noone.object_index
+mod_point_parent_player = noone
+mod_point_grid_row      = 0
+mod_point_grid_col      = 0
+mod_point_gem_level     = 0
+// ---- 预留显示属性：插件在 .bin 里用 VM_SetProp(self,"名",值) 改，核心只负责按值渲染 ----
+on_click       = false   // 鼠标进来/离开时由 Mouse_10/Mouse_11 置位（插件也可以自己置）
+clicked        = false   // 左键点了一下（Mouse_4 置 true），插件处理完自己设回 0
+cooldown_timer = 0       // 剩余冷却帧：>0 画冷却遮罩+秒数、说明里加「正在冷却中」，每帧自减
+gem_level      = 0       // >0 画等级星星，默认取存档等级
+tooltip_text   = ""      // 追加在宝石说明后面的自定义文本
+if (gem_id != "") {
+	var _gl = get_gem_level(gem_id)
+	if (!is_undefined(_gl)) gem_level = _gl
+}
 image_speed = 0
 // 动画配置（与 obj_card_parent 同款）：.bin 可在 _OBJECT_CREATE 用 VM_SetProp 覆盖
 timer = 0

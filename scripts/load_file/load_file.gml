@@ -73,6 +73,27 @@ function load_file(file_slot) {
 			}
 			global.save_data.unlocked_cards = _keep;
 		}
+
+		// 宝石同理（mod 宝石被删掉/改名留下的孤儿）：
+		// 1) 宝石表里未注册的摘到 global.save_orphan_gems（写档时由 save_file 并回）
+		// 2) 装备栏三个 gems 数组里未注册的摘到 global.save_orphan_equipped_gems
+		//    （不摘的话创建宝石时 get_gem_info 返回 undefined，取 .obj 直接崩）
+		global.save_orphan_gems = [];
+		global.save_orphan_equipped_gems = {};
+		if (is_array(global.save_data.unlocked_gems)) {
+			var _ug = global.save_data.unlocked_gems;
+			var _kg = [];
+			for (var _ui = 0; _ui < array_length(_ug); _ui++) {
+				if (is_struct(get_gem_info(_ug[_ui].id))) array_push(_kg, _ug[_ui]);
+				else array_push(global.save_orphan_gems, _ug[_ui]);
+			}
+			if (array_length(global.save_orphan_gems) > 0) {
+				show_debug_message("[save] 有 " + string(array_length(global.save_orphan_gems))
+				                 + " 颗宝石未注册，本次会话内不显示（存档不动，写档时原样写回）");
+			}
+			global.save_data.unlocked_gems = _kg;
+		}
+		save_strip_unknown_equipped_gems();
         return true;
     } catch(e) {
         show_debug_message("存档解析错误: " + string(e));
@@ -80,9 +101,37 @@ function load_file(file_slot) {
     }
 }
 
+/// @function save_strip_unknown_equipped_gems()
+/// @desc 把装备栏（主/副/超级武器）的 gems 里"未注册的宝石 id"摘出来，存进
+///       global.save_orphan_equipped_gems（槽位 → 被摘掉的 id 数组），写档时由 save_file 并回。
+///       不摘的话：创建宝石实体时 get_gem_info 返回 undefined，取 .obj 会直接崩。
+function save_strip_unknown_equipped_gems() {
+	if (!variable_global_exists("save_orphan_equipped_gems")) global.save_orphan_equipped_gems = {};
+	if (!is_struct(global.save_data)) return;
+	var _eq = global.save_data[$ "equipped_items"];
+	if (!is_struct(_eq)) return;
+	var _slots = ["main_weapon", "secondary_weapon", "super_weapon"];
+	for (var _s = 0; _s < array_length(_slots); _s++) {
+		var _w = _eq[$ _slots[_s]];
+		if (!is_struct(_w)) continue;
+		var _gl = _w[$ "gems"];
+		if (!is_array(_gl)) continue;
+		var _keep = [];
+		var _drop = [];
+		for (var _i = 0; _i < array_length(_gl); _i++) {
+			if (is_struct(get_gem_info(_gl[_i]))) array_push(_keep, _gl[_i]);
+			else array_push(_drop, _gl[_i]);
+		}
+		_w[$ "gems"] = _keep;
+		if (array_length(_drop) > 0) global.save_orphan_equipped_gems[$ _slots[_s]] = _drop;
+	}
+}
+
 function reset_file(file_slot){
 	//重置到初始存档
 	global.save_orphan_cards = [];   // 新档不带上一个档摘出来的未注册卡
+	global.save_orphan_gems  = [];   // 宝石同理
+	global.save_orphan_equipped_gems = {};
 	global.save_data = {
             "version": 1.8,
             "player": {

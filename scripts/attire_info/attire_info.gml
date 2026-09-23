@@ -30,6 +30,11 @@ function card_equipped_attire_id(card_id){
 	var attire_list = global.save_data.attires
 	for(var i = 0 ; i < array_length(attire_list) ; i++){
 		var attire_data = get_attire_info(attire_list[i].attire_id)
+		// 存档里可能有当前版本没注册的时装（mod 卸载 / 版本不一致）→ 跳过，别崩
+		if !is_struct(attire_data){
+			show_debug_message("[attire] 存档里的时装未注册，已忽略: " + string(attire_list[i].attire_id))
+			continue
+		}
 		if attire_data.target_card == card_id && attire_list[i].state == "equipped"{
 			return attire_list[i].attire_id
 		}
@@ -95,6 +100,7 @@ function get_card_attire_list(card_id){
 	var attire_list = global.save_data.attires
 	for(var i = 0 ; i < array_length(attire_list) ; i++){
 		var attire_data = get_attire_info(attire_list[i].attire_id)
+		if !is_struct(attire_data) continue      // 同上：没注册的时装直接跳过
 		if attire_data.target_card == card_id{
 			//如果找到，加入到时装id数组中
 			array_push(attire_id_list,attire_list[i].attire_id)
