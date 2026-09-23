@@ -14,7 +14,6 @@
 | [mod时装.md](mod时装.md) | 时装：只有 json 的纯外观 |
 | [mod地图.md](mod地图.md) | 地图：`world.json` 与关卡（实验室格式 + 关卡脚本） |
 | `help.md` | VM 脚本语言：语法、事件块、**全部 VM 函数** |
-| `mod_plugin_guide.md` | 深入指南：对象事件、复刻原版流程、性能模型、历史坑 |
 
 **配套工具**：编辑器（`MapEditCreator.exe`）内置了 `help.md`（点「帮助」看语法与函数表），
 带语法检查、函数补全与悬停说明、代码折叠、一键编译（`Ctrl+B` / `F5`）；
@@ -142,6 +141,9 @@ _OBJECT_CFG {
 | 贴图空白但不报错 | `get_load_sprite` 找不到会给占位图；用 `VM_SpriteExists` 判断，自带图记得在 `_OBJECT_CFG` 预加载 |
 | 每次进房间临时贴图没了 | 临时缓存（`VM_LoadSprite`）进房间会清；常驻用 `VM_LoadSpritePerm_Ex` |
 | `VM_CallFunc` 那批工具函数叫不动 | 走字典的动态调用**较慢**，且只适合低频；先 `VM_FuncExists("名字")` 判断 |
-| 某些 mod 函数在目标构建里没有 | 见 `mod_plugin_guide.md` 14.13（main / mod 分支差异） |
+| 某些 mod 函数叫不动 | 确认**目标构建**里有没有这个函数（编辑器帮助 / `help.md` 能查），主线与 mod 分支的函数表不一定一样 |
+| 存档里的旧 mod 变成透明卡 / 空位 | 卸载或改名后，存档里还留着那个 id；游戏会把它当"未注册"处理（摘出来不写坏档） |
+| 掉帧 | 瓶颈是**进 VM 解释器的次数**：别在 `_VM_FRAME` / 每帧每实例里写重逻辑；大量同质子弹改用屏幕弹幕管理器（`VM_BulletScreenAdd_Ex`），少用 `VM_CallFunc` |
 
-更多坑（存档孤儿卡、临时贴图缓存、性能模型、主线/分支差异）见 `mod_plugin_guide.md` 第 14 章。
+遇到"原版是怎么做的"这类问题，可以直接翻 `datafiles/mod/dev_test/` 里的样例，
+或对照游戏源码里对应的 `obj_*` 对象事件。

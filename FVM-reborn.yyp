@@ -863,7 +863,6 @@
     {"$GMIncludedFile":"","%Name":"triple_gun.json","CopyToMask":-1,"filePath":"datafiles/mod/dev_test/weapons","name":"triple_gun.json","resourceType":"GMIncludedFile","resourceVersion":"2.0",},
     {"$GMIncludedFile":"","%Name":"triple_gun.txt","CopyToMask":-1,"filePath":"datafiles/mod/dev_test/weapons","name":"triple_gun.txt","resourceType":"GMIncludedFile","resourceVersion":"2.0",},
     {"$GMIncludedFile":"","%Name":"help.md","CopyToMask":-1,"filePath":"datafiles/mod/docs","name":"help.md","resourceType":"GMIncludedFile","resourceVersion":"2.0",},
-    {"$GMIncludedFile":"","%Name":"mod_plugin_guide.md","CopyToMask":-1,"filePath":"datafiles/mod/docs","name":"mod_plugin_guide.md","resourceType":"GMIncludedFile","resourceVersion":"2.0",},
     {"$GMIncludedFile":"","%Name":"mod开发工具说明.md","CopyToMask":-1,"filePath":"datafiles/mod/docs","name":"mod开发工具说明.md","resourceType":"GMIncludedFile","resourceVersion":"2.0",},
     {"$GMIncludedFile":"","%Name":"mod卡片.md","CopyToMask":-1,"filePath":"datafiles/mod/docs","name":"mod卡片.md","resourceType":"GMIncludedFile","resourceVersion":"2.0",},
     {"$GMIncludedFile":"","%Name":"mod武器.md","CopyToMask":-1,"filePath":"datafiles/mod/docs","name":"mod武器.md","resourceType":"GMIncludedFile","resourceVersion":"2.0",},

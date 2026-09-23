@@ -31,8 +31,8 @@ mod/weapons/my_weapon.json / .bin / tex/
 | `.bin` 的 `CREATE/STEP/DRAW` | 会执行 | **会执行**（跑在额外那个 `obj_weapon_mod` 上） |
 | 血量 / 原版盾宝石效果 | 不涉及 | 由 `obj_player_shield` 负责，mod 管不到 |
 
-> ⚠️ `mod_plugin_guide.md` 的 6.3 写的是"副武器没有 VM"，那是旧版结论；现在副武器会额外挂一个
-> `obj_weapon_mod` 跑它的 `.bin`（`obj_player_character/Mouse_53.gml` 里创建）。
+> 副武器的 `.bin` 是**额外挂的那个 `obj_weapon_mod`** 在跑（`obj_player_character/Mouse_53.gml` 里创建），
+> 所以逻辑块照样能写；但盾牌本体（血量、原版盾宝石效果）不归 mod 管。
 
 ## BIN 特别用法
 
