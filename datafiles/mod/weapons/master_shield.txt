@@ -38,7 +38,6 @@ _OBJECT_CFG {
 
 _OBJECT_CREATE {
     self = VM_GetCurCard()
-	VM_ShowNotice("王者盾牌")
     // 贴图：显式指定，不依赖 weapon_info.sprite 的解析结果
     VM_SetProp(self, "sprite_index", "spr_master_shield")
     VM_SetProp(self, "image_xscale", 1.6)

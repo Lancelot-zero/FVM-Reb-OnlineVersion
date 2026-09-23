@@ -60,6 +60,8 @@ _OBJECT_CREATE {
     VM_SetProp(a, "mod_type", "clotho_aura")
     VM_SetProp(a, "sprite_index", "spr_clotho_effect_2")
     VM_SetProp(a, "image_alpha", 1)
+    VM_SetProp(a, "image_xscale", 2)
+    VM_SetProp(a, "image_yscale", 2)
     VM_SetProp(a, "depth", VM_GetProp(self, "depth") + 1)
     VM_SetProp(a, "owner", self)
     VM_SetProp(self, "clotho_aura", a)

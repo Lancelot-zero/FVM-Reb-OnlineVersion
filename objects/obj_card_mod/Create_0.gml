@@ -1,7 +1,7 @@
 // 通用 mod 植物对象：src_mod 注册的所有卡共用此对象
 // 卡 id 由放置逻辑在创建前写入 global._mod_pending_card_id
 event_inherited();
-plant_id = global._mod_pending_card_id
+plant_id = variable_global_exists("_mod_pending_card_id") ? global._mod_pending_card_id : ""
 event_user(0)
 
 // ══════════════════════════════════════════════════════════════════════════

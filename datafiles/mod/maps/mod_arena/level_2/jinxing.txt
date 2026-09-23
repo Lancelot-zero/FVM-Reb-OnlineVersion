@@ -1,0 +1,50 @@
+
+_VM_ROOM_READY_ENTRY {
+    VM_LoadSprite("final_backage_a.png")
+    VM_LoadSprite("final_backage_b.png")
+    VM_LoadSprite("final_backage_c.png")
+    VM_LoadSprite("final_backage_d.png")
+
+}
+
+_VM_BATTLE_START {
+    VM_SetTerrain(-1, -1, "normal")
+    VM_SetMapBackground("final_backage_a.png", 0.5)
+    VM_ShowNotice("冰川来咯")
+}
+
+_VM_WAVE_START {
+    wave = VM_GetWave()
+    cnt = 0
+    if (wave ==3) {
+        VM_SetCardProp(-1, -1, "all", "ice_timer", 0)
+        VM_SetTerrain(-1, -1, "water")
+        VM_SetRowFeature(-1, "water")
+        VM_SetMapBackground("final_backage_b.png", 0.05)
+        VM_SpawnPlant("wooden_plate", -1, -1, 0, 10, 0)
+        VM_ShowNotice("水池来咯")
+
+    }
+    if (wave == 6) {
+        VM_ClearPlantsByType("wooden_plate")
+        VM_SetRowFeature(-1, "land")
+        VM_SetTerrain(-1, -1, "normal")
+        VM_SetMapBackground("final_backage_c.png", 0.05)
+        VM_ShowNotice("陆地来咯")
+
+    }
+    if (wave == 9) {
+        VM_SetMapBackground("final_backage_d.png", 0.05)
+        VM_SpawnObject("lava",-1,-1)
+        VM_SpawnPlant("cotton_candy", -1, -1, 0, 10, 0)
+        VM_ShowNotice("岩浆来咯")
+    }
+}
+
+_VM_TIMER_30f{
+    if(wave<3){
+        VM_SetCardProp(-1, -1, "all", "ice_timer", 30)
+        VM_SetEnemyProp("all", "ice_timer", 30)
+    }
+}
+

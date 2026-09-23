@@ -7,8 +7,7 @@ _OBJECT_CREATE {
     VM_SetProp(self, "attack_anim", 6)
     VM_SetProp(self, "flash_speed", 6)
     VM_SetProp(self, "cd", 0)
-    VM_ShellPrint("baozi_gun create")
-}
+    }
 
 _OBJECT_STEP {
     self = VM_GetCurCard()

@@ -4,9 +4,7 @@ _OBJECT_CREATE {
     VM_SetProp(self, "parent_player_history", VM_GetProp(self, "parent_player"))
     VM_SetProp(self, "parent_player", "")
     VM_SetProp(self, "cd", 0)
-    VM_ShellPrint("baozi_storm create")
-	
-}
+    }
 
 _OBJECT_STEP {
     self = VM_GetCurCard()

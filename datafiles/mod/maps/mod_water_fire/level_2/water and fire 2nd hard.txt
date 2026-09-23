@@ -1,0 +1,76 @@
+// ============================================================
+// Water and Fire 2nd Hard
+// 帧块：每5帧切换，8张图循环
+// ============================================================
+
+_VM_ROOM_READY_ENTRY{
+    VM_SpawnCats(0)
+    VM_LoadSprite("resize_frame_01.png")
+    VM_LoadSprite("resize_frame_02.png")
+    VM_LoadSprite("resize_frame_03.png")
+    VM_LoadSprite("resize_frame_04.png")
+    VM_LoadSprite("resize_frame_05.png")
+    VM_LoadSprite("resize_frame_06.png")
+    VM_LoadSprite("resize_frame_07.png")
+    VM_LoadSprite("resize_frame_08.png")
+    VM_LoadSprite("water and fire 2nd_1.png")
+    VM_LoadSprite("water and fire 2nd_2.png")
+}
+
+_VM_BATTLE_START {
+    VM_SpawnCats(0)
+    cnt = 0
+
+
+}
+
+_VM_WAVE_START {
+    wave = VM_GetWave()
+    //VM_ShowNotice("第", wave, "波来袭！")
+    if (wave == 1) {
+        VM_SetMapBackground("water and fire 2nd_1.png", 0.05)
+        VM_SpawnObject("lava", 0, -1)
+        VM_SpawnObject("lava", 1, -1)
+        VM_SpawnObject("lava", 3, 0)
+        VM_SpawnObject("lava", 3, 1)
+    }
+    if (wave == 3) {
+        //VM_SetMapBackground("water and fire 2nd_2.png", 0.05)
+        // 上2行+下2行：全列
+        VM_SpawnObject("lava", -1, 0)
+        VM_SpawnObject("lava", -1, 1)
+        VM_SpawnObject("lava", -1, 5)
+        VM_SpawnObject("lava", -1, 6)
+        // 中间3行：只铺0~5列（留出右侧6~8列的3x3区域）
+        VM_SpawnObject("lava", 0, 2)
+        VM_SpawnObject("lava", 1, 2)
+        VM_SpawnObject("lava", 2, 2)
+        VM_SpawnObject("lava", 3, 2)
+        VM_SpawnObject("lava", 4, 2)
+        VM_SpawnObject("lava", 5, 2)
+        VM_SpawnObject("lava", 0, 3)
+        VM_SpawnObject("lava", 1, 3)
+        VM_SpawnObject("lava", 2, 3)
+        VM_SpawnObject("lava", 3, 3)
+        VM_SpawnObject("lava", 4, 3)
+        VM_SpawnObject("lava", 5, 3)
+        VM_SpawnObject("lava", 0, 4)
+        VM_SpawnObject("lava", 1, 4)
+        VM_SpawnObject("lava", 2, 4)
+        VM_SpawnObject("lava", 3, 4)
+        VM_SpawnObject("lava", 4, 4)
+        VM_SpawnObject("lava", 5, 4)
+    }
+}
+
+_VM_FRAME {
+    cnt = ( cnt + 1 ) %80
+    tmp = cnt % 10
+    if (tmp == 0) {
+        idx = cnt/10
+        spr_name = VM_GetLoadedSpriteName(idx)
+        VM_SetDrawSlot(0, spr_name, -30, 0, 1.0)
+    }
+}
+
+

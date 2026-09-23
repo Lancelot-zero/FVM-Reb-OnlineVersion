@@ -31,8 +31,6 @@ _OBJECT_CREATE {
     VM_SetProp(self, "fx", 0)      // 光环特效实例（第一次 STEP 里创建）
     VM_SetProp(self, "dbg", 0)
     VM_SetProp(self, "cooldown_timer", 60)   // 预留属性：首发 1 秒，给图标显示冷却用
-    VM_ShellPrint("[gem] 神佑之眼 CREATE")
-
     // 每档周期（秒，原版 cycle）
     VM_ArrayClear("dvb_cy")
     VM_ArrayADD("dvb_cy", 15)
@@ -79,16 +77,14 @@ _OBJECT_STEP {
     p = VM_GetProp(self, "mod_point_parent_player")
     fx = VM_GetProp(self, "fx")
     db = VM_GetProp(self, "dbg")
-    if (db == 0) { VM_ShellPrint("[gem] 神佑之眼 STEP 开始跑"); VM_SetProp(self, "dbg", 9) }
+    if (db == 0) {  VM_SetProp(self, "dbg", 9) }
     if (VM_IsUndefined(p) == 1) {
         if (db < 9) {
-            VM_ShellPrint("神佑之眼: mod_point_parent_player 未定义 → GM 没重编译?")
             VM_SetProp(self, "dbg", 9)
         }
     } else {
         if (VM_IsDestroyed(p) == 1) {
             if (db < 9) {
-                VM_ShellPrint("神佑之眼: 角色实例不存在")
                 VM_SetProp(self, "dbg", 9)
             }
         } else {
@@ -106,8 +102,8 @@ _OBJECT_STEP {
                 VM_SetProp(fx, "rel_x", 0 - 15)
                 VM_SetProp(fx, "rel_y", 0 - 30)
                 VM_SetProp(self, "fx", fx)
-                VM_ShellPrint("神佑之眼: 光环创建 id=", fx)
-            }
+                VM_SetProp(fx, "depth", 40)
+                }
         }
     }
     lv = VM_GetProp(self, "mod_point_gem_level")

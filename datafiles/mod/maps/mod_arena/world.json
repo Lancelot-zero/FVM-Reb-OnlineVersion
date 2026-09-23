@@ -9,16 +9,16 @@
       "stage_json": "level_1/斗兽场-中级.json"
     },
     {
-      "name": "斗兽场-高级",
+      "name": "四季火山",
       "button_x": 620,
       "button_y": 360,
-      "stage_json": "level_2/斗兽场-高级.json"
+      "stage_json": "level_2/jinxing.json"
     },
     {
-      "name": "我是老鼠",
+      "name": "Wasd",
       "button_x": 880,
       "button_y": 360,
-      "stage_json": "level_3/I,mouse.json"
+      "stage_json": "level_3/wsad.json"
     },
     {
       "name": "里飞船",

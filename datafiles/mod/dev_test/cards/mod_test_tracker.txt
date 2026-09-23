@@ -10,16 +10,14 @@ _OBJECT_CREATE {
     VM_SetProp(self, "plant_type", "normal")
     VM_SetProp(self, "is_slowdown", 0)
     VM_SetProp(self, "target_type", "track")
-    VM_ShellPrint("mod_test_tracker create")
-}
+    }
 
 _OBJECT_STEP {
     self = VM_GetCurCard()
     tick = VM_GetProp(self, "tick") + 1
     if (tick >= 60) {
         tick = 0
-        VM_ShellPrint("mod_test_tracker step ok")
-    }
+        }
     VM_SetProp(self, "tick", tick)
     t = VM_GetHomingTarget("")
     if (t != -1) {
@@ -27,7 +25,6 @@ _OBJECT_STEP {
         if (cd >= 78) {
             cd = 0
             b = VM_CreateInstance("takoyaki_bullet", VM_GetProp(self, "x"), VM_GetProp(self, "y") - 55)
-            VM_ShellPrint("mod_test_tracker step ok",VM_GetProp(self, "atk"))
             VM_SetProp(b, "damage", VM_GetProp(self, "atk"))
             VM_SetProp(b, "move_speed", 10)
             VM_SetProp(b, "target_enemy", t)
