@@ -53,10 +53,10 @@ if (_has_grid && variable_global_exists("grid_plants")) {
     _snap_ok = true;
 }
 
-
+/*
 if(obj_battle.battle_time%20==0){
 	show_notice("弹幕数量"+string(_len),20)
-}
+}*/
 var _i = _len - 1;
 while (_i >= 0) {
 

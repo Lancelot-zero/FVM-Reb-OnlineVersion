@@ -13,10 +13,10 @@ if origin_row == -1{
 	origin_col = grid_col
 }
 
-//检测自身右方是否有敌人（格子范围比原版左右各多 1 格）
+//检测左右两侧是否有敌人：x 差 ≤ (range + 0.5) 格 + 20 像素（本体在格子中心，到格子边还有半格）
 var has_enemy = false
 with(obj_enemy_parent){
-	if (grid_row == other.grid_row && grid_col >= other.grid_col-other.range-1 && grid_col <= (other.grid_col + other.range+1) && can_target_on(other.target_type,target_type)){
+	if (grid_row == other.grid_row && abs(x - other.x) <= (other.range + 0.7) * global.grid_cell_size_x + 20 && can_target_on(other.target_type,target_type)){
 		has_enemy = true
 		other.first_target_x = x
 		other.first_target_y = y

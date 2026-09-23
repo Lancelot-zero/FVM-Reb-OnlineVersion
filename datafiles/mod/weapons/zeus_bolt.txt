@@ -44,8 +44,7 @@ _OBJECT_CREATE {
     VM_SetProp(self, "atk_timer", 0)
     VM_SetProp(self, "fired", 0)
     VM_SetProp(self, "cooldown", 0)
-    VM_ShellPrint("[weapon] 宙斯神弩 create")
-}
+    }
 
 _OBJECT_STEP {
     self = VM_GetCurCard()

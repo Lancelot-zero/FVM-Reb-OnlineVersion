@@ -93,7 +93,44 @@ function load_file(file_slot) {
 			}
 			global.save_data.unlocked_gems = _kg;
 		}
+		// 武器同理（mod 武器被删掉/改名留下的孤儿）：
+		// 1) 武器表里未注册的摘到 global.save_orphan_weapons（写档时由 save_file 并回）
+		// 2) 装备栏三个武器 id 未注册的，把 id 清空、原 id 记到 global.save_orphan_equipped_weapons
+		//    （不清的话界面取 get_weapon_info(id).icon 会直接崩）
+		global.save_orphan_weapons = [];
+		global.save_orphan_equipped_weapons = {};
+		if (is_array(global.save_data.unlocked_weapons)) {
+			var _uw = global.save_data.unlocked_weapons;
+			var _kw = [];
+			for (var _wi = 0; _wi < array_length(_uw); _wi++) {
+				if (is_struct(get_weapon_info(_uw[_wi].id))) array_push(_kw, _uw[_wi]);
+				else array_push(global.save_orphan_weapons, _uw[_wi]);
+			}
+			if (array_length(global.save_orphan_weapons) > 0) {
+				show_debug_message("[save] 有 " + string(array_length(global.save_orphan_weapons))
+				                 + " 把武器未注册，本次会话内不显示（存档不动，写档时原样写回）");
+			}
+			global.save_data.unlocked_weapons = _kw;
+		}
+
+		// 时装同理（mod 时装被删掉/改名留下的孤儿）
+		global.save_orphan_attires = [];
+		if (is_array(global.save_data.attires)) {
+			var _at = global.save_data.attires;
+			var _ka = [];
+			for (var _ai = 0; _ai < array_length(_at); _ai++) {
+				if (variable_global_exists("attire_pool") && is_struct(get_attire_info(_at[_ai].attire_id))) array_push(_ka, _at[_ai]);
+				else array_push(global.save_orphan_attires, _at[_ai]);
+			}
+			if (array_length(global.save_orphan_attires) > 0) {
+				show_debug_message("[save] 有 " + string(array_length(global.save_orphan_attires))
+				                 + " 件时装未注册，本次会话内不显示（存档不动，写档时原样写回）");
+			}
+			global.save_data.attires = _ka;
+		}
+
 		save_strip_unknown_equipped_gems();
+		save_strip_unknown_equipped_weapons();
         return true;
     } catch(e) {
         show_debug_message("存档解析错误: " + string(e));
@@ -127,11 +164,35 @@ function save_strip_unknown_equipped_gems() {
 	}
 }
 
+/// @function save_strip_unknown_equipped_weapons()
+/// @desc 把装备栏（主/副/超级武器）里"未注册的武器 id"清成空串，原 id 存进
+///       global.save_orphan_equipped_weapons（槽位 → id），写档时由 save_file 写回。
+///       不清的话：界面取 get_weapon_info(id).icon 会直接崩。
+function save_strip_unknown_equipped_weapons() {
+	if (!variable_global_exists("save_orphan_equipped_weapons")) global.save_orphan_equipped_weapons = {};
+	if (!is_struct(global.save_data)) return;
+	var _eq = global.save_data[$ "equipped_items"];
+	if (!is_struct(_eq)) return;
+	var _slots = ["main_weapon", "secondary_weapon", "super_weapon"];
+	for (var _s = 0; _s < array_length(_slots); _s++) {
+		var _w = _eq[$ _slots[_s]];
+		if (!is_struct(_w)) continue;
+		var _id = _w[$ "id"];
+		if (!is_string(_id) || _id == "") continue;
+		if (is_struct(get_weapon_info(_id))) continue;
+		global.save_orphan_equipped_weapons[$ _slots[_s]] = _id;
+		_w[$ "id"] = "";
+	}
+}
+
 function reset_file(file_slot){
 	//重置到初始存档
 	global.save_orphan_cards = [];   // 新档不带上一个档摘出来的未注册卡
 	global.save_orphan_gems  = [];   // 宝石同理
 	global.save_orphan_equipped_gems = {};
+	global.save_orphan_weapons = [];   // 武器同理
+	global.save_orphan_attires = [];   // 时装同理
+	global.save_orphan_equipped_weapons = {};
 	global.save_data = {
             "version": 1.8,
             "player": {

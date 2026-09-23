@@ -3,8 +3,7 @@ _OBJECT_CREATE {
     self = VM_GetCurCard()
     VM_SetProp(self, "sprite_index", "spr_star_gun")
     VM_SetProp(self, "cd", 0)
-    VM_ShellPrint("triple_gun create")
-}
+    }
 
 _OBJECT_STEP {
     self = VM_GetCurCard()

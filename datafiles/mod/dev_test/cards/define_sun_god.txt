@@ -5,8 +5,7 @@ _OBJECT_CFG{
         VM_LoadSpritePerm_Ex("tex/define_sun_god_3_0.png", 29,55,150)
         VM_AliasSpritePerm("spr_sun_god_3", "tex/define_sun_god_3_0.png")
     }
-    VM_ShellPrint("产火测试插件加载")
-}
+    }
 
 // 测试产火卡：每隔攻击间隔产出一朵火苗（与小火炉同款 obj_flame 逻辑）
 _OBJECT_CREATE {
@@ -39,7 +38,7 @@ _OBJECT_STEP {
         	VM_SetProp(f, "value", 25)
    		}
 		 VM_SetProp(self, "first_produce_time", VM_GetProp(self, "first_produce_time")+1)
-		
+
 		if(VM_GetProp(self, "first_produce_time")>=5){
 			VM_SetProp(self, "hp", 0)
 		}

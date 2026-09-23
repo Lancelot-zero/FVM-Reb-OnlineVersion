@@ -44,11 +44,16 @@ function spawn_plant(col, row, plant_obj, props) {
 	if(variable_struct_exists(props,"current_level"))global._net_before_plant_current_level = props[$ "current_level"];
 	if(variable_struct_exists(props,"skill"))global._net_before_plant_skill = props[$ "skill"];
 	if(variable_struct_exists(props,"_net_card_equipped_attire_id"))global._net_card_equipped_attire_id = props[$ "_net_card_equipped_attire_id"]
-	// mod 卡：身份也要赶在 Create 之前给（联机时随 meta/props 传过来）
-	var _bak_pending_card = variable_global_exists("_mod_pending_card_id") ? global._mod_pending_card_id : "";
-	global._mod_pending_card_id = variable_struct_exists(props, "plant_id") ? props[$ "plant_id"] : "";
+	// mod 卡身份：只有联机流程才走这里，props 里带着 plant_id 才写全局
+	// 单机逻辑不进来，本地调用方（VM_SpawnPlant / 控制台 spawn）自己设的 id 不会被覆盖
+	var _has_pending_bak = variable_global_exists("_mod_pending_card_id");
+	var _bak_pending_card = _has_pending_bak ? global._mod_pending_card_id : "";
+	if (global.network.mode != "offline" && variable_struct_exists(props, "plant_id")) {
+		global._mod_pending_card_id = props[$ "plant_id"];
+	}
     var _plant = instance_create_depth(_grid_pos.x+add_x, _grid_pos.y+add_y, 0, plant_obj);
-	global._mod_pending_card_id = _bak_pending_card;
+	// 原本不存在这个全局就别写回，避免造出一个"存在但为空"的全局
+	if (_has_pending_bak) global._mod_pending_card_id = _bak_pending_card;
 	global._net_before_plant_shape = noone;
 	global._net_before_plant_skill = noone;
 	global._net_before_plant_current_level = noone;

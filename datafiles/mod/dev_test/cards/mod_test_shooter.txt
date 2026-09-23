@@ -8,8 +8,7 @@ _OBJECT_CREATE {
     VM_SetProp(self, "flash_speed", 5)
     VM_SetProp(self, "plant_type", "normal")
     VM_SetProp(self, "is_slowdown", 0)
-    VM_ShellPrint("mod_test_shooter create")
-}
+    }
 
 _OBJECT_STEP {
     self = VM_GetCurCard()

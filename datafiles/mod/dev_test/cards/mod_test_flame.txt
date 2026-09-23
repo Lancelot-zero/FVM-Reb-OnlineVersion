@@ -5,9 +5,7 @@ _OBJECT_CFG{
         VM_LoadSpritePerm_Ex("tex/combined_strip.png", 29,30,90)
         VM_AliasSpritePerm("spr_mod_test_flame", "tex/combined_strip.png")
     }
-    VM_ShellPrint("mod_test_flame load")
-
-}
+    }
 
 // 测试产火卡：每隔攻击间隔产出一朵火苗（与小火炉同款 obj_flame 逻辑）
 _OBJECT_CREATE {
@@ -20,8 +18,7 @@ _OBJECT_CREATE {
     VM_SetProp(self, "plant_type", "normal")
     VM_SetProp(self, "flame_produce", 25)
     VM_SetProp(self, "first_produce_delay", 60)
-    VM_ShellPrint("mod_test_flame create")
-}
+    }
 
 _OBJECT_STEP {
     self = VM_GetCurCard()

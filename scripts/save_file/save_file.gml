@@ -47,12 +47,56 @@ function save_file(file_slot) {
 		}
 	}
 
+	// 未注册的武器同理：武器表 + 装备栏里未注册的武器 id，写盘时都并回【武器表（仓库）】，
+	// 不写回装备槽；写完恢复内存状态
+	var _ow  = variable_global_exists("save_orphan_weapons") ? global.save_orphan_weapons : undefined;
+	var _oew = variable_global_exists("save_orphan_equipped_weapons") ? global.save_orphan_equipped_weapons : undefined;
+	var _livew  = undefined;   // 武器表（干净版）
+	var _oew_ids = [];         // 装备栏摘下来的孤儿武器 id，写盘时并进武器表
+	if (is_struct(_oew)) {
+		for (var _s = 0; _s < array_length(_slots); _s++) {
+			var _slot = _slots[_s];
+			if (variable_struct_exists(_oew, _slot)) array_push(_oew_ids, _oew[$ _slot]);
+		}
+	}
+	if ((is_array(_ow) && array_length(_ow) > 0 || array_length(_oew_ids) > 0)
+	 && is_array(global.save_data.unlocked_weapons)) {
+		_livew = global.save_data.unlocked_weapons;
+		var _mw = [];
+		for (var _i = 0; _i < array_length(_livew); _i++) array_push(_mw, _livew[_i]);
+		if (is_array(_ow)) {
+			for (var _j = 0; _j < array_length(_ow); _j++) array_push(_mw, _ow[_j]);
+		}
+		for (var _k = 0; _k < array_length(_oew_ids); _k++) {
+			var _oid = _oew_ids[_k];
+			var _dup = false;
+			for (var _q = 0; _q < array_length(_mw); _q++) {
+				if (_mw[_q].id == _oid) { _dup = true; break; }
+			}
+			if (!_dup) array_push(_mw, { id: _oid });
+		}
+		global.save_data.unlocked_weapons = _mw;
+	}
+
+	// 未注册的时装同理：时装表写盘时并回，写完恢复内存状态
+	var _oa = variable_global_exists("save_orphan_attires") ? global.save_orphan_attires : undefined;
+	var _livea = undefined;
+	if (is_array(_oa) && array_length(_oa) > 0 && is_array(global.save_data.attires)) {
+		_livea = global.save_data.attires;
+		var _ma = [];
+		for (var _i = 0; _i < array_length(_livea); _i++) array_push(_ma, _livea[_i]);
+		for (var _j = 0; _j < array_length(_oa);    _j++) array_push(_ma, _oa[_j]);
+		global.save_data.attires = _ma;
+	}
+
     // 将数据转换为JSON字符串
     var json_string = json_stringify(global.save_data);
 
 	// 恢复内存状态
 	if (!is_undefined(_live)) global.save_data.unlocked_cards = _live;
 	if (!is_undefined(_liveg)) global.save_data.unlocked_gems = _liveg;
+	if (!is_undefined(_livew)) global.save_data.unlocked_weapons = _livew;
+	if (!is_undefined(_livea)) global.save_data.attires = _livea;
 	if (is_struct(global.save_data.equipped_items)) {
 		for (var _s = 0; _s < array_length(_slots); _s++) {
 			var _slot = _slots[_s];
