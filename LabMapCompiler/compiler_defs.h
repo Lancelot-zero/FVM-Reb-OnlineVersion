@@ -351,6 +351,7 @@ static std::vector<FuncDef> FUNC_DEFS = {
     {"VM_DamageEnemy",             3,  {PT_INT, PT_ANY, PT_STRING}}, // 141 — 给敌人造成伤害：走敌人自己的受击事件（闪白/音效/护盾，含自定义 Other_10），比直接改 hp 正确
     {"VM_DamageEnemyAsh",          3,  {PT_INT, PT_ANY, PT_STRING}}, // 142 — 灰烬伤害：接不下就一击必杀换成 obj_mouse_ash_death（照抄原版 obj_power_god_bullet_1，不看护盾）
     {"VM_BulletScreenAdd_Ex",     18,  {PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY}}, // 143 — 屏幕弹幕(带卡片效果)：同 VM_BulletScreenAdd，多【伤害类型】【标志数值 flag】【出生角度】；flag bit1=过火/bit2=解冻/4,8,16…=自定义，进格子中心带时与卡片的 bullet_flag 取且运算，>0 就应用并消位；angle 给后向子弹用（180=倒过来）
+    {"VM_BulletScreenAdd_Exs",    20,  {PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY}}, // 144 — 同 VM_BulletScreenAdd_Ex，多【ty 目标行的世界 y，-1=不渐变】【lk 每帧靠拢比例，默认 0.15】：先朝目标行拐过去再直线飞（原版水管弹的 y 向 lerp），到位自动吸附并停掉渐变
 };
 
 // ============================================================

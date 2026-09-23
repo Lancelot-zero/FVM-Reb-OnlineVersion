@@ -43,7 +43,41 @@
 //
 // 消失条件有三条：出界（x<0 / x>2200 / y<0 / y>1200，静默删）、伤害次数用完、存活帧数走完。
 
-list = [];
+// 子弹表：**固定大小的数组**，每个槽位预先放好一颗"空子弹"结构体 + count 表示前几个是有效的
+//   [0, count) 是有效子弹，[count, bullet_max) 是回收池
+//   新增：拿 list[count] 这个现成结构体原地填字段，然后 count += 1（不再新建结构体）
+//   删除：list[i] = list[count-1]（末尾那颗挪过来顶替），再把死掉的那颗放回末尾当回收池
+//   全程不 array_push / array_delete（数组长度永远不变）
+bullet_max = 400;                        // 容量：改这个数就行
+list       = array_create(bullet_max);
+for (var _i = 0; _i < bullet_max; _i++) {
+    list[_i] = {
+        spr:         -1,
+        frames:      1,
+        cell_range:  0,
+        scale:       1,
+        angle:       0,
+        anim_speed:  1,
+        frame:       0,
+        x:           0,
+        y:           0,
+        vx:          0,
+        vy:          0,
+        dmg:         0,
+        hits:        0,
+        life:        -1,
+        target_type: "all",
+        damage_type: "normal",
+        flag:        0,
+        freeze:      0,
+        death_obj:   "",
+        death_mod:   "",
+        ty:          -1,   // 行渐变的目标 y（世界坐标）；-1 = 不渐变（纯直线）
+        lk:          0.15  // 行渐变的每帧靠拢比例（同原版水管弹）
+    };
+}
+count = 0;
+
 
 // 画在敌人（0 / -200）前面，但仍在 UI（-2900 以下）后面
 depth = -700;

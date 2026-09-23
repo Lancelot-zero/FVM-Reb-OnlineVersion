@@ -21,6 +21,9 @@
 #macro VM_OP_IF      15   // cond_addr(u32) true_ip(s32) false_ip(s32)
 #macro VM_OP_JMP     16   // ip(s32)
 #macro VM_OP_HALT    17
+// 以下两个不来自编译器，是 VM_Decode 给热函数生成的快捷码：dst(s32) [addr(s32)*]
+#macro VM_OP_CALL_GETPROP 18   // addr(s32) addr(s32)
+#macro VM_OP_CALL_SETPROP 19   // addr(s32) addr(s32) addr(s32)
 
 // 内存类型 (u8)
 #macro VM_TYPE_INT    0
@@ -3098,12 +3101,28 @@ function VM_Decode(buf) {
                 break;
             }
             case VM_OP_CALL: {
-                array_push(_code, buffer_read(buf, buffer_u16));      // 函数 id
+                var _fid = buffer_read(buf, buffer_u16);              // 函数 id
                 var _argc = buffer_read(buf, buffer_u8);
-                array_push(_code, _argc);
-                array_push(_code, buffer_read(buf, buffer_s32));      // dst
-                for (var _i = 0; _i < _argc; _i++) {
+                var _dst = buffer_read(buf, buffer_s32);
+                // 热函数在解码期就换成专用操作码，执行期不再走通用 CALL
+                if (_fid == global._VMfn_GetProp && _argc == 2) {
+                    _code[array_length(_code) - 1] = VM_OP_CALL_GETPROP;
+                    array_push(_code, _dst);
                     array_push(_code, buffer_read(buf, buffer_s32));
+                    array_push(_code, buffer_read(buf, buffer_s32));
+                } else if (_fid == global._VMfn_SetProp && _argc == 3) {
+                    _code[array_length(_code) - 1] = VM_OP_CALL_SETPROP;
+                    array_push(_code, _dst);
+                    for (var _i = 0; _i < 3; _i++) {
+                        array_push(_code, buffer_read(buf, buffer_s32));
+                    }
+                } else {
+                    array_push(_code, _fid);
+                    array_push(_code, _argc);
+                    array_push(_code, _dst);
+                    for (var _i = 0; _i < _argc; _i++) {
+                        array_push(_code, buffer_read(buf, buffer_s32));
+                    }
                 }
                 break;
             }
@@ -3173,6 +3192,116 @@ function VM_Execute_code(vm, code, name) {
             _ip += 1;
 
             switch (_op) {
+                // ==================== CALL ====================
+                case VM_OP_CALL_GETPROP: {
+                    var _dst = code[_ip]; _ip += 1;
+                    var _result = VM_GetProp(code[_ip], code[_ip + 1]);
+                    _ip += 2;
+
+                    if (_dst != VM_DST_VOID) {
+                        if (is_string(_result)) {
+                            _mt[_dst] = VM_TYPE_STRING;
+                            var _idx;
+                            if (ds_map_exists(vm.str_map, _result)) {
+                                _idx = vm.str_map[? _result];
+                            } else {
+                                _idx = array_length(vm.strings);
+                                array_push(vm.strings, _result);
+                                vm.str_map[? _result] = _idx;
+                            }
+                            _mv[_dst] = _idx;
+                        } else if (is_real(_result)) {
+                            if (floor(_result) == _result) {
+                                _mt[_dst] = VM_TYPE_INT;
+                            } else {
+                                _mt[_dst] = VM_TYPE_FLOAT;
+                            }
+                            _mv[_dst] = _result;
+                        } else {
+                            _mt[_dst] = VM_TYPE_INT;
+                            _mv[_dst] = _result;
+                        }
+                    }
+                    break;
+                }
+
+                case VM_OP_CALL_SETPROP: {
+                    var _dst = code[_ip]; _ip += 1;
+                    var _result = VM_SetProp(code[_ip], code[_ip + 1], code[_ip + 2]);
+                    _ip += 3;
+
+                    if (_dst != VM_DST_VOID) {
+                        if (is_string(_result)) {
+                            _mt[_dst] = VM_TYPE_STRING;
+                            var _idx;
+                            if (ds_map_exists(vm.str_map, _result)) {
+                                _idx = vm.str_map[? _result];
+                            } else {
+                                _idx = array_length(vm.strings);
+                                array_push(vm.strings, _result);
+                                vm.str_map[? _result] = _idx;
+                            }
+                            _mv[_dst] = _idx;
+                        } else if (is_real(_result)) {
+                            if (floor(_result) == _result) {
+                                _mt[_dst] = VM_TYPE_INT;
+                            } else {
+                                _mt[_dst] = VM_TYPE_FLOAT;
+                            }
+                            _mv[_dst] = _result;
+                        } else {
+                            _mt[_dst] = VM_TYPE_INT;
+                            _mv[_dst] = _result;
+                        }
+                    }
+                    break;
+                }
+
+                case VM_OP_CALL: {
+                    var _func_id = code[_ip]; _ip += 1;
+                    var _arg_count = code[_ip]; _ip += 1;
+                    var _dst = code[_ip]; _ip += 1;
+                    var _args = array_create(_arg_count);
+                    for (var _i = 0; _i < _arg_count; _i++) {
+                        _args[_i] = code[_ip];
+                        _ip += 1;
+                    }
+
+                    if (_func_id < 0 || _func_id >= array_length(vm.functions)) {
+                        shell_print("VM Error: 未注册函数ID " + string(_func_id));
+                        return -1;
+                    }
+
+                    var _fn = vm.functions[_func_id];
+                    var _result = script_execute_ext(_fn, _args);
+
+                    if (_dst != VM_DST_VOID) {
+                        if (is_string(_result)) {
+                            _mt[_dst] = VM_TYPE_STRING;
+                            var _idx;
+                            if (ds_map_exists(vm.str_map, _result)) {
+                                _idx = vm.str_map[? _result];
+                            } else {
+                                _idx = array_length(vm.strings);
+                                array_push(vm.strings, _result);
+                                vm.str_map[? _result] = _idx;
+                            }
+                            _mv[_dst] = _idx;
+                        } else if (is_real(_result)) {
+                            if (floor(_result) == _result) {
+                                _mt[_dst] = VM_TYPE_INT;
+                            } else {
+                                _mt[_dst] = VM_TYPE_FLOAT;
+                            }
+                            _mv[_dst] = _result;
+                        } else {
+                            _mt[_dst] = VM_TYPE_INT;
+                            _mv[_dst] = _result;
+                        }
+                    }
+                    break;
+                }
+
 
                 // ==================== ASSIGN ====================
                 case VM_OP_ASSIGN: {
@@ -3299,52 +3428,6 @@ function VM_Execute_code(vm, code, name) {
                     var _b = code[_ip]; _ip += 1;
                     _mt[_d] = VM_TYPE_INT;
                     _mv[_d] = (_mv[_a] <= _mv[_b]) ? 1 : 0;
-                    break;
-                }
-
-                // ==================== CALL ====================
-                case VM_OP_CALL: {
-                    var _func_id = code[_ip]; _ip += 1;
-                    var _arg_count = code[_ip]; _ip += 1;
-                    var _dst = code[_ip]; _ip += 1;
-                    var _args = array_create(_arg_count);
-                    for (var _i = 0; _i < _arg_count; _i++) {
-                        _args[_i] = code[_ip];
-                        _ip += 1;
-                    }
-
-                    if (_func_id < 0 || _func_id >= array_length(vm.functions)) {
-                        shell_print("VM Error: 未注册函数ID " + string(_func_id));
-                        return -1;
-                    }
-
-                    var _fn = vm.functions[_func_id];
-                    var _result = script_execute_ext(_fn, _args);
-
-                    if (_dst != VM_DST_VOID) {
-                        if (is_string(_result)) {
-                            _mt[_dst] = VM_TYPE_STRING;
-                            var _idx;
-                            if (ds_map_exists(vm.str_map, _result)) {
-                                _idx = vm.str_map[? _result];
-                            } else {
-                                _idx = array_length(vm.strings);
-                                array_push(vm.strings, _result);
-                                vm.str_map[? _result] = _idx;
-                            }
-                            _mv[_dst] = _idx;
-                        } else if (is_real(_result)) {
-                            if (floor(_result) == _result) {
-                                _mt[_dst] = VM_TYPE_INT;
-                            } else {
-                                _mt[_dst] = VM_TYPE_FLOAT;
-                            }
-                            _mv[_dst] = _result;
-                        } else {
-                            _mt[_dst] = VM_TYPE_INT;
-                            _mv[_dst] = _result;
-                        }
-                    }
                     break;
                 }
 
@@ -4390,7 +4473,7 @@ function VM_BuildDeadSnap(_inst) {
         }
     }
     // 内置变量不会被 variable_instance_get_names 返回，需显式补记
-    var _builtins = ["x", "y", "xstart", "ystart", "depth", "image_index", "image_speed", "sprite_index", "object_index", "direction", "speed"];
+    var _builtins = ["x", "y", "xstart", "ystart", "depth", "image_index", "image_speed", "sprite_index", "object_index", "direction", "speed","state"];
     for (var _b = 0; _b < array_length(_builtins); _b++) {
         _snap[$ _builtins[_b]] = variable_instance_get(_inst, _builtins[_b]);
     }
@@ -4709,36 +4792,38 @@ function bullet_screen_add(spr, frames, range, scale, anim_speed, x, y, vx, vy, 
     }
     var _spr = is_string(spr) ? get_load_sprite(spr) : spr;
     if (!sprite_exists(_spr)) return -1;
+    if (_mgr.count >= _mgr.bullet_max) return -1;   // 表满了：直接不生成（静默丢弃）
     var _frames = frames;
     var _spr_frames = sprite_get_number(_spr);
     if (is_undefined(_frames) || _frames <= 0 || _frames > _spr_frames) _frames = _spr_frames;
     if (is_undefined(scale) || scale == 0) scale = 1;
     if (is_undefined(anim_speed)) anim_speed = 1;
-    array_push(_mgr.list, {
-        spr:         _spr,
-        frames:      _frames,
-        cell_range:  range,
-        scale:       scale,
-        angle:       0,          // 绘制角度（度）：管理器默认不转，只有卡片效果翻转方向时才 +180
-        anim_speed:  anim_speed,
-        frame:       0,
-        x:           x,
-        y:           y,
-        vx:          vx,
-        vy:          vy,
-        dmg:         dmg,
-        hits:        hits,
-        life:        life,
-        target_type: type,
-        damage_type: "normal",   // 固定：命中走 damage_enemy（闪白/音效/护盾 + 各敌人的 Other_10），
-                                 // 和追踪弹一个口径；要按子弹区分类型时再开参数（或用 bullet_screen_add_Ex）
-        // 卡片效果用的两个字段（普通版本固定成"什么都不吃"，所以只有 _Ex 加的子弹才参与）
-        flag:        0,          // 标志数值：还能接受哪些类别的卡片效果（bit1 过火 / bit2 解冻 / 4,8,16… 自定义）
-        freeze:      0,          // 累计的冰冻帧数：命中时写给敌人的 ice_timer
-        death_obj:   death_obj,
-        death_mod:   death_mod
-    });
-    return array_length(_mgr.list) - 1;
+
+    // 原地填 list[count] 那个现成的"空子弹"结构体（不新建，省掉每颗一次的分配）
+    var _b = _mgr.list[_mgr.count];
+    _b.spr         = _spr;
+    _b.frames      = _frames;
+    _b.cell_range  = range;
+    _b.scale       = scale;
+    _b.angle       = 0;        // 绘制角度：默认不转，只有卡片效果翻转方向时才 +180
+    _b.anim_speed  = anim_speed;
+    _b.frame       = 0;
+    _b.x           = x;
+    _b.y           = y;
+    _b.vx          = vx;
+    _b.vy          = vy;
+    _b.dmg         = dmg;
+    _b.hits        = hits;
+    _b.life        = life;
+    _b.target_type = type;
+    _b.damage_type = "normal"; // 命中走 damage_enemy（闪白/音效/护盾 + 各敌人的 Other_10）
+    _b.flag        = 0;        // 卡片效果位：普通版本固定"什么都不吃"，只有 _Ex 加的子弹才参与
+    _b.freeze      = 0;        // 累计冰冻帧数：命中时写给敌人的 ice_timer
+    _b.death_obj   = death_obj;
+    _b.death_mod   = death_mod;
+
+    _mgr.count += 1;
+    return _mgr.count - 1;
 }
 
 /// @function VM_BulletScreenAdd(spr, frames, range, scale, anim_speed, x, y, vx, vy, dmg, hits, life, type, death_obj, death_mod)
@@ -4787,6 +4872,46 @@ function VM_BulletScreenAdd_Ex(spr_addr, frames_addr, range_addr, scale_addr, an
                                 vm_arg(vy_addr), vm_arg(dmg_addr), vm_arg(hits_addr), vm_arg(life_addr),
                                 vm_arg(type_addr), vm_arg(death_obj_addr), vm_arg(death_mod_addr),
                                 vm_arg(damage_type_addr), vm_arg(flag_addr), vm_arg(angle_addr));
+}
+
+/// @function bullet_screen_add_Exs(spr, frames, range, scale, anim_speed, x, y, vx, vy, dmg, hits, life,
+///                                 type, death_obj, death_mod, damage_type, flag, angle, ty, lk)
+/// @desc 在 bullet_screen_add_Ex 基础上多两个"行渐变"参数（原版水管弹那种先拐到目标行再直线飞）：
+///       【ty】目标行的**世界 y**；不想渐变就传 -1（就是普通直线子弹）
+///       【lk】每帧朝目标 y 靠拢的比例；原版水管弹是 0.15（传 0 会一直不动，别传 0）
+///       ⚠️ VM 侧调用要写满 20 个参数（编译器按固定个数校验），不渐变时写：…, -1, 0.15
+///       渐变到位（|ty - y| <= 8）会自动吸附并把 ty 清成 -1，之后这颗弹就是纯直线，不再花那笔计算。
+///       渐变过程中子弹会依次经过中间几行，那几行的敌人/卡片照常结算（行是按 y 每帧反算的）。
+/// @return 子弹在管理器数组里的下标；管理器或贴图不存在、表满返回 -1
+function bullet_screen_add_Exs(spr, frames, range, scale, anim_speed, x, y, vx, vy, dmg, hits, life,
+                               type = "all", death_obj = "", death_mod = "",
+                               damage_type = "normal", flag = 0, angle = 0, ty = -1, lk = 0.15) {
+    var _idx = bullet_screen_add_Ex(spr, frames, range, scale, anim_speed, x, y, vx, vy,
+                                    dmg, hits, life, type, death_obj, death_mod,
+                                    damage_type, flag, angle);
+    if (_idx < 0) return -1;
+    var _mgr = instance_find(obj_Bullet_Screen_Management, 0);
+    var _b   = _mgr.list[_idx];
+    if (is_undefined(ty)) ty = -1;
+    if (is_undefined(lk)) lk = 0.15;
+    _b.ty = ty;
+    _b.lk = lk;
+    return _idx;
+}
+
+/// @function VM_BulletScreenAdd_Exs(spr, frames, range, scale, anim_speed, x, y, vx, vy, dmg, hits, life,
+///                                  type, death_obj, death_mod, damage_type, flag, angle, ty, lk)
+/// @desc VM 侧接口，参数和返回值和 bullet_screen_add_Exs 一致
+function VM_BulletScreenAdd_Exs(spr_addr, frames_addr, range_addr, scale_addr, anim_speed_addr,
+                                x_addr, y_addr, vx_addr, vy_addr, dmg_addr, hits_addr, life_addr,
+                                type_addr, death_obj_addr, death_mod_addr,
+                                damage_type_addr, flag_addr, angle_addr, ty_addr, lk_addr) {
+    return bullet_screen_add_Exs(vm_arg(spr_addr), vm_arg(frames_addr), vm_arg(range_addr), vm_arg(scale_addr),
+                                 vm_arg(anim_speed_addr), vm_arg(x_addr), vm_arg(y_addr), vm_arg(vx_addr),
+                                 vm_arg(vy_addr), vm_arg(dmg_addr), vm_arg(hits_addr), vm_arg(life_addr),
+                                 vm_arg(type_addr), vm_arg(death_obj_addr), vm_arg(death_mod_addr),
+                                 vm_arg(damage_type_addr), vm_arg(flag_addr), vm_arg(angle_addr),
+                                 vm_arg(ty_addr), vm_arg(lk_addr));
 }
 
 /// @function homing_bullet_instant_hit(mgr, type, dmg)
@@ -4905,10 +5030,10 @@ VM_RegisterFunction(global.__vm, VM_SpawnEnemy);       // 7
 VM_RegisterFunction(global.__vm, VM_SpawnBoss);        // 8
 VM_RegisterFunction(global.__vm, VM_LoadSprite);       // 9
 VM_RegisterFunction(global.__vm, VM_SpawnObject);      // 10
-VM_RegisterFunction(global.__vm, VM_SetProp);          // 11
+global._VMfn_SetProp = VM_RegisterFunction(global.__vm, VM_SetProp);   // 11
 VM_RegisterFunction(global.__vm, VM_GetWave);               // 12
 VM_RegisterFunction(global.__vm, VM_GetSubwave);            // 13
-VM_RegisterFunction(global.__vm, VM_GetProp);               // 14
+global._VMfn_GetProp = VM_RegisterFunction(global.__vm, VM_GetProp);   // 14
 VM_RegisterFunction(global.__vm, VM_GetLastBoss);           // 15
 VM_RegisterFunction(global.__vm, VM_GetLastCreatedEnemy);   // 16
 VM_RegisterFunction(global.__vm, VM_GetLastKilledEnemy);    // 17
@@ -5038,6 +5163,7 @@ VM_RegisterFunction(global.__vm, VM_HomingBulletAdd);  // 140
 VM_RegisterFunction(global.__vm, VM_DamageEnemy);      // 141
 VM_RegisterFunction(global.__vm, VM_DamageEnemyAsh);   // 142
 VM_RegisterFunction(global.__vm, VM_BulletScreenAdd_Ex);   // 143
+VM_RegisterFunction(global.__vm, VM_BulletScreenAdd_Exs);  // 144
 ds_map_add(global._VM_remote_funcs, "VM_SwapPlants", VM_SwapPlants);
 ds_map_add(global._VM_remote_funcs, "VM_SwapPlantRects", VM_SwapPlantRects);
 ds_map_add(global._VM_remote_funcs, "VM_CompactColumn", VM_CompactColumn);
@@ -5161,6 +5287,8 @@ function VM_InitRoomEntry(buf) {
     ds_map_clear(global._VM_real_to_vm_id);
     ds_map_clear(global.__vm.str_map);
     ds_map_clear(global.__vm.arrays);
+    // 解码缓存必须清：字符串池重建后旧的下标全部失效
+    if (variable_struct_exists(global.__vm, "codes")) ds_map_clear(global.__vm.codes);
 	
     if (!buffer_exists(buf)) return;
 

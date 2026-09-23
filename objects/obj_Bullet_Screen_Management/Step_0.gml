@@ -1,9 +1,8 @@
 // 每帧：移动 -> 出界静默删除 -> 动画回绕 -> 打范围内敌人 -> 存活倒计时 -> 到期移除
 if (global.is_paused) exit;
 
-var _len = array_length(list);
+var _len = count;
 if (_len <= 0) exit;
-
 // 网格参数只读一次，循环里不再碰 global
 // 注意：这里等价于 get_grid_position_from_world(x, y, true) 的裸算法（不回绕），
 //       但不建那个 {col,row,x,y} 结构体——每颗子弹每帧省一次分配
@@ -34,6 +33,18 @@ while (_i >= 0) {
     // 1. 坐标推进
     _b.x += _b.vx;
     _b.y += _b.vy;
+
+    // 1.5 行渐变（可选）：ty >= 0 时朝目标行的世界 y 靠拢（原版水管弹那个 y 向 lerp）
+    //     够近就吸附并把 ty 清成 -1 —— 之后这颗弹就是纯直线，不再每帧花这笔计算
+    //     ⚠️ 碰撞行是按 y 每帧反算的，所以渐变过程中会依次命中经过的那几行，和原版一致
+    if (_b.ty >= 0) {
+        if (abs(_b.ty - _b.y) <= 8) {
+            _b.y  = _b.ty;
+            _b.ty = -1;
+        } else {
+            _b.y += (_b.ty - _b.y) * _b.lk;
+        }
+    }
 	
     var _gone = false;
 
@@ -51,7 +62,7 @@ while (_i >= 0) {
                 if (_b.frame < 0) _b.frame += _b.frames;
             }
         }
-		if(obj_battle.battle_time%5==0){
+
 
         // 3.5 卡片效果：子弹进到「格子中心带」时，看那一格卡片有没有能吃它的标志数值
         //     规则：子弹 flag 与卡片 bullet_flag 做【与运算】，> 0 就应用效果，然后消位
@@ -118,6 +129,7 @@ while (_i >= 0) {
             }
         }
 		
+		//if(obj_battle.battle_time%20==0){
         // 4. 命中：打击范围内 可命中敌人，按格子里敌人数组的顺序依次结算
         //    打击范围是「方格子」：以子弹所在格为中心，上下左右各扩 cell_range 格（0=只算本格）
         //    伤害计数 -1（不限次数）→ 范围内敌人**全部**结算，永不减
@@ -127,46 +139,75 @@ while (_i >= 0) {
         if (_has_grid && _b.hits != 0) {
             var _col = floor((_b.x - _gox) / _gcsx);
             var _row = floor((_b.y - _goy) / _gcsz);
-            if (_row >= 0 && _row < _rows && _col >= 0 && _col < _stride) {
+            if (_row >= 0 && _row < _rows) {
                 var _all  = (_b.hits < 0);
                 var _left = _b.hits;
                 var _cr = _b.cell_range;
                 if (_cr < 0) _cr = 0;
                 var _r1 = _row - _cr;  if (_r1 < 0)         _r1 = 0;
                 var _r2 = _row + _cr;  if (_r2 >= _rows)    _r2 = _rows - 1;
-                var _c1 = _col - _cr;  if (_c1 < 0)         _c1 = 0;
-                var _c2 = _col + _cr;  if (_c2 >= _stride)  _c2 = _stride - 1;
-                for (var _r = _r1; _r <= _r2; _r++) {
-                    var _base = _r * _stride;
-                    for (var _c = _c1; _c <= _c2; _c++) {
-                        var _cell = global.enemy_array[_base + _c];
-                        var _cn   = array_length(_cell);
-                        for (var _k = 0; _k < _cn; _k++) {
-                            var _e = _cell[_k];
-                            if (!instance_exists(_e)) continue;
-                            if (_e.hp <= 0) continue;
-                            if (!can_hit(_b.target_type, _e.target_type)) continue;
-                            // 走敌人自己的受击事件（闪白 + 音效 + 护盾，含各敌人自己重写的 Other_10），
-                            // 和原版子弹命中一样 —— 不再直接 _e.hp -= dmg 手抄父对象那 16 行。
-                            // 伤害类型固定在 bullet_screen_add 里（normal），和追踪弹管理器同一口径。
-                            damage_enemy(_e, _b.dmg, _b.damage_type);
-                            // 冰冻：子弹累计的冰冻帧数写给敌人（只加不减，同原版 ice_timer）
-                            if (_b.freeze > 0 && variable_instance_exists(_e, "ice_timer")) {
-                                if (_e.ice_timer < _b.freeze) _e.ice_timer = _b.freeze;
+
+                if (_col < 0) {
+                    // ── 负列（场外左侧，格 -1 / -2 …）：这些敌人不在 global.enemy_array 里 ──
+                    //    obj_battle 把它们按行收在 global.enemy_array_left[row]（那一行所有负列敌人）
+                    //    所以这里扫那几行的 left 列表 —— 不补这一段的话，-1/-2 列的老鼠永远打不到
+                    if (variable_global_exists("enemy_array_left")) {
+                        for (var _r = _r1; _r <= _r2; _r++) {
+                            var _cell = global.enemy_array_left[_r];
+                            var _cn   = array_length(_cell);
+                            for (var _k = 0; _k < _cn; _k++) {
+                                var _e = _cell[_k];
+                                if (!instance_exists(_e)) continue;
+                                if (_e.hp <= 0) continue;
+                                if (!can_hit(_b.target_type, _e.target_type)) continue;
+                                damage_enemy(_e, _b.dmg, _b.damage_type);
+                                if (_b.freeze > 0 && variable_instance_exists(_e, "ice_timer")) {
+                                    if (_e.ice_timer < _b.freeze) _e.ice_timer = _b.freeze;
+                                }
+                                if (!_all) {
+                                    _left -= 1;
+                                    if (_left <= 0) break;
+                                }
                             }
-                            if (!_all) {
-                                _left -= 1;
-                                if (_left <= 0) break;
+                            if (!_all && _left <= 0) break;
+                        }
+                    }
+                } else if (_col < _stride) {
+                    // ── 场内：按格子扫（左右各扩 cell_range 格，列不会退到 0 以下）──
+                    var _c1 = _col - _cr;  if (_c1 < 0)         _c1 = 0;
+                    var _c2 = _col + _cr;  if (_c2 >= _stride)  _c2 = _stride - 1;
+                    for (var _r = _r1; _r <= _r2; _r++) {
+                        var _base = _r * _stride;
+                        for (var _c = _c1; _c <= _c2; _c++) {
+                            var _cell = global.enemy_array[_base + _c];
+                            var _cn   = array_length(_cell);
+                            for (var _k = 0; _k < _cn; _k++) {
+                                var _e = _cell[_k];
+                                if (!instance_exists(_e)) continue;
+                                if (_e.hp <= 0) continue;
+                                if (!can_hit(_b.target_type, _e.target_type)) continue;
+                                // 走敌人自己的受击事件（闪白 + 音效 + 护盾，含各敌人自己重写的 Other_10），
+                                // 和原版子弹命中一样 —— 不再直接 _e.hp -= dmg 手抄父对象那 16 行。
+                                // 伤害类型固定在 bullet_screen_add 里（normal），和追踪弹管理器同一口径。
+                                damage_enemy(_e, _b.dmg, _b.damage_type);
+                                // 冰冻：子弹累计的冰冻帧数写给敌人（只加不减，同原版 ice_timer）
+                                if (_b.freeze > 0 && variable_instance_exists(_e, "ice_timer")) {
+                                    if (_e.ice_timer < _b.freeze) _e.ice_timer = _b.freeze;
+                                }
+                                if (!_all) {
+                                    _left -= 1;
+                                    if (_left <= 0) break;
+                                }
                             }
+                            if (!_all && _left <= 0) break;
                         }
                         if (!_all && _left <= 0) break;
                     }
-                    if (!_all && _left <= 0) break;
                 }
                 if (!_all) _b.hits = _left;
             }
         }
-		}	
+		//}	
 
         // 5. 存活倒计时
         if (_b.life > 0) _b.life -= 1;
@@ -186,11 +227,14 @@ while (_i >= 0) {
         }
     }
 
-    // 7. 交换删除：把末尾那条挪过来，再砍掉末尾
+    // 7. 删除 = 和末尾那颗**交换**，然后 count 减一（数组长度不变、不 array_delete）
+    //    交换而不是只覆盖，是为了让"每槽一个结构体"的对应关系保持住：
+    //    空闲槽永远指向空闲结构体，下次新增原地填字段才不会改到活子弹
     if (_gone) {
-        var _last = array_length(list) - 1;
-        list[_i] = list[_last];
-        array_delete(list, _last, 1);
+        count -= 1;
+        var _t = list[_i];
+        list[_i] = list[count];
+        list[count] = _t;
     }
 
     _i -= 1;

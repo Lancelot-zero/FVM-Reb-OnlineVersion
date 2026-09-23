@@ -1,6 +1,6 @@
 // 逐条画子弹
 // 角度用子弹自己的 angle（默认 0；卡片效果把方向翻转时会 +180，看着才是"弹回去了"）
-var _i = array_length(list) - 1;
+var _i = count - 1;
 while (_i >= 0) {
     var _b = list[_i];
     if (_b.spr != -1) {

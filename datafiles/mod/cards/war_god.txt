@@ -1,41 +1,16 @@
-// 至尊战神（金卡 · 战神·阿瑞斯最终形态）：前后各一发，每 4 轮来一发超级子弹
-// 按 mod 分支 obj_war1_god（shape 3）+ obj_war_god_bullet / obj_war_god_bullet_super 移植。
-//
-//   Create：attack_anim = 10、idle_anim = 11、flash_speed = 5、super_bullet = 4
-//   Step  ：本行**任意位置**（前后都算）有敌人就开打，一轮里：
-//             at == cycle - 7*flash_speed  且 super_bullet >= 4 → 前后各一发超级子弹，计数清零
-//             at == cycle - 5*flash_speed  → 前后各一发普通子弹，计数 +1
-//             at == cycle - 4 / 3 / 2 / 1 * flash_speed → 各一次前后齐射
-//           也就是：每轮 5 次齐射（10 发普通），每隔 4 轮多一轮超级（首轮立即就有）。
-//           计数从 4 起，所以第 1 轮打超级、第 5、9…轮再打。
-//   子弹  ：原版 obj_war_god_bullet 直线飞（自带 move_speed ±8），命中一个敌人就 instance_destroy，
-//           缩放 1.6。交给弹幕管理器：
-//             · 伤害计数 hits = 1 → 打一个就移除，和原版「命中即消失」等价，
-//               所以每帧伤害直接填原版那一下的伤害（普通 atk、超级 12*atk），不用按帧换算
-//             · 存活 life = -1（不自动到期，出界由管理器删）
-//             · 类型 "normal"（原弹 target_type = "normal"）
-//   后向子弹：原版用 image_angle = 180 把贴图倒过来。管理器不支持旋转，
-//             所以另外抽了一份 180° 旋转的贴图 spr_*_r180 专给后向子弹用（原点也翻了）。
-//   一个原版贴图 bug：obj_war_god_bullet_super 的默认贴图是 spr_war_god_bullet_f
-//             （40x40 的「燃烧普通弹」），而真正的超级弹 spr_war_god_bullet_s（57x57）
-//             从没被引用过。这里按意图用 spr_war_god_bullet_s。
+// 至尊战神：前后各一发；每 4 轮多一轮超级弹（首轮就有）
+// 计时 / 索敌 / 窗口 / state 全在 obj_card_mod；卡只声明窗口 + 发弹
+// ⚠️ 窗口写负数（从一轮末尾倒数），别写死帧数：技能会把 cycle 压小
 
 _OBJECT_CFG {
-    // 统一写内部 spr 名：内置有就直接用；内置没有才把本地图挂到这个名上。
-    // 本体：23 帧，原点 (51, 108)
     if (VM_SpriteExists("spr_war_god_3") == 0) {
         VM_LoadSpritePerm_Ex("tex/spr_war_god_3_0.png", 23, 51, 108)
         VM_AliasSpritePerm("spr_war_god_3", "tex/spr_war_god_3_0.png")
     }
-
-    // 普通子弹：3 帧 57x57，原点 (28, 28)
-    // （后向那一发不用单独贴图：直接用真实例的 image_angle = 180，跟原版双向水管一样）
     if (VM_SpriteExists("spr_war_god_bullet") == 0) {
         VM_LoadSpritePerm_Ex("tex/spr_war_god_bullet_0.png", 3, 28, 28)
         VM_AliasSpritePerm("spr_war_god_bullet", "tex/spr_war_god_bullet_0.png")
     }
-
-    // 超级子弹：3 帧 57x57
     if (VM_SpriteExists("spr_war_god_bullet_s") == 0) {
         VM_LoadSpritePerm_Ex("tex/spr_war_god_bullet_s_0.png", 3, 28, 28)
         VM_AliasSpritePerm("spr_war_god_bullet_s", "tex/spr_war_god_bullet_s_0.png")
@@ -50,104 +25,54 @@ _OBJECT_CREATE {
     VM_SetProp(self, "attack_anim", 10)
     VM_SetProp(self, "flash_speed", 5)
     VM_SetProp(self, "plant_type", "normal")
-
-    VM_SetProp(self, "attack_timer", 0)
     VM_SetProp(self, "state", 0)
     VM_SetProp(self, "super_bullet", 4)
+
+    // 有敌人且命中下面 6 个窗口才进 VM（0 号窗口 = 超级弹）
+    VM_SetProp(self, "mod_step_enter_condition", "norm_attack")
+
+    // 索敌范围：本行整行（前后都算）
+    VM_InstArrayClear(self, "mod_step_enemy_area")
+    VM_InstArrayAdd(self, "mod_step_enemy_area", 0)
+    VM_InstArrayAdd(self, "mod_step_enemy_area", 0)
+    VM_InstArrayAdd(self, "mod_step_enemy_area", 99)
+    VM_InstArrayAdd(self, "mod_step_enemy_area", 99)
+
+    f0 = VM_GetProp(self, "flash_speed")
+    if (VM_IsUndefined(f0)) {
+        f0 = 5
+    }
+    VM_InstArrayClear(self, "mod_step_enter_arr")
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 0 - 7 * f0)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 0 - 5 * f0)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 0 - 4 * f0)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 0 - 3 * f0)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 0 - 2 * f0)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 0 - 1 * f0)
 }
 
 _OBJECT_STEP {
     self = VM_GetCurCard()
 
-    if (VM_GetProp(self, "is_frozen") == 1) {
-        exit
-    }
+    // 进到这里 = 有敌人 且 命中某个开火窗口
+    wi  = VM_GetProp(self, "mod_step_enter_index")
+    atk = VM_GetProp(self, "atk")
+    bx  = VM_GetProp(self, "x")
+    by  = VM_GetProp(self, "y") - 50
 
-    fs = VM_GetProp(self, "flash_speed")
-    cfs = fs
-    if (VM_GetProp(self, "is_slowdown") == 1) {
-        cfs = cfs * 2
-    }
-
-    at = VM_GetProp(self, "attack_timer")
-    r = VM_GetProp(self, "grid_row")
-    st = 0
-    volley = 0
-    sup = 0
-
-    // 原版：本行任意列有敌人就开打（前后都算）
-    if (VM_EnemyInRange(r, r, 0, 99, "") == 1) {
-        cyc = VM_GetProp(self, "cycle")
-        sb = VM_GetProp(self, "super_bullet")
-        if (VM_IsUndefined(sb)) {
-            sb = 4
-        }
-
-        if (at <= cyc - 10 * cfs) {
-            at = at + 1
-        } else if (at <= cyc) {
-            at = at + 1
-            st = 1
+    if (wi == 0) {
+        // 0 号窗口 = 超级弹窗口：每轮 +1，攒够 4 次放一发（前后各一）
+        sb = VM_GetProp(self, "super_bullet") + 1
+        if (sb >= 4) {
+            VM_SetProp(self, "super_bullet", 0)
+            VM_BulletScreenAdd_Ex("spr_war_god_bullet_s", 3, 0, 1.6, 1, bx + 40, by, 8, 0, 12 * atk, 1, 0 - 1, "normal", "", "", "normal", 5, 0)
+            VM_BulletScreenAdd_Ex("spr_war_god_bullet_s", 3, 0, 1.6, 1, bx - 40, by, 0 - 8, 0, 12 * atk, 1, 0 - 1, "normal", "", "", "normal", 5, 180)
         } else {
-            at = 0
-            st = 0
+            VM_SetProp(self, "super_bullet", sb)
         }
-
-        if (at == cyc - 7 * fs) {
-            if (sb >= 4) {
-                sup = 1
-                sb = 0
-            }
-        }
-        if (at == cyc - 5 * fs) {
-            volley = 1
-            sb = sb + 1
-        }
-        if (at == cyc - 4 * fs) {
-            volley = 1
-        }
-        if (at == cyc - 3 * fs) {
-            volley = 1
-        }
-        if (at == cyc - 2 * fs) {
-            volley = 1
-        }
-        if (at == cyc - 1 * fs) {
-            volley = 1
-        }
-
-        VM_SetProp(self, "super_bullet", sb)
     } else {
-        at = 0
-        st = 0
-    }
-
-    // 发射：全部走【屏幕弹幕管理器】（不再造实体子弹）
-    // 原版 obj_war_god_bullet 是直线飞（move_speed ±8）+ 命中即消失 + 缩放 1.6，
-    // 后向那一发靠 image_angle = 180 倒过来 —— 管理器现在支持出生角度，所以直接传 180。
-    // 参数：贴图,帧数,打击范围,缩放,动画速度,x,y,vx,vy,伤害,伤害计数,存活帧数,类型,销毁对象,mod名字,
-    //       伤害类型, 标志数值, 出生角度
-    //   flag = 5：bit1 过火 + bit4 反弹（原来用的是 obj_waterpipe_bullet，本来就带这两个碰撞事件）
-    if (volley == 1) {
-        atk = VM_GetProp(self, "atk")
-        bx = VM_GetProp(self, "x")
-        by = VM_GetProp(self, "y") - 50
-
-        // 前向
+        // 1~5 号窗口 = 普通齐射：前后各一发（命中一个敌人就消失）
         VM_BulletScreenAdd_Ex("spr_war_god_bullet", 3, 0, 1.6, 1, bx + 40, by, 8, 0, atk, 1, 0 - 1, "normal", "", "", "normal", 5, 0)
-        // 后向：vx 取负 + 出生角度 180
         VM_BulletScreenAdd_Ex("spr_war_god_bullet", 3, 0, 1.6, 1, bx - 40, by, 0 - 8, 0, atk, 1, 0 - 1, "normal", "", "", "normal", 5, 180)
     }
-
-    if (sup == 1) {
-        atk = VM_GetProp(self, "atk")
-        bx = VM_GetProp(self, "x")
-        by = VM_GetProp(self, "y") - 50
-
-        VM_BulletScreenAdd_Ex("spr_war_god_bullet_s", 3, 0, 1.6, 1, bx + 40, by, 8, 0, 12 * atk, 1, 0 - 1, "normal", "", "", "normal", 5, 0)
-        VM_BulletScreenAdd_Ex("spr_war_god_bullet_s", 3, 0, 1.6, 1, bx - 40, by, 0 - 8, 0, 12 * atk, 1, 0 - 1, "normal", "", "", "normal", 5, 180)
-    }
-
-    VM_SetProp(self, "attack_timer", at)
-    VM_SetProp(self, "state", st)
 }
