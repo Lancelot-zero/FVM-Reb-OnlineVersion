@@ -741,7 +741,7 @@ function meta_fps() {
 }
 
 /// @description 命令行：重新加载 mod 的 bin 代码；带参数时只重载指定的那一个
-function sh_reloadmod(args) {
+function sh_modreload(args) {
     // 带参数：只重载指定的 mod（数字id / id / json 里的 name）
     // ⚠️ 单个重载不动贴图别名（别名是所有 mod 共用一批登记的，全清会让其它 mod 的新实例丢图），
     //    所以改了贴图还是走不带参数的全量 reloadmod
@@ -762,7 +762,7 @@ function sh_reloadmod(args) {
     return "[reloadmod] 已重载 " + string(_n) + " 张 mod 卡的 bin 代码（释放永久别名 " + string(_alias_n) + " 条）";
 }
 
-function meta_reloadmod() {
+function meta_modreload() {
     return {
         description: "重新加载 mod 的 bin 代码；带 数字id/id/名称 时只重载那一个（不动注册表，不影响场上已放置的卡）",
         arguments: ["[数字id | mod id | 名称]"],
@@ -773,11 +773,11 @@ function meta_reloadmod() {
 }
 
 /// @description 命令行：列出当前已加载的 mod
-function sh_listmod(args) {
+function sh_modlist(args) {
     return src_mod_list();
 }
 
-function meta_listmod() {
+function meta_modlist() {
     return {
         description: "列出当前已加载的 mod（卡/武器/宝石/敌人/子弹/特效/时装：id、名称、路径、简介）",
         arguments: [],
@@ -787,12 +787,23 @@ function meta_listmod() {
     };
 }
 
-/// @description 命令行：重扫 mod 目录，只注册新增（还没加载过）的 mod
-function sh_reloadallmod(args) {
-    return src_mod_register_new();
+/// @description 命令行：重扫 mod 目录注册新增；已注册的那批重载 bin
+function sh_modallreload(args) {
+    var _new = src_mod_register_new();
+    // 已注册的那批：重读 .json/.bin 灌回原 VM（和 modreload 不带参数同一套）
+    // ⚠️ 这里重载的是 bin 代码，不动注册表 —— 卡的卡池是单向注册，重复注册会塞出两条
+    var _alias_n = VM_FreeSpritePermAlias();
+    var _n = src_mod_reload();
+    src_mod_weapons_reload();
+    src_mod_gems_reload();
+    src_mod_attires_init();
+    src_mod_enemies_reload();
+    src_mod_bullets_reload();
+    src_mod_effects_reload();
+    return _new + "；[reloadallmod] 已重载 " + string(_n) + " 张 mod 卡的 bin 代码（释放永久别名 " + string(_alias_n) + " 条）";
 }
 
-function meta_reloadallmod() {
+function meta_modallreload() {
     return {
         description: "重扫所有 mod 目录，把新增（还没注册）的 mod 注册进来；已加载的会跳过",
         arguments: [],
