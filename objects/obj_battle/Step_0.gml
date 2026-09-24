@@ -19,6 +19,52 @@ if global.lose_focus_pause && global.network.mode != "client"{
 }
 
 battle_time ++
+
+// ── 格子快照（全局，每帧重建；弹幕管理器只读，见 obj_Bullet_Screen_Management/Step_0.gml）──
+//   global.cell_flag[格]     = 这一格里所有卡片 bullet_flag 的按位或
+//                              （子弹先做一次位测试就能排除掉"这一格根本没卡能吃我"）
+//   global.obstacle_flag[格] = 这一格有没有障碍物（非穿透子弹撞上就消失）
+//   尺寸变了（换图）就重建；两个循环每帧都会把整张表写一遍，不用先清零
+//   ⚠️ 弹幕管理器按 depth 排在后面（battle 是 50、它是 -700），所以这里先跑
+var _cols   = global.grid_cols;
+var _rows   = global.grid_rows;
+var _ncells = _cols * _rows;
+if (!variable_global_exists("cell_flag")     || array_length(global.cell_flag)     != _ncells) global.cell_flag     = array_create(_ncells, 0);
+if (!variable_global_exists("obstacle_flag") || array_length(global.obstacle_flag) != _ncells) global.obstacle_flag = array_create(_ncells, 0);
+
+// 卡片加成位
+if (variable_global_exists("grid_plants")) {
+	for (var _sr = 0; _sr < _rows; _sr++) {
+		var _srow = _sr * _cols;
+		for (var _sc = 0; _sc < _cols; _sc++) {
+			var _cardlist = ds_grid_get(global.grid_plants, _sc, _sr);
+			var _cnum = ds_list_size(_cardlist);
+			var _mask = 0;
+			for (var _sk = 0; _sk < _cnum; _sk++) {
+				var _card = ds_list_find_value(_cardlist, _sk);
+				if (!instance_exists(_card)) continue;
+				if (!variable_instance_exists(_card, "bullet_flag")) continue;
+				_mask = _mask | _card.bullet_flag;
+			}
+			global.cell_flag[_srow + _sc] = _mask;
+		}
+	}
+}
+
+// 障碍物：格子号按自己的 x/y 反算，不读实例的 row/col —— 那套字段不是每条创建路径都写全
+// （obj_event_manager 造障碍物时只写 row、col 一直是 0）。反算两边都准：障碍物放在格子中心，
+// y 再 -35，中心到格子边还有半个格子（58 像素），仍在同一格内
+for (var _oi = 0; _oi < _ncells; _oi++) global.obstacle_flag[_oi] = 0;
+var _nobs = instance_number(obj_obstacle);
+for (var _oj = 0; _oj < _nobs; _oj++) {
+	var _ob  = instance_find(obj_obstacle, _oj);
+	var _occ = floor((_ob.x - global.grid_offset_x) / global.grid_cell_size_x);
+	var _orr = floor((_ob.y - global.grid_offset_y) / global.grid_cell_size_y);
+	if (_orr >= 0 && _orr < _rows && _occ >= 0 && _occ < _cols) {
+		global.obstacle_flag[_orr * _cols + _occ] = 1;
+	}
+}
+
 // obj_controller STEP 事件
 if global.debug{
 	if keyboard_check_pressed(ord("M")){
