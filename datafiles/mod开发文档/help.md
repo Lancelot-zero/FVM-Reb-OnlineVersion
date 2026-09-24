@@ -544,15 +544,15 @@ _VM_BATTLE_START {
 
 ### 按名字调用函数
 
-按名字调用 `global._VM_call_dict` 里的函数——名字对编译器只是字符串，加函数不用改编译器、不用重编 exe。
+按名字调用引擎预置的工具函数（下面是可用清单）。
 
 | 函数 | 参数 / 返回 | 说明 |
 |---|---|---|
-| `VM_CallFunc("函数名", 参数...)` | 任意 | 按名字调用**独立字典**（`global._VM_call_dict`）里的函数，返回它的返回值。**名字对编译器只是字符串、不校验**，所以往字典里加函数不用改编译器、不用重编编译器、不用同步编辑器。第一个参数是函数名，后面是实参，最多 15 个；名字不在字典里返回 undefined（先 `VM_FuncExists` 判断） |
+| `VM_CallFunc("函数名", 参数...)` | 任意 | 按名字调用预置工具函数，返回它的返回值。第一个参数是函数名，后面是实参，最多 15 个；名字不存在返回 undefined（先用 `VM_FuncExists` 判断） |
 | `VM_FuncExists("函数名")` | int | 字典里有没有这个函数，1=有 0=没有（`VM_CallFunc` 的配套） |
 | `VM_FuncDesc("函数名")` | string | 返回字典里登记的该函数说明字符串，没登记返回空串（`VM_CallFunc` 的配套） |
 
-**字典里预置的通用工具函数**（清单在 `scripts/scr_command_VM_callFunction`，全是不碰游戏内部的纯逻辑）：
+**预置的通用工具函数**（全是不碰游戏内部的纯逻辑）：
 
 | 组 | 名字 |
 |---|---|
@@ -562,7 +562,7 @@ _VM_BATTLE_START {
 | 字符串 | `str_len` `str_sub` `str_find` `str_upper` `str_lower` `str_replace` `str_replace_all` `str_repeat` `str_trim` |
 | 随机 | `rand_i` `rand_f` `chance` |
 
-用法：`VM_CallFunc("clamp", v, 0, 100)`、`VM_CallFunc("bit_test", flag, 1)`。参数最多 15 个；字符串下标一律 **0 起**、找不到返回 `-1`；入参类型不对统一返回 `undefined`。想看某个函数的说明用 `VM_FuncDesc("名字")`；想加自己的辅助函数，在 `scr_command_VM_callFunction.gml` 里写个 GML 函数 + 在清单里加一行即可（不用改编译器、不占 VM 函数号）。
+用法：`VM_CallFunc("clamp", v, 0, 100)`、`VM_CallFunc("bit_test", flag, 1)`。参数最多 15 个；字符串下标一律 **0 起**、找不到返回 `-1`；入参类型不对统一返回 `undefined`。想看某个函数的说明用 `VM_FuncDesc("名字")`。
 
 > ⚠️ **`VM_CallFunc` 比直接调 VM 函数慢不少**（每次都要查一遍字典、把每个参数地址转成值、再走一次动态调用）。
 > 适合**低频**场景：开局摆地图、一次性配置、偶发事件。

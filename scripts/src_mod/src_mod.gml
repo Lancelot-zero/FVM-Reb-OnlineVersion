@@ -480,80 +480,201 @@ function src_mod_maps_load_dir(_dir = "") {
   file_find_close();
   return _count;
 }
+/// @function src_mod_json_fmt(_kind)
+/// @desc 各类 mod json 的**固定格式表**：每行 = [路径, 类型, 数组长度, 可选?, 元素类型]
+///       路径写法：`键` / `结构体键.子键` / `数组键[].子键`；长度写 0 = 不检查长度。
+///       类型：str=字符串 num=数字 arr=数组 obj=结构体 bool=布尔
+///       元素类型只对 arr 有意义（查数组里每个元素），写 "" / 省略 = 不查元素。
+function src_mod_json_fmt(_kind) {
+	switch (_kind) {
+		case "card": return [
+			["name", "str", 0], ["shapes", "arr", 0, false, "obj"],
+			["shop", "obj", 0], ["info_island", "str", 0],
+			["skill", "obj", 0], ["skill.attr", "str", 0], ["skill.values", "arr", 9, false, "num"],
+			["shapes[].shape", "num", 0], ["shapes[].name", "str", 0], ["shapes[].description", "str", 0],
+			["shapes[].sprite", "str", 0], ["shapes[].plant_type", "str", 0],
+			["shapes[].feature_type", "str", 0], ["shapes[].target_card", "str", 0],
+			["shapes[].hp", "arr", 17, false, "num"], ["shapes[].cost", "arr", 17, false, "num"],
+			["shapes[].atk", "arr", 17, false, "num"], ["shapes[].range", "arr", 17, false, "num"],
+			["shapes[].cooldown", "arr", 17, false, "num"], ["shapes[].cycle", "arr", 17, false, "num"],
+			["shapes[].flame_produce", "arr", 17, true, "num"],
+		];
+		case "weapon": return [
+			["name", "str", 0], ["description", "str", 0], ["sprite", "str", 0],
+			["icon", "str", 0], ["slot", "str", 0], ["shop", "obj", 0],
+			["atk", "num", 0, true], ["cycle", "num", 0, true], ["hp_increase", "num", 0, true],
+			["bullet_amount", "num", 0, true], ["bullet_shape", "num", 0, true], ["ghost_shape", "num", 0, true],
+			["atk_impact", "arr", 16, true, "num"], ["cycle_impact", "arr", 16, true, "num"],
+			["bullet_amount_impact", "arr", 16, true, "num"], ["bullet_shape_impact", "arr", 16, true, "num"],
+			["ghost_shape_impact", "arr", 16, true, "num"],
+		];
+		case "gem": return [
+			["name", "str", 0], ["description", "str", 0], ["icon", "str", 0], ["slot", "str", 0],
+			["max_level", "num", 0], ["cooldown", "arr", 0, false, "num"], ["shop", "obj", 0],
+		];
+		case "enemy": return [
+			["name", "str", 0], ["description", "str", 0], ["spr", "str", 0], ["hp", "num", 0],
+			["shield", "num", 0, true], ["speed", "num", 0, true], ["atk", "num", 0, true],
+			["cycle", "num", 0, true], ["range", "num", 0, true],
+			["ash_proof", "bool", 0, true], ["feature", "str", 0, true],
+		];
+	}
+	return [];
+}
+
+/// @function src_mod_fmt_type_name(_t)
+/// @desc 类型代号 → 中文名（只用于报错文案）
+function src_mod_fmt_type_name(_t) {
+	switch (_t) {
+		case "str":  return "字符串";
+		case "num":  return "数字";
+		case "arr":  return "数组";
+		case "obj":  return "结构体";
+		case "bool": return "布尔";
+	}
+	return _t;
+}
+
+/// @function src_mod_fmt_ok(_v, _t)
+/// @desc 这个值符不符合类型代号
+function src_mod_fmt_ok(_v, _t) {
+	switch (_t) {
+		case "str":  return is_string(_v);
+		case "num":  return is_real(_v);
+		case "arr":  return is_array(_v);
+		case "obj":  return is_struct(_v);
+		case "bool": return is_bool(_v);
+	}
+	return true;
+}
+
+/// @function src_mod_fmt_at(_s, _key, _type, _alen, _opt, _prefix, _etype)
+/// @desc 检查结构体 _s 的某个键；_prefix 只用来拼报错文案里的路径；
+///       _etype 不为空时，额外检查数组里每个元素的类型。
+function src_mod_fmt_at(_s, _key, _type, _alen, _opt, _prefix, _etype) {
+	var _label = (_prefix == "") ? _key : _prefix + "." + _key;
+	if (!variable_struct_exists(_s, _key)) return _opt ? "" : _label + "(缺) ";
+	var _v = _s[$ _key];
+	if (!src_mod_fmt_ok(_v, _type)) return _label + "(不是" + src_mod_fmt_type_name(_type) + ") ";
+	if (_type != "arr") return "";
+
+	var _out = "";
+	if (_alen > 0 && array_length(_v) != _alen) {
+		_out += _label + "(长度 " + string(array_length(_v)) + "≠" + string(_alen) + ") ";
+	}
+	if (_etype != "") {
+		var _bad_i = -1;
+		var _bad_n = 0;
+		for (var _k = 0; _k < array_length(_v); _k++) {
+			if (!src_mod_fmt_ok(_v[_k], _etype)) { if (_bad_i < 0) _bad_i = _k; _bad_n++; }
+		}
+		var _tn = src_mod_fmt_type_name(_etype);
+		if (_bad_n == 1)     _out += _label + "[" + string(_bad_i) + "](不是" + _tn + ") ";
+		else if (_bad_n > 1) _out += _label + "(" + string(_bad_n) + " 个元素不是" + _tn + ", 第一个是 [" + string(_bad_i) + "]) ";
+	}
+	return _out;
+}
+
+/// @function src_mod_fmt_check(_json, _spec)
+/// @desc 比对一条格式规则，返回问题说明串（没问题返回 ""）
+function src_mod_fmt_check(_json, _spec) {
+	if (!is_struct(_json)) return "";
+	var _path = _spec[0];
+	var _type = _spec[1];
+	var _alen = _spec[2];
+	var _opt  = (array_length(_spec) > 3) ? _spec[3] : false;
+	var _etyp = (array_length(_spec) > 4) ? _spec[4] : "";
+
+	var _br = string_pos("[]", _path);
+	if (_br > 0) {                                    // 数组键[].子键
+		var _ak  = string_copy(_path, 1, _br - 1);
+		var _sub = string_delete(_path, 1, _br + 1);  // 砍掉 "数组键[]"
+		if (string_char_at(_sub, 1) == ".") _sub = string_delete(_sub, 1, 1);
+		if (!variable_struct_exists(_json, _ak)) return "";
+		var _arr = _json[$ _ak];
+		if (!is_array(_arr)) return "";               // 数组本身由它自己那条规则报
+		var _out = "";
+		for (var _i = 0; _i < array_length(_arr); _i++) {
+			if (!is_struct(_arr[_i])) continue;
+			_out += src_mod_fmt_at(_arr[_i], _sub, _type, _alen, _opt, _ak + "[" + string(_i) + "]", _etyp);
+		}
+		return _out;
+	}
+
+	var _dot = string_pos(".", _path);
+	if (_dot > 0) {                                   // 结构体键.子键
+		var _pk   = string_copy(_path, 1, _dot - 1);
+		var _sub2 = string_delete(_path, 1, _dot);
+		if (!variable_struct_exists(_json, _pk)) return "";
+		var _p = _json[$ _pk];
+		if (!is_struct(_p)) return "";                // 结构体本身由它自己那条规则报
+		return src_mod_fmt_at(_p, _sub2, _type, _alen, _opt, _pk, _etyp);
+	}
+
+	return src_mod_fmt_at(_json, _path, _type, _alen, _opt, "", _etyp);
+}
+
+/// @function src_mod_check_flush()
+/// @desc 所有 mod 都加载完之后调用一次：这一轮体检出过问题就补一行汇总，提醒去看日志。
+/// @return 汇总文案（没问题返回 ""）
+function src_mod_check_flush() {
+	if (!variable_global_exists("_mod_fmt_bad_files")) return "";
+	var _f = global._mod_fmt_bad_files;
+	var _n = global._mod_fmt_bad_count;
+	global._mod_fmt_bad_files = 0;
+	global._mod_fmt_bad_count = 0;
+	if (_f <= 0) return "";
+	var _msg = "[mod 校验] 共 " + string(_f) + " 个文件 " + string(_n) + " 处不符合格式 → 详情见 mod/mod_errors.log";
+	shell_print(_msg);
+	mod_error_log(_msg);
+	return _msg;
+}
+
 /// @function src_mod_check_json(_kind, _id, _json)
-/// @desc 注册前体检 mod 的 json：缺字段 / 类型不对的补安全默认值，并把该文件的**所有问题一次性**
-///       报到 shell 控制台 + GameMaker 输出 + mod/mod_errors.log。
-///       目的：json 写漏字段时"这张卡不生效，但不会崩游戏、也不会静默没有任何提示"。
+/// @desc 注册前体检：拿该类型的**固定格式表**逐条比对（字段在不在、类型对不对、数组长度对不对）。
+///       每个文件在 shell 最多打一行，逐条明细进 GameMaker 输出 + mod/mod_errors.log；
+///       全部加载完由 src_mod_check_flush() 补一行汇总。
 function src_mod_check_json(_kind, _id, _json) {
 	if (!is_struct(_json)) return false;
 	var _bad = "";
 
-	// ── 通用字段 ──
-	if (!variable_struct_exists(_json, "name") || !is_string(_json[$ "name"]) || _json[$ "name"] == "") {
-		_json[$ "name"] = _id; _bad += "name(补 id) ";
-	}
-	if (!variable_struct_exists(_json, "description") && !variable_struct_exists(_json, "shop")) {
-		_bad += "description(缺,可省) ";
+	// 卡片的 skill 是唯一"缺了会崩"的东西（get_plant_data_with_skill 按 [等级] 索引）→ 先兜底，
+	// 兜底成合法的 9 档，再交给下面的格式表统一报错
+	if (_kind == "card") {
+		if (!is_struct(_json[$ "skill"])) {
+			_json[$ "skill"] = { attr: "cycle", values: [60, 60, 60, 60, 60, 60, 60, 60, 60] };
+			_bad += "skill(缺 → 补 9 档 cycle[60]) ";
+		} else {
+			var _sk = _json[$ "skill"];
+			if (!is_string(_sk[$ "attr"])) {
+				_sk[$ "attr"] = "cycle";
+				_bad += "skill.attr(补 cycle) ";
+			}
+			if (!is_array(_sk[$ "values"])) {
+				_sk[$ "values"] = [60, 60, 60, 60, 60, 60, 60, 60, 60];
+				_bad += "skill.values(补 9 档 [60]) ";
+			}
+		}
 	}
 
-	switch (_kind) {
-		case "card": {
-			var _shapes = _json[$ "shapes"];
-			if (!is_array(_shapes)) {
-				_json[$ "shapes"] = [];
-				_bad += "shapes(缺/不是数组 → 补空表, 这张卡不会注册) ";
-			} else {
-				for (var _i = 0; _i < array_length(_shapes); _i++) {
-					var _s = _shapes[_i];
-					if (!is_struct(_s)) { _bad += "shapes[" + string(_i) + "](不是结构体, 跳过) "; continue; }
-					var _t = "shapes[" + string(_i) + "]";
-					if (!is_real(_s[$ "shape"]))  { _s[$ "shape"] = _i;                       _bad += _t + ".shape(补 " + string(_i) + ") "; }
-					if (!is_string(_s[$ "sprite"]) || _s[$ "sprite"] == "") {
-						_s[$ "sprite"] = "spr_brazier";                                     _bad += _t + ".sprite(补 spr_brazier) ";
-					}
-					if (!is_real(_s[$ "hp"]))       _bad += _t + ".hp(缺→按 0) ";
-					if (!is_real(_s[$ "atk"]))      _bad += _t + ".atk(缺→按 0) ";
-					if (!is_real(_s[$ "cost"]))     _bad += _t + ".cost(缺→按 0) ";
-					if (!is_real(_s[$ "cooldown"])) _bad += _t + ".cooldown(缺→按 0) ";
-					if (!is_real(_s[$ "range"]))    _bad += _t + ".range(缺→按 0) ";
-					if (!is_real(_s[$ "cycle"]))    _bad += _t + ".cycle(缺→按 0) ";
-					if (!is_string(_s[$ "plant_type"]))   { _s[$ "plant_type"] = "normal";   _bad += _t + ".plant_type(补 normal) "; }
-					if (!is_string(_s[$ "feature_type"])) { _s[$ "feature_type"] = "normal"; _bad += _t + ".feature_type(补 normal) "; }
-					if (!is_string(_s[$ "target_card"]))  { _s[$ "target_card"] = "none";    _bad += _t + ".target_card(补 none) "; }
-				}
-			}
-			// 卡必须有 skill 结构，否则 get_plant_data_with_skill 里 [1][等级] 会炸
-			if (!variable_struct_exists(_json, "skill") || !is_struct(_json[$ "skill"])) {
-				_json[$ "skill"] = { attr: "cycle", values: [60] };
-				_bad += "skill(缺 → 补 cycle[60]) ";
-			}
-			break;
-		}
-		case "weapon": {
-			if (!is_string(_json[$ "sprite"]) || _json[$ "sprite"] == "") { _json[$ "sprite"] = "spr_brazier"; _bad += "sprite(补 spr_brazier) "; }
-			if (!is_string(_json[$ "icon"])   || _json[$ "icon"]   == "") { _json[$ "icon"] = _json[$ "sprite"]; _bad += "icon(补 sprite) "; }
-			if (!is_real(_json[$ "atk"]))    _bad += "atk(缺→按 0) ";
-			if (!is_real(_json[$ "cycle"]))  _bad += "cycle(缺→按 0) ";
-			if (!is_string(_json[$ "slot"])) _bad += "slot(缺→用默认槽) ";
-			break;
-		}
-		case "gem": {
-			if (!is_string(_json[$ "icon"]) || _json[$ "icon"] == "") _bad += "icon(缺→无图标, 不崩) ";
-			if (!is_string(_json[$ "slot"])) _bad += "slot(缺→用默认槽) ";
-			break;
-		}
-		case "enemy": {
-			if (!is_string(_json[$ "spr"]) || _json[$ "spr"] == "") { _json[$ "spr"] = "spr_brazier"; _bad += "spr(补 spr_brazier) "; }
-			if (!is_real(_json[$ "hp"])) _bad += "hp(缺→按 0) ";
-			break;
-		}
+	var _fmt = src_mod_json_fmt(_kind);
+	for (var _i = 0; _i < array_length(_fmt); _i++) {
+		_bad += src_mod_fmt_check(_json, _fmt[_i]);
 	}
 
 	if (_bad != "") {
-		var _msg = "[mod 校验] " + _kind + " / " + string(_id) + ".json → " + _bad;
-		shell_print(_msg);
-		show_debug_message(_msg);
-		mod_error_log(_msg);
+		var _detail = "[mod 校验] " + _kind + " / " + string(_id) + ".json → " + _bad;
+		show_debug_message(_detail);
+		mod_error_log(_detail);
+		var _n = string_count(") ", _bad);
+		if (_n <= 0) _n = 1;
+		shell_print("[mod 校验] " + _kind + "/" + string(_id) + ".json 有 " + string(_n) + " 处不符合格式（详情见 mod/mod_errors.log）");
+		if (!variable_global_exists("_mod_fmt_bad_files")) {
+			global._mod_fmt_bad_files = 0;
+			global._mod_fmt_bad_count = 0;
+		}
+		global._mod_fmt_bad_files += 1;
+		global._mod_fmt_bad_count += _n;
 	}
 	return true;
 }
@@ -1665,6 +1786,7 @@ function src_mod_register_new() {
 	}
 	_total += _an;
 	_sum += "时装" + string(_an);
+	src_mod_check_flush();
 	return "[reloadallmod] 新增 " + string(_total) + " 项（卡/武器/宝石/敌人/子弹/特效/时装）：" + _sum;
 }
 
