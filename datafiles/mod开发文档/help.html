@@ -1560,7 +1560,7 @@ _VM_BATTLE_START {
 （四周各留 25% 的三不管带），免得贴着格边飞的子弹被相邻两格的卡片同时触发。</p>
 </blockquote>
 <h3>按名字调用函数</h3>
-<p>按名字调用 <code>global._VM_call_dict</code> 里的函数——名字对编译器只是字符串，加函数不用改编译器、不用重编 exe。</p>
+<p>按名字调用引擎预置的工具函数（下面是可用清单）。</p>
 <table>
 <thead>
 <tr>
@@ -1572,7 +1572,7 @@ _VM_BATTLE_START {
 <tbody><tr>
 <td><code>VM_CallFunc(&quot;函数名&quot;, 参数...)</code></td>
 <td>任意</td>
-<td>按名字调用<strong>独立字典</strong>（<code>global._VM_call_dict</code>）里的函数，返回它的返回值。<strong>名字对编译器只是字符串、不校验</strong>，所以往字典里加函数不用改编译器、不用重编编译器、不用同步编辑器。第一个参数是函数名，后面是实参，最多 15 个；名字不在字典里返回 undefined（先 <code>VM_FuncExists</code> 判断）</td>
+<td>按名字调用预置工具函数，返回它的返回值。第一个参数是函数名，后面是实参，最多 15 个；名字不存在返回 undefined（先用 <code>VM_FuncExists</code> 判断）</td>
 </tr>
 <tr>
 <td><code>VM_FuncExists(&quot;函数名&quot;)</code></td>
@@ -1585,7 +1585,7 @@ _VM_BATTLE_START {
 <td>返回字典里登记的该函数说明字符串，没登记返回空串（<code>VM_CallFunc</code> 的配套）</td>
 </tr>
 </tbody></table>
-<p><strong>字典里预置的通用工具函数</strong>（清单在 <code>scripts/scr_command_VM_callFunction</code>，全是不碰游戏内部的纯逻辑）：</p>
+<p><strong>预置的通用工具函数</strong>（全是不碰游戏内部的纯逻辑）：</p>
 <table>
 <thead>
 <tr>
@@ -1614,7 +1614,7 @@ _VM_BATTLE_START {
 <td><code>rand_i</code> <code>rand_f</code> <code>chance</code></td>
 </tr>
 </tbody></table>
-<p>用法：<code>VM_CallFunc(&quot;clamp&quot;, v, 0, 100)</code>、<code>VM_CallFunc(&quot;bit_test&quot;, flag, 1)</code>。参数最多 15 个；字符串下标一律 <strong>0 起</strong>、找不到返回 <code>-1</code>；入参类型不对统一返回 <code>undefined</code>。想看某个函数的说明用 <code>VM_FuncDesc(&quot;名字&quot;)</code>；想加自己的辅助函数，在 <code>scr_command_VM_callFunction.gml</code> 里写个 GML 函数 + 在清单里加一行即可（不用改编译器、不占 VM 函数号）。</p>
+<p>用法：<code>VM_CallFunc(&quot;clamp&quot;, v, 0, 100)</code>、<code>VM_CallFunc(&quot;bit_test&quot;, flag, 1)</code>。参数最多 15 个；字符串下标一律 <strong>0 起</strong>、找不到返回 <code>-1</code>；入参类型不对统一返回 <code>undefined</code>。想看某个函数的说明用 <code>VM_FuncDesc(&quot;名字&quot;)</code>。</p>
 <blockquote>
 <p>⚠️ <strong><code>VM_CallFunc</code> 比直接调 VM 函数慢不少</strong>（每次都要查一遍字典、把每个参数地址转成值、再走一次动态调用）。
 适合<strong>低频</strong>场景：开局摆地图、一次性配置、偶发事件。

@@ -44,6 +44,7 @@ if (global.mod_enabled) {
 	src_mod_enemies_init()
   src_mod_bullets_init()
   src_mod_effects_init()
+  src_mod_check_flush()
 }
 
 global.player_name = "Player";
