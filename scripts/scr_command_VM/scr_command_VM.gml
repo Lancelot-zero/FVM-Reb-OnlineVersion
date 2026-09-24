@@ -2328,7 +2328,11 @@ function VM_ArrayContains(name_addr, value_addr) {
 function VM_InstArrayExists(inst_addr, name_addr) {
     var _inst = vm_arg(inst_addr);
     var _name = vm_arg(name_addr);
-    if (_inst == 0) return 0;
+    // inst = 0：和 VM_GetProp(0, …) 一个口径 —— 名字当全局变量名，操作 global.<name> 那个数组
+    if (_inst == 0) {
+        if (!variable_global_exists(_name)) return 0;
+        return is_array(variable_global_get(_name)) ? 1 : 0;
+    }
     if (_inst < 0) {
         var _real = ds_map_find_value(global._VM_id_to_real, -_inst);
         if (is_undefined(_real)) return 0;
@@ -2344,7 +2348,11 @@ function VM_InstArrayExists(inst_addr, name_addr) {
 function VM_InstArraySize(inst_addr, name_addr) {
     var _inst = vm_arg(inst_addr);
     var _name = vm_arg(name_addr);
-    if (_inst == 0) return -1;
+    if (_inst == 0) {
+        if (!variable_global_exists(_name)) return -1;
+        var _g = variable_global_get(_name);
+        return is_array(_g) ? array_length(_g) : -1;
+    }
     if (_inst < 0) {
         var _real = ds_map_find_value(global._VM_id_to_real, -_inst);
         if (is_undefined(_real)) return -1;
@@ -2364,7 +2372,13 @@ function VM_InstArrayItem(inst_addr, name_addr, k_addr) {
     var _inst = vm_arg(inst_addr);
     var _name = vm_arg(name_addr);
     var _k = vm_arg(k_addr);
-    if (_inst == 0) return -1;
+    if (_inst == 0) {
+        if (!variable_global_exists(_name)) return -1;
+        var _g = variable_global_get(_name);
+        if (!is_array(_g)) return -1;
+        if (_k < 0 || _k >= array_length(_g)) return -1;
+        return _g[_k];
+    }
     if (_inst < 0) {
         var _real = ds_map_find_value(global._VM_id_to_real, -_inst);
         if (is_undefined(_real)) return -1;
@@ -2389,7 +2403,15 @@ function VM_InstArraySet(inst_addr, name_addr, k_addr, value_addr) {
     var _name = vm_arg(name_addr);
     var _k = vm_arg(k_addr);
     var _v = vm_arg(value_addr);
-    if (_inst == 0) return -1;
+    if (_inst == 0) {
+        var _g = variable_global_exists(_name) ? variable_global_get(_name) : [];
+        if (!is_array(_g)) _g = [];
+        if (_k < 0) return -1;
+        if (_k >= array_length(_g)) array_resize(_g, _k + 1);
+        _g[_k] = _v;
+        variable_global_set(_name, _g);
+        return 1;
+    }
     if (_inst < 0) {
         var _real = ds_map_find_value(global._VM_id_to_real, -_inst);
         if (is_undefined(_real)) return -1;
@@ -2416,7 +2438,13 @@ function VM_InstArrayAdd(inst_addr, name_addr, value_addr) {
     var _inst = vm_arg(inst_addr);
     var _name = vm_arg(name_addr);
     var _v = vm_arg(value_addr);
-    if (_inst == 0) return -1;
+    if (_inst == 0) {
+        var _g = variable_global_exists(_name) ? variable_global_get(_name) : [];
+        if (!is_array(_g)) _g = [];
+        array_push(_g, _v);
+        variable_global_set(_name, _g);
+        return 1;
+    }
     if (_inst < 0) {
         var _real = ds_map_find_value(global._VM_id_to_real, -_inst);
         if (is_undefined(_real)) return -1;
@@ -2441,7 +2469,15 @@ function VM_InstArrayDel(inst_addr, name_addr, k_addr) {
     var _inst = vm_arg(inst_addr);
     var _name = vm_arg(name_addr);
     var _k = vm_arg(k_addr);
-    if (_inst == 0) return -1;
+    if (_inst == 0) {
+        if (!variable_global_exists(_name)) return -1;
+        var _g = variable_global_get(_name);
+        if (!is_array(_g)) return -1;
+        if (_k < 0 || _k >= array_length(_g)) return -1;
+        array_delete(_g, _k, 1);
+        variable_global_set(_name, _g);
+        return 1;
+    }
     if (_inst < 0) {
         var _real = ds_map_find_value(global._VM_id_to_real, -_inst);
         if (is_undefined(_real)) return -1;
@@ -2462,7 +2498,10 @@ function VM_InstArrayDel(inst_addr, name_addr, k_addr) {
 function VM_InstArrayClear(inst_addr, name_addr) {
     var _inst = vm_arg(inst_addr);
     var _name = vm_arg(name_addr);
-    if (_inst == 0) return -1;
+    if (_inst == 0) {
+        variable_global_set(_name, []);
+        return 1;
+    }
     if (_inst < 0) {
         var _real = ds_map_find_value(global._VM_id_to_real, -_inst);
         if (is_undefined(_real)) return -1;
@@ -2481,7 +2520,12 @@ function VM_InstArrayContains(inst_addr, name_addr, value_addr) {
     var _inst = vm_arg(inst_addr);
     var _name = vm_arg(name_addr);
     var _v = vm_arg(value_addr);
-    if (_inst == 0) return -1;
+    if (_inst == 0) {
+        if (!variable_global_exists(_name)) return -1;
+        var _g = variable_global_get(_name);
+        if (!is_array(_g)) return -1;
+        return (array_get_index(_g, _v) != -1) ? 1 : 0;
+    }
     if (_inst < 0) {
         var _real = ds_map_find_value(global._VM_id_to_real, -_inst);
         if (is_undefined(_real)) return -1;
@@ -3097,7 +3141,7 @@ function vm_store_result(vm, _mt, _mv, _dst, _result) {
 ///          所以解码时分两趟：先记 字节偏移→数组下标 的映射，最后回填跳转目标。
 ///          （-1 是"不跳"，原样保留）
 /// @return 值数组（空块返回空数组）
-function VM_Decode(buf) {
+function VM_Decode(buf, _poslist = noone) {
     var _code = [];
     if (!buffer_exists(buf)) return _code;
 
@@ -3105,9 +3149,14 @@ function VM_Decode(buf) {
     var _fix = [];                    // 待回填：[数组位置, 原始字节偏移, 数组位置, 原始字节偏移, ...]
     buffer_seek(buf, buffer_seek_start, 0);
     var _size = buffer_get_size(buf);
+    var _want_pos = (_poslist != noone && ds_exists(_poslist, ds_type_list));   // 传了 ds_list 才记位置（报错定位用）
 
     while (buffer_tell(buf) < _size) {
         _off2idx[? string(buffer_tell(buf))] = array_length(_code);
+        if (_want_pos) {
+            ds_list_add(_poslist, array_length(_code));   // 这条指令占用的【数组下标】（操作数也在数组里，不是逐条 +1）
+            ds_list_add(_poslist, buffer_tell(buf));      // 它对应的【字节偏移】
+        }
         var _op = buffer_read(buf, buffer_u8);
         array_push(_code, _op);
 
@@ -3223,6 +3272,198 @@ function VM_Decode(buf) {
     ds_map_destroy(_off2idx);
 
     return _code;
+}
+
+/// @function mod_error_report(vm, name, ip, err)
+/// @desc 把一次 mod 运行错误整理成"人能看懂"的多行块写进 mod/mod_errors.log：
+///         先说清【哪个 bin、哪个块、源码第几行 + 那一行的原文】，
+///         再附【GML 的原始错误】（script / message / longMessage / 完整调用栈）。
+///       shell 只打一行摘要，避免控制台被刷屏。
+function mod_error_report(vm, name, ip, _err, _pos_is_byte = false) {
+    var _dir = (is_struct(vm) && variable_struct_exists(vm, "mod_dir")) ? string(vm[$ "mod_dir"]) : "";
+    // 出错的到底是哪个 bin（src_lines 是 dir+id+".lines"，换成 .bin 就是它）
+    var _binp = "";
+    if (is_struct(vm) && variable_struct_exists(vm, "src_lines")) _binp = string_replace(vm[$ "src_lines"], ".lines", ".bin");
+    var _nm  = "";
+    if (is_struct(vm) && variable_struct_exists(vm, "card_data") && is_struct(vm.card_data)
+     && variable_struct_exists(vm.card_data, "name")) _nm = string(vm.card_data.name);
+
+    // 源码行号（VM_LineOf 返回 "err_test.txt:15"，拿不到就是 ""）
+    var _loc = VM_LineOf(vm, name, ip, _pos_is_byte);
+    var _ln  = -1;
+    if (_loc != "") _ln = real(string_delete(_loc, 1, string_pos(":", _loc)));
+
+    // 源码那一行的原文（.txt 就在 bin 旁边：src_lines 是 .lines，换成 .txt）
+    var _srctext = "";
+    if (_ln > 0 && is_struct(vm) && variable_struct_exists(vm, "src_lines")) {
+        var _tp = string_replace(vm[$ "src_lines"], ".lines", ".txt");
+        if (file_exists(_tp)) {
+            var _fr = file_text_open_read(_tp);
+            if (_fr != -1) {
+                var _k = 0;
+                while (!file_text_eof(_fr)) {
+                    var _s = file_text_read_string(_fr);
+                    file_text_readln(_fr);
+                    _k++;
+                    if (_k == _ln) { _srctext = _s; break; }
+                }
+                file_text_close(_fr);
+            }
+        }
+    }
+
+    // GML 的原始错误信息
+    var _escript = "", _emsg = "", _elong = "", _estack = "";
+    if (is_struct(_err)) {
+        if (variable_struct_exists(_err, "script"))      _escript = string(_err[$ "script"]);
+        if (variable_struct_exists(_err, "message"))     _emsg    = string(_err[$ "message"]);
+        if (variable_struct_exists(_err, "longMessage")) _elong   = string(_err[$ "longMessage"]);
+        if (variable_struct_exists(_err, "stacktrace") && is_array(_err[$ "stacktrace"])) {
+            var _st = _err[$ "stacktrace"];
+            for (var _i = 0; _i < array_length(_st); _i++) _estack += "      " + string(_st[_i]) + "\n";
+        }
+    } else {
+        _emsg = string(_err);
+    }
+
+    var _o = "\n========== mod 运行出错 ==========\n";
+    _o += "  文件   : " + _binp + "\n";
+    _o += "  名称   : " + _nm + "\n";
+    _o += "  VM块   : " + string(name) + "   指令位置 " + string(ip) + "\n";
+    if (_ln > 0) _o += "  源码行 : 第 " + string(_ln) + " 行   （" + _loc + "）\n";
+    else         _o += "  源码行 : 拿不到（那个 bin 里没有行号表？）\n";
+    if (_srctext != "") _o += "  那一行 : " + string_trim(_srctext) + "\n";
+    _o += "  ---- GML 原始错误 ----\n";
+    _o += "  script : " + _escript + "\n";
+    _o += "  message: " + _emsg + "\n";
+    if (_elong != "") _o += "  long   : " + _elong + "\n";
+    if (_estack != "") _o += "  调用栈 :\n" + _estack;
+    _o += "==================================\n";
+    mod_error_log(_o);
+
+    // shell 只给一行摘要：哪个文件、哪张卡、哪个块、第几行；详细内容看日志
+    shell_print("[mod 出错] " + _binp + "   块 " + string(name) + "   名称 " + _nm
+              + ((_ln > 0) ? ("   第 " + string(_ln) + " 行") : "   行号未知"));
+    shell_print("详情见 错误日志：mod/mod_errors.log");
+    return _loc;
+}
+
+/// @function mod_error_ctx(vm, name, pos)
+/// @desc 组装一条 mod 运行错误的定位信息：块名 + 位置 + 是哪个 mod（目录/名称）+ 源码行号
+function mod_error_ctx(vm, name, pos) {
+    var _who = "";
+    if (is_struct(vm)) {
+        if (variable_struct_exists(vm, "mod_dir") && is_string(vm.mod_dir)) _who += " | 目录 " + vm.mod_dir;
+        if (variable_struct_exists(vm, "card_data") && is_struct(vm.card_data)
+         && variable_struct_exists(vm.card_data, "name"))              _who += " | 名称 " + string(vm.card_data.name);
+    }
+    var _loc = VM_LineOf(vm, name, pos);   // 有行号表就带上 "xxx.txt:88"，没有就是空串
+    if (_loc != "") _loc = " " + _loc;
+    return "[块 " + string(name) + " @ " + string(pos) + _who + "]" + _loc;
+}
+
+/// @function VM_LineOf(vm, name, ip)
+/// @desc 把数组版解释器的 _ip 翻译成源码位置（"clotho.txt:88"）。
+///       行号表在加载 bin 时已读进 vm.line_tab，这里只做两次查表：
+///         _ip →（报错时才解码出的位置表）→ 字节偏移 →（行号表）→ 源行号
+///       没有行号表 / 查不到 → 返回 ""，调用方保持原来的"块名 + 位置"输出。
+function VM_LineOf(vm, name, ip, _is_byte = false) {
+    if (!is_struct(vm)) return "";
+    if (!variable_struct_exists(vm, "line_tab") || !variable_struct_exists(vm, "blocks")) {
+        mod_error_log("[VM_LineOf] 没有 line_tab/blocks（bin 里没打包行号表？）");
+        return "";
+    }
+    if (!ds_map_exists(vm.line_tab, name) || !ds_map_exists(vm.blocks, name)) {
+        mod_error_log("[VM_LineOf] 行号表里没有块 " + string(name));
+        return "";
+    }
+
+    // _ip → 字节偏移：按块解码一次拿位置表并缓存（只在报错路径上发生）
+    if (!variable_struct_exists(vm, "code_pos")) vm[$ "code_pos"] = ds_map_create();
+    if (!ds_map_exists(vm.code_pos, name)) {
+        var _pl = ds_list_create();
+        VM_Decode(vm.blocks[? name], _pl);
+        vm.code_pos[? name] = _pl;
+    }
+    var _pos = vm.code_pos[? name];   // [指令的数组下标, 字节偏移, 下标, 偏移, …]
+    var _pn = ds_list_size(_pos);
+    var _byte = -1;
+    if (_is_byte) {
+        _byte = ip;   // 字节码版/调试版解释器传进来的本来就是字节偏移，直接用
+    } else {
+        for (var _pi = 0; _pi + 1 < _pn; _pi += 2) {
+            if (ds_list_find_value(_pos, _pi) > ip) break;   // 找到 ip 落在哪条指令上
+            _byte = ds_list_find_value(_pos, _pi + 1);
+        }
+    }
+    if (_byte < 0) {
+        mod_error_log("[VM_LineOf] ip " + string(ip) + " 落在位置表之外（共 " + string(_pn div 2) + " 条指令）");
+        return "";
+    }
+
+    // 行号表里找"起始字节 ≤ _byte"的最后一条语句
+    var _lst = vm.line_tab[? name];
+    var _n = ds_list_size(_lst);
+    var _line_no = -1;
+    for (var _i = 0; _i + 1 < _n; _i += 2) {
+        if (ds_list_find_value(_lst, _i) > _byte) break;
+        _line_no = ds_list_find_value(_lst, _i + 1);
+    }
+    if (_line_no < 0) {
+        mod_error_log("[VM_LineOf] 字节偏移 " + string(_byte) + " 之前没有任何记录（表长度 " + string(_n) + "）");
+        return "";
+    }
+
+    var _f = "?";
+    if (variable_struct_exists(vm, "src_lines")) _f = string_replace(filename_name(vm[$ "src_lines"]), ".lines", ".txt");
+    return _f + ":" + string(_line_no);
+}
+
+/// @function mod_error_log(_msg)
+/// @desc 把一条 mod 运行错误追加到本地日志 mod/mod_errors.log（时间 + 内容）。
+///       同一个错误连续刷屏时每 60 次才再记一条；日志只保留最近 400 行。
+function mod_error_log(_msg) {
+    var _m = string(_msg);
+
+    // 连续重复的同一个错误不刷屏
+    if (variable_global_exists("_mod_err_last") && _m == global._mod_err_last) {
+        global._mod_err_dup += 1;
+        if ((global._mod_err_dup mod 60) != 0) return;
+    } else {
+        global._mod_err_last = _m;
+        global._mod_err_dup  = 0;
+    }
+
+    var _dir = working_directory + "mod/";
+    if (!directory_exists(_dir)) return;
+    var _path = _dir + "mod_errors.log";
+
+    // 读旧内容（GM 没有追加模式，只能读出来再整体写回）
+    var _lines = [];
+    if (file_exists(_path)) {
+        var _r = file_text_open_read(_path);
+        if (_r != -1) {
+            while (!file_text_eof(_r)) {
+                array_push(_lines, file_text_read_string(_r));
+                file_text_readln(_r);
+            }
+            file_text_close(_r);
+        }
+    }
+    array_push(_lines, date_datetime_string(date_current_datetime()) + "  " + _m);
+    if (array_length(_lines) > 2000) {
+        var _keep = [];
+        for (var _i = array_length(_lines) - 2000; _i < array_length(_lines); _i++) array_push(_keep, _lines[_i]);
+        _lines = _keep;
+    }
+
+    var _w = file_text_open_write(_path);
+    if (_w == -1) return;
+    for (var _i = 0; _i < array_length(_lines); _i++) {
+        file_text_write_string(_w, _lines[_i]);
+        file_text_writeln(_w);
+    }
+    file_text_close(_w);
 }
 
 /// @function VM_Execute_code(vm, code, name)
@@ -3547,7 +3788,9 @@ function VM_Execute_code(vm, code, name) {
         return 0;
 
     } catch (_err) {
-        shell_print("VM Error: " + string(_err));
+        mod_error_report(vm, name, _ip, _err);
+        // 严格模式：再抛一次，让 GameMaker 报出完整调用栈（开发期用；会中断当帧）
+        if (variable_global_exists("_VM_strict") && global._VM_strict) throw _err;
         return -1;
     }
 }
@@ -3575,8 +3818,10 @@ function VM_Execute(vm, buf, name) {
         var _mt = vm.mem_type;
         var _mv = vm.mem_val;
         var _mlen = array_length(_mt);
+        var _pos_cur = 0;   // 每次取指前记一次位置，出错时报出来
 
         while (buffer_tell(buf) < _size) {
+            _pos_cur = buffer_tell(buf);
             var _op = buffer_read(buf, buffer_u8);
 
             switch (_op) {
@@ -3802,7 +4047,9 @@ function VM_Execute(vm, buf, name) {
         return 0;
 
     } catch (_err) {
-        shell_print("VM Error: " + string(_err));
+        mod_error_report(vm, name, _pos_cur, _err, true);
+        // 严格模式：再抛一次，让 GameMaker 报出完整调用栈（开发期用；会中断当帧）
+        if (variable_global_exists("_VM_strict") && global._VM_strict) throw _err;
         return -1;
     }
 }
@@ -4070,7 +4317,9 @@ function VM_Execute_debug(vm, buf, name) {
         }
         return 0;
     } catch (_err) {
-        shell_print("VM Error: " + string(_err));
+        mod_error_report(vm, name, _pos, _err, true);
+        // 严格模式：再抛一次，让 GameMaker 报出完整调用栈（开发期用；会中断当帧）
+        if (variable_global_exists("_VM_strict") && global._VM_strict) throw _err;
         return -1;
     }
 }
@@ -4854,6 +5103,22 @@ function VM_DrawSpriteExt(spr_addr, subimg_addr, x_addr, y_addr, xs_addr, ys_add
 #macro HIT_DIVER       16
 #macro HIT_UNDERGROUND 32
 #macro HIT_OTHER       64   // 其它/未知敌人类型：只有子弹类型 "all" 能打（can_target_on 的兜底行为）
+
+/// @function enemy_tbit_of(type)
+/// @desc 敌人 target_type 字符串 → 命中位掩码（唯一一份映射，别处不要再抄 switch）。
+///       由 obj_enemy_parent 自己在 Create / Step_2 里写进 tbit，不再依赖 obj_battle 的每帧遍历 ——
+///       否则刚生成的敌人、或排在 obj_battle 之前执行的管理器读 tbit 会"变量未定义"。
+function enemy_tbit_of(_t) {
+    switch (_t) {
+        case "normal":      return HIT_NORMAL;
+        case "air":         return HIT_AIR;
+        case "dance":       return HIT_DANCE;
+        case "obstacle":    return HIT_OBSTACLE;
+        case "diver":       return HIT_DIVER;
+        case "underground": return HIT_UNDERGROUND;
+    }
+    return HIT_OTHER;   // "invisible" / mod 自定义类型等
+}
 
 /// @function bullet_type_mask(type)
 /// @desc 子弹 type 字符串 → 命中位掩码，和 can_target_on 一一对应

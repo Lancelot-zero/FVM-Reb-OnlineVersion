@@ -2,7 +2,9 @@
 // 卡 id 由放置逻辑在创建前写入 global._mod_pending_card_id
 event_inherited();
 plant_id = variable_global_exists("_mod_pending_card_id") ? global._mod_pending_card_id : ""
-event_user(0)
+// ⚠️ event_user(0) 故意放到下面「默认值」之后：它会用 plant_id 取卡数据，
+//    plant_id 查不到时会抛错中断 Create —— 那时 mod_tick_max 等默认值必须已经写好，
+//    否则实例已经存在、Step 每帧读 mod_tick_max 就是致命错误（整个游戏崩）
 
 // ══════════════════════════════════════════════════════════════════════════
 // mod 卡可设置（在卡的 _OBJECT_CREATE 里 VM_SetProp；数组用 VM_InstArray*）：
@@ -69,6 +71,9 @@ mod_set2_on   = 0  // 第二套开关
 mod_set2_id   = []
 mod_set2_prop = []
 mod_set2_val  = []
+
+// 默认值全部写完，再跑父对象初始化（读卡数据、算攻防；plant_id 无效时它会抛错）
+event_user(0)
 
 // 创建时加入该卡的实例容器，并执行该卡虚拟机里的创建块
 if (plant_id != "" && variable_global_exists("mod_card_vms") && ds_map_exists(global.mod_card_vms, plant_id)) {
