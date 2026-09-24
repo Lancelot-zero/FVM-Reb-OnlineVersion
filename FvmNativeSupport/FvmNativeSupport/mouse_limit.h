@@ -149,6 +149,14 @@ static volatile LONG g_inject_tick = 0;
 
 // 本模块不做任何前台/几何判断：玩家是否在游戏里由 GML 侧用 window_has_focus() 决定
 // （有焦点才 Start，失焦即 Stop）。这里只在 g_interval > 0 且心跳新鲜时限频。
+// 把一个已放行事件的位置采纳为位移累加的新基准。
+// 放行的事件会由系统真正送达，光标随即处于 ms->pt，累加是相对 g_cur 做差的，故基准要同步。
+// 只换基准，不动 g_acc：g_acc 是「尚欠玩家的位移」，换参照系依旧有效（清零会吞掉它）。
+static void RebaseTo(const MSLLHOOKSTRUCT *ms) {
+  g_cur_x = ms->pt.x;
+  g_cur_y = ms->pt.y;
+}
+
 static LRESULT CALLBACK LowLevelProc(int nCode, WPARAM wParam, LPARAM lParam) {
   g_arrive += 1.0;
   if (nCode != HC_ACTION || wParam != WM_MOUSEMOVE || g_interval <= 0) {
@@ -159,6 +167,8 @@ static LRESULT CALLBACK LowLevelProc(int nCode, WPARAM wParam, LPARAM lParam) {
   MSLLHOOKSTRUCT *ms = reinterpret_cast<MSLLHOOKSTRUCT *>(lParam);
   if (ms == nullptr || (ms->flags & LLMHF_INJECTED) != 0) {
     g_inj_seen += 1.0;  // 我们自己注入的事件，绝不能再吞（否则自我循环）
+    if (ms != nullptr)
+      RebaseTo(ms);  // 本事件放行，基准跟随
     g_pass += 1.0;
     return CallNextHookEx(g_hook, nCode, wParam, lParam);
   }
@@ -167,6 +177,7 @@ static LRESULT CALLBACK LowLevelProc(int nCode, WPARAM wParam, LPARAM lParam) {
   const DWORD now_ms = GetTickCount();
   if (now_ms - static_cast<DWORD>(g_inject_tick) > kStallMs) {
     g_stale += 1.0;
+    RebaseTo(ms);  // 本条放行，基准跟随
     g_pass += 1.0;
     return CallNextHookEx(g_hook, nCode, wParam, lParam);
   }
