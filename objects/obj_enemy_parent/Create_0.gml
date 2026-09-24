@@ -73,3 +73,8 @@ _state_prev = state
 random_seed = irandom_range(0,4096)
 pre_state = -1 
 pre_hp = -1
+
+// 命中位掩码 + 吃不吃冰冻：由敌人自己持有（Step_2 每帧刷新），不再依赖 obj_battle 的每帧遍历。
+// 这里按父对象的默认 target_type 先算一次，子对象改了 target_type 后下一帧就正了 —— 关键是不会"未定义"。
+tbit   = enemy_tbit_of(target_type);
+ice_ok = 1 ;

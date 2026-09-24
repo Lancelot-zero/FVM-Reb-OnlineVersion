@@ -813,6 +813,34 @@ function meta_modallreload() {
     };
 }
 
+/// @description 命令行：VM 严格模式开关（on=VM 出错直接抛到 GM 层，能看到调用栈）
+function sh_vmstrict(args) {
+    var _cur = (variable_global_exists("_VM_strict") && global._VM_strict);
+    var _a = (array_length(args) > 1) ? string_lower(string(args[1])) : "";
+    if (_a == "") {
+        return "[vmstrict] 当前：" + (_cur ? "on" : "off") + "（用法：vmstrict on | off）";
+    }
+    if (_a == "on" || _a == "1" || _a == "true") {
+        global._VM_strict = true;
+        return "[vmstrict] 已打开：VM 里出错会直接抛出（能看完整调用栈），当帧会中断";
+    }
+    if (_a == "off" || _a == "0" || _a == "false") {
+        global._VM_strict = false;
+        return "[vmstrict] 已关闭：VM 报错只打控制台 + 写 mod/mod_errors.log";
+    }
+    return "[vmstrict] 用法：vmstrict on | off";
+}
+
+function meta_vmstrict() {
+    return {
+        description: "VM 严格模式：on = VM 里出错直接抛到 GameMaker 层（能看到完整调用栈，当帧会中断）；off = 只记控制台和 mod/mod_errors.log",
+        arguments: ["[on | off]"],
+        suggestions: ["on", "off"],
+        hidden: false,
+        deferred: false
+    };
+}
+
 /// @description 命令行：取消暂停（等价于点暂停菜单的"继续游戏"）
 function sh_unpause(args) {
     var _was = false;

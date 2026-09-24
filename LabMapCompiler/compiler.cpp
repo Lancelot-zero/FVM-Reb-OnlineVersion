@@ -138,6 +138,9 @@ public:
 
     bool compile(string& err_msg) {
         // ---- 第一遍：收集字符串/变量，校验结构，检测常量 ----
+        // 源码总行数（行号表用它兜底：块末尾回放/内联那段会跑到文件外，行号是假的，不记）
+        total_lines_ = 1;
+        for (char _c : src_) { if (_c == '\n') total_lines_++; }
         src_copy_ = src_;
         // 跳过 UTF-8 BOM（部分 Windows 编辑器保存时自动添加）
         if (src_copy_.size() >= 3 && (uint8_t)src_copy_[0] == 0xEF &&
@@ -155,6 +158,7 @@ public:
 
     const StringPool& strings() const { return strings_; }
     const vector<pair<int, vector<uint8_t>>>& blocks() const { return blocks_; }
+    const vector<pair<int, vector<pair<int,int>>>>& block_lines() const { return block_lines_; }
     const vector<string>& const_names() const { return const_names_; }
     int literal_count() const { return (int)literal_pool_.size(); }
 
@@ -177,6 +181,16 @@ private:
     VarTable vars_;
     vector<pair<int, vector<uint8_t>>> blocks_;
     ByteBuf* cur_buf_ = nullptr;
+    // 行号表：gen_statement 每条语句记一次 (字节偏移, 源行号)，gen_block 收工时按块存进 block_lines_。
+    // 编译成功后由 write_binary 写成同名 .lines（侧挂文件，不改 bin 格式；VM 端只在报错时才读）
+    bool                                     rec_lines_ = false;
+    vector<pair<int,int>>                    cur_lines_;
+    vector<pair<int, vector<pair<int,int>>>> block_lines_;
+    int                                      total_lines_ = 0;   // 源码总行数（行号表兜底用）
+    bool                                     want_lines_ = true; // 是否把行号表打进 bin（--no-lines 关闭）
+public:
+    void set_lines(bool v) { want_lines_ = v; }
+private:
     int temp_base_ = 0;        // 临时槽位起点（= 用户变量数）
     map<int, int> slot_type_;     // 槽位 → 类型 (MEM_INT/MEM_FLOAT/MEM_STRING)
     map<int, string> slot_str_;   // 槽位 → 字面量字符串值（仅字面量槽位有）
@@ -873,6 +887,28 @@ private:
             int si = strings_.add("_VM_CONST_INIT");
             blocks_.insert(blocks_.begin(), make_pair(si, init.buf));
         }
+
+        // ── 行号表打包成伪块（方案 C，二进制）────────────────────
+        // 块名 __LINES__，数据：u32 段数；每段 u32 块名下标 + u32 条数；每条 u32 字节偏移 + u32 行号。
+        // 复用现成的"长度 + 名字下标 + 数据"块结构 → bin 格式零变化；
+        // 老 VM 读新 bin 只会多一个永不执行的块，新 VM 读老 bin 没有这块（自动退回"块名+位置"）。
+        if (want_lines_ && !block_lines_.empty()) {
+            vector<uint8_t> lb;
+            auto w32 = [&](uint32_t v) {
+                lb.push_back((uint8_t)(v & 0xFF));
+                lb.push_back((uint8_t)((v >> 8) & 0xFF));
+                lb.push_back((uint8_t)((v >> 16) & 0xFF));
+                lb.push_back((uint8_t)((v >> 24) & 0xFF));
+            };
+            w32((uint32_t)block_lines_.size());
+            for (auto& bl : block_lines_) {
+                w32((uint32_t)bl.first);
+                w32((uint32_t)bl.second.size());
+                for (auto& e : bl.second) { w32((uint32_t)e.first); w32((uint32_t)e.second); }
+            }
+            int li = strings_.add("__LINES__");
+            blocks_.push_back({li, lb});
+        }
         return !failed_;
     }
 
@@ -884,18 +920,34 @@ private:
         next();                     // 块名
         match(TK_LBRACE);
 
+        rec_lines_ = want_lines_;   // 本块开始记行号表
+        cur_lines_.clear();
         while (!check(TK_RBRACE) && !check(TK_EOF)) {
             gen_statement();
         }
+        rec_lines_ = false;
         int brace_line = cur_.line;
         match(TK_RBRACE);
         if (!check(TK_EOF) && !check(TK_RBRACE) && cur_.line == brace_line)
             error(cur_.line, "unexpected token after block");
 
+        // 自定义块体内联到本块末尾：写的是同一个 buffer（cur_buf_ 还是 bb），偏移天然对得上，
+        // 所以这里也要记行号 —— 否则自定义块里报错会落到"内联之前最后一条普通语句"的行上
+        rec_lines_ = want_lines_;
         gen_inline_calls();         // 本块调用的自定义块内联到本块末尾
+        rec_lines_ = false;
 
         int name_str_idx = strings_.add(BLOCK_NAMES[block_name_idx]);
         blocks_.push_back({name_str_idx, bb.buf});
+        // 同一偏移的连续多条（不产生字节码的语句）只留最后一条：
+        // 查表规则是"起始偏移 ≤ 目标字节的最后一条"，留着前者会把行号指到一句压根没发射字节码的语句上
+        vector<pair<int,int>> cleaned;
+        for (auto& e : cur_lines_) {
+            if (!cleaned.empty() && cleaned.back().first == e.first) cleaned.back() = e;
+            else cleaned.push_back(e);
+        }
+        block_lines_.push_back({name_str_idx, cleaned});   // 本块的行号表（和 blocks_ 同序）
+        cur_lines_.clear();
         cur_buf_ = nullptr;
     }
 
@@ -985,6 +1037,10 @@ private:
         if (check(TK_ERROR)) { next(); return; }
         TempScope ts(temp_base_);  // 语句级临时槽位回收
         int start_line = cur_.line;
+        // 行号表：这条语句的字节码从当前偏移开始，源码在 start_line 行
+        // 兜底：只记落在源码行数内的（正常不会越界，防的是编译器前后版本对不上的极端情况）
+        if (rec_lines_ && cur_buf_ && start_line <= total_lines_)
+            cur_lines_.push_back({(int)cur_buf_->buf.size(), start_line});
 
         if (check(TK_IDENT)) {
             string name = cur_.str_val;
@@ -1504,7 +1560,8 @@ private:
 // 二进制写入
 // ============================================================
 void write_binary(const string& path, const StringPool& strings,
-                  const vector<pair<int, vector<uint8_t>>>& blocks) {
+                  const vector<pair<int, vector<uint8_t>>>& blocks,
+                  const vector<pair<int, vector<pair<int,int>>>>& block_lines) {
     ofstream out(path, ios::binary);
     if (!out) { cerr << "Error: cannot write file " << path << endl; return; }
 
@@ -1532,6 +1589,7 @@ void write_binary(const string& path, const StringPool& strings,
     }
 
     out.close();
+
     cout << "Compiled: " << path << " (" << blocks.size() << " blocks, "
          << strings.size() << " strings)" << endl;
 }
@@ -1546,8 +1604,9 @@ static string derive_output(const string& input) {
     return input + ".bin";
 }
 
-static int compile_one(const string& src_path, const string& out_path) {
-    ifstream in(src_path);
+static bool g_lines = true;   // true = 把行号表作为 __LINES__ 伪块打进 bin（--no-lines 关闭）
+
+static int compile_one(const string& src_path, const string& out_path) {    ifstream in(src_path);
     if (!in) {
         cerr << "Error: cannot read " << src_path << endl;
         return 1;
@@ -1557,6 +1616,7 @@ static int compile_one(const string& src_path, const string& out_path) {
     string src = ss.str();
     in.close();
     Compiler compiler(src);
+    compiler.set_lines(g_lines);
     string err;
     if (!compiler.compile(err)) {
         cerr << "Compile error (" << src_path << "): " << err << endl;
@@ -1570,7 +1630,7 @@ static int compile_one(const string& src_path, const string& out_path) {
     }
     if (compiler.literal_count() > 0)
         cout << "Literal pool: " << compiler.literal_count() << " values" << endl;
-    write_binary(out_path, compiler.strings(), compiler.blocks());
+    write_binary(out_path, compiler.strings(), compiler.blocks(), compiler.block_lines());
     return 0;
 }
 
@@ -1578,8 +1638,17 @@ static int compile_one(const string& src_path, const string& out_path) {
 // 入口
 // ============================================================
 int main(int argc, char* argv[]) {
+    // ---- 开关：--lines / --no-lines；其余按位置参数 ----
+    vector<string> _pos;
+    for (int i = 1; i < argc; i++) {
+        string a = argv[i];
+        if (a == "--no-lines") { g_lines = false; continue; }
+        if (a == "--lines")    { g_lines = true;  continue; }
+        if (a.rfind("--", 0) == 0) continue;   // 其它未知开关忽略
+        _pos.push_back(a);
+    }
     // ---- 无参数：遍历当前目录下所有 .txt ----
-    if (argc < 2) {
+    if (_pos.empty()) {
         int total = 0, ok = 0;
         _finddata_t fd;
         intptr_t hFind = _findfirst("*.txt", &fd);
@@ -1602,8 +1671,8 @@ int main(int argc, char* argv[]) {
         return (ok == total) ? 0 : 1;
     }
 
-    // ---- 1 或 2 个参数 ----
-    string in_path = argv[1];
-    string out_path = (argc >= 3) ? argv[2] : derive_output(in_path);
+    // ---- 1 或 2 个位置参数 ----
+    string in_path = _pos[0];
+    string out_path = (_pos.size() >= 2) ? _pos[1] : derive_output(in_path);
     return compile_one(in_path, out_path);
 }

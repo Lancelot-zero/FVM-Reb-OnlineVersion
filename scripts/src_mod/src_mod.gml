@@ -53,7 +53,7 @@ function src_mod_bullets_init(_dir = "") {
       var _id = string_copy(_name, 1, string_length(_name) - 5);
       var _bin_path = string_replace(_path, ".json", ".bin");
       var _bin_buf = file_exists(_bin_path) ? buffer_load(_bin_path) : undefined;
-      global.mod_bullet_vms[? _id] = src_mod_card_vm_load(_bin_buf, _dir);
+      global.mod_bullet_vms[? _id] = src_mod_card_vm_load(_bin_buf, _dir, _id);
       global.mod_bullet_vms[? _id][$ "card_data"] = _json;
       global.mod_bullet_vms[? _id][$ "mod_dir"] = _dir;
       _count++;
@@ -86,7 +86,7 @@ function src_mod_effects_init(_dir = "") {
       var _id = string_copy(_name, 1, string_length(_name) - 5);
       var _bin_path = string_replace(_path, ".json", ".bin");
       var _bin_buf = file_exists(_bin_path) ? buffer_load(_bin_path) : undefined;
-      global.mod_effect_vms[? _id] = src_mod_card_vm_load(_bin_buf, _dir);
+      global.mod_effect_vms[? _id] = src_mod_card_vm_load(_bin_buf, _dir, _id);
       global.mod_effect_vms[? _id][$ "card_data"] = _json;
       global.mod_effect_vms[? _id][$ "mod_dir"] = _dir;
       _count++;
@@ -122,7 +122,7 @@ function src_mod_bullets_reload() {
       if (ds_map_exists(global.mod_bullet_vms, _id)) {
         _vm = src_mod_card_vm_fill(global.mod_bullet_vms[? _id], _bin_buf, _dir);
       } else {
-        _vm = src_mod_card_vm_load(_bin_buf, _dir);
+        _vm = src_mod_card_vm_load(_bin_buf, _dir, _id);
         global.mod_bullet_vms[? _id] = _vm;   // 新建的 VM 必须写回，否则这次重载白干
       }
       _vm[$ "card_data"] = _json;
@@ -160,7 +160,7 @@ function src_mod_effects_reload() {
       if (ds_map_exists(global.mod_effect_vms, _id)) {
         _vm = src_mod_card_vm_fill(global.mod_effect_vms[? _id], _bin_buf, _dir);
       } else {
-        _vm = src_mod_card_vm_load(_bin_buf, _dir);
+        _vm = src_mod_card_vm_load(_bin_buf, _dir, _id);
         global.mod_effect_vms[? _id] = _vm;   // 新建的 VM 必须写回，否则这次重载白干
       }
       _vm[$ "card_data"] = _json;
@@ -480,6 +480,84 @@ function src_mod_maps_load_dir(_dir = "") {
   file_find_close();
   return _count;
 }
+/// @function src_mod_check_json(_kind, _id, _json)
+/// @desc 注册前体检 mod 的 json：缺字段 / 类型不对的补安全默认值，并把该文件的**所有问题一次性**
+///       报到 shell 控制台 + GameMaker 输出 + mod/mod_errors.log。
+///       目的：json 写漏字段时"这张卡不生效，但不会崩游戏、也不会静默没有任何提示"。
+function src_mod_check_json(_kind, _id, _json) {
+	if (!is_struct(_json)) return false;
+	var _bad = "";
+
+	// ── 通用字段 ──
+	if (!variable_struct_exists(_json, "name") || !is_string(_json[$ "name"]) || _json[$ "name"] == "") {
+		_json[$ "name"] = _id; _bad += "name(补 id) ";
+	}
+	if (!variable_struct_exists(_json, "description") && !variable_struct_exists(_json, "shop")) {
+		_bad += "description(缺,可省) ";
+	}
+
+	switch (_kind) {
+		case "card": {
+			var _shapes = _json[$ "shapes"];
+			if (!is_array(_shapes)) {
+				_json[$ "shapes"] = [];
+				_bad += "shapes(缺/不是数组 → 补空表, 这张卡不会注册) ";
+			} else {
+				for (var _i = 0; _i < array_length(_shapes); _i++) {
+					var _s = _shapes[_i];
+					if (!is_struct(_s)) { _bad += "shapes[" + string(_i) + "](不是结构体, 跳过) "; continue; }
+					var _t = "shapes[" + string(_i) + "]";
+					if (!is_real(_s[$ "shape"]))  { _s[$ "shape"] = _i;                       _bad += _t + ".shape(补 " + string(_i) + ") "; }
+					if (!is_string(_s[$ "sprite"]) || _s[$ "sprite"] == "") {
+						_s[$ "sprite"] = "spr_brazier";                                     _bad += _t + ".sprite(补 spr_brazier) ";
+					}
+					if (!is_real(_s[$ "hp"]))       _bad += _t + ".hp(缺→按 0) ";
+					if (!is_real(_s[$ "atk"]))      _bad += _t + ".atk(缺→按 0) ";
+					if (!is_real(_s[$ "cost"]))     _bad += _t + ".cost(缺→按 0) ";
+					if (!is_real(_s[$ "cooldown"])) _bad += _t + ".cooldown(缺→按 0) ";
+					if (!is_real(_s[$ "range"]))    _bad += _t + ".range(缺→按 0) ";
+					if (!is_real(_s[$ "cycle"]))    _bad += _t + ".cycle(缺→按 0) ";
+					if (!is_string(_s[$ "plant_type"]))   { _s[$ "plant_type"] = "normal";   _bad += _t + ".plant_type(补 normal) "; }
+					if (!is_string(_s[$ "feature_type"])) { _s[$ "feature_type"] = "normal"; _bad += _t + ".feature_type(补 normal) "; }
+					if (!is_string(_s[$ "target_card"]))  { _s[$ "target_card"] = "none";    _bad += _t + ".target_card(补 none) "; }
+				}
+			}
+			// 卡必须有 skill 结构，否则 get_plant_data_with_skill 里 [1][等级] 会炸
+			if (!variable_struct_exists(_json, "skill") || !is_struct(_json[$ "skill"])) {
+				_json[$ "skill"] = { attr: "cycle", values: [60] };
+				_bad += "skill(缺 → 补 cycle[60]) ";
+			}
+			break;
+		}
+		case "weapon": {
+			if (!is_string(_json[$ "sprite"]) || _json[$ "sprite"] == "") { _json[$ "sprite"] = "spr_brazier"; _bad += "sprite(补 spr_brazier) "; }
+			if (!is_string(_json[$ "icon"])   || _json[$ "icon"]   == "") { _json[$ "icon"] = _json[$ "sprite"]; _bad += "icon(补 sprite) "; }
+			if (!is_real(_json[$ "atk"]))    _bad += "atk(缺→按 0) ";
+			if (!is_real(_json[$ "cycle"]))  _bad += "cycle(缺→按 0) ";
+			if (!is_string(_json[$ "slot"])) _bad += "slot(缺→用默认槽) ";
+			break;
+		}
+		case "gem": {
+			if (!is_string(_json[$ "icon"]) || _json[$ "icon"] == "") _bad += "icon(缺→无图标, 不崩) ";
+			if (!is_string(_json[$ "slot"])) _bad += "slot(缺→用默认槽) ";
+			break;
+		}
+		case "enemy": {
+			if (!is_string(_json[$ "spr"]) || _json[$ "spr"] == "") { _json[$ "spr"] = "spr_brazier"; _bad += "spr(补 spr_brazier) "; }
+			if (!is_real(_json[$ "hp"])) _bad += "hp(缺→按 0) ";
+			break;
+		}
+	}
+
+	if (_bad != "") {
+		var _msg = "[mod 校验] " + _kind + " / " + string(_id) + ".json → " + _bad;
+		shell_print(_msg);
+		show_debug_message(_msg);
+		mod_error_log(_msg);
+	}
+	return true;
+}
+
 /// @function src_mod_register_card(_id, _c)
 /// @desc 用一份卡配置注册一张卡：依次调用 register_card(卡池) / register_plant_lite(植物数据) /
 ///       register_card_skill(技能) / register_goods(商店) / register_card_info_island(图鉴)。
@@ -513,6 +591,7 @@ function src_mod_maps_load_dir(_dir = "") {
 /// @return true=注册成功
 function src_mod_register_card(_id, _c) {
 	if (!is_struct(_c)) return false;
+	src_mod_check_json("card", _id, _c);
 	var _shapes = _c[$ "shapes"];
 	if (is_undefined(_id) || !is_array(_shapes)) return false;
 	if (!variable_global_exists("mod_cards")) { global.mod_cards = ds_map_create(); }
@@ -588,19 +667,21 @@ function src_mod_register_card(_id, _c) {
 	return true;
 }
 
-/// @function src_mod_card_vm_load(_buf, _dir)
+/// @function src_mod_card_vm_load(_buf, _dir, _id)
 /// @desc 创建一张 mod 卡自己的虚拟机：函数表沿用全局 VM 注册表，
 ///       bin 的字符串池读入 vm，各块的字节码存进字典 vm.blocks（块名 → buffer）
 /// @param _buf 该卡 bin 文件的 buffer，可为 undefined（只建空 VM）
 /// @param _dir 卡所在目录（mod/cards/），执行 _VM_CONST_INIT/_OBJECT_CFG 前先写入
 ///             mod_dir，供块内加载贴图时作为候选路径
-function src_mod_card_vm_load(_buf = undefined, _dir = "") {
+function src_mod_card_vm_load(_buf = undefined, _dir = "", _id = "") {
 	var _vm = VM_Create();
 	_vm.functions = global.__vm.functions;
 	_vm.func_ret_types = global.__vm.func_ret_types;
 	_vm[$ "blocks"] = ds_map_create();   // 二进制逻辑字典：块名 → 字节码 buffer
 	_vm[$ "instances"] = ds_list_create();  // 该卡所有实例的容器：创建时加入、消耗时移除
 	if (_dir != "") { _vm[$ "mod_dir"] = _dir; }
+	// 侧挂行号表路径（编译器多写的 <同名>.lines）：报错定位用，平时不读
+	if (_dir != "" && _id != "") { _vm[$ "src_lines"] = _dir + _id + ".lines"; }
 	if (!buffer_exists(_buf)) return _vm;
 
 	buffer_seek(_buf, buffer_seek_start, 0);
@@ -624,6 +705,36 @@ function src_mod_card_vm_load(_buf = undefined, _dir = "") {
 		if (!ds_map_exists(_vm.str_map, _str)) _vm.str_map[? _str] = _i;
 	}
 
+	// 侧挂行号表 <同名>.lines（编译器多写的）：直接读进来，报错时把"字节偏移"翻成源码行号。
+	// 表很小（一张卡几 KB）；没有这个文件就什么都不做，报错只显示"块名+位置"。
+	// 格式：  B <块名字符串下标> <条数>   然后每条   <字节偏移> <源行号>
+	if (variable_struct_exists(_vm, "src_lines") && file_exists(_vm[$ "src_lines"])) {
+		_vm[$ "line_tab"] = ds_map_create();   // 块名 → ds_list（偶数位=字节偏移、奇数位=行号）
+		var _lr = file_text_open_read(_vm[$ "src_lines"]);
+		if (_lr != -1) {
+			var _cur_name = "";
+			var _cur_list = -1;
+			while (!file_text_eof(_lr)) {
+				var _ln = string_trim(file_text_read_string(_lr));
+				file_text_readln(_lr);
+				if (_ln == "") continue;
+				if (string_char_at(_ln, 1) == "B") {
+					if (_cur_list != -1) ds_map_set(_vm.line_tab, _cur_name, _cur_list);
+					var _sp  = string_pos(" ", _ln);
+					var _idx = real(string_copy(_ln, _sp + 1, string_pos(" ", string_delete(_ln, 1, _sp)) - 1));
+					_cur_name = (_idx >= 0 && _idx < array_length(_vm.strings)) ? _vm.strings[_idx] : "";
+					_cur_list = ds_list_create();
+				} else if (_cur_list != -1) {
+					var _sp2 = string_pos(" ", _ln);
+					ds_list_add(_cur_list, real(string_copy(_ln, 1, _sp2 - 1)));
+					ds_list_add(_cur_list, real(string_delete(_ln, 1, _sp2)));
+				}
+			}
+			if (_cur_list != -1) ds_map_set(_vm.line_tab, _cur_name, _cur_list);
+			file_text_close(_lr);
+		}
+	}
+
 	// 读块数据
 	while (buffer_tell(_buf) < _buf_size) {
 		var _block_len = buffer_read(_buf, buffer_s32);
@@ -637,7 +748,28 @@ function src_mod_card_vm_load(_buf = undefined, _dir = "") {
 			buffer_write(_bc_buf, buffer_u8, buffer_read(_buf, buffer_u8));
 		}
 		buffer_seek(_bc_buf, buffer_seek_start, 0);
-		_vm.blocks[? _block_name] = _bc_buf;
+		if (_block_name == "__LINES__") {
+			// 行号表（编译器打包进来的伪块，二进制）：u32 段数；
+			// 每段 u32 块名下标 + u32 条数；每条 u32 块内字节偏移 + u32 源行号。
+			// 它不是可执行块，不进 vm.blocks，只解析成 line_tab（块名 → ds_list，偶数位=偏移、奇数位=行号）
+			if (!variable_struct_exists(_vm, "line_tab")) _vm[$ "line_tab"] = ds_map_create();
+			var _nsec = buffer_read(_bc_buf, buffer_u32);
+			for (var _s = 0; _s < _nsec; _s++) {
+				var _bidx = buffer_read(_bc_buf, buffer_u32);
+				var _bcnt = buffer_read(_bc_buf, buffer_u32);
+				var _bnam = (_bidx >= 0 && _bidx < array_length(_vm.strings)) ? _vm.strings[_bidx] : "";
+				var _blst = ds_list_create();
+				for (var _e = 0; _e < _bcnt; _e++) {
+					ds_list_add(_blst, buffer_read(_bc_buf, buffer_u32));
+					ds_list_add(_blst, buffer_read(_bc_buf, buffer_u32));
+				}
+				ds_map_set(_vm.line_tab, _bnam, _blst);
+			}
+			show_debug_message("[VM] 行号表载入: " + string(_nsec) + " 段 / " + string(_block_len) + " 字节");
+			buffer_delete(_bc_buf);
+		} else {
+			_vm.blocks[? _block_name] = _bc_buf;
+		}
 	}
 	// _VM_CONST_INIT：编译器把字面量池（所有字符串字面量）初始化放在这个块里，
 	// 主 VM 加载时会立即执行；卡 VM 也必须执行，否则块内字符串槽全是 undefined
@@ -727,7 +859,28 @@ function src_mod_card_vm_fill(_vm, _buf, _dir = "") {
 			buffer_write(_bc_buf, buffer_u8, buffer_read(_buf, buffer_u8));
 		}
 		buffer_seek(_bc_buf, buffer_seek_start, 0);
-		_vm.blocks[? _block_name] = _bc_buf;
+		if (_block_name == "__LINES__") {
+			// 行号表（编译器打包进来的伪块，二进制）：u32 段数；
+			// 每段 u32 块名下标 + u32 条数；每条 u32 块内字节偏移 + u32 源行号。
+			// 它不是可执行块，不进 vm.blocks，只解析成 line_tab（块名 → ds_list，偶数位=偏移、奇数位=行号）
+			if (!variable_struct_exists(_vm, "line_tab")) _vm[$ "line_tab"] = ds_map_create();
+			var _nsec = buffer_read(_bc_buf, buffer_u32);
+			for (var _s = 0; _s < _nsec; _s++) {
+				var _bidx = buffer_read(_bc_buf, buffer_u32);
+				var _bcnt = buffer_read(_bc_buf, buffer_u32);
+				var _bnam = (_bidx >= 0 && _bidx < array_length(_vm.strings)) ? _vm.strings[_bidx] : "";
+				var _blst = ds_list_create();
+				for (var _e = 0; _e < _bcnt; _e++) {
+					ds_list_add(_blst, buffer_read(_bc_buf, buffer_u32));
+					ds_list_add(_blst, buffer_read(_bc_buf, buffer_u32));
+				}
+				ds_map_set(_vm.line_tab, _bnam, _blst);
+			}
+			show_debug_message("[VM] 行号表载入: " + string(_nsec) + " 段 / " + string(_block_len) + " 字节");
+			buffer_delete(_bc_buf);
+		} else {
+			_vm.blocks[? _block_name] = _bc_buf;
+		}
 	}
 
 	// 常量初始化
@@ -783,7 +936,7 @@ function src_mod_init(_dir = "") {
 			// 必须先执行，下方注册时 get_load_sprite 才能命中永久缓存）
 			var _bin_path = string_replace(_path, ".json", ".bin");
 			var _bin_buf = file_exists(_bin_path) ? buffer_load(_bin_path) : undefined;
-			global.mod_card_vms[? _id] = src_mod_card_vm_load(_bin_buf, _dir);
+			global.mod_card_vms[? _id] = src_mod_card_vm_load(_bin_buf, _dir, _id);
 			global.mod_card_vms[? _id][$ "card_data"] = _json;   // 保留原始 JSON，创建实例时取 plant_type/feature_type
 			global.mod_card_vms[? _id][$ "mod_dir"] = _dir;      // 记录 JSON/bin 所在目录，贴图加载时作为候选路径
 			if (buffer_exists(_bin_buf)) {
@@ -831,7 +984,7 @@ function src_mod_reload() {
 				// 已有 VM：把新 bin 灌进同一个 VM（保留 mem/instances，场上实例状态不丢）
 				_vm = src_mod_card_vm_fill(global.mod_card_vms[? _id], _bin_buf, _dir);
 			} else {
-				_vm = src_mod_card_vm_load(_bin_buf, _dir);
+				_vm = src_mod_card_vm_load(_bin_buf, _dir, _id);
 				global.mod_card_vms[? _id] = _vm;   // 新建的 VM 必须写回，否则这次重载白干
 			}
 			_vm[$ "card_data"] = _json;
@@ -865,6 +1018,7 @@ function src_mod_reload() {
 /// @return true=注册成功
 function src_mod_register_weapon(_id, _c) {
 	if (!is_struct(_c)) return false;
+	src_mod_check_json("weapon", _id, _c);
 	var _spr = noone;
 	var _spr_name = _c[$ "sprite"];
 	if (is_string(_spr_name) && _spr_name != "") { _spr = get_load_sprite(_spr_name); }
@@ -927,7 +1081,7 @@ function src_mod_weapons_init(_dir = "") {
 			var _id = string_copy(_name, 1, string_length(_name) - 5);  // 去掉 .json
 			var _bin_path = string_replace(_path, ".json", ".bin");
 			var _bin_buf = file_exists(_bin_path) ? buffer_load(_bin_path) : undefined;
-			global.mod_weapon_vms[? _id] = src_mod_card_vm_load(_bin_buf, _dir);
+			global.mod_weapon_vms[? _id] = src_mod_card_vm_load(_bin_buf, _dir, _id);
 			global.mod_weapon_vms[? _id][$ "card_data"] = _json;
 			global.mod_weapon_vms[? _id][$ "mod_dir"] = _dir;
 			if (src_mod_register_weapon(_id, _json)) {
@@ -969,7 +1123,7 @@ function src_mod_weapons_reload() {
 			if (ds_map_exists(global.mod_weapon_vms, _id)) {
 				_vm = src_mod_card_vm_fill(global.mod_weapon_vms[? _id], _bin_buf, _dir);
 			} else {
-				_vm = src_mod_card_vm_load(_bin_buf, _dir);
+				_vm = src_mod_card_vm_load(_bin_buf, _dir, _id);
 				global.mod_weapon_vms[? _id] = _vm;   // 新建的 VM 必须写回，否则这次重载白干
 			}
 			_vm[$ "card_data"] = _json;
@@ -999,6 +1153,7 @@ function src_mod_weapons_reload() {
 /// @return true=注册成功
 function src_mod_register_gem(_id, _c) {
 	if (!is_struct(_c)) return false;
+	src_mod_check_json("gem", _id, _c);
 	var _icon = noone;
 	var _icon_name = _c[$ "icon"];
 	if (is_string(_icon_name) && _icon_name != "") { _icon = get_load_sprite(_icon_name); }
@@ -1058,7 +1213,7 @@ function src_mod_gems_init(_dir = "") {
 			var _id = string_copy(_name, 1, string_length(_name) - 5);  // 去掉 .json
 			var _bin_path = string_replace(_path, ".json", ".bin");
 			var _bin_buf = file_exists(_bin_path) ? buffer_load(_bin_path) : undefined;
-			global.mod_gem_vms[? _id] = src_mod_card_vm_load(_bin_buf, _dir);
+			global.mod_gem_vms[? _id] = src_mod_card_vm_load(_bin_buf, _dir, _id);
 			global.mod_gem_vms[? _id][$ "card_data"] = _json;
 			global.mod_gem_vms[? _id][$ "mod_dir"] = _dir;
 			if (src_mod_register_gem(_id, _json)) {
@@ -1100,7 +1255,7 @@ function src_mod_gems_reload() {
 			if (ds_map_exists(global.mod_gem_vms, _id)) {
 				_vm = src_mod_card_vm_fill(global.mod_gem_vms[? _id], _bin_buf, _dir);
 			} else {
-				_vm = src_mod_card_vm_load(_bin_buf, _dir);
+				_vm = src_mod_card_vm_load(_bin_buf, _dir, _id);
 				global.mod_gem_vms[? _id] = _vm;   // 新建的 VM 必须写回，否则这次重载白干
 			}
 			_vm[$ "card_data"] = _json;
@@ -1227,6 +1382,7 @@ function src_mod_attires_init(_dir = "") {
 /// @return true=注册成功
 function src_mod_register_enemy(_id, _c) {
 	if (!is_struct(_c)) return false;
+	src_mod_check_json("enemy", _id, _c);
 	var _spr = noone;
 	var _spr_name = _c[$ "spr"];
 	if (is_string(_spr_name) && _spr_name != "") { _spr = get_load_sprite(_spr_name); }
@@ -1273,7 +1429,7 @@ function src_mod_enemies_init(_dir = "") {
 			var _id = string_copy(_name, 1, string_length(_name) - 5);  // 去掉 .json
 			var _bin_path = string_replace(_path, ".json", ".bin");
 			var _bin_buf = file_exists(_bin_path) ? buffer_load(_bin_path) : undefined;
-			global.mod_enemy_vms[? _id] = src_mod_card_vm_load(_bin_buf, _dir);
+			global.mod_enemy_vms[? _id] = src_mod_card_vm_load(_bin_buf, _dir, _id);
 			global.mod_enemy_vms[? _id][$ "card_data"] = _json;
 			global.mod_enemy_vms[? _id][$ "mod_dir"] = _dir;
 			if (src_mod_register_enemy(_id, _json)) {
@@ -1315,7 +1471,7 @@ function src_mod_enemies_reload() {
 			if (ds_map_exists(global.mod_enemy_vms, _id)) {
 				_vm = src_mod_card_vm_fill(global.mod_enemy_vms[? _id], _bin_buf, _dir);
 			} else {
-				_vm = src_mod_card_vm_load(_bin_buf, _dir);
+				_vm = src_mod_card_vm_load(_bin_buf, _dir, _id);
 				global.mod_enemy_vms[? _id] = _vm;   // 新建的 VM 必须写回，否则这次重载白干
 			}
 			_vm[$ "card_data"] = _json;
@@ -1470,7 +1626,7 @@ function src_mod_register_new() {
 				if (is_struct(_jd)) {
 					var _bin_path = _dir + _id + ".bin";
 					var _buf = file_exists(_bin_path) ? buffer_load(_bin_path) : undefined;
-					var _vm = src_mod_card_vm_load(_buf, _dir);
+					var _vm = src_mod_card_vm_load(_buf, _dir, _id);
 					_vm[$ "card_data"] = _jd;
 					_vm[$ "mod_dir"] = _dir;
 					_m[? _id] = _vm;

@@ -1,3 +1,8 @@
+// 命中位掩码 + 冰冻标记：敌人每帧自己刷新（tbit 的唯一写点，别处不要再写）
+// 放在 End Step：本帧稍后执行的管理器读到的一定是"已设置"的值，不会再报 tbit 未定义
+tbit   = enemy_tbit_of(target_type);
+ice_ok = variable_instance_exists(id, "ice_timer");
+
 damage_amount = 0
 damage_type = ""
 
