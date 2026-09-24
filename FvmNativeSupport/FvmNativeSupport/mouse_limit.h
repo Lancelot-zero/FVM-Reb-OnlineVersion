@@ -260,6 +260,11 @@ static DWORD WINAPI InjectThread(LPVOID) {
 }
 
 static DWORD WINAPI HookThread(LPVOID) {
+  // 先建出本线程的消息队列，再发布 g_hook_tid。
+  // 顺序是有意的：投递到本线程的消息（含 Stop 的退出消息）要求队列已存在，
+  // 而调用方是拿 g_hook_tid 找到本线程的。
+  MSG msg;
+  PeekMessageW(&msg, nullptr, WM_USER, WM_USER, PM_NOREMOVE);
   g_hook_tid = GetCurrentThreadId();
   // 钩子句柄存在局部变量里，只卸自己装的那一个：Stop→Start 快速交替时，按全局
   // g_hook 去卸会误卸掉新装好的钩子。
@@ -270,11 +275,26 @@ static DWORD WINAPI HookThread(LPVOID) {
     return 1;
   }
   g_hook = h;
-  MSG msg;
-  while (InterlockedCompareExchange(&g_run, 1, 1) == 1 &&
-         GetMessageW(&msg, nullptr, 0, 0) > 0) {
-    TranslateMessage(&msg);
-    DispatchMessageW(&msg);
+  // 带超时的等待：每 50ms 醒一次重查 g_run。
+  // 退出条件是 g_run，不是「收到消息」，所以不能阻塞在 GetMessageW 上。
+  while (InterlockedCompareExchange(&g_run, 1, 1) == 1) {
+    const DWORD w = MsgWaitForMultipleObjectsEx(0, nullptr, 50, QS_ALLINPUT,
+                                                MWMO_INPUTAVAILABLE);
+    if (w == WAIT_TIMEOUT) {
+      continue;
+    }
+    bool got_quit = false;
+    while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
+      if (msg.message == WM_QUIT) {
+        got_quit = true;
+        break;
+      }
+      TranslateMessage(&msg);
+      DispatchMessageW(&msg);
+    }
+    if (got_quit) {
+      break;
+    }
   }
   UnhookWindowsHookEx(h);
   if (g_hook == h)
@@ -340,16 +360,20 @@ static double Stop() {
   InterlockedExchange(&g_inject_tick, 0);  // 心跳归零 → 钩子立刻转为全放行
   InterlockedExchange(&g_run, 0);
   g_interval = 0;  // 即使钩子还没卸干净，也不再有事件被吞
-  if (g_hook_tid != 0)
-    PostThreadMessageW(g_hook_tid, WM_QUIT, 0, 0);
+  const DWORD tid = g_hook_tid;
+  if (tid != 0)
+    PostThreadMessageW(tid, WM_QUIT, 0, 0);
   LogF("Stop 吞=%.0f 放行=%.0f 注入=%.0f", g_drop, g_pass, g_injected);
-  // 不要在这里等待线程退出：Stop() 由游戏主线程调用，等待会卡住整帧。
-  // 线程自己看 g_run 退出，钩子由 HookThread 用局部句柄卸自己那一个；句柄直接关。
+  // 等两个线程真正退出再返回（各 200ms 上限）。
+  // 必须等：钩子由所属线程持有，线程退出才会被系统卸下。
+  // 两个线程的唤醒周期分别是 50ms 和 ≤4ms，正常几毫秒内返回，200ms 是兜底。
   if (g_hook_thread != nullptr) {
+    WaitForSingleObject(g_hook_thread, 200);
     CloseHandle(g_hook_thread);
     g_hook_thread = nullptr;
   }
   if (g_inject_thread != nullptr) {
+    WaitForSingleObject(g_inject_thread, 200);
     CloseHandle(g_inject_thread);
     g_inject_thread = nullptr;
   }
