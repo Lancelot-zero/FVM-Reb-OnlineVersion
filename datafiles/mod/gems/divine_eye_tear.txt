@@ -107,7 +107,7 @@ _OBJECT_STEP {
                 VM_SetProp(self, "fx", fx)
                 VM_SetProp(fx, "image_xscale", 3.0)
                 VM_SetProp(fx, "image_yscale", 3.0)
-                VM_SetProp(fx, "depth", 40)
+                VM_SetProp(fx, "depth", 9)
             }
 
             // 光环每帧跟着角色走

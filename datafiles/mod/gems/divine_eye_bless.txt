@@ -102,7 +102,7 @@ _OBJECT_STEP {
                 VM_SetProp(fx, "rel_x", 0 - 15)
                 VM_SetProp(fx, "rel_y", 0 - 30)
                 VM_SetProp(self, "fx", fx)
-                VM_SetProp(fx, "depth", 40)
+                VM_SetProp(fx, "depth", 9)
                 }
         }
     }

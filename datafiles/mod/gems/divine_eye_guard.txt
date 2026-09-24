@@ -98,7 +98,7 @@ _OBJECT_STEP {
                 VM_SetProp(self, "fx", fx)
                 VM_SetProp(fx, "image_xscale", 1.8)
                 VM_SetProp(fx, "image_yscale", 1.8)
-                VM_SetProp(fx, "depth", 40)
+                VM_SetProp(fx, "depth", 9)
             }
 
             // 光环每帧跟着角色走
@@ -106,7 +106,12 @@ _OBJECT_STEP {
             VM_SetProp(fx, "y", VM_GetProp(p, "y") + 15)
         }
     }
+    // ⚠️ lv 必须钳成 0~15 的干净整数：只判上界的话，undefine/负数会让下面
+    //    VM_ArrayGet 取到垃圾值 → rt 可能 < -1 → 卡片 atk 被乘成负数 →
+    //    该卡子弹的伤害也变负 → 敌人 hp -= 负数 → 血量不降反涨（血条满、数字越涨越长）
     lv = VM_GetProp(self, "mod_point_gem_level")
+    if (VM_IsUndefined(lv) == 1) { lv = 0 }
+    if (lv < 0) { lv = 0 }
     if (lv > 15) { lv = 15 }
     r = VM_GetProp(self, "mod_point_grid_row")
     c = VM_GetProp(self, "mod_point_grid_col")
@@ -124,6 +129,9 @@ _OBJECT_STEP {
             if (dc < 0) { dc = 0 - dc }
             rt = VM_ArrayGet("dvg_out", lv)
             if (dr <= 1) { if (dc <= 1) { rt = VM_ArrayGet("dvg_in", lv) } }
+            // 攻击力只加不减：rt 取不到 / 被取成负数时按 0 处理，绝不能把 atk 乘成负的
+            if (VM_IsUndefined(rt) == 1) { rt = 0 }
+            if (rt < 0) { rt = 0 }
             VM_SetProp(p, "atk", VM_GetProp(p, "atk") * (1 + rt))
             VM_InstArrayAdd(self, "done", p)
         }
