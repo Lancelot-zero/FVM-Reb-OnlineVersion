@@ -11,8 +11,8 @@
   "name":"obj_enemy_mod",
   "overriddenProperties":[],
   "parent":{
-    "name":"delicious_island",
-    "path":"folders/物体/Enemy/delicious_island.yy",
+    "name":"Enemy",
+    "path":"folders/物体/Enemy.yy",
   },
   "parentObjectId":{
     "name":"obj_enemy_parent",

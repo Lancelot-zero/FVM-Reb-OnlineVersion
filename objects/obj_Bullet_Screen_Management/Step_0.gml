@@ -1,8 +1,7 @@
 // 每帧：移动 -> 出界静默删除 -> 动画回绕 -> 打范围内敌人 -> 存活倒计时 -> 到期移除
 if (global.is_paused) exit;
 
-var _len = count;
-if (_len <= 0) exit;
+
 // 网格参数只读一次，循环里不再碰 global
 // 注意：这里等价于 get_grid_position_from_world(x, y, true) 的裸算法（不回绕），
 //       但不建那个 {col,row,x,y} 结构体——每颗子弹每帧省一次分配
@@ -25,33 +24,18 @@ if (_has_grid) {
     if (_gcsx <= 0 || _gcsz <= 0) _has_grid = false;
 }
 
-// 格子加成快照：每格把卡的 bullet_flag 或起来（每帧一次，9x7 格可以忽略）
-// 子弹只用一次位测试就能排除掉绝大多数"这一格根本没卡能吃我"的情况，
-// 命中掩码才走下面那套逐卡循环（吃位、换贴图、加伤）
-var _cols = 0;
-var _snap_ok = false;
-if (_has_grid && variable_global_exists("grid_plants")) {
-    _cols = global.grid_cols;
-    var _ncells = _cols * _rows;
-    // 尺寸变了（换图）就重建；下面两个循环会把每一格都写一遍，不用先清零
-    if (array_length(cell_flag) != _ncells) cell_flag = array_create(_ncells, 0);
-    for (var _sr = 0; _sr < _rows; _sr++) {
-        var _srow = _sr * _cols;
-        for (var _sc = 0; _sc < _cols; _sc++) {
-            var _cardlist = ds_grid_get(global.grid_plants, _sc, _sr);
-            var _cnum = ds_list_size(_cardlist);
-            var _mask = 0;
-            for (var _sk = 0; _sk < _cnum; _sk++) {
-                var _card = ds_list_find_value(_cardlist, _sk);
-                if (!instance_exists(_card)) continue;
-                if (!variable_instance_exists(_card, "bullet_flag")) continue;
-                _mask = _mask | _card.bullet_flag;
-            }
-            cell_flag[_srow + _sc] = _mask;
-        }
-    }
-    _snap_ok = true;
-}
+// 快照（cell_flag / obstacle_flag）由 obj_battle 的 Step 每帧写进全局，这里只读：
+//   global.cell_flag[格]     = 这一格所有卡片 bullet_flag 的按位或
+//   global.obstacle_flag[格] = 这一格有没有障碍物
+// 长度对得上就认为本帧的快照是好的（没建过 / 换图后长度不符 → 判定直接跳过）
+var _cols = _has_grid ? global.grid_cols : 0;
+var _snap_ok = _has_grid && _cols > 0 && _rows > 0 && variable_global_exists("cell_flag")
+            && array_length(global.cell_flag) == _cols * _rows;
+var _snap_ok_obstacle = _has_grid && _cols > 0 && _rows > 0 && variable_global_exists("obstacle_flag")
+            && array_length(global.obstacle_flag) == _cols * _rows;
+
+var _len = count;
+if (_len <= 0) exit;
 
 /*
 if(obj_battle.battle_time%20==0){
@@ -115,7 +99,7 @@ while (_i >= 0) {
             // 中心带：和 obj_battle 收录 bullet_array_special 同一口径（格子中间 50%）
             if (_pc >= 0 && _pc < _cols && _pr >= 0 && _pr < _rows
                 && (_fx - _pc) >= 0.15 && (_fx - _pc) <= 0.85
-                && (_b.flag & cell_flag[_pr * _cols + _pc]) != 0) {
+                && (_b.flag & global.cell_flag[_pr * _cols + _pc]) != 0) {
                 var _cards = ds_grid_get(global.grid_plants, _pc, _pr);
                 var _ncard = ds_list_size(_cards);
                 for (var _ci = 0; _ci < _ncard; _ci++) {
@@ -162,7 +146,21 @@ while (_i >= 0) {
             }
         }
 		
+		
+		
 		//if(obj_battle.battle_time%20==0){
+        // 3.6 障碍物：非穿透子弹（hits >= 0）飞进有障碍物的格子 → 直接消耗掉，走第 6 步销毁流程
+        //     穿透子弹（hits < 0，和 bullet_merge_find 里"穿透"同一口径）不受影响，照旧穿过去
+        //     命中数清 0 后，下面的第 4 步也会跳过——这一帧不再打敌人，和原版撞障碍物一致
+        if (_snap_ok_obstacle && _b.hits >= 0) {
+            var _obc = floor((_b.x - _gox) / _gcsx);
+            var _obr = floor((_b.y - _goy) / _gcsz);
+            if (_obc >= 0 && _obc < _cols && _obr >= 0 && _obr < _rows
+                && global.obstacle_flag[_obr * _cols + _obc] == 1) {
+                _b.hits = 0;
+            }
+        }
+
         // 4. 命中：打击范围内 可命中敌人，按格子里敌人数组的顺序依次结算
         //    打击范围是「方格子」：以子弹所在格为中心，上下左右各扩 cell_range 格（0=只算本格）
         //    伤害计数 -1（不限次数）→ 范围内敌人**全部**结算，永不减

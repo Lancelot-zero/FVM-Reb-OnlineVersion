@@ -48,7 +48,7 @@
 //   新增：拿 list[count] 这个现成结构体原地填字段，然后 count += 1（不再新建结构体）
 //   删除：list[i] = list[count-1]（末尾那颗挪过来顶替），再把死掉的那颗放回末尾当回收池
 //   全程不 array_push / array_delete（数组长度永远不变）
-bullet_max = 2000;                        // 容量：改这个数就行
+bullet_max = 800;                        // 容量：改这个数就行
 list       = array_create(bullet_max);
 for (var _i = 0; _i < bullet_max; _i++) {
     list[_i] = {
@@ -80,8 +80,8 @@ for (var _i = 0; _i < bullet_max; _i++) {
 }
 count = 0;
 
-// 格子加成快照：每格所有卡片 bullet_flag 的按位或（Step 每帧重建），子弹先做一次位测试
-cell_flag = [];
+// 格子快照不在这边建了：global.cell_flag / global.obstacle_flag 由 obj_battle 的 Step
+// 每帧重建（那边一帧写一遍，这边只读），见 obj_battle/Step_0.gml
 
 // ── 子弹合并（默认关闭 = 原逻辑：加不进去就丢）──
 //    打开后按当前弹数分三个阶段：
