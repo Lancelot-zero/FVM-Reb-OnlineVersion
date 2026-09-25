@@ -636,7 +636,7 @@ GmlCallable auto UnzipMapFile(const char *zip_path,
 }
 
 /**
- * @brief 启动鼠标输入限频（高回报率鼠标掉帧修复）。
+ * @brief 启动鼠标输入限频。
  * @param hz         目标频率（上限 1000，建议 500）；<= 0 时不启动。
  * @param hwnd_value 游戏窗口句柄；为 0 时使用当前前台窗口。
  * @return 1 = 启动成功，0 = 失败（例如钩子安装失败）。

@@ -3,10 +3,6 @@
 // mouse_limit.h — 高回报率鼠标输入限频
 // ============================================================================
 //
-// 问题
-//   高回报率鼠标（如 8 kHz）每帧向窗口灌入数千条 WM_MOUSEMOVE。帧内 draw 阻塞最高
-//   可达 380 ms，而同期 CPU 占用很低 —— runner 是在等待消息，不是在计算。
-//
 // 为什么用低级钩子
 //   GameMaker runner 用自己的 PeekMessage 循环取消息，在窗口过程里丢弃消息挡不住它；
 //   能拦在应用之前的只有系统级钩子，故用 WH_MOUSE_LL。
@@ -71,6 +67,15 @@ static LONG g_cur_y = 0;
 static LONGLONG g_acc_dx = 0;  // 自上次注入以来累加的真实位移
 static LONGLONG g_acc_dy = 0;
 static LONGLONG g_last_inj_qpc = 0;
+// 待补发的位移量：由钩子线程发布、由注入线程执行。
+// SendInput 只在注入线程调用 —— 钩子回调必须尽快返回。
+static volatile LONG g_pending = 0;
+static volatile LONG g_tgt_x = 0;
+static volatile LONG g_tgt_y = 0;
+// 位移对账：手移动了多少 vs 我们补发了多少，差值就是丢掉的位移。
+static double g_hand_dx = 0, g_hand_dy = 0;
+static double g_inj_dx = 0, g_inj_dy = 0;
+static double g_pending_mag = 0;
 static DWORD g_game_pid = 0;        // 游戏进程号（Start 时取，仅供诊断打印）
 // 诊断计数器：每条 return 路径各有一个计数，便于区分是哪一步放行的。
 static double g_arrive = 0;    // 钩子被调用总次数
@@ -147,13 +152,20 @@ static void InjectAbs(LONG x, LONG y) {
   }
 }
 
-// 注入线程心跳：由 InjectThread 每轮循环【无条件】刷新。安全网据此判断该线程是否存活，
-// 因此不能在注入成功时才刷新 —— 玩家短暂停手会让时间戳越过 kStallMs 并永久过期，
-// 安全网随即闩死在全放行。
+// 注入线程心跳：由 InjectThread 每轮循环无条件刷新。安全网据此判断该线程是否存活，
+// 故刷新不依赖注入是否真的发生。
 static volatile LONG g_inject_tick = 0;
 
 // 本模块不做任何前台/几何判断：玩家是否在游戏里由 GML 侧用 window_has_focus() 决定
 // （有焦点才 Start，失焦即 Stop）。这里只在 g_interval > 0 且心跳新鲜时限频。
+// 把一个已放行事件的位置采纳为位移累加的新基准。
+// 放行的事件会由系统真正送达，光标随即处于 ms->pt，累加是相对 g_cur 做差的，故基准要同步。
+// 只换基准，不动 g_acc：g_acc 是「尚欠玩家的位移」，换参照系依旧有效（清零会吞掉它）。
+static void RebaseTo(const MSLLHOOKSTRUCT *ms) {
+  g_cur_x = ms->pt.x;
+  g_cur_y = ms->pt.y;
+}
+
 static LRESULT CALLBACK LowLevelProc(int nCode, WPARAM wParam, LPARAM lParam) {
   g_arrive += 1.0;
   if (nCode != HC_ACTION || wParam != WM_MOUSEMOVE || g_interval <= 0) {
@@ -164,6 +176,8 @@ static LRESULT CALLBACK LowLevelProc(int nCode, WPARAM wParam, LPARAM lParam) {
   MSLLHOOKSTRUCT *ms = reinterpret_cast<MSLLHOOKSTRUCT *>(lParam);
   if (ms == nullptr || (ms->flags & LLMHF_INJECTED) != 0) {
     g_inj_seen += 1.0;  // 我们自己注入的事件，绝不能再吞（否则自我循环）
+    if (ms != nullptr)
+      RebaseTo(ms);  // 本事件放行，基准跟随
     g_pass += 1.0;
     return CallNextHookEx(g_hook, nCode, wParam, lParam);
   }
@@ -172,30 +186,40 @@ static LRESULT CALLBACK LowLevelProc(int nCode, WPARAM wParam, LPARAM lParam) {
   const DWORD now_ms = GetTickCount();
   if (now_ms - static_cast<DWORD>(g_inject_tick) > kStallMs) {
     g_stale += 1.0;
+    RebaseTo(ms);  // 本条放行，基准跟随
     g_pass += 1.0;
     return CallNextHookEx(g_hook, nCode, wParam, lParam);
   }
   // ── 核心：累加被吞掉的位移，按间隔一次性补发 ────────────────────────────────
-  // return 1 会把这条事件的位移真正丢掉，而 ms->pt 永远只比「当前光标」超前【一个】
-  // 位移。所以直接注入 pt 等于每次注入只补回一个位移：
-  //     有效位移 = 注入次数 / 轮询率 × 原始位移
-  // 正确做法是以「我们上次注入的位置」为基准把每个位移累加起来，注入时发累加后的
-  // 真实位置 —— 补回 100% 位移，与注入频率无关。
+  // return 1 会丢掉这条事件的位移，而 ms->pt 只比「当前光标」超前一个位移；
+  // 所以要以「上次注入的位置」为基准把位移累加，注入时发累加后的真实位置 ——
+  // 补回 100% 位移，与注入频率无关。
   g_px = ms->pt.x;  // 仅供日志诊断
   g_py = ms->pt.y;
-  g_acc_dx += static_cast<LONGLONG>(ms->pt.x) - g_cur_x;
-  g_acc_dy += static_cast<LONGLONG>(ms->pt.y) - g_cur_y;
+  // 位移增量相对实际光标计算：注入是异步完成的，光标位置只有向系统查询才准确。
+  // GetCursorPos 是快速查询，可在回调内安全调用。
+  POINT cp{};
+  GetCursorPos(&cp);
+  const LONGLONG ddx = static_cast<LONGLONG>(ms->pt.x) - cp.x;
+  const LONGLONG ddy = static_cast<LONGLONG>(ms->pt.y) - cp.y;
+  g_acc_dx += ddx;
+  g_acc_dy += ddy;
+  g_hand_dx += (ddx < 0 ? -ddx : ddx);
+  g_hand_dy += (ddy < 0 ? -ddy : ddy);
   LARGE_INTEGER now_qpc{};
   QueryPerformanceCounter(&now_qpc);
   if (g_last_inj_qpc == 0)
     g_last_inj_qpc = now_qpc.QuadPart;
-  if (g_interval > 0 && (now_qpc.QuadPart - g_last_inj_qpc) >= g_interval) {
-    g_cur_x += static_cast<LONG>(g_acc_dx);
-    g_cur_y += static_cast<LONG>(g_acc_dy);
+  // g_pending 保证同一时刻只有一个在途目标。
+  if (g_interval > 0 && g_pending == 0 &&
+      (now_qpc.QuadPart - g_last_inj_qpc) >= g_interval) {
+    g_tgt_x = static_cast<LONG>(g_acc_dx);
+    g_tgt_y = static_cast<LONG>(g_acc_dy);
+    g_pending_mag = static_cast<double>(g_tgt_x < 0 ? -g_tgt_x : g_tgt_x) +
+                    static_cast<double>(g_tgt_y < 0 ? -g_tgt_y : g_tgt_y);
     g_acc_dx = 0;
     g_acc_dy = 0;
-    InjectAbs(g_cur_x, g_cur_y);  // 绝对坐标：绕过指针加速，位置精确
-    g_injected += 1.0;
+    InterlockedExchange(&g_pending, 1);
     g_last_inj_qpc = now_qpc.QuadPart;
   }
   g_drop += 1.0;
@@ -228,6 +252,21 @@ static DWORD WINAPI InjectThread(LPVOID) {
     } else {
       Sleep(1);
     }
+    // 消费在途目标：这是全模块唯一调用 SendInput 的地方。
+    if (InterlockedCompareExchange(&g_pending, 1, 1) == 1) {
+      const LONG dx = g_tgt_x;
+      const LONG dy = g_tgt_y;
+      POINT cp{};
+      GetCursorPos(&cp);  // 以光标当前实际位置为基准，异步漂移不会累积
+      g_cur_x = cp.x + dx;
+      g_cur_y = cp.y + dy;
+      InjectAbs(g_cur_x, g_cur_y);
+      g_inj_dx += (dx < 0 ? -dx : dx);
+      g_inj_dy += (dy < 0 ? -dy : dy);
+      g_pending_mag = 0;
+      g_injected += 1.0;
+      InterlockedExchange(&g_pending, 0);  // 最后清标志：期间回调不会再发布
+    }
     // 心跳：无论这一轮有没有真的注入，都刷新（安全网判据，见 LowLevelProc）
     InterlockedExchange(&g_inject_tick, static_cast<LONG>(GetTickCount()));
     QueryPerformanceCounter(&now);
@@ -238,14 +277,16 @@ static DWORD WINAPI InjectThread(LPVOID) {
       last_log = GetTickCount();
       POINT curpoint{};
       GetCursorPos(&curpoint);
-      LogF("统计 吞=%.0f 放行=%.0f 注入=%.0f 注入失败=%.0f | 到达=%.0f 非移动=%.0f 注入事件=%.0f 心跳过期=%.0f | 钩子=%d 事件位置=(%ld,%ld) 注入位置=(%ld,%ld) 实际光标=(%ld,%ld) 前台=%p 游戏=%p",
+      LogF("统计 吞=%.0f 放行=%.0f 注入=%.0f 注入失败=%.0f | 到达=%.0f 非移动=%.0f 注入事件=%.0f 心跳过期=%.0f | 钩子=%d 事件位置=(%ld,%ld) 注入位置=(%ld,%ld) 实际光标=(%ld,%ld) 前台=%p 游戏=%p | 对账 hand=(%.0f,%.0f) inj=(%.0f,%.0f) 未兑现=%.0f 残差=%.0f",
            g_drop, g_pass, g_injected, g_inj_fail, g_arrive, g_notmove,
            g_inj_seen, g_stale, g_hook != nullptr ? 1 : 0,
            static_cast<long>(g_px), static_cast<long>(g_py),
            static_cast<long>(g_cur_x), static_cast<long>(g_cur_y),
            static_cast<long>(curpoint.x), static_cast<long>(curpoint.y),
            static_cast<void *>(GetForegroundWindow()),
-           static_cast<void *>(g_game_hwnd));
+           static_cast<void *>(g_game_hwnd),
+           g_hand_dx, g_hand_dy, g_inj_dx, g_inj_dy, g_pending_mag,
+           (g_hand_dx + g_hand_dy) - (g_inj_dx + g_inj_dy) - g_pending_mag);
     }
   }
   if (timer != nullptr)
@@ -256,6 +297,11 @@ static DWORD WINAPI InjectThread(LPVOID) {
 }
 
 static DWORD WINAPI HookThread(LPVOID) {
+  // 先建出本线程的消息队列，再发布 g_hook_tid。
+  // 顺序是有意的：投递到本线程的消息（含 Stop 的退出消息）要求队列已存在，
+  // 而调用方是拿 g_hook_tid 找到本线程的。
+  MSG msg;
+  PeekMessageW(&msg, nullptr, WM_USER, WM_USER, PM_NOREMOVE);
   g_hook_tid = GetCurrentThreadId();
   // 钩子句柄存在局部变量里，只卸自己装的那一个：Stop→Start 快速交替时，按全局
   // g_hook 去卸会误卸掉新装好的钩子。
@@ -266,11 +312,26 @@ static DWORD WINAPI HookThread(LPVOID) {
     return 1;
   }
   g_hook = h;
-  MSG msg;
-  while (InterlockedCompareExchange(&g_run, 1, 1) == 1 &&
-         GetMessageW(&msg, nullptr, 0, 0) > 0) {
-    TranslateMessage(&msg);
-    DispatchMessageW(&msg);
+  // 带超时的等待：每 50ms 醒一次重查 g_run。
+  // 退出条件是 g_run，不是「收到消息」，所以不能阻塞在 GetMessageW 上。
+  while (InterlockedCompareExchange(&g_run, 1, 1) == 1) {
+    const DWORD w = MsgWaitForMultipleObjectsEx(0, nullptr, 50, QS_ALLINPUT,
+                                                MWMO_INPUTAVAILABLE);
+    if (w == WAIT_TIMEOUT) {
+      continue;
+    }
+    bool got_quit = false;
+    while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
+      if (msg.message == WM_QUIT) {
+        got_quit = true;
+        break;
+      }
+      TranslateMessage(&msg);
+      DispatchMessageW(&msg);
+    }
+    if (got_quit) {
+      break;
+    }
   }
   UnhookWindowsHookEx(h);
   if (g_hook == h)
@@ -335,17 +396,22 @@ static double Start(double hz, HWND hwnd) {
 static double Stop() {
   InterlockedExchange(&g_inject_tick, 0);  // 心跳归零 → 钩子立刻转为全放行
   InterlockedExchange(&g_run, 0);
+  InterlockedExchange(&g_pending, 0);
   g_interval = 0;  // 即使钩子还没卸干净，也不再有事件被吞
-  if (g_hook_tid != 0)
-    PostThreadMessageW(g_hook_tid, WM_QUIT, 0, 0);
+  const DWORD tid = g_hook_tid;
+  if (tid != 0)
+    PostThreadMessageW(tid, WM_QUIT, 0, 0);
   LogF("Stop 吞=%.0f 放行=%.0f 注入=%.0f", g_drop, g_pass, g_injected);
-  // 不要在这里等待线程退出：Stop() 由游戏主线程调用，等待会卡住整帧。
-  // 线程自己看 g_run 退出，钩子由 HookThread 用局部句柄卸自己那一个；句柄直接关。
+  // 等两个线程真正退出再返回（各 200ms 上限）。
+  // 必须等：钩子由所属线程持有，线程退出才会被系统卸下。
+  // 两个线程的唤醒周期分别是 50ms 和 ≤4ms，正常几毫秒内返回，200ms 是兜底。
   if (g_hook_thread != nullptr) {
+    WaitForSingleObject(g_hook_thread, 200);
     CloseHandle(g_hook_thread);
     g_hook_thread = nullptr;
   }
   if (g_inject_thread != nullptr) {
+    WaitForSingleObject(g_inject_thread, 200);
     CloseHandle(g_inject_thread);
     g_inject_thread = nullptr;
   }

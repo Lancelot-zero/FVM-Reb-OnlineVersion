@@ -57,15 +57,17 @@ if (!_ime_typing && ime_tick >= 60) {
 // ═══ 鼠标限频的「玩家在游戏里」开关（每 10 帧）═══════════════════════════════════
 // 由游戏自己判断是否有焦点，native 侧不做任何前台/几何判断：有焦点才限频，失去焦点
 // 立刻停，桌面和其它程序的鼠标完全不受影响。
-// 去抖：无边框窗口下 window_has_focus() 会抖动（日志里 4 秒内翻了三次），若每 10 帧
-// 就跟着切，模块大半时间处于停止状态 —— 连续 3 次同向才算数（约 0.2~0.5 秒）。
+
+// 去抖：无边框窗口下 window_has_focus() 会抖动，连续 3 次同向才切换（约 0.2~0.5 秒），
+// 避免模块被反复启停。
+
 if (!variable_instance_exists(id, "ml_tick")) {
     ml_tick = 10;               // 首次立刻评估，不等 10 帧
     ml_on = false;
     ml_focus_stable = false;
     ml_focus_count = 0;
-    // 起手先把 native 侧归零：ml_on 必须与 native 的真实状态一致，否则「启动时已经在
-    // 限频、但 ml_on 为 false」会让下面的 Stop 分支永远不触发。
+
+    // 起手把 native 侧归零，保证 ml_on 与 native 的真实状态一致（Stop 分支依赖这个一致性）。
     if (native_stop_mouse_limit != undefined) {
         native_stop_mouse_limit();
     }
