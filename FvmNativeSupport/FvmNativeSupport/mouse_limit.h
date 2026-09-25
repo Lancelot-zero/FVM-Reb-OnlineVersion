@@ -67,6 +67,15 @@ static LONG g_cur_y = 0;
 static LONGLONG g_acc_dx = 0;  // 自上次注入以来累加的真实位移
 static LONGLONG g_acc_dy = 0;
 static LONGLONG g_last_inj_qpc = 0;
+// 待补发的位移量：由钩子线程发布、由注入线程执行。
+// SendInput 只在注入线程调用 —— 钩子回调必须尽快返回。
+static volatile LONG g_pending = 0;
+static volatile LONG g_tgt_x = 0;
+static volatile LONG g_tgt_y = 0;
+// 位移对账：手移动了多少 vs 我们补发了多少，差值就是丢掉的位移。
+static double g_hand_dx = 0, g_hand_dy = 0;
+static double g_inj_dx = 0, g_inj_dy = 0;
+static double g_pending_mag = 0;
 static DWORD g_game_pid = 0;        // 游戏进程号（Start 时取，仅供诊断打印）
 // 诊断计数器：每条 return 路径各有一个计数，便于区分是哪一步放行的。
 static double g_arrive = 0;    // 钩子被调用总次数
@@ -187,19 +196,30 @@ static LRESULT CALLBACK LowLevelProc(int nCode, WPARAM wParam, LPARAM lParam) {
   // 补回 100% 位移，与注入频率无关。
   g_px = ms->pt.x;  // 仅供日志诊断
   g_py = ms->pt.y;
-  g_acc_dx += static_cast<LONGLONG>(ms->pt.x) - g_cur_x;
-  g_acc_dy += static_cast<LONGLONG>(ms->pt.y) - g_cur_y;
+  // 位移增量相对实际光标计算：注入是异步完成的，光标位置只有向系统查询才准确。
+  // GetCursorPos 是快速查询，可在回调内安全调用。
+  POINT cp{};
+  GetCursorPos(&cp);
+  const LONGLONG ddx = static_cast<LONGLONG>(ms->pt.x) - cp.x;
+  const LONGLONG ddy = static_cast<LONGLONG>(ms->pt.y) - cp.y;
+  g_acc_dx += ddx;
+  g_acc_dy += ddy;
+  g_hand_dx += (ddx < 0 ? -ddx : ddx);
+  g_hand_dy += (ddy < 0 ? -ddy : ddy);
   LARGE_INTEGER now_qpc{};
   QueryPerformanceCounter(&now_qpc);
   if (g_last_inj_qpc == 0)
     g_last_inj_qpc = now_qpc.QuadPart;
-  if (g_interval > 0 && (now_qpc.QuadPart - g_last_inj_qpc) >= g_interval) {
-    g_cur_x += static_cast<LONG>(g_acc_dx);
-    g_cur_y += static_cast<LONG>(g_acc_dy);
+  // g_pending 保证同一时刻只有一个在途目标。
+  if (g_interval > 0 && g_pending == 0 &&
+      (now_qpc.QuadPart - g_last_inj_qpc) >= g_interval) {
+    g_tgt_x = static_cast<LONG>(g_acc_dx);
+    g_tgt_y = static_cast<LONG>(g_acc_dy);
+    g_pending_mag = static_cast<double>(g_tgt_x < 0 ? -g_tgt_x : g_tgt_x) +
+                    static_cast<double>(g_tgt_y < 0 ? -g_tgt_y : g_tgt_y);
     g_acc_dx = 0;
     g_acc_dy = 0;
-    InjectAbs(g_cur_x, g_cur_y);  // 绝对坐标：绕过指针加速，位置精确
-    g_injected += 1.0;
+    InterlockedExchange(&g_pending, 1);
     g_last_inj_qpc = now_qpc.QuadPart;
   }
   g_drop += 1.0;
@@ -232,6 +252,21 @@ static DWORD WINAPI InjectThread(LPVOID) {
     } else {
       Sleep(1);
     }
+    // 消费在途目标：这是全模块唯一调用 SendInput 的地方。
+    if (InterlockedCompareExchange(&g_pending, 1, 1) == 1) {
+      const LONG dx = g_tgt_x;
+      const LONG dy = g_tgt_y;
+      POINT cp{};
+      GetCursorPos(&cp);  // 以光标当前实际位置为基准，异步漂移不会累积
+      g_cur_x = cp.x + dx;
+      g_cur_y = cp.y + dy;
+      InjectAbs(g_cur_x, g_cur_y);
+      g_inj_dx += (dx < 0 ? -dx : dx);
+      g_inj_dy += (dy < 0 ? -dy : dy);
+      g_pending_mag = 0;
+      g_injected += 1.0;
+      InterlockedExchange(&g_pending, 0);  // 最后清标志：期间回调不会再发布
+    }
     // 心跳：无论这一轮有没有真的注入，都刷新（安全网判据，见 LowLevelProc）
     InterlockedExchange(&g_inject_tick, static_cast<LONG>(GetTickCount()));
     QueryPerformanceCounter(&now);
@@ -242,14 +277,16 @@ static DWORD WINAPI InjectThread(LPVOID) {
       last_log = GetTickCount();
       POINT curpoint{};
       GetCursorPos(&curpoint);
-      LogF("统计 吞=%.0f 放行=%.0f 注入=%.0f 注入失败=%.0f | 到达=%.0f 非移动=%.0f 注入事件=%.0f 心跳过期=%.0f | 钩子=%d 事件位置=(%ld,%ld) 注入位置=(%ld,%ld) 实际光标=(%ld,%ld) 前台=%p 游戏=%p",
+      LogF("统计 吞=%.0f 放行=%.0f 注入=%.0f 注入失败=%.0f | 到达=%.0f 非移动=%.0f 注入事件=%.0f 心跳过期=%.0f | 钩子=%d 事件位置=(%ld,%ld) 注入位置=(%ld,%ld) 实际光标=(%ld,%ld) 前台=%p 游戏=%p | 对账 hand=(%.0f,%.0f) inj=(%.0f,%.0f) 未兑现=%.0f 残差=%.0f",
            g_drop, g_pass, g_injected, g_inj_fail, g_arrive, g_notmove,
            g_inj_seen, g_stale, g_hook != nullptr ? 1 : 0,
            static_cast<long>(g_px), static_cast<long>(g_py),
            static_cast<long>(g_cur_x), static_cast<long>(g_cur_y),
            static_cast<long>(curpoint.x), static_cast<long>(curpoint.y),
            static_cast<void *>(GetForegroundWindow()),
-           static_cast<void *>(g_game_hwnd));
+           static_cast<void *>(g_game_hwnd),
+           g_hand_dx, g_hand_dy, g_inj_dx, g_inj_dy, g_pending_mag,
+           (g_hand_dx + g_hand_dy) - (g_inj_dx + g_inj_dy) - g_pending_mag);
     }
   }
   if (timer != nullptr)
@@ -359,6 +396,7 @@ static double Start(double hz, HWND hwnd) {
 static double Stop() {
   InterlockedExchange(&g_inject_tick, 0);  // 心跳归零 → 钩子立刻转为全放行
   InterlockedExchange(&g_run, 0);
+  InterlockedExchange(&g_pending, 0);
   g_interval = 0;  // 即使钩子还没卸干净，也不再有事件被吞
   const DWORD tid = g_hook_tid;
   if (tid != 0)
