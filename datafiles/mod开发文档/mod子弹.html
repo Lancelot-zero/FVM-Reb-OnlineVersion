@@ -44,28 +44,50 @@ hr { border:none; border-top:1px solid #e5e7eb; margin:2em 0; }
 VM 语言与全部函数见 <code>help.md</code>。</p>
 </blockquote>
 <h2>文件</h2>
-<pre><code class="language-text">mod/bullets/my_bullet.json   ← 可以就是 {}
-mod/bullets/my_bullet.bin    ← 逻辑全在这里
-mod/bullets/my_bullet.txt    ← 源码（建议保留）
-mod/bullets/tex/...          ← 自带贴图
+<p>子弹放在<strong>游戏目录下的 <code>mod/bullets/</code></strong> 里：</p>
+<pre><code class="language-text">游戏目录/                       ← 运行游戏的那个文件夹
+└─ mod/
+   └─ bullets/                  ← 子弹这一类都放这里
+      ├─ my_bullet.json         可以就是 {}
+      ├─ my_bullet.bin          逻辑全在这里（由 my_bullet.txt 编译出来）
+      ├─ my_bullet.txt          源码（建议保留）
+      └─ tex/                   自带贴图（可选）
+         └─ xxx.png
 </code></pre>
+<p><strong>也可以再分一层子目录归类</strong>（只扫一层、不往下递归）：<code>mod/bullets/xxx/my_bullet.json</code>，贴图跟 json 同一层放 <code>mod/bullets/xxx/tex/</code>；id 只看 json 文件名。</p>
 <p>子弹<strong>不进任何池</strong>，只是给 <code>obj_bullet_mod</code> 提供一套同名逻辑（<code>mod_type</code> 就是文件名）。
 所以 json 没有固定字段，<code>{}</code> 也行，但<strong>必须有这个 json</strong>，否则扫描不到。</p>
 <hr>
 <h2>一、怎么创建（两步）</h2>
-<pre><code class="language-gml">// ① 先创建通用对象
-b = VM_CreateInstance(&quot;obj_bullet_mod&quot;, x, y)
-// ② 再设 mod_type（= mod/bullets/ 下的文件名，去掉 .json）
-VM_SetProp(b, &quot;mod_type&quot;, &quot;my_bullet&quot;)
-VM_SetProp(b, &quot;sprite_index&quot;, &quot;spr_my_bullet&quot;)
+<blockquote>
+<p><strong>没有「按 mod 类型直接创建」的命令。</strong> <code>VM_CreateInstance</code> 只认游戏对象名（<code>obj_xxx</code>）：
+传 mod 类型名（如 <code>&quot;my_bullet&quot;</code>）会去找 <code>obj_my_bullet</code> → 找不到 → <strong>返回 −1</strong>，日志里打一行
+<code>[VM_CreateInstance] 对象不存在: obj_my_bullet</code>。所以流程永远是：
+<strong>先创建通用的 <code>obj_bullet_mod</code>，再告诉它用哪套逻辑</strong>。</p>
+</blockquote>
+<h3>✅ 方案 A（推荐）：创建【前】用全局指定类型 —— 当帧就动</h3>
+<pre><code class="language-gml">VM_SetProp(0, &quot;_mod_pending_bullet_id&quot;, &quot;my_bullet&quot;)   // ① 先指定类型（= mod/bullets/ 下的文件名）
+b = VM_CreateInstance(&quot;obj_bullet_mod&quot;, x, y)          // ② 再创建
+VM_SetProp(0, &quot;_mod_pending_bullet_id&quot;, &quot;&quot;)            // ③ 用完清空（别省，见下面的坑）
 VM_SetProp(b, &quot;vx&quot;, 8)              // ⚠️ 必须显式设速度
 VM_SetProp(b, &quot;vy&quot;, 0)
 VM_SetProp(b, &quot;damage&quot;, 60)
+VM_SetProp(b, &quot;sprite_index&quot;, &quot;spr_my_bullet&quot;)
 </code></pre>
-<p>也可以&quot;先写全局再创建&quot;（Create 时就初始化，见下面的时机表）：</p>
-<pre><code class="language-gml">VM_SetProp(0, &quot;_mod_pending_bullet_id&quot;, &quot;my_bullet&quot;)
-b = VM_CreateInstance(&quot;obj_bullet_mod&quot;, x, y)
+<ul>
+<li>Create 里立刻按类型初始化 → <strong>创建当帧</strong>就能动、贴图和数值当帧生效</li>
+<li><strong>③ 清空不能省</strong>：<code>_mod_pending_bullet_id</code> 是个<strong>全局</strong>，不清就会一直留着。下一个脚本只要
+用的是方案 B（创建后才写 <code>mod_type</code>），就会<strong>继承这个脏值</strong> —— 因为 Create 里已经按脏值把
+VM 初始化并把 <code>_mod_initialized</code> 置成 <code>true</code>，之后写 <code>mod_type</code> <strong>再也改不回来</strong>。
+症状是「A 发完子弹，B 的子弹跑成了 A 的逻辑」（雷神 / 哈迪斯镰刀 / 命运女神都栽过这个）</li>
+</ul>
+<h3>⚠️ 方案 B：创建【后】再设 <code>mod_type</code> —— 下一帧才动，且怕脏值</h3>
+<pre><code class="language-gml">b = VM_CreateInstance(&quot;obj_bullet_mod&quot;, x, y)
+VM_SetProp(b, &quot;mod_type&quot;, &quot;my_bullet&quot;)     // 靠下一帧的&quot;延迟初始化&quot;补上
 </code></pre>
+<p>只在<strong>创建那一刻 <code>_mod_pending_bullet_id</code> 恰好是空的</strong>时才可靠。
+只要别的地方用了方案 A 却没清全局，这里就会静默跑成别人的脚本 —— 所以<strong>优先用方案 A</strong>，
+真要用 B 的话，创建前先 <code>VM_SetProp(0, &quot;_mod_pending_bullet_id&quot;, &quot;&quot;)</code> 把它清干净。</p>
 <hr>
 <h2>二、子弹实例上的内置字段</h2>
 <table>
@@ -122,6 +144,136 @@ b = VM_CreateInstance(&quot;obj_bullet_mod&quot;, x, y)
 <td><strong>插件自己设的</strong>属性（<code>VM_SetProp</code> 设过才有）</td>
 </tr>
 </tbody></table>
+<h3>碰撞结算字段（<strong>引擎自动做</strong>，默认全 0 = 不结算）</h3>
+<p>撞到敌人时（<code>Collision_obj_enemy_parent</code>）核心会按下面这些字段<strong>自动结算</strong>，脚本不用自己写：</p>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>默认</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>bullet_damage</code></td>
+<td><code>0</code></td>
+<td>撞到敌人造成多少伤害（<code>0</code> = 不掉血）</td>
+</tr>
+<tr>
+<td><code>bullet_damage_type</code></td>
+<td><code>&quot;normal&quot;</code></td>
+<td><code>normal</code> 有盾只打盾 / <code>pierce</code> 盾血一起掉 / 其它无视护盾</td>
+</tr>
+<tr>
+<td><code>bullet_collide</code></td>
+<td><code>1</code></td>
+<td><code>1</code> = 正常碰撞；<strong><code>0</code> = 关掉碰撞</strong>：核心把它的碰撞掩码换成&quot;空掩码&quot;，引擎<strong>直接跳过重叠检测</strong>（真省性能）</td>
+</tr>
+<tr>
+<td><code>bullet_slow</code></td>
+<td><code>0</code></td>
+<td><code>1</code> = 命中就<strong>减速</strong>（写敌人 <code>ice_timer</code>：移动与攻速都减半）</td>
+</tr>
+<tr>
+<td><code>bullet_slow_frame</code></td>
+<td><code>0</code></td>
+<td>减速持续帧数</td>
+</tr>
+<tr>
+<td><code>bullet_freeze_chance</code></td>
+<td><code>0</code></td>
+<td><code>0~1</code>：命中时<strong>完全冻结</strong>的概率（写 <code>frozen_timer</code>，整只不动）</td>
+</tr>
+<tr>
+<td><code>bullet_freeze_frame</code></td>
+<td><code>0</code></td>
+<td>冻结持续帧数</td>
+</tr>
+<tr>
+<td><code>bullet_stun_chance</code></td>
+<td><code>0</code></td>
+<td><code>0~1</code>：命中时<strong>眩晕</strong>的概率（写 <code>stun_timer</code>，不动 + 冒星星）</td>
+</tr>
+<tr>
+<td><code>bullet_stun_frame</code></td>
+<td><code>0</code></td>
+<td>眩晕持续帧数</td>
+</tr>
+<tr>
+<td><code>bullet_hits</code></td>
+<td><code>-1</code></td>
+<td>撞几次后消失；<strong><code>-1</code> = 不消耗（默认：撞上也不会消失）</strong> —— 要让子弹&quot;撞一次就没&quot;必须显式写 <code>1</code></td>
+</tr>
+</tbody></table>
+<pre><code class="language-gml">_OBJECT_CREATE {
+    self = VM_GetCurCard()
+    VM_SetProp(self, &quot;bullet_damage&quot;, 120)          // 命中掉 120
+    VM_SetProp(self, &quot;bullet_slow&quot;, 1)              // 顺带减速
+    VM_SetProp(self, &quot;bullet_slow_frame&quot;, 180)      // 3 秒
+    VM_SetProp(self, &quot;bullet_freeze_chance&quot;, 0.3)   // 30% 完全冻住
+    VM_SetProp(self, &quot;bullet_freeze_frame&quot;, 120)    // 冻 2 秒
+    VM_SetProp(self, &quot;bullet_hits&quot;, 1)              // 撞一次就消失（**默认是 -1 = 撞了不消失**）
+}
+</code></pre>
+<ul>
+<li>减速 / 冻结 / 眩晕都是&quot;<strong>取更长的那一个</strong>&quot;，不会把敌人身上已有的更长状态缩短</li>
+<li>伤害走敌人自己的受击事件（闪白 / 音效 / 护盾判定都对），和自己写 <code>VM_DamageEnemy</code> 一个口径</li>
+<li>碰撞还会写 <code>mod_collision_enemies</code>（这一帧撞到的所有敌人，数组）/ <code>mod_collision_enemy</code>（最后一个）/
+<code>mod_collision_hit</code>，配合 <code>mod_step_enter_condition = &quot;attack_collision&quot;</code> 就能&quot;撞上才进 VM&quot;</li>
+<li>⚠️ 子弹必须有<strong>有效贴图</strong>（<code>sprite_index</code>）才有碰撞体；空占位图撞不到敌人</li>
+<li><strong>不想让这颗子弹参与碰撞</strong>：<code>bullet_collide = 0</code> —— 核心会把它的碰撞掩码换成一个<strong>空掩码精灵</strong>，
+<strong>引擎直接跳过它的重叠检测</strong>（这是真的省性能，不只是&quot;不结算&quot;）；伤害/状态/碰撞字段/<code>&quot;attack_collision&quot;</code>
+全都不做，命中判断完全交给脚本。<ul>
+<li>恢复：把 <code>bullet_collide</code> 改回 <code>1</code>（掩码复位成自家贴图）</li>
+<li><code>place_meeting</code> 之类的检测也会一起失效（掩码是空的）</li>
+<li>兜底：万一引擎版本没有 <code>sprite_collision_mask</code>，会自动退回&quot;碰撞事件里提前退出&quot;（不结算，但检测仍在跑）</li>
+<li>⚠️ 掩码每帧在 Step 里维护，所以<strong>在 <code>_OBJECT_CREATE</code> 或任意 STEP 里设都生效</strong>（当帧就生效）</li>
+</ul>
+</li>
+<li>⚠️ 贴着敌人不动时<strong>每帧</strong>都会触发一次碰撞 → 伤害/状态也每帧结算一次</li>
+<li>⚠️ 概率用 <code>random(1)</code>，联机下各客户端可能掷出不同结果（要严格同步就在 VM 里自己掷）</li>
+</ul>
+<h3>抛物线字段（<strong>引擎自己飞</strong>）</h3>
+<p><code>bullet_parabola = 1</code> 就由核心按弧线推进（会<strong>覆盖</strong> <code>vx/vy</code> 的直线位移）：</p>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>默认</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>bullet_parabola</code></td>
+<td><code>0</code></td>
+<td><code>1</code> = 走抛物线</td>
+</tr>
+<tr>
+<td><code>bullet_target</code></td>
+<td><code>-1</code></td>
+<td>目标<strong>实例</strong> id（优先；<code>-1</code> 或实例没了就用下面坐标）</td>
+</tr>
+<tr>
+<td><code>bullet_target_x</code> / <code>bullet_target_y</code></td>
+<td><code>0</code> / <code>0</code></td>
+<td>目标坐标</td>
+</tr>
+<tr>
+<td><code>bullet_parabola_time</code></td>
+<td><code>30</code></td>
+<td>全程帧数（30 帧 = 0.5 秒）</td>
+</tr>
+<tr>
+<td><code>bullet_parabola_h</code></td>
+<td><code>-1</code></td>
+<td>弧线最高点高度（像素）；<code>-1</code> = 自动（起点到目标距离的 1/4）</td>
+</tr>
+</tbody></table>
+<ul>
+<li>起点和目标是<strong>起飞那一帧</strong>取一次（目标是实例时也不追第二遍）</li>
+<li>飞完（到目标点）就停下：<code>bullet_parabola</code> 置 <code>0</code>、<code>vx/vy</code> 清零、坐标钉在目标点，
+之后交给碰撞结算 / <code>destroy_timer</code> / 脚本自己处理</li>
+</ul>
 <hr>
 <h2>三、STEP 的时机与执行顺序</h2>
 <h3>创建当帧 vs 下一帧（重要）</h3>
@@ -135,7 +287,7 @@ b = VM_CreateInstance(&quot;obj_bullet_mod&quot;, x, y)
 </thead>
 <tbody><tr>
 <td><strong>创建当帧</strong></td>
-<td><code>obj_bullet_mod</code> 的 Create 跑，<code>mod_type</code> 还是空 → <strong>不初始化</strong>；随后你的 <code>VM_SetProp</code> 把 <code>mod_type</code> / 数值写进去。这帧还没有本体精灵，看不见是正常的</td>
+<td>子弹刚建出来时 <code>mod_type</code> 还是空 → <strong>不初始化</strong>；随后你的 <code>VM_SetProp</code> 把 <code>mod_type</code> / 数值写进去。这帧还没有本体精灵，看不见是正常的</td>
 </tr>
 <tr>
 <td><strong>下一帧</strong></td>
@@ -149,7 +301,7 @@ b = VM_CreateInstance(&quot;obj_bullet_mod&quot;, x, y)
 <blockquote>
 <p>所以：在&quot;创建前设好类型&quot;就能当帧生效；只设 <code>mod_type</code> 也行，代价是下一帧才开始动。</p>
 </blockquote>
-<h3>每帧顺序（<code>obj_bullet_mod/Step_0.gml</code>）</h3>
+<h3>每帧顺序（核心在什么时候跑你的块）</h3>
 <pre><code class="language-text">1. 暂停 → exit
 2. prev_grid_col/row = 当前格子；再用 get_grid_position_from_world 更新 grid_col/row
 3. 延迟初始化（mod_type 有了就跑 _OBJECT_CREATE）
@@ -195,17 +347,104 @@ b = VM_CreateInstance(&quot;obj_bullet_mod&quot;, x, y)
 <td>—</td>
 </tr>
 <tr>
+<td><code>&quot;cell_target_row&quot;</code></td>
+<td><strong>在目标所在行里</strong>就进（在着就一直进）</td>
+<td>目标取 <code>bullet_target</code>（实例）；没实例就用 <code>bullet_target_x/y</code> 换算格子；都没设 = 永不进</td>
+</tr>
+<tr>
+<td><code>&quot;cell_target_col&quot;</code></td>
+<td><strong>在目标所在列里</strong>就进</td>
+<td>同上</td>
+</tr>
+<tr>
 <td><code>&quot;attack&quot;</code></td>
-<td><strong>场上还有敌人才进</strong>（<code>instance_number(obj_enemy_parent) &gt; 0</code>）</td>
+<td><strong>场上还有敌人才进</strong></td>
 <td><code>mod_has_enemy</code>（只读）</td>
+</tr>
+<tr>
+<td><code>&quot;attack_cell&quot;</code></td>
+<td><strong>子弹当前这一格有敌人才进</strong>（查每帧重建的敌人表，比 <code>&quot;attack&quot;</code> 精确）</td>
+<td><code>mod_has_enemy</code>（只读）</td>
+</tr>
+<tr>
+<td><code>&quot;attack_collision&quot;</code></td>
+<td><strong>撞到敌人了才进</strong>（碰撞事件把撞到的敌人攒成数组；<strong>一帧撞几个也只进一次</strong>）</td>
+<td><code>mod_collision_enemies</code>（只读，数组）= 这一帧撞到的所有敌人；<code>mod_collision_enemy</code>（只读）= 最后一个；<code>mod_collision_hit</code> = 1/0</td>
 </tr>
 </tbody></table>
 <ul>
-<li><strong>子弹最常用 <code>&quot;cell&quot;</code></strong>：只有跨格那一帧进 VM，正好对上&quot;路径碰撞&quot;的需求</li>
-<li>⚠️ <code>&quot;cell&quot;</code> 触发的是<strong>进格后的第一帧</strong> —— 格子坐标是在 <code>x += vx</code> <strong>之前</strong>算的，比实际越界晚一帧；
-一帧跨多格也只触发一次</li>
-<li><code>&quot;attack&quot;</code> 是<strong>全局判定</strong>（只看场上还有没有敌人），不像卡片那样按区域/类型索敌 —— 子弹数量多，这样便宜</li>
+<li><p><strong>子弹最常用 <code>&quot;cell&quot;</code></strong>：只有跨格那一帧进 VM，正好对上&quot;路径碰撞&quot;的需求</p>
+</li>
+<li><p>⚠️ <strong>子弹是场上数量最多的东西，最忌每帧进 VM</strong>（不设条件就是每帧）：九成情况 <code>&quot;cell&quot;</code> 就够；
+真的需要&quot;每帧都动&quot;的（抛物线、自转），才留空让自己每帧进 —— 而且那种弹优先考虑屏幕弹幕 <code>VM_BulletScreenAdd_Exs</code>（见 <code>help.md</code> 与 <a href="mod%E5%BC%80%E5%8F%91%E5%B7%A5%E5%85%B7%E8%AF%B4%E6%98%8E.html">mod开发工具说明.md</a> 的「性能铁律」）</p>
+</li>
+<li><p>⚠️ <code>&quot;cell&quot;</code> 触发的是<strong>进格后的第一帧</strong> —— 格子坐标是在 <code>x += vx</code> <strong>之前</strong>算的，比实际越界晚一帧；
+一帧跨多格也只触发一次</p>
+</li>
+<li><p><code>&quot;attack_collision&quot;</code> 是&quot;<strong>撞上才进</strong>&quot;：碰撞事件把这一帧撞到的敌人<strong>都攒进 <code>mod_collision_enemies</code></strong>（数组），
+Step 里只进<strong>一次</strong> VM —— 一帧撞 3 个也只进一次，脚本自己遍历；进完 VM 列表自动清空。</p>
+</li>
+<li><p>⚠️ <strong>时序</strong>：碰撞是 Step <strong>跑完之后</strong>才判定的，所以卡片是在<strong>下一帧的 Step</strong> 里收到这次碰撞。
+<code>bullet_hits</code> 用完的子弹会<strong>等这一次 VM 跑完</strong>才销毁（引擎把销毁推到子弹自己的下一步），
+不会出现&quot;子弹先没了、脚本收不到通知&quot;这种情况。
+只关心一个敌人就读 <code>mod_collision_enemy</code>（= 最后一个）。遍历写法：</p>
+<pre><code class="language-gml">_OBJECT_STEP {
+    self = VM_GetCurCard()
+    n = VM_InstArraySize(self, &quot;mod_collision_enemies&quot;)
+    k = 0
+    while (k &lt; n) {
+        e = VM_InstArrayItem(self, &quot;mod_collision_enemies&quot;, k)
+        // 对 e 做点什么……
+        k = k + 1
+    }
+    VM_DestroyInstance(self)     // 撞完就没
+}
+</code></pre>
+</li>
+<li><p><code>&quot;cell_target_row&quot;</code> / <code>&quot;cell_target_col&quot;</code> 是&quot;<strong>在</strong>目标那一行/列里&quot;就进（不是跨过去那一帧）：
+目标优先取 <code>bullet_target</code> 实例，其次按 <code>bullet_target_x/y</code> 换算格子；两个都没设就永不进。
+适合&quot;飞到目标行/列里了才开始做点什么&quot;（配合 <code>&quot;attack_cell&quot;</code> 用就是&quot;同一行 + 同格&quot;）</p>
+</li>
+<li><p><code>&quot;attack&quot;</code> 是<strong>全局判定</strong>（只看场上还有没有敌人），<code>&quot;attack_cell&quot;</code> 只看<strong>自己脚下这一格</strong> ——</p>
+</li>
 </ul>
+<p><strong>能不进 STEP 就别进：这些需求只靠预设字段就能做完（只在 <code>_OBJECT_CREATE</code> 里设好）</strong></p>
+<table>
+<thead>
+<tr>
+<th>需求</th>
+<th>只靠这些字段 / 条件</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>直线飞 + 命中扣血</td>
+<td><code>bullet_damage</code> / <code>bullet_damage_type</code> / <code>bullet_hits</code>（引擎在碰撞事件里自动结算）</td>
+</tr>
+<tr>
+<td>命中减速 / 冻结 / 眩晕</td>
+<td><code>bullet_slow</code> + <code>bullet_slow_frame</code> / <code>bullet_freeze_chance</code> + <code>bullet_freeze_frame</code> / <code>bullet_stun_chance</code> + <code>bullet_stun_frame</code></td>
+</tr>
+<tr>
+<td>抛物线（追实例或坐标）</td>
+<td><code>bullet_parabola</code> + <code>bullet_target</code>（或 <code>bullet_target_x/y</code>）+ <code>bullet_parabola_time</code> / <code>bullet_parabola_h</code></td>
+</tr>
+<tr>
+<td>撞上才做额外事</td>
+<td>STEP 条件用 <code>&quot;attack_collision&quot;</code> —— 全程只在<strong>命中那几帧</strong>进 VM</td>
+</tr>
+<tr>
+<td>到目标行 / 列才做</td>
+<td><code>&quot;cell_target_row&quot;</code> / <code>&quot;cell_target_col&quot;</code></td>
+</tr>
+<tr>
+<td>只要命中特效 / 音效</td>
+<td>同上：<code>&quot;attack_collision&quot;</code> 进一次就够，不用每帧跑</td>
+</tr>
+</tbody></table>
+<p>也就是说：<strong>多数子弹连 <code>_OBJECT_STEP</code> 都不用写</strong>（写了也就是命中/到位那一两帧跑），
+子弹多的时候这就是帧率差别的来源。真需要每帧动的（追踪、自转），优先考虑
+<code>VM_BulletScreenAdd_Exs</code> / <code>VM_HomingBulletAdd</code> 这类不占实例的接口。
+  两个都是一次查表、零循环，比卡片那套按区域索敌便宜；要&quot;飞到敌人身上才结算&quot;就用 <code>&quot;attack_cell&quot;</code></p>
 <h3>鼠标三个块</h3>
 <p><code>_OBJECT_MOUSE_ENTER</code> / <code>_OBJECT_MOUSE_LEAVE</code> / <code>_OBJECT_CLICK</code> 子弹也有，是按实例判定的
 （鼠标要压在子弹的贴图上）。⚠️ 子弹飞得快、通常又没设 <code>sprite_index</code>，<strong>实际很少用得上</strong>。</p>
@@ -229,14 +468,14 @@ Draw 里也会补做一次延迟初始化，所以&quot;还没 Step 就先画一
 
 _OBJECT_CREATE {
     self = VM_GetCurCard()
-    VM_SetProp(self, &quot;destroy_timer&quot;, 0 - 1)      // 不自动销毁（出界由对象处理）
+    VM_SetProp(self, &quot;destroy_timer&quot;, -1)      // 不自动销毁（出界由对象处理）
     VM_SetProp(self, &quot;image_xscale&quot;, 1.6)
     VM_SetProp(self, &quot;image_yscale&quot;, 1.6)
 
     // sprite_index 是内置实例变量，永远&quot;已定义&quot;（没设时是 -1）→ 不能用 undefined 兜底
     spr = VM_GetProp(self, &quot;sprite_index&quot;)
-    if (VM_IsUndefined(spr) == 1) { spr = 0 - 1 }
-    if (spr == 0 - 1) { VM_SetProp(self, &quot;sprite_index&quot;, &quot;spr_my_bullet&quot;) }
+    if (VM_IsUndefined(spr) == 1) { spr = -1 }
+    if (spr == -1) { VM_SetProp(self, &quot;sprite_index&quot;, &quot;spr_my_bullet&quot;) }
 
     // 别人没给的速度/伤害，这里给默认
     if (VM_IsUndefined(VM_GetProp(self, &quot;vx&quot;)) == 1) { VM_SetProp(self, &quot;vx&quot;, 8) }
@@ -282,7 +521,7 @@ _OBJECT_STEP {
 <h3>Demo 3：抛物线 / 自转</h3>
 <pre><code class="language-gml">_OBJECT_CREATE {
     self = VM_GetCurCard()
-    VM_SetProp(self, &quot;vy&quot;, 0 - 8)         // 先往上
+    VM_SetProp(self, &quot;vy&quot;, -8)         // 先往上
     VM_SetProp(self, &quot;spin&quot;, 0)
 }
 
@@ -297,12 +536,22 @@ _OBJECT_STEP {
 <hr>
 <h2>五、要点（踩过的坑）</h2>
 <ul>
+<li><strong>创建 mod 子弹：优先用方案 A（创建【前】设全局 <code>_mod_pending_bullet_id</code>，创建后清空）</strong>。
+<code>VM_CreateInstance</code> <strong>不认 mod 类型名</strong>，只能创建游戏对象；创建后写 <code>mod_type</code>（方案 B）只在
+&quot;创建那一刻全局是空的&quot;时才有效。全局不清 → 下一个用方案 B 的脚本继承脏值，静默跑成上一个
+mod 的逻辑（Create 里已置 <code>_mod_initialized = true</code>，之后改 <code>mod_type</code> 无效）</li>
 <li><strong><code>vx</code> / <code>vy</code> 必须显式设</strong>：Create 里就是 0，&quot;不设就用默认&quot;不成立（子弹一动不动）</li>
 <li><strong><code>sprite_index</code> 永远&quot;已定义&quot;</strong>（没设时是 <code>-1</code>），判断&quot;别人给没给贴图&quot;要用 <code>== -1</code>，不能用 undefined</li>
 <li><strong>默认不会自己消失</strong>（<code>destroy_timer = -1</code>）：出界会自动销毁，但命中后要自己 <code>VM_DestroyInstance(self)</code>
 或者给自己一个寿命 <code>VM_SetProp(self, &quot;destroy_timer&quot;, 90)</code></li>
-<li><strong>碰撞要自己写</strong>：<code>obj_bullet_mod</code> 没有碰撞事件（原版那些 <code>Collision_*</code> 联动一个都没有），
-常用 <code>VM_GetInstancesInRange(..., &quot;card&quot;, &quot;brazier&quot;)</code> / <code>(..., &quot;enemy&quot;, &quot;&quot;)</code> / <code>VM_EnemyInRange</code></li>
+<li><strong>命中结算可以交给引擎</strong>：设好 <code>bullet_damage</code> / <code>bullet_slow</code> / <code>bullet_freeze_chance</code> /
+<code>bullet_stun_chance</code> / <code>bullet_hits</code> 这些字段（见「碰撞结算字段」），撞上敌人时核心会自动扣血、
+上状态、按次数消耗 —— 这种写法<strong>一条 VM 代码都不用进</strong>。
+想自己接管（例如命中后放范围爆炸），就用 <code>mod_step_enter_condition = &quot;attack_collision&quot;</code>：
+碰撞时核心已经把 <code>mod_collision_enemy</code>（撞到的敌人 id）写好，进 VM 后自己处理。
+⚠️ 子弹必须有<strong>有效贴图</strong>（<code>sprite_index</code>）才有碰撞体；空占位图撞不到东西。
+⚠️ 碰撞事件在 Step 之后跑，所以闸门是<strong>撞到的下一帧</strong>才放行；贴着敌人不动会每帧都撞、每帧都结算。
+不想用碰撞事件也可以自己查：<code>VM_GetInstancesInRange(..., &quot;card&quot;, &quot;brazier&quot;)</code> / <code>(..., &quot;enemy&quot;, &quot;&quot;)</code> / <code>VM_EnemyInRange</code></li>
 <li><strong>大量同质子弹别用实例子弹</strong>：改用屏幕弹幕管理器，不占实例、统一迭代绘制：<ul>
 <li><code>VM_BulletScreenAdd_Ex(贴图,总帧数,打击范围,缩放,动画速度,x,y,vx,vy,伤害,伤害计数,存活帧数,子弹类型,销毁对象,mod名字,伤害类型,标志数值,角度)</code>（18 个参数，带卡片效果位掩码）</li>
 <li><code>VM_BulletScreenAdd_Exs(...)</code>（多两个<strong>行渐变</strong>参数：目标行世界 y、靠拢比例 0.15）</li>

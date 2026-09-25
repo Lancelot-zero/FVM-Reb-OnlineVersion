@@ -1,0 +1,103 @@
+// 旋风牛（生肖卡）：起手吹走全屏空中老鼠 + 清除障碍，随后自己退场
+// 原版 obj_xuanfengniu：
+//   activate_delay = 4 * flash_speed = 20 帧后触发一次，state = RELAX，image_alpha 每帧 -0.1 消失。
+//   0 形态：只吹空中老鼠；1 转及以上：额外清障（鼠洞/梯子/弹簧/障碍）。
+//   ⚠️ mod 卡只有形态 0，按最终形态写死（含清障）。
+//
+//   吹走的方式（原版）：标记 is_blown_away、置 ENEMY_STATE.DEAD、instance_destroy ——
+//   **不掉金币、不计击杀**。插件没有这些标记字段，这里用 VM_DestroyInstance 直接移除，
+//   同样不掉金币不计击杀（因为没有走伤害流程）。
+//
+//   ⚠️ 原版用 air_mouse_whitelist 白名单筛"可吹走的空中老鼠"（排除 Boss 和免疫目标）。
+//      插件拿不到 mouse_id 白名单，这里改成"target_type = air 一律吹走"——
+//      会把原版免疫的空中目标也吹掉，是本卡与原型唯一的差异。
+//
+//   贴图：本体 spr_xuanfengniu_2 = 28 帧、258x138、原点 (71, 121)
+
+_OBJECT_CFG {
+    if (VM_SpriteExists("spr_xuanfengniu_2") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_xuanfengniu_2_0.png", 27, 71, 121)
+        VM_AliasSpritePerm("spr_xuanfengniu_2", "tex/spr_xuanfengniu_2_0.png")
+    }
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+
+    VM_SetProp(self, "sprite_index", "spr_xuanfengniu_2")
+    VM_SetProp(self, "attack_anim", 0)
+    VM_SetProp(self, "idle_anim", 11)
+    VM_SetProp(self, "flash_speed", 5)
+    VM_SetProp(self, "plant_type", "normal")
+    VM_SetProp(self, "state", 0)
+
+    // 起手 20 帧后触发一次（原版 4 * flash_speed），然后每帧都进 VM 走淡出
+    VM_SetProp(self, "xfn_timer", 0)
+    VM_SetProp(self, "xfn_done", 0)
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+
+    t = VM_GetProp(self, "xfn_timer")
+    if (VM_IsUndefined(t) == 1) {
+        t = 0
+    }
+    t = t + 1
+    VM_SetProp(self, "xfn_timer", t)
+
+    done = VM_GetProp(self, "xfn_done")
+    if (VM_IsUndefined(done) == 1) {
+        done = 0
+    }
+
+    // 还没触发：保持每帧进，等 t 到 20
+    if (done == 0) {
+
+        if (t >= 20) {
+            VM_SetProp(self, "xfn_done", 1)
+            VM_SetProp(self, "state", 3)        // CARD_STATE.RELAX
+
+            gc = VM_GetProp(0, "grid_cols")
+            if (VM_IsUndefined(gc) == 1) {
+                gc = 9
+            }
+            gr = VM_GetProp(0, "grid_rows")
+            if (VM_IsUndefined(gr) == 1) {
+                gr = 5
+            }
+
+            // 1) 全屏空中敌人：直接移除
+            n = VM_GetInstancesInRange("xfn_air", 0, gr - 1, 0, gc - 1, "enemy", "air")
+            k = 0
+            while (k < n) {
+                e = VM_ArrayGet("xfn_air", k)
+                if (VM_GetProp(e, "hp") > 0) {
+                    VM_DestroyInstance(e)
+                }
+                k = k + 1
+            }
+
+            // 2) 最终形态：顺手清障（障碍类敌人）
+            m = VM_GetInstancesInRange("xfn_obs", 0, gr - 1, 0, gc - 1, "enemy", "obstacle")
+            j = 0
+            while (j < m) {
+                o = VM_ArrayGet("xfn_obs", j)
+                VM_DestroyInstance(o)
+                j = j + 1
+            }
+        }
+        exit
+    }
+
+    // 触发之后：淡出，alpha 到 0 就自毁
+    al = VM_GetProp(self, "image_alpha")
+    if (VM_IsUndefined(al) == 1) {
+        al = 1
+    }
+    al = al - 0.1
+    VM_SetProp(self, "image_alpha", al)
+    if (al <= 0) {
+        VM_DestroyInstance(self)
+    }
+}

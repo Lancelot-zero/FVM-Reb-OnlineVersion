@@ -17,16 +17,10 @@ _OBJECT_CFG {
         VM_LoadSpritePerm_Ex("../effects/tex/spr_master_shield_effect_3_0.png", 30, 181, 210)
         VM_AliasSpritePerm("spr_master_shield_effect_3", "../effects/tex/spr_master_shield_effect_3_0.png")
     }
-}
-
-_OBJECT_CREATE {
-    self = VM_GetCurCard()
-    // 战场贴图 45×45 按 1.8 放大；背包图标是 82×82 那张
-    VM_SetProp(self, "sprite_index", "spr_divine_protect_gem")
-    VM_SetProp(self, "image_xscale", 1.8)
-    VM_SetProp(self, "image_yscale", 1.8)
-
-    // 每档内圈系数（3×3，原版 ratio_inner）
+    // tables live in _OBJECT_CFG, NOT _OBJECT_CREATE:
+    // reloadmod clears this VM's named arrays but only re-runs _VM_CONST_INIT + _OBJECT_CFG,
+    // never _OBJECT_CREATE -- if the tables were built in Create they come back empty after a
+    // reload and VM_ArrayGet returns 0 (bless spams flames every frame, tear/holy deal 0 damage).
     VM_ArrayClear("dvg_in")
     VM_ArrayADD("dvg_in", 0.07)
     VM_ArrayADD("dvg_in", 0.08)
@@ -44,8 +38,6 @@ _OBJECT_CREATE {
     VM_ArrayADD("dvg_in", 0.42)
     VM_ArrayADD("dvg_in", 0.46)
     VM_ArrayADD("dvg_in", 0.5)
-
-    // 每档外圈系数（5×5 去掉 3×3）
     VM_ArrayClear("dvg_out")
     VM_ArrayADD("dvg_out", 0.035)
     VM_ArrayADD("dvg_out", 0.04)
@@ -63,16 +55,29 @@ _OBJECT_CREATE {
     VM_ArrayADD("dvg_out", 0.21)
     VM_ArrayADD("dvg_out", 0.23)
     VM_ArrayADD("dvg_out", 0.25)
-
-    // 黑名单（原版 shield 的 blacklist）
     VM_ArrayClear("dvg_bl")
     VM_ArrayADD("dvg_bl", "loki")
     VM_ArrayADD("dvg_bl", "aurora")
     VM_ArrayADD("dvg_bl", "player")
     VM_ArrayADD("dvg_bl", "cherry_pudding")
     VM_ArrayADD("dvg_bl", "brazier")
+}
 
-    VM_InstArrayClear(self, "done")
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+    // 战场贴图 45×45 按 1.8 放大；背包图标是 82×82 那张
+    VM_SetProp(self, "sprite_index", "spr_divine_protect_gem")
+    VM_SetProp(self, "image_xscale", 1.8)
+    VM_SetProp(self, "image_yscale", 1.8)
+
+    // 每档内圈系数（3×3，原版 ratio_inner）
+
+    // 每档外圈系数（5×5 去掉 3×3）
+
+    // 黑名单（原版 shield 的 blacklist）
+
+    // 去重标记不用建数组：直接打在【被加成的卡自己】身上的实例变量 dvg_buffed
+    //（VM_InstArrayClear 在这里是无效的 —— 脚本创建不了实例数组，调用会静默失败）
     VM_SetProp(self, "fx", 0)
 }
 
@@ -120,7 +125,10 @@ _OBJECT_STEP {
     while (k < n) {
         p = VM_ArrayGet("dvg_arr", k)
         skip = 0
-        if (VM_InstArrayContains(self, "done", p) != -1) { skip = 1 }
+        // 去重标记打在【被加成的卡自己身上】：原来用 VM_InstArrayContains(self, "done", p) 是无效的
+        // —— 脚本没法自己创建实例数组，那两个函数在变量不存在时直接返回 -1，
+        //   判断恒不成立 → 同一张卡**每帧**都被 atk *= (1+rt)，攻击力指数级膨胀。
+        if (VM_GetProp(p, "dvg_buffed") == 1) { skip = 1 }
         if (VM_ArrayContains("dvg_bl", VM_GetProp(p, "plant_id")) != -1) { skip = 1 }
         if (skip == 0) {
             dr = VM_GetProp(p, "grid_row") - r
@@ -133,7 +141,7 @@ _OBJECT_STEP {
             if (VM_IsUndefined(rt) == 1) { rt = 0 }
             if (rt < 0) { rt = 0 }
             VM_SetProp(p, "atk", VM_GetProp(p, "atk") * (1 + rt))
-            VM_InstArrayAdd(self, "done", p)
+            VM_SetProp(p, "dvg_buffed", 1)
         }
         k = k + 1
     }

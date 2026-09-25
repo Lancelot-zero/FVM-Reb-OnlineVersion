@@ -5,9 +5,20 @@
 
 ## 文件
 
+宝石放在**游戏目录下的 `mod/gems/`** 里：
+
 ```text
-mod/gems/my_gem.json / .bin / .txt / tex/
+游戏目录/                       ← 运行游戏的那个文件夹
+└─ mod/
+   └─ gems/                     ← 宝石这一类都放这里
+      ├─ my_gem.json            宝石配置（被动/主动、数值、图标）
+      ├─ my_gem.bin             逻辑（由 my_gem.txt 编译出来，游戏只读这个）
+      ├─ my_gem.txt             源码（建议保留）
+      └─ tex/                   自带贴图（可选）
+         └─ xxx.png
 ```
+
+**也可以再分一层子目录归类**（只扫一层、不往下递归）：`mod/gems/xxx/my_gem.json`，贴图跟 json 同一层放 `mod/gems/xxx/tex/`；id 只看 json 文件名。
 
 ---
 
@@ -31,7 +42,7 @@ mod/gems/my_gem.json / .bin / .txt / tex/
 
 ## 二、宝石实例上的内置字段
 
-`obj_gem_mod` 的 Create 建好这些：
+宝石实例一建出来就带好这些：
 
 | 字段 | 初值 | 说明 |
 |---|---|---|
@@ -43,6 +54,8 @@ mod/gems/my_gem.json / .bin / .txt / tex/
 | `mod_point_parent_player` | 放置它的角色实例 | 插件宝石定位用（放置逻辑挂的） |
 | `mod_point_grid_row` / `mod_point_grid_col` | 放置方所在格子 | 同上 |
 | `mod_point_gem_level` | 存档等级 | 同上 |
+| `mod_has_enemy` / `mod_has_card` | 只读 | "区域里有敌人 / 有卡片"的结果（`"enemy_area*"` / `"card_area*"` 条件用） |
+| `mod_tick_cool` | 只读 | `"*_area_mod"` 的冷却剩余帧数 |
 | `image_speed` / `timer` / `flash_speed` | `0` / `0` / `5` | 动画（同卡片那套 `state`/`idle_anim`/`attack_anim`） |
 | `state` / `idle_anim` / `attack_anim` | IDLE / 0 / 0 | 动画状态 |
 
@@ -70,7 +83,7 @@ mod/gems/my_gem.json / .bin / .txt / tex/
 - **`_OBJECT_DESTROY`**：宝石对象**不支持**（写了不会执行）
 - **`_OBJECT_MOUSE_ENTER` / `_OBJECT_MOUSE_LEAVE` / `_OBJECT_CLICK`**：鼠标移入 / 移出 / 左键点在宝石图标上（按实例判定，鼠标要压在宝石贴图上）
 
-### 每帧顺序（`obj_gem_mod/Step_0.gml`）
+### 每帧顺序（核心在什么时候跑你的块）
 
 ```text
 1. 暂停 → 整个 exit
@@ -91,9 +104,39 @@ mod/gems/my_gem.json / .bin / .txt / tex/
 | `"mod"` | `battle_time % 间隔 == 0`（全场共享） | `mod_step_enter_var` = 间隔帧数 |
 | `"wait"` | `mod_step_enter_var` 每帧自减，减到 0 进（进之前保持 0，需自己再设） | `mod_step_enter_var` = 剩余帧数 |
 | `"cool"` | **冷却结束才进**（`cooldown_timer <= 0`） | — |
+| `"enemy_area"` | **索敌区域里有敌人**就进 | `mod_step_enemy_area`（区域）/ `mod_enemy_types`（类型筛选）；`mod_has_enemy`（只读） |
+| `"enemy_area_mod"` | 同上，但**进一次后要等冷却**再进 | 再加 `mod_step_enter_var` = 冷却帧数；`mod_tick_cool`（只读） |
+| `"card_area"` | **指定区域里有卡片**就进（玩家底座不算） | `mod_step_card_area`（区域）；`mod_has_card`（只读） |
+| `"card_area_mod"` | 同上，但**进一次后要等冷却**再进 | 再加 `mod_step_enter_var` = 冷却帧数；`mod_tick_cool`（只读） |
+
+**区域怎么写**（`mod_step_enemy_area` / `mod_step_card_area` 都是同一套）：**每 4 个值一组** `[上, 下, 左, 右]`，
+以"**锚点格**"为中心各扩几格；可以写多组，任一组命中就算命中。不设 / 凑不满 4 个 = 默认 `[1,1,0,99]`。
+
+```gml
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+    // 只看本行往右 → [0,0,0,99]
+    VM_InstArrayClear(self, "mod_step_enemy_area")
+    VM_InstArrayAdd(self, "mod_step_enemy_area", 0)
+    VM_InstArrayAdd(self, "mod_step_enemy_area", 0)
+    VM_InstArrayAdd(self, "mod_step_enemy_area", 0)
+    VM_InstArrayAdd(self, "mod_step_enemy_area", 99)
+    // 只看空中敌人
+    VM_InstArrayClear(self, "mod_enemy_types")
+    VM_InstArrayAdd(self, "mod_enemy_types", "air")
+    // 有敌人就进，进一次后至少等 30 帧
+    VM_SetProp(self, "mod_step_enter_condition", "enemy_area_mod")
+    VM_SetProp(self, "mod_step_enter_var", 30)
+}
+```
+
+- **锚点格**：优先用"**放置这颗宝石的角色**"当前所在格（角色会动，区域跟着走）；
+  角色不在了就退回创建时记下的 `mod_point_grid_row` / `mod_point_grid_col`
+- `mod_enemy_types` 可写 `normal` / `obstacle` / `diver` / `air` / `dance` / `underground`；空 = 任意类型
+- 这两种区域检测**只在用这些条件时才算**，其它条件零开销
 
 > 宝石**没有** `hp`、图标也不移动（钉在 `390, 213 + 序号*80`），所以卡片/敌人那套
-> `hp_change` / `cell` / 索敌条件这里都没有。`"cool"` 就是给主动宝石用的：冷却中不进 VM，冷却一结束就进。
+> `hp_change` / `cell` 这里没有。`"cool"` 是给主动宝石用的：冷却中不进 VM，冷却一结束就进。
 
 ### 鼠标事件（核心挂的，插件不用写）
 
@@ -107,7 +150,7 @@ mod/gems/my_gem.json / .bin / .txt / tex/
 `cooldown_timer` 由插件自己写。
 
 > 想自己接管鼠标，就写 `_OBJECT_MOUSE_ENTER` / `_OBJECT_MOUSE_LEAVE` / `_OBJECT_CLICK` 块 ——
-> 核心那套照常跑（三个块最后都会 `event_inherited()`），不会互相顶掉。
+> 核心那套照常跑（三个块跑完，核心自己的鼠标处理还会继续），不会互相顶掉。
 
 ---
 
@@ -209,8 +252,8 @@ _OBJECT_STEP {
                 VM_SetProp(0, "_mod_pending_effect_id", "")            // 用完清掉
                 VM_SetProp(fx, "parent_inst", p)                       // 交给特效自己跟随
                 VM_SetProp(fx, "sprite_index", "spr_my_aura")
-                VM_SetProp(fx, "rel_x", 0 - 15)
-                VM_SetProp(fx, "rel_y", 0 - 5)
+                VM_SetProp(fx, "rel_x", -15)
+                VM_SetProp(fx, "rel_y", -5)
                 VM_SetProp(self, "fx", fx)
             }
         }
@@ -231,3 +274,9 @@ _OBJECT_STEP {
 - 战场形象自己设（`sprite_index` + `image_xscale/yscale`），背包/槽位图标用 JSON 的 `icon`
 - 宝石实例由**放置逻辑**创建，插件创建不了宝石；要跟角色/格子就靠 `mod_point_*`
 - `parent_player` 保持 `noone`（原版语义），别拿它当"发射方"
+- ⚠️ **按等级查的数值表要建在 `_OBJECT_CFG`，别放 `_OBJECT_CREATE`**：
+  `[reloadmod]` 会**清空这个 VM 的全部命名数组**，但**不会重跑 `_OBJECT_CREATE`**（实例是保留的）。
+  放 CREATE 的表重载后全空，`VM_ArrayGet` 静默返回 **0**，症状很隐蔽：
+  产火苗的宝石会把「`t >= 0×60`」判成恒真 → **每帧狂刷火苗**；伤害/减伤类则变成**打不出伤害、没有护盾**。
+  活计数器（场上同类数量）同理，别用命名数组记，用的时候现场 `VM_GetInstancesInRange`。
+  详见 `mod开发工具说明.md`「四、常见坑速查」

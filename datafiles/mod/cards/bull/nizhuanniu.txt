@@ -1,0 +1,108 @@
+// 逆转牛（生肖卡）：起手把范围内普通老鼠传送回出生线（1 转及以上附带伤害），随后自己退场
+// 原版 obj_nizhuanniu：
+//   activate_delay = 4 * flash_speed = 20 帧后触发一次，state = RELAX，image_alpha 每帧 -0.1 消失。
+//   范围：0 形态半径 1（3x3）、2 形态半径 2（5x5）—— mod 卡只有形态 0，按最终形态写死半径 2。
+//   伤害：1 转及以上 reverse_damage = 1000，0 形态为 0。
+//   只作用于 target_type = "normal" 的普通老鼠，排除 Boss 与 mole。
+//
+//   传送目标：x 直接设成 2100（右侧场外的出生线）。
+//   原版用的是敌人自己的 birth_x 更精确，但敌人身上没有这个属性、插件读不到，
+//   所以按场地固定的出生线写死；不要拿 grid_offset_x + grid_cell_size_x * grid_cols 去算
+//   （那算出来是场地右边缘 1658，不是出生线，表现就是"没传走"）。
+//
+//   贴图：本体 spr_nizhuanniu_2 = 13 帧、196x199、原点 (104, 133)
+
+_OBJECT_CFG {
+    if (VM_SpriteExists("spr_nizhuanniu_2") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_nizhuanniu_2_0.png", 12, 104, 133)
+        VM_AliasSpritePerm("spr_nizhuanniu_2", "tex/spr_nizhuanniu_2_0.png")
+    }
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+
+    VM_SetProp(self, "sprite_index", "spr_nizhuanniu_2")
+    VM_SetProp(self, "attack_anim", 0)
+    VM_SetProp(self, "idle_anim", 11)
+    VM_SetProp(self, "flash_speed", 5)
+    VM_SetProp(self, "plant_type", "normal")
+    VM_SetProp(self, "state", 0)
+
+    VM_SetProp(self, "nzn_timer", 0)
+    VM_SetProp(self, "nzn_done", 0)
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+
+    t = VM_GetProp(self, "nzn_timer")
+    if (VM_IsUndefined(t) == 1) {
+        t = 0
+    }
+    t = t + 1
+    VM_SetProp(self, "nzn_timer", t)
+
+    done = VM_GetProp(self, "nzn_done")
+    if (VM_IsUndefined(done) == 1) {
+        done = 0
+    }
+
+    if (done == 0) {
+
+        if (t >= 20) {
+            VM_SetProp(self, "nzn_done", 1)
+            VM_SetProp(self, "state", 3)        // CARD_STATE.RELAX
+
+            gr = VM_GetProp(self, "grid_row")
+            gc = VM_GetProp(self, "grid_col")
+            if (VM_IsUndefined(gr) == 1) {
+                gr = 0
+            }
+            if (VM_IsUndefined(gc) == 1) {
+                gc = 0
+            }
+
+            // 半径 2（最终形态）
+            r1 = gr - 2
+            if (r1 < 0) {
+                r1 = 0
+            }
+            r2 = gr + 2
+            c1 = gc - 2
+            if (c1 < 0) {
+                c1 = 0
+            }
+            c2 = gc + 2
+
+            n = VM_GetInstancesInRange("nzn_hit", r1, r2, c1, c2, "enemy", "normal")
+            k = 0
+            while (k < n) {
+                e = VM_ArrayGet("nzn_hit", k)
+                if (VM_GetProp(e, "hp") > 0) {
+                    // 传回右侧出生线：x = 1700（场地右侧靠外，老鼠从那边走进来）。
+                    // 原来按 grid_offset_x + grid_cell_size_x * grid_cols 算出来是 1658（场地右边缘），
+                    // 后来一度改成 2100（太远），再改 1600，现在按需求定 1700。
+                    // ⚠️ 不动 grid_col：它是 obj_enemy_parent 每帧按 x/y 自己重算的，写了也白写；
+                    //    而且 VM_SetProp 里对 grid_col 有一段用错变量的清理逻辑，能避就避。
+                    VM_SetProp(e, "x", 1700)
+
+                    // 最终形态附带伤害
+                    VM_DamageEnemy(e, 1000, "normal")
+                }
+                k = k + 1
+            }
+        }
+        exit
+    }
+
+    al = VM_GetProp(self, "image_alpha")
+    if (VM_IsUndefined(al) == 1) {
+        al = 1
+    }
+    al = al - 0.1
+    VM_SetProp(self, "image_alpha", al)
+    if (al <= 0) {
+        VM_DestroyInstance(self)
+    }
+}

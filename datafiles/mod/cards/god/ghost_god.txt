@@ -1,0 +1,131 @@
+// 至尊冥神（金卡 · 冥神·哈迪斯最终形态）：五向穿透子弹
+// 按 mod 分支 obj_ghost_god（shape 3）+ obj_ghost_god_bullet_*_m 移植。
+//
+//   Create：attack_anim = 11、idle_anim = 10、flash_speed = 5
+//   Step  ：场上**任意位置**有敌人就开打（原版不限行列），一轮里：
+//             at == cycle - 20 / 15 / 10 / 5 → 各来一次五向齐射（每次都走 event_user(3)）
+//           注意这几个判定原版写的是**固定帧数**，没有乘 flash_speed。
+//           state == 4（睡眠）和冰冻都不打，照原样判。
+//   五向  ：正后（vx -8）、正下（vy +8）、正上（vy -8）、
+//           右下（vx +8*0.766, vy +8*0.6428）、右上（vx +8*0.766, vy -8*0.6428）
+//   子弹  ：最终形态全用 __m 版（次级弹），_m = 1 → 伤害就是 atk，且是**穿透**
+//           （原版每颗只对同一敌人结算一次然后继续飞）→ 管理器 hits = -1。
+//           穿透弹按帧扣血，所以每帧伤害按「穿过一格的总量 = atk」换算：
+//             横向：格子宽 107 / 速度 8 = 13.4 帧  → atk * 8 / 107
+//             纵向：格子高 116 / 速度 8 = 14.5 帧  → atk * 8 / 116
+//             斜向：横向分量 6.128 先出格 = 17.5 帧 → atk * 6.128 / 107
+//   贴图旋转：一张图 + 管理器的 angle 参数（原来的 5 张预旋转图已经用不上了）。
+//           基准图就是 a180 那张（矛尖朝左，原点在矛尖），其余方向在这张图上再转：
+//             a180(朝左)=0°、a270(朝下)=90°、a90(朝上)=270°、a315(右下)=135°、a45(右上)=225°
+//           （GM 的 angle 是逆时针：180° + 90° = 270° 正好是"朝下"，和原来那张 a270 对得上）
+//           ⚠️ 旋转是绕原点转的，原点 (1,10) 就在矛尖 —— 和原来 5 张图各自手工设的原点等效，
+//              所以出生点/飞行轨迹不用改。
+
+_OBJECT_CFG {
+    // 统一写内部 spr 名：内置有就直接用；内置没有才把本地图挂到这个名上。
+    // 本体：21 帧，原点 (82, 136)
+    if (VM_SpriteExists("spr_ghost_god_3") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_ghost_god_3_0.png", 21, 82, 136)
+        VM_AliasSpritePerm("spr_ghost_god_3", "tex/spr_ghost_god_3_0.png")
+    }
+
+    // 子弹（1 帧 46x21，原点在矛尖）：**只加载一张图**（a180 那张，矛尖朝左），
+    // 五个方向全部由弹幕管理器的 angle 参数旋转出来 —— 一页贴图、天然合批，
+    // 也不用再维护 5 张预旋转图（tex 里那 4 张 a270/a90/a315/a45 现在没人用了）。
+    if (VM_SpriteExists("spr_ghost_god_bullet_3") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_ghost_god_bullet_3_a180_0.png", 1, 1, 10)
+        VM_AliasSpritePerm("spr_ghost_god_bullet_3", "tex/spr_ghost_god_bullet_3_a180_0.png")
+    }
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+
+    VM_SetProp(self, "sprite_index", "spr_ghost_god_3")
+    VM_SetProp(self, "idle_anim", 10)
+    VM_SetProp(self, "attack_anim", 11)
+    VM_SetProp(self, "flash_speed", 5)
+    VM_SetProp(self, "plant_type", "normal")
+
+    VM_SetProp(self, "attack_timer", 0)
+    VM_SetProp(self, "state", 0)
+
+    // 一轮 84 帧里只有 6 帧真有事做（开攻击动画 / 四次齐射 / 归零收招），其余 78 帧白进 VM。
+    // 用 "norm" + 窗口表：只在 mod_tick_cycle 命中这几帧时进 VM；卡自己的索敌与 state 逻辑照旧。
+    // mod_tick_cycle 由 obj_card_mod 每帧 +1（到 cycle 归零），数值逐帧等于原来的 attack_timer。
+    VM_InstArrayClear(self, "mod_step_enter_arr")
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 0 - 54)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 0 - 20)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 0 - 15)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 0 - 10)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 0 - 5)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 0)
+    VM_SetProp(self, "mod_step_enter_condition", "norm")
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+
+    if (VM_GetProp(self, "is_frozen") == 1) {
+        exit
+    }
+    if (VM_GetProp(self, "state") == 4) {
+        exit
+    }
+
+    cfs = VM_GetProp(self, "flash_speed")
+    if (VM_GetProp(self, "is_slowdown") == 1) {
+        cfs = cfs * 2
+    }
+
+    at = VM_GetProp(self, "mod_tick_cycle")
+    st = 0
+    volley = 0
+
+    // 原版：全屏任意敌人（只看能不能打，不看行列）
+    if (VM_EnemyInRange(0, 99, 0, 99, "") == 1) {
+        cyc = VM_GetProp(self, "cycle")
+
+        // 计时器由引擎推进，这里只判断这一帧该是待机还是攻击动画
+        if (at <= cyc - 11 * cfs) {
+            st = 0
+        } else {
+            st = 1
+        }
+
+        // 最终形态四次齐射（原版 shape >= 1 / >= 2 / >= 3 那几段叠出来的）
+        if (at == cyc - 20) {
+            volley = 1
+        }
+        if (at == cyc - 15) {
+            volley = 1
+        }
+        if (at == cyc - 10) {
+            volley = 1
+        }
+        if (at == cyc - 5) {
+            volley = 1
+        }
+    } else {
+        st = 0
+    }
+
+    if (volley == 1) {
+        atk = VM_GetProp(self, "atk")
+        bx = VM_GetProp(self, "x")
+        by = VM_GetProp(self, "y") - 50
+
+        dh = atk * 8 / 107        // 横向穿格
+        dv = atk * 8 / 116        // 纵向穿格
+        dd = atk * 6.128 / 107    // 斜向（横分量先出格）
+
+        // 正后、正下、正上、右下、右上：同一张图 + angle（180=/0、270=/90、90=/270、315=/135、45=/225）
+        VM_BulletScreenAdd_Ex("spr_ghost_god_bullet_3", 1, 0, 1.8, 1, bx, by, 0 - 8, 0, dh, 0 - 1, 0 - 1, "normal", "", "", "normal", 5, 0)
+        VM_BulletScreenAdd_Ex("spr_ghost_god_bullet_3", 1, 0, 1.8, 1, bx, by, 0, 8, dv, 0 - 1, 0 - 1, "normal", "", "", "normal", 5, 90)
+        VM_BulletScreenAdd_Ex("spr_ghost_god_bullet_3", 1, 0, 1.8, 1, bx, by, 0, 0 - 8, dv, 0 - 1, 0 - 1, "normal", "", "", "normal", 5, 270)
+        VM_BulletScreenAdd_Ex("spr_ghost_god_bullet_3", 1, 0, 1.8, 1, bx, by, 6.128, 5.1424, dd, 0 - 1, 0 - 1, "normal", "", "", "normal", 5, 135)
+        VM_BulletScreenAdd_Ex("spr_ghost_god_bullet_3", 1, 0, 1.8, 1, bx, by, 6.128, 0 - 5.1424, dd, 0 - 1, 0 - 1, "normal", "", "", "normal", 5, 225)
+    }
+
+    VM_SetProp(self, "state", st)
+}

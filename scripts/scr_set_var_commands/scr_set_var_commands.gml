@@ -455,7 +455,8 @@ function sh_sudologin(args) {
         show_debug_message("[sudo] FVM_SUDO=" + string(_priv) + " md5=" + string(_md5));
         if (_md5 == "68ab501b7b8831f672207ed54f9a8511") {
             global.sudo_authed = true;
-            return "[sudo] 认证通过";
+            shell_log_write("========== sudo 认证通过，以下 shell 输出开始记录 ==========");
+            return "[sudo] 认证通过（shell 输出已开始记录到 mod/shell.log）";
         }
     }
     var _d = date_current_datetime();
@@ -470,7 +471,8 @@ function sh_sudologin(args) {
     var _pw = "fvmreb" + string((_ym * _ym) mod 9999991);
     if (args[1] == _pw) {
         global.sudo_authed = true;
-        return "[sudo] 管理员已登录";
+        shell_log_write("========== 管理员登录，以下 shell 输出开始记录 ==========");
+        return "[sudo] 管理员已登录（shell 输出已开始记录到 mod/shell.log）";
     }
     return "[sudo] 密码错误";
 }
@@ -480,6 +482,46 @@ function meta_sudologin() {
         description: "管理员登录",
         arguments: ["密码"],
         suggestions: [],
+        hidden: false,
+        deferred: false
+    };
+}
+
+/// @description 命令行：查看 / 清空 shell 日志（sudo 认证后所有 shell 输出都在里面）
+/// 用法: shelllog [clear]
+function sh_shelllog(args) {
+    if (!sudo_check()) {
+        return "[sudo] 需要管理员权限，请先 sudologin";
+    }
+    var _path = working_directory + "mod/shell.log";
+    var _sub = (array_length(args) >= 2) ? string_lower(string(args[1])) : "";
+
+    if (_sub == "clear" || _sub == "clean") {
+        if (file_exists(_path)) file_delete(_path);
+        global._shell_log_writes = 0;
+        return "[shelllog] 已清空 " + _path;
+    }
+
+    var _n = 0;
+    if (file_exists(_path)) {
+        var _r = file_text_open_read(_path);
+        if (_r != -1) {
+            while (!file_text_eof(_r)) {
+                file_text_read_string(_r);
+                file_text_readln(_r);
+                _n += 1;
+            }
+            file_text_close(_r);
+        }
+    }
+    return "[shelllog] " + _path + "（" + string(_n) + " 行）";
+}
+
+function meta_shelllog() {
+    return {
+        description: "查看/清空 shell 日志（mod/shell.log）",
+        arguments: ["[clear]"],
+        suggestions: ["clear"],
         hidden: false,
         deferred: false
     };

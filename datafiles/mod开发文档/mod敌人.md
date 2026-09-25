@@ -5,9 +5,20 @@
 
 ## 文件
 
+敌人放在**游戏目录下的 `mod/enemies/`** 里：
+
 ```text
-mod/enemies/my_mouse.json / .bin / .txt / tex/
+游戏目录/                       ← 运行游戏的那个文件夹
+└─ mod/
+   └─ enemies/                  ← 敌人这一类都放这里
+      ├─ my_mouse.json          敌人配置（血量、速度、攻击…）
+      ├─ my_mouse.bin           逻辑（由 my_mouse.txt 编译出来，游戏只读这个）
+      ├─ my_mouse.txt           源码（建议保留）
+      └─ tex/                   自带贴图（可选）
+         └─ xxx.png
 ```
+
+**也可以再分一层子目录归类**（只扫一层、不往下递归）：`mod/enemies/xxx/my_mouse.json`，贴图跟 json 同一层放 `mod/enemies/xxx/tex/`；id 只看 json 文件名。
 
 ---
 
@@ -43,28 +54,28 @@ mod/enemies/my_mouse.json / .bin / .txt / tex/
 
 ## 二、敌人实例上的内置字段
 
-mod 敌人用 `obj_enemy_mod`（**继承 `obj_enemy_parent`**，移动 / 攻击 / 死亡 / 受击这些基础行为全部复用父类）。
+mod 敌人的基础行为（移动 / 攻击 / 死亡 / 受击）都是现成的，你只写自己那部分。
 Create 时按上面 JSON 套用数值，所以实例上一建出来就有：
 
 | 字段 | 来源 | 说明 |
 |---|---|---|
 | `enemy_id` | 全局 `_mod_pending_enemy_id` | 敌人 id（= 文件名） |
 | `sprite_index` | JSON `spr` | 贴图 |
-| `hp` / `maxhp` | JSON `hp` | 当前 / 最大血量（`hp <= 0` 由父类走死亡流程） |
+| `hp` / `maxhp` | JSON `hp` | 当前 / 最大血量（`hp <= 0` 由核心走死亡流程） |
 | `shield_hp` / `shield_max_hp` | JSON `shield` | 护盾 |
-| `move_speed` | JSON `speed` | 移动速度（父类用它推进 `x`） |
+| `move_speed` | JSON `speed` | 移动速度（核心用它推进 `x`） |
 | `atk` | JSON `atk` | 攻击力 |
 | `atk_cycle` | JSON `cycle` | 攻击间隔（帧） |
 | `attack_range` | JSON `range` | 攻击距离 |
 | `immune_to_ash` | JSON `ash_proof` | 免疫灰烬 |
 | `feature` | JSON `feature` | 陆行 / 水生 |
-| `x` / `y` / `grid_col` / `grid_row` | 父类 | 位置与所在格（每帧更新） |
-| `state` | 父类 | `ENEMY_STATE`（移动 / 攻击 / 死亡…） |
-| `target_plant` / `target_type` / `mouse_id` / `is_boss` | 父类 | 索敌与身份 |
-| `ice_timer` / `is_frozen` / `is_stun` / `stun_timer` / `hurt_rate` | 父类 | 冰冻 / 眩晕 / 受伤状态 |
-| `helmet_hp` / `helmet_max_hp` | 父类 | 头盔 |
+| `x` / `y` / `grid_col` / `grid_row` | 核心 | 位置与所在格（每帧更新） |
+| `state` | 核心 | `ENEMY_STATE`（移动 / 攻击 / 死亡…） |
+| `target_plant` / `target_type` / `mouse_id` / `is_boss` | 核心 | 索敌与身份 |
+| `ice_timer` / `is_frozen` / `is_stun` / `stun_timer` / `hurt_rate` | 核心 | 冰冻 / 眩晕 / 受伤状态 |
+| `helmet_hp` / `helmet_max_hp` | 核心 | 头盔 |
 
-**父类已经做好的事**：按 `move_speed` 往左推进、到卡片旁边停下攻击（走 `atk_cycle`）、
+**核心已经做好的事**：按 `move_speed` 往左推进、到卡片旁边停下攻击（走 `atk_cycle`）、
 掉血 / 死亡动画 / 灰烬判定。所以 mod 敌人**基本只需要写"额外行为"**。
 
 ---
@@ -75,8 +86,8 @@ Create 时按上面 JSON 套用数值，所以实例上一建出来就有：
 
 - **`_OBJECT_CREATE`**：实例创建时立刻执行（刷怪时）
 - **`_OBJECT_STEP`**：每帧；暂停时不跑，**且会被 `mod_step_enter_condition` 挡住**（默认 `""` 才是每帧进）
-- **`_OBJECT_DRAW`**：父类先画，然后跑 VM 的绘制块（**叠加绘制**，不会替代父类的画）
-- **`_OBJECT_DESTROY`**：父类处理完，再跑 VM 的 `_OBJECT_DESTROY`，最后把实例移出列表
+- **`_OBJECT_DRAW`**：核心先画，然后跑 VM 的绘制块（**叠加绘制**，不会替代核心的画）
+- **`_OBJECT_DESTROY`**：核心处理完，再跑 VM 的 `_OBJECT_DESTROY`，最后把实例移出列表
 - **`_OBJECT_MOUSE_ENTER` / `_OBJECT_MOUSE_LEAVE` / `_OBJECT_CLICK`**：鼠标移入 / 移出 / 左键点在敌人身上（按实例判定，鼠标要压在敌人的贴图上）
 
 ### 每帧顺序
@@ -84,12 +95,12 @@ Create 时按上面 JSON 套用数值，所以实例上一建出来就有：
 ```text
 1. 暂停 → exit
 2. 记下上一帧格子坐标：prev_grid_col / prev_grid_row = 当前 grid_col / grid_row
-3. event_inherited()   → 父类：移动 / 攻击 / 死亡 / 受击状态推进（并刷新 target_plant / grid_col / grid_row）
+3. 核心那一套           → 移动 / 攻击 / 死亡 / 受击状态推进（并刷新 target_plant / grid_col / grid_row）
 4. 判断这一帧进不进 VM（mod_step_enter_condition）
-5. 跑敌人 .bin 的 _OBJECT_STEP（被上面条件挡住时不执行）
+5. 进 VM：执行你自己的 _OBJECT_STEP（被上面条件挡住时不执行）
 ```
 
-> 因为父类先跑，VM 里读到的是**父类推进之后**的位置/状态；想改速度就改 `move_speed`（下一帧生效），
+> 因为核心那套先跑，VM 里读到的是**核心推进之后**的位置/状态；想改速度就改 `move_speed`（下一帧生效），
 > 想改位置直接写 `x` / `y`。
 
 ### 进 VM 的时机（`mod_step_enter_condition`）
@@ -102,7 +113,7 @@ Create 时按上面 JSON 套用数值，所以实例上一建出来就有：
 | `"cell"` | **跨格**那一帧进（`grid_col` 或 `grid_row` 相对上一帧变了） | — |
 | `"hp_change"` | **血量相对上一帧变了**就进（掉血、回血都算） | — |
 | `"hp_change_mod"` | 同 `"hp_change"`，但触发一次后进 `mod_step_enter_var` 帧冷却 | `mod_step_enter_var` = 冷却帧数 |
-| `"card"` | **父类索敌当前有目标才进**（`target_plant` 有效） | — |
+| `"card"` | **核心索敌当前有目标才进**（`target_plant` 有效） | — |
 | `"card_mod"` | 同 `"card"`，但触发一次后进 `mod_step_enter_var` 帧冷却 | `mod_step_enter_var` = 冷却帧数 |
 
 | 字段 | 读写 | 说明 |
@@ -110,12 +121,28 @@ Create 时按上面 JSON 套用数值，所以实例上一建出来就有：
 | `mod_step_enter_condition` | 可写 | 见上表 |
 | `mod_step_enter_var` | 可写 | `"mod"` = 间隔帧数；`"wait"` = 还要等几帧；`*_mod` = 冷却帧数 |
 | `mod_tick_cool` | 只读 | `*_mod` 模式下的冷却剩余帧数 |
-| `mod_has_card` | 只读 | `"card"` / `"card_mod"` 模式下 1 = 父类索敌有目标 |
+| `mod_has_card` | 只读 | `"card"` / `"card_mod"` 模式下 1 = 核心索敌有目标 |
 | `prev_grid_col` / `prev_grid_row` | 只读 | 上一帧格子坐标（`"cell"` 用） |
+| `mod_hover_mask` | 可写 | `1` = **鼠标移入时显示白色半透明遮罩**（默认 0 = 不显示） |
+| `mod_hover_alpha` | 可写 | 遮罩的透明度（默认 `0.35`，0~1，越大越白） |
 
-- `"cell"` 触发的是**进格后的第一帧**（格子坐标在父类 Step 里算，比移动晚一帧）
-- `"hp_change"` 读的是父类的 `pre_hp`（写在 **End Step**，而这段 Step 先跑），所以拿到的是上一帧末的血量
-- `"card"` 用的是**父类自己那套索敌**（和 "有没有卡片能打" 同一口径），不用自己再查一遍
+- `"cell"` 触发的是**进格后的第一帧**（格子坐标在核心 Step 里算，比移动晚一帧）
+- `"hp_change"` 读的是核心的 `pre_hp`（写在 **End Step**，而这段 Step 先跑），所以拿到的是上一帧末的血量
+- `"card"` 用的是**核心自己那套索敌**（和 "有没有卡片能打" 同一口径），不用自己再查一遍
+
+**`mod_hover_mask`：鼠标移入时戴一层白色半透明遮罩**（卡片 / 敌人都有）
+
+```gml
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+    VM_SetProp(self, "mod_hover_mask", 1)        // 打开
+    VM_SetProp(self, "mod_hover_alpha", 0.45)    // 想更白就调大（默认 0.35）
+}
+```
+
+- 判定：鼠标**压在实例的贴图碰撞掩码上**才算移入（`position_meeting`）；没有碰撞遮罩时按贴图包围盒（bbox）兜底
+- 做法：用项目的 `hit_effect_2` 着色器把同一张贴图再画一遍（RGB 换成顶点色、保留贴图 alpha）→
+  得到的是**贴图形状的纯白半透明剪影**，盖在本体上
 
 ---
 
@@ -123,7 +150,7 @@ Create 时按上面 JSON 套用数值，所以实例上一建出来就有：
 
 ### Demo 1：冲刺型敌人（改速度做节奏）
 
-父类管移动，VM 只做节奏（`dev_test/enemies/mod_dash_mouse.txt`）：
+核心管移动，VM 只做节奏（`dev_test/enemies/mod_dash_mouse.txt`）：
 
 ```gml
 _OBJECT_CREATE {
@@ -148,7 +175,7 @@ _OBJECT_STEP {
 
 ### Demo 2：远程 / 投掷攻击
 
-父类的攻击是"贴身打卡片"；想远程就自己找目标、自己发子弹：
+核心的攻击是"贴身打卡片"；想远程就自己找目标、自己发子弹：
 
 ```gml
 _OBJECT_CREATE {
@@ -169,7 +196,7 @@ _OBJECT_STEP {
             b = VM_CreateInstance("obj_bullet_mod", VM_GetProp(self, "x"), VM_GetProp(self, "y") - 20)
             VM_SetProp(b, "mod_type", "my_enemy_shot")
             VM_SetProp(b, "damage", VM_GetProp(self, "atk"))
-            VM_SetProp(b, "vx", 0 - 5)          // 往左飞
+            VM_SetProp(b, "vx", -5)          // 往左飞
             VM_SetProp(b, "vy", 0)
             VM_PlaySound("snd_throw")
         }
@@ -187,7 +214,7 @@ _OBJECT_STEP {
 ```gml
 _OBJECT_STEP {
     self = VM_GetCurCard()
-    // 血量掉到一半以下 → 换贴图 / 加速（父类负责真正的死亡）
+    // 血量掉到一半以下 → 换贴图 / 加速（核心负责真正的死亡）
     if (VM_GetProp(self, "hp") <= VM_GetProp(self, "maxhp") / 2) {
         VM_SetProp(self, "sprite_index", "spr_my_mouse_angry")
         VM_SetProp(self, "move_speed", 0.6)
@@ -209,7 +236,7 @@ _OBJECT_DESTROY {
 
 - **刷敌人**：地图脚本里 `VM_SpawnEnemy("敌人id", 行, 血量)`（id 就是 `mod/enemies/` 下的文件名）；
   关卡 JSON 的 `enemy_list` 也能直接引用
-- **别重复实现父类已有的东西**（移动、贴身攻击、死亡动画）；VM 里改 `move_speed` / `hp` / `state` 就行
+- **别重复实现核心已有的东西**（移动、贴身攻击、死亡动画）；VM 里改 `move_speed` / `hp` / `state` 就行
 - 敌人受伤走自己的受击事件（闪白 / 音效 / 护盾判定）；插件主动给别人伤害用
   `VM_DamageEnemy(敌人id, 伤害, 伤害类型)`，灰烬那套用 `VM_DamageEnemyAsh(...)`
 - `feature` 只有 `land` / `water` 有意义（决定刷在哪种行），其它值＝不限

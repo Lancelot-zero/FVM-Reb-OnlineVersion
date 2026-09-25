@@ -1,0 +1,108 @@
+// 宝宝鸡（生肖卡）：放下当帧炸掉周围 5×5 的障碍物，然后自己消失（一次性）
+// 原版 obj_baobaoji：
+//   放置当帧（Step 第一帧）清一次，之后不再重复（cleared 标记）。
+//   范围：0/1 转半径 1（3x3）；2 转半径 2（5x5）—— 按最终形态写死 5x5。
+//
+//   ⚠️ 清障用 VM_ClearMapObjects（按对象类型清那 7 类地图物件），不要用
+//      VM_GetInstancesInRange(..., "enemy", "obstacle")：那条路走 enemy_array + target_type
+//      过滤，而实际只有 obj_barrier 的 target_type 是 "obstacle"，鼠洞/梯子/弹簧等都不带 —— 会清不掉。
+//   贴图：本体 spr_baobaoji_2 = 20 帧、428x383、原点 (218, 218)
+
+_OBJECT_CFG {
+    if (VM_SpriteExists("spr_baobaoji_2") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_baobaoji_2_0.png", 19, 218, 218)
+        VM_AliasSpritePerm("spr_baobaoji_2", "tex/spr_baobaoji_2_0.png")
+    }
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+
+    VM_SetProp(self, "sprite_index", "spr_baobaoji_2")
+    VM_SetProp(self, "idle_anim", 11)
+    VM_SetProp(self, "attack_anim", 0)
+    VM_SetProp(self, "plant_type", "normal")
+    VM_SetProp(self, "state", 0)
+    VM_SetProp(self, "bbj_cleared", 0)
+
+    // 效果只在第 1 帧做一次（之后 *_cleared 早退），第 2 个窗口（36 帧后）才销毁自己 ——
+    // 留一小段让人看见卡片被放下的动画。
+    VM_InstArrayClear(self, "mod_step_enter_arr")
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 1)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 36)
+    VM_SetProp(self, "mod_step_enter_condition", "norm")
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+
+    done = VM_GetProp(self, "bbj_cleared")
+    if (VM_IsUndefined(done) == 1) {
+        done = 0
+    }
+    if (done == 1) {
+        // 第二次进 VM = 动画已经播了一小段，收工
+        VM_DestroyInstance(self)
+        exit
+    }
+    VM_SetProp(self, "bbj_cleared", 1)
+
+    gr = VM_GetProp(self, "grid_row")
+    gc = VM_GetProp(self, "grid_col")
+    if (VM_IsUndefined(gr) == 1) {
+        gr = 0
+    }
+    if (VM_IsUndefined(gc) == 1) {
+        gc = 0
+    }
+    grs = VM_GetProp(0, "grid_rows")
+    if (VM_IsUndefined(grs) == 1) {
+        grs = 5
+    }
+    gcs = VM_GetProp(0, "grid_cols")
+    if (VM_IsUndefined(gcs) == 1) {
+        gcs = 9
+    }
+
+    // ⚠️ 清障必须用 VM_ClearMapObjects（按【对象类型】清那 7 类地图物件：
+    //    obj_obstacle / wind_tunnel / lava / barrier / fog / cloud / seawater），
+    //    不能像以前那样用 VM_GetInstancesInRange(..., "enemy", "obstacle")：
+    //    那条路走的是 global.enemy_array + target_type 过滤，而实际只有 obj_barrier 的
+    //    target_type 是 "obstacle"，鼠洞/梯子/弹簧/地刺之类根本不带这个类型、也不一定在
+    //    enemy_array 里 —— 结果就是「放了没反应、也不炸」。
+    r1 = gr - 2
+    if (r1 < 0) {
+        r1 = 0
+    }
+    r2 = gr + 2
+    if (r2 > grs - 1) {
+        r2 = grs - 1
+    }
+    c1 = gc - 2
+    if (c1 < 0) {
+        c1 = 0
+    }
+    c2 = gc + 2
+    if (c2 > gcs - 1) {
+        c2 = gcs - 1
+    }
+
+    // 逐格清（VM_ClearMapObjects 只能给「一格」或「全图」，所以要 5×5 地循环）
+    rr = r1
+    while (rr <= r2) {
+        cc = c1
+        while (cc <= c2) {
+            VM_ClearMapObjects(cc, rr, "all")
+            cc = cc + 1
+        }
+        rr = rr + 1
+    }
+
+    // 爆炸表现：走屏幕弹幕管理器（不占实例、自带 7 帧动画），配爆炸音效
+    bx = VM_GetProp(self, "x")
+    by = VM_GetProp(self, "y")
+    VM_BulletScreenAdd_Ex("spr_coke_bomb_explode", 7, 0, 1.8, 1, bx, by, 0, 0, 0, 0, 7, "all", "", "", "normal", 0, 0)
+    VM_PlaySound("snd_bottle_explode")
+
+    // 不在这里销毁：等第 36 帧那个窗口再消失（能看见卡片被放下的动画）
+}

@@ -1,0 +1,5 @@
+{
+  "name": "射手蛇弹",
+  "description": "mod 子弹：向右直线飞，给了目标行就一边飞一边朝那一行靠拢",
+  "sprite": "spr_sheshou_bullet"
+}

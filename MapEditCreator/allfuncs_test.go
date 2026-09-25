@@ -146,6 +146,11 @@ _VM_BATTLE_START {
     VM_DamageEnemyAsh(1, 1, "normal")
     VM_BulletScreenAdd_Ex("spr_bullet", 1, 0, 1.6, 1, 1, 1, 8, 0, 1, 1, 0 - 1, "normal", "", "", "normal", 5, 0)
     VM_BulletScreenAdd_Exs("spr_bullet", 1, 0, 1.6, 1, 1, 1, 8, 0, 1, 1, 0 - 1, "normal", "", "", "normal", 5, 0, 0 - 1, 0.15)
+    VM_GetInfo("card", "small_fire", "shapes", 0, "upgrades", 3, "atk")
+    VM_CatInRow(1)
+    VM_MapObj(1, 1, "lava")
+    VM_GetInstanceCount("obj_cat")
+    VM_GetInstanceAt("obj_cat", 0)
 }
 `
 	for _, d := range lintScript(code) {

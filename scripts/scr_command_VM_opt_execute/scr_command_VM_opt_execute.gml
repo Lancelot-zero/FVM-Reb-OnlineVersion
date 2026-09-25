@@ -146,9 +146,14 @@ global._vm_opt_run_funcs[18 + 141] = run_VM_DamageEnemy;
 global._vm_opt_run_funcs[18 + 142] = run_VM_DamageEnemyAsh;
 global._vm_opt_run_funcs[18 + 143] = run_VM_BulletScreenAdd_Ex;
 global._vm_opt_run_funcs[18 + 144] = run_VM_BulletScreenAdd_Exs;
+global._vm_opt_run_funcs[18 + 145] = run_VM_GetInfo;             // 145
+global._vm_opt_run_funcs[18 + 146] = run_VM_CatInRow;            // 146
+global._vm_opt_run_funcs[18 + 147] = run_VM_MapObj;              // 147
+global._vm_opt_run_funcs[18 + 148] = run_VM_GetInstanceCount;    // 148
+global._vm_opt_run_funcs[18 + 149] = run_VM_GetInstanceAt;       // 149
 
 // ══════════════════════════════════════════════════════════════════════════
-// VM_GetProp 的"内置变量专用版"（函数 id 145~153，见 VM_FID_GETPROPX）
+// VM_GetProp 的"内置变量专用版"（函数 id 200~208，见 VM_FID_GETPROPX）
 //
 // 加载期 VM_Decode 认出 VM_GetProp(id, "x") 这种（属性名是字面量常量字符串）时，
 // 把函数 id 换成下面这 9 个之一、argc 从 2 改成 1；handler 直接读实例字段，
@@ -295,15 +300,15 @@ function run_VM_GetPropImageIndex(vm, code, _ip) {
     return _ip;
 }
 
-global._vm_opt_run_funcs[18 + 145] = run_VM_GetPropX;            // x
-global._vm_opt_run_funcs[18 + 146] = run_VM_GetPropY;            // y
-global._vm_opt_run_funcs[18 + 147] = run_VM_GetPropSpriteIndex;  // sprite_index
-global._vm_opt_run_funcs[18 + 148] = run_VM_GetPropImageXscale;  // image_xscale
-global._vm_opt_run_funcs[18 + 149] = run_VM_GetPropImageYscale;  // image_yscale
-global._vm_opt_run_funcs[18 + 150] = run_VM_GetPropDepth;        // depth
-global._vm_opt_run_funcs[18 + 151] = run_VM_GetPropImageAngle;   // image_angle
-global._vm_opt_run_funcs[18 + 152] = run_VM_GetPropImageAlpha;   // image_alpha
-global._vm_opt_run_funcs[18 + 153] = run_VM_GetPropImageIndex;   // image_index
+global._vm_opt_run_funcs[18 + 200] = run_VM_GetPropX;            // x
+global._vm_opt_run_funcs[18 + 201] = run_VM_GetPropY;            // y
+global._vm_opt_run_funcs[18 + 202] = run_VM_GetPropSpriteIndex;  // sprite_index
+global._vm_opt_run_funcs[18 + 203] = run_VM_GetPropImageXscale;  // image_xscale
+global._vm_opt_run_funcs[18 + 204] = run_VM_GetPropImageYscale;  // image_yscale
+global._vm_opt_run_funcs[18 + 205] = run_VM_GetPropDepth;        // depth
+global._vm_opt_run_funcs[18 + 206] = run_VM_GetPropImageAngle;   // image_angle
+global._vm_opt_run_funcs[18 + 207] = run_VM_GetPropImageAlpha;   // image_alpha
+global._vm_opt_run_funcs[18 + 208] = run_VM_GetPropImageIndex;   // image_index
 
 function run_vm_read_mem(vm, addr) {
     var _type = vm.mem_type[addr];
@@ -837,9 +842,14 @@ function run_VM_SetProp(vm, code, _ip) {
 		
 		
 	if(prop=="grid_col"||prop=="grid_row"){
-		if( object_is_ancestor(obj_card_parent, instance_id) ){
-			var _list = ds_grid_get(global.grid_plants, instance_id.grid_col, instance_id.grid_row);
-			ds_list_delete(_list,ds_list_find_index(_list,inst_id))
+		// ⚠️ 这里原来写的是 GML 内置的 instance_id（= 跑这段 VM 的当前实例），不是被改的 inst_id：
+		//    任何 mod 脚本对【别的实例】写 grid_col/grid_row，都会去「自己那格」的 plants 列表里
+		//    删目标 id —— 找不到时 ds_list_find_index 返回 -1，ds_list_delete(_list, -1) 会误删
+		//    列表末尾那张卡（同格的底座卡 / 莲叶）。
+		if( object_is_ancestor(obj_card_parent, inst_id) ){
+			var _list = ds_grid_get(global.grid_plants, inst_id.grid_col, inst_id.grid_row);
+			var _idx = ds_list_find_index(_list, inst_id);
+			if (_idx >= 0) ds_list_delete(_list, _idx);
 		}
 	}
     variable_instance_set(inst_id, prop, value);
@@ -847,9 +857,9 @@ function run_VM_SetProp(vm, code, _ip) {
 		update_plant_bindings(inst_id);
 	}
 	if(prop=="grid_col"||prop=="grid_row"){
-		if( object_is_ancestor(obj_card_parent, instance_id) ){
-			var _list = ds_grid_get(global.grid_plants, instance_id.grid_col, instance_id.grid_row);
-			ds_list_add(_list,instance_id)
+		if( object_is_ancestor(obj_card_parent, inst_id) ){
+			var _list = ds_grid_get(global.grid_plants, inst_id.grid_col, inst_id.grid_row);
+			ds_list_add(_list, inst_id)
 		}
 	}
 	if(prop=="shape" || prop=="skill"|| prop=="current_level" ){
@@ -5457,4 +5467,99 @@ function VM_Execute_code_opt(vm, code, name) {
         if (variable_global_exists("_VM_strict") && global._VM_strict) throw _err;
         return -1;
     }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// 145 VM_GetInfo / 146 VM_CatInRow / 147 VM_MapObj
+// 148 VM_GetInstanceCount / 149 VM_GetInstanceAt
+// 实现体都在 scr_command_VM.gml（vm_info_query / vm_cat_first_in_row /
+// vm_mapobj_query / vm_obj_of_name），这里只负责按操作码取参数、写返回值
+// ══════════════════════════════════════════════════════════════════════════
+
+function run_VM_GetInfo(vm, code, _ip) {
+    var opt_number = code[_ip]; _ip += 1;
+    var _mt = vm.mem_type;
+    var _mv = vm.mem_val;
+    var _dst = code[_ip]; _ip += 1;
+    var _base = _ip;
+    _ip += opt_number;
+
+    var _args = [];
+    for (var _i = 0; _i < opt_number; _i++) {
+        array_push(_args, run_vm_read_mem(vm, code[_base + _i]));
+    }
+    var _result = vm_info_query(_args);
+    if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+    return _ip;
+}
+
+function run_VM_CatInRow(vm, code, _ip) {
+    var opt_number = code[_ip]; _ip += 1;
+    var _mt = vm.mem_type;
+    var _mv = vm.mem_val;
+    var _dst = code[_ip]; _ip += 1;
+    var _base = _ip;
+    _ip += opt_number;
+
+    var _result = -1;
+    if (opt_number >= 1) _result = vm_cat_first_in_row(run_vm_read_mem(vm, code[_base]));
+    if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+    return _ip;
+}
+
+function run_VM_MapObj(vm, code, _ip) {
+    var opt_number = code[_ip]; _ip += 1;
+    var _mt = vm.mem_type;
+    var _mv = vm.mem_val;
+    var _dst = code[_ip]; _ip += 1;
+    var _base = _ip;
+    _ip += opt_number;
+
+    var _args = [];
+    for (var _i = 0; _i < opt_number; _i++) {
+        array_push(_args, run_vm_read_mem(vm, code[_base + _i]));
+    }
+    var _result = vm_mapobj_query(_args);
+    if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+    return _ip;
+}
+
+function run_VM_GetInstanceCount(vm, code, _ip) {
+    var opt_number = code[_ip]; _ip += 1;
+    var _mt = vm.mem_type;
+    var _mv = vm.mem_val;
+    var _dst = code[_ip]; _ip += 1;
+    var _base = _ip;
+    _ip += opt_number;
+
+    var _result = -1;
+    if (opt_number >= 1) {
+        var _obj = vm_obj_of_name(run_vm_read_mem(vm, code[_base]));
+        if (_obj >= 0) _result = instance_number(_obj);
+    }
+    if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+    return _ip;
+}
+
+function run_VM_GetInstanceAt(vm, code, _ip) {
+    var opt_number = code[_ip]; _ip += 1;
+    var _mt = vm.mem_type;
+    var _mv = vm.mem_val;
+    var _dst = code[_ip]; _ip += 1;
+    var _base = _ip;
+    _ip += opt_number;
+
+    var _result = -1;
+    if (opt_number >= 2) {
+        var _obj = vm_obj_of_name(run_vm_read_mem(vm, code[_base]));
+        var _k = run_vm_read_mem(vm, code[_base + 1]);
+        if (_obj >= 0 && is_real(_k)) {
+            _k = floor(_k);
+            if (_k >= 0 && _k < instance_number(_obj)) {
+                _result = VM_ClientWrapId(instance_find(_obj, _k));
+            }
+        }
+    }
+    if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+    return _ip;
 }

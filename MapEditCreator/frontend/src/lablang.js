@@ -55,6 +55,7 @@ export const FUNC_NAMES = [
   "VM_ArrayExists", "VM_CellCount", "VM_CellItem", "VM_CellContains", "VM_ArrayContains", "VM_InstArrayExists", "VM_InstArraySize", "VM_InstArrayItem", "VM_InstArraySet", "VM_InstArrayAdd", "VM_InstArrayDel", "VM_InstArrayClear", "VM_InstArrayContains", "VM_HomingBulletAdd", "VM_DamageEnemy", "VM_DamageEnemyAsh",
   "VM_BulletScreenAdd_Ex",
   "VM_BulletScreenAdd_Exs",
+  "VM_GetInfo", "VM_CatInRow", "VM_MapObj", "VM_GetInstanceCount", "VM_GetInstanceAt",
 ];
 
 const eventSet = new Set(EVENT_BLOCKS);

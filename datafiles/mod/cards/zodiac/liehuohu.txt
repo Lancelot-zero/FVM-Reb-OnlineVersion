@@ -1,0 +1,112 @@
+// 烈火虎（生肖卡）：定时产火苗，一次两朵
+// 照 warm_birds 的原始写法：**不设 mod_step_enter_condition**（默认每帧进 VM），
+// 卡自己用 attack_timer 数帧、自己切 state，动画才会正常推进。
+//
+//   节奏（照原版 obj_liehuohu）：
+//     first_produce_delay = 60 → 先等 60 帧
+//     然后播 attack_anim(11) 帧攻击动画（每帧 flash_speed 个游戏帧）
+//     动画放完 → 产 flame_burst_count 朵火苗（最终形态 2 朵），attack_timer 归零
+//     之后每 cycle 帧重复一轮
+//   火苗：VM_CreateInstance("flame", x, y - 60) 再写 value
+//
+//   贴图：本体 spr_liehuohu_2 = 25 帧、101x150、原点 (52, 114)
+
+_OBJECT_CFG {
+    if (VM_SpriteExists("spr_liehuohu_2") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_liehuohu_2_0.png", 25, 52, 114)
+        VM_AliasSpritePerm("spr_liehuohu_2", "tex/spr_liehuohu_2_0.png")
+    }
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+
+    VM_SetProp(self, "sprite_index", "spr_liehuohu_2")
+    VM_SetProp(self, "idle_anim", 11)
+    VM_SetProp(self, "attack_anim", 11)
+    VM_SetProp(self, "plant_type", "normal")
+    VM_SetProp(self, "state", 0)
+
+    VM_SetProp(self, "first_produce_delay", 60)
+    VM_SetProp(self, "attack_timer", 0)
+    VM_SetProp(self, "first_produce", 0)
+
+    // 一轮 1500 帧里只有 4 帧真有事做：
+    //   首次：第 61 帧起播攻击动画、第 127 帧产火（60 + 11*fs，fs=6）
+    //   之后：第 1435 帧起播攻击动画、第 0 帧（= 越过 cycle）产火
+    VM_InstArrayClear(self, "mod_step_enter_arr")
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 0)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 61)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 127)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 1 - 11 * 6)
+    VM_SetProp(self, "mod_step_enter_condition", "norm")
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+
+    fs = VM_GetProp(self, "flash_speed")
+    if (VM_IsUndefined(fs)) {
+        fs = 6
+    }
+    if (VM_GetProp(self, "is_slowdown") == 1) {
+        fs = fs * 2
+    }
+
+    at = VM_GetProp(self, "mod_tick_cycle")
+    cyc = VM_GetProp(self, "cycle")
+    if (VM_IsUndefined(cyc)) {
+        cyc = 1500
+    }
+    fp = VM_GetProp(self, "first_produce")
+    if (VM_IsUndefined(fp)) {
+        fp = 0
+    }
+    dly = VM_GetProp(self, "first_produce_delay")
+    if (VM_IsUndefined(dly)) {
+        dly = 60
+    }
+
+    st = 0
+    fire = 0
+
+    if (fp == 0) {
+        // 首次：等 dly 帧 → 播 attack_anim 帧动画 → 产火
+        if (at == dly + 11 * fs + 1) {
+            fire = 1
+            fp = 1
+        } else if (at <= dly + 11 * fs) {
+            st = 1
+        }
+    } else {
+        // 之后：每 cycle 帧一轮，末尾 11 帧播攻击动画
+        if (at == 0) {
+            fire = 1
+        } else if (at <= cyc - 11 * fs) {
+            st = 0
+        } else {
+            st = 1
+        }
+    }
+
+    if (fire == 1) {
+        fpn = VM_GetProp(self, "flame_produce")
+        if (VM_IsUndefined(fpn)) {
+            fpn = 35
+        }
+        if (fpn == 0) {
+            fpn = 35
+        }
+        fx = VM_GetProp(self, "x")
+        fy = VM_GetProp(self, "y") - 60
+
+        // 最终形态一次吐 2 朵
+        f1 = VM_CreateInstance("flame", fx, fy)
+        VM_SetProp(f1, "value", fpn)
+        f2 = VM_CreateInstance("flame", fx, fy)
+        VM_SetProp(f2, "value", fpn)
+    }
+
+    VM_SetProp(self, "first_produce", fp)
+    VM_SetProp(self, "state", st)
+}

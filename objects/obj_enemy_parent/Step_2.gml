@@ -57,13 +57,11 @@ if (_has_terrain && grid_row >= 0 && grid_row < _tr && grid_col >= 0 && grid_col
 
 var _slow = false;
 // 岩浆：normal / dance / air / obstacle 减速
-if ((_tf & (1 << 2)) != 0 &&
-    (target_type == "normal" || target_type == "dance" || target_type == "air" || target_type == "obstacle")) {
+if ((_tf & (1 << 2)) != 0 && (target_type == "normal" || target_type == "dance" || target_type == "air" || target_type == "obstacle")) {
   _slow = true;
 }
 // 黏液：normal / dance 减速
-if ((_tf & (1 << 1)) != 0 &&
-    (target_type == "normal" || target_type == "dance")) {
+if ((_tf & (1 << 1)) != 0 && (target_type == "normal" || target_type == "dance")) {
   _slow = true;
 }
 move_speed_modify = _slow ? 2 : 1;

@@ -1,0 +1,125 @@
+// 青涩柿柿（生肖卡）：索敌 → 前摇 → 从上方落下柿子，落点 3x3 范围伤害
+// 原版 obj_qingse_shishi：
+//   target_type = d_fruit（0/1 转，陆地+地下）/ all（2 转，追加空中）—— 按最终形态写死 all。
+//   attack_windup = 30 帧前摇；命中半径 1（3x3）；柿子数量与竖向偏移按形态：
+//     2 转 = 5 个，偏移 [-2,-1,0,1,2]，整体越界时平移不裁剪。
+//   冷却：cooldown_timer 倒数，到 0 才能再打。
+//
+//   柿子本体见 qingse_shishi_persimmon.txt（mod 子弹）。
+//   贴图：本体 spr_shishi_2 = 67 帧、264x526、原点 (135, 290)
+
+_OBJECT_CFG {
+    if (VM_SpriteExists("spr_shishi_2") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_shishi_2_0.png", 62, 135, 290)
+        VM_AliasSpritePerm("spr_shishi_2", "tex/spr_shishi_2_0.png")
+    }
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+
+    VM_SetProp(self, "sprite_index", "spr_shishi_2")
+    // 贴图 62 帧：idle 播 0..idle_anim、攻击从 idle_anim+1 起跳，要求 idle+attack+2 <= 62。
+    // 原版 24/39 超了 1 帧，按比例压到 23/37。
+    VM_SetProp(self, "idle_anim", 23)
+    VM_SetProp(self, "attack_anim", 37)
+    VM_SetProp(self, "flash_speed", 6)
+    VM_SetProp(self, "plant_type", "normal")
+    VM_SetProp(self, "state", 0)
+    VM_SetProp(self, "qss_phase", 0)      // 0 = 找目标，1 = 前摇已走完、这次进来该开火
+    VM_SetProp(self, "qss_windup", 0)     // 前摇已走帧数（仅作记录）
+
+    // 进 VM 的时机交给引擎的 "wait"：引擎每帧自减 mod_step_enter_var，减到 0 才进 VM。
+    // 冷却(600)、前摇(30)、空场重试(30) 全部变成引擎侧倒计时 —— 期间脚本一帧都不跑，
+    // 但倒计时照走（不像 norm_attack 会因为没敌人把冷却冻住）。
+    // ⚠️ 卡里每次进 VM 都必须把 mod_step_enter_var 重新设成正数：减到 0 进完之后它还是 0，
+    //    不重设的话引擎会把条件清成 ""（退化成每帧进）。
+    VM_SetProp(self, "mod_step_enter_condition", "wait")
+    VM_SetProp(self, "mod_step_enter_var", 1)      // 开局下一帧就开始找目标
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+
+    ph = VM_GetProp(self, "qss_phase")
+    if (VM_IsUndefined(ph) == 1) {
+        ph = 0
+    }
+
+    gr = VM_GetProp(self, "grid_row")
+    gc = VM_GetProp(self, "grid_col")
+    rg = VM_GetProp(self, "range")
+    if (VM_IsUndefined(rg) == 1) {
+        rg = 9
+    }
+
+    // 索敌：上下各 1 行、本行及其右侧 range 格
+    r1 = gr - 1
+    if (r1 < 0) {
+        r1 = 0
+    }
+    r2 = gr + 1
+    c1 = gc
+    c2 = gc + rg
+
+    cdv = VM_GetProp(self, "cooldown")
+    if (VM_IsUndefined(cdv) == 1) {
+        cdv = 600
+    }
+
+    // ph == 0：进来找目标。没敌人就隔 30 帧再看（引擎数），有敌人就起前摇。
+    // 前摇的 30 帧动画由 obj_card_parent 自己推，这里不需要每帧写 state。
+    if (ph == 0) {
+        n = VM_GetInstancesInRange("qss_tg", r1, r2, c1, c2, "enemy", "")
+        if (n <= 0) {
+            VM_SetProp(self, "state", 0)
+            VM_SetProp(self, "qss_windup", 0)
+            VM_SetProp(self, "mod_step_enter_var", 30)   // 空场重试
+            exit
+        }
+        VM_SetProp(self, "state", 1)
+        VM_SetProp(self, "qss_phase", 1)
+        VM_SetProp(self, "qss_windup", 30)
+        VM_SetProp(self, "mod_step_enter_var", 30)       // 前摇 30 帧
+        exit
+    }
+
+    // ph == 1：引擎已经等了 30 帧，这次进来开火；冷却交给引擎数
+    VM_SetProp(self, "state", 0)
+    VM_SetProp(self, "qss_phase", 0)
+    VM_SetProp(self, "qss_windup", 0)
+    VM_SetProp(self, "mod_step_enter_var", cdv)
+
+    grid_rows = VM_GetProp(0, "grid_rows")
+    if (VM_IsUndefined(grid_rows) == 1) {
+        grid_rows = 5
+    }
+
+    // 边界平移：算出最小/最大行后整体挪
+    shift = 0
+    lo = gr - 2
+    hi = gr + 2
+    if (lo < 0) {
+        shift = 0 - lo
+    }
+    if (hi >= grid_rows) {
+        shift = grid_rows - 1 - hi
+    }
+
+    atk = VM_GetProp(self, "atk")
+    bx  = VM_GetProp(self, "x")
+    by  = VM_GetProp(self, "y")
+
+    i = 0
+    while (i < 5) {
+        trow = gr - 2 + i + shift
+        VM_SetProp(0, "_mod_pending_bullet_id", "qingse_shishi_persimmon")
+        p = VM_CreateInstance("obj_bullet_mod", bx, by - 200)
+        VM_SetProp(p, "damage", atk)
+        VM_SetProp(p, "row", trow)
+        VM_SetProp(p, "fall_speed", 2)
+        VM_SetProp(p, "target_y", by)
+        VM_SetProp(p, "hit_radius", 1)
+        i = i + 1
+    }
+}

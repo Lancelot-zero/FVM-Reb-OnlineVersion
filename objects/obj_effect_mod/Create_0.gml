@@ -22,6 +22,10 @@ image_speed = 0;
 mod_step_enter_condition = ""   // "" / "mod" / "wait"
 mod_step_enter_var       = 0    // "mod" = 间隔帧数；"wait" = 还要等几帧
 
+// 倒计时 + 每帧透明度变化（基础属性，所有 mod 对象都有）
+mod_countdown = 0    // 倒计时（帧）：> 0 时每帧 -1
+mod_alpha_add = 0    // 每帧加到 image_alpha 上的量（负数 = 渐隐）；只在倒计时 > 0 时加
+
 // 偏移：每帧 Step 结束时把这两个量加到 x/y 上；0 = 不动
 // mod 特效脚本用 VM_SetProp(self, "mod_prestep_dx", 值) 改
 // ⚠️ 和 obj_weapon_mod 不同：武器每帧会按 parent_player 重置 x/y，所以那边是「固定偏移」；

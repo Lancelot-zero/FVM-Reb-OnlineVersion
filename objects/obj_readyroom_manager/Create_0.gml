@@ -29,7 +29,12 @@ select_card_index = ds_list_create()
 hover_card_index = -1
 hover_slot_index = -1
 slot_rows = 11
-slot_cols = 10
+// 行数按已注册卡片数动态算（每行 slot_rows 张，末行不足也算一行），下限 10 行
+var _card_total = 0;
+if (variable_global_exists("player_deck") && ds_exists(global.player_deck, ds_type_list)) {
+	_card_total = ds_list_size(global.player_deck) div 2;
+}
+slot_cols = max(10, (_card_total + slot_rows - 1) div slot_rows);
 slot_surface = -1
 map_surface = -1
 y_offset = 0

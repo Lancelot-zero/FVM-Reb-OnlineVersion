@@ -54,8 +54,23 @@ if (is_struct(gem_info)) {
 // ⚠️ 宝石没有 hp、不移动（图标钉在 390, 213 + gem_index*80），
 //    所以卡片/敌人那套 hp_change、cell、索敌条件这里都没有
 // ══════════════════════════════════════════════════════════════════════════
-mod_step_enter_condition = ""   // "" / "mod" / "wait" / "cool"
-mod_step_enter_var       = 0    // "mod" = 间隔帧数；"wait" = 还要等几帧
+mod_step_enter_condition = ""   // "" / "mod" / "wait" / "cool" / "enemy_area" / "enemy_area_mod" / "card_area" / "card_area_mod"
+mod_step_enter_var       = 0    // "mod" = 间隔帧数；"wait" = 还要等几帧；"*_area_mod" = 冷却帧数
+
+// ── 区域检测（"enemy_area*" / "card_area*" 用；锚点跟着放置它的角色走）──
+//   区域写法：**每 4 个值一组** [上, 下, 左, 右]（以锚点那格为中心各扩几格），可写多组，任一组命中即可
+//   写：VM_InstArrayClear(self,"mod_step_enemy_area") 再按组 VM_InstArrayAdd(..., 值)
+//   不设 / 凑不满 4 个 → 默认一组 [1,1,0,99]（本行 ±1、自己那格往右到边界）
+mod_has_enemy       = 0    // 【只读】区域内有没有敌人
+mod_has_card        = 0    // 【只读】区域内有没有卡片
+mod_step_enemy_area = []   // 敌人区域，[上,下,左,右] ×N
+mod_enemy_types     = []   // 敌人类型筛选（normal/obstacle/diver/air/dance/underground）；空 = 任意
+mod_step_card_area  = []   // 卡片区域，[上,下,左,右] ×N；空 = [1,1,0,99]
+mod_tick_cool       = 0    // 【obj 内部】"*_area_mod" 的冷却剩余帧数
+
+// 倒计时 + 每帧透明度变化（基础属性，所有 mod 对象都有）
+mod_countdown = 0    // 倒计时（帧）：> 0 时每帧 -1
+mod_alpha_add = 0    // 每帧加到 image_alpha 上的量（负数 = 渐隐）；只在倒计时 > 0 时加
 
 // 创建时加入该宝石的实例容器，并执行该宝石虚拟机里的创建块
 if (gem_id != "" && variable_global_exists("mod_gem_vms") && ds_map_exists(global.mod_gem_vms, gem_id)) {

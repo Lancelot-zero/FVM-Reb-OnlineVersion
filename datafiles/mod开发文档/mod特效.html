@@ -44,8 +44,17 @@ hr { border:none; border-top:1px solid #e5e7eb; margin:2em 0; }
 VM 语言与全部函数见 <code>help.md</code>。</p>
 </blockquote>
 <h2>文件</h2>
-<pre><code class="language-text">mod/effects/my_fx.json / .bin / .txt / tex/
+<p>特效放在<strong>游戏目录下的 <code>mod/effects/</code></strong> 里：</p>
+<pre><code class="language-text">游戏目录/                       ← 运行游戏的那个文件夹
+└─ mod/
+   └─ effects/                  ← 特效这一类都放这里
+      ├─ my_fx.json             可以就是 {}
+      ├─ my_fx.bin              逻辑（由 my_fx.txt 编译出来，游戏只读这个）
+      ├─ my_fx.txt              源码（建议保留）
+      └─ tex/                   自带贴图（可选）
+         └─ xxx.png
 </code></pre>
+<p><strong>也可以再分一层子目录归类</strong>（只扫一层、不往下递归）：<code>mod/effects/xxx/my_fx.json</code>，贴图跟 json 同一层放 <code>mod/effects/xxx/tex/</code>；id 只看 json 文件名。</p>
 <p>和子弹同一套路：<strong>不进任何池，只提供逻辑</strong>，json 可以是 <code>{}</code>（但必须有 json 才会被扫描）。
 特效一般用在三处：<strong>卡片/宝石/武器身上的光环</strong>、<strong>命中或死亡特效</strong>、<strong>纯表现（文字提示、爆炸）</strong>。</p>
 <hr>
@@ -122,7 +131,7 @@ VM_SetProp(0, &quot;_mod_pending_effect_id&quot;, &quot;&quot;)
 <p><strong>跟随与偏移的配合（注意区别）：</strong></p>
 <pre><code class="language-gml">// ① 固定偏移：每帧贴到主人身上，再往上偏 40 像素（x/y 每帧被跟随重置，所以偏移是固定的）
 VM_SetProp(self, &quot;mod_follow_instance&quot;, 主人实例)
-VM_SetProp(self, &quot;mod_prestep_dy&quot;, 0 - 40)
+VM_SetProp(self, &quot;mod_prestep_dy&quot;, -40)
 
 // ② 每帧位移：不设跟随 → x/y 没人重置，每帧加一次就是&quot;匀速移动&quot;
 VM_SetProp(self, &quot;mod_prestep_dx&quot;, 3)      // 每帧往右 3 像素
@@ -154,7 +163,7 @@ VM_SetProp(self, &quot;mod_prestep_dx&quot;, 3)      // 每帧往右 3 像素
 <td>Create 里直接初始化，<strong>当帧</strong>就生效（宝石挂光环就是这么写的）</td>
 </tr>
 </tbody></table>
-<p>每帧顺序（<code>obj_effect_mod/Step_0.gml</code>）：</p>
+<p>每帧顺序：</p>
 <pre><code class="language-text">1. 暂停 → exit
 2. 跟随目标：mod_follow_instance 有设且实例还在 → x = 目标.x; y = 目标.y
 3. 延迟初始化（mod_type 有了就跑 _OBJECT_CREATE）
@@ -201,8 +210,8 @@ VM_SetProp(self, &quot;mod_prestep_dx&quot;, 3)      // 每帧往右 3 像素
 <h3>Demo 1：跟随光环（挂在卡片 / 宝石 / 角色身上）</h3>
 <pre><code class="language-gml">_OBJECT_CREATE {
     self = VM_GetCurCard()
-    VM_SetProp(self, &quot;rel_x&quot;, 0 - 15)      // 相对主人的偏移
-    VM_SetProp(self, &quot;rel_y&quot;, 0 - 5)
+    VM_SetProp(self, &quot;rel_x&quot;, -15)      // 相对主人的偏移
+    VM_SetProp(self, &quot;rel_y&quot;, -5)
     VM_SetProp(self, &quot;frames&quot;, 9)          // 贴图帧数（自己推 image_index 用）
     VM_SetProp(self, &quot;anim&quot;, 0)
     VM_SetProp(self, &quot;image_speed&quot;, 0)

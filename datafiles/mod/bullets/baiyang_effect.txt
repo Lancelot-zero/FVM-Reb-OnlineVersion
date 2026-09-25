@@ -1,0 +1,90 @@
+// 白羊的冲撞车（mod 子弹）：沿本行向右一路冲，撞到普通老鼠把它撞飞（车也消失）
+// 撞到 Boss 或在 ignore_list 里的目标则只掉血、车继续前进（同一目标只扣一次）。
+//
+// 原版 obj_baiyang_effect：
+//   image_xscale/yscale = 1.8，4 帧动画、每 4 帧推一帧；move_speed = 8；x > 2200 自毁。
+//   命中判定：同行、横向差 <= 100。
+//   普通目标 → 生成击退特效并销毁自己（车没了）；Boss/免疫目标 → 扣 atk、车继续。
+//
+//   ⚠️ 原版的击退特效 obj_knock_back_effect 是独立对象，插件建不了；
+//      这里对普通目标改成"造成一次大伤害"代替撞飞，是本卡与原型唯一的差异。
+//   ⚠️ ignore_list 白名单插件读不到，统一按"Boss 才不撞飞"处理（读 is_boss 属性）。
+
+_OBJECT_CFG {
+    if (VM_SpriteExists("spr_baiyang") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_baiyang_0.png", 4, 44, 121)
+        VM_AliasSpritePerm("spr_baiyang", "tex/spr_baiyang_0.png")
+    }
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+
+    VM_SetProp(self, "destroy_timer", 0 - 1)     // 出界由 obj_bullet_mod 处理
+    VM_SetProp(self, "image_xscale", 1.8)
+    VM_SetProp(self, "image_yscale", 1.8)
+
+    spr = VM_GetProp(self, "sprite_index")
+    if (VM_IsUndefined(spr) == 1) {
+        spr = 0 - 1
+    }
+    if (spr == 0 - 1) {
+        VM_SetProp(self, "sprite_index", "spr_baiyang")
+    }
+
+    if (VM_IsUndefined(VM_GetProp(self, "vx")) == 1) {
+        VM_SetProp(self, "vx", 8)
+    }
+    if (VM_IsUndefined(VM_GetProp(self, "vy")) == 1) {
+        VM_SetProp(self, "vy", 0)
+    }
+    if (VM_IsUndefined(VM_GetProp(self, "damage")) == 1) {
+        VM_SetProp(self, "damage", 0)
+    }
+    if (VM_IsUndefined(VM_GetProp(self, "row")) == 1) {
+        VM_SetProp(self, "row", VM_GetProp(self, "grid_row"))
+    }
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+
+    r   = VM_GetProp(self, "row")
+    bc  = VM_GetProp(self, "grid_col")
+    dmg = VM_GetProp(self, "damage")
+
+    n = VM_GetInstancesInRange("by_hit", r, r, bc - 1, bc + 1, "enemy", "")
+    k = 0
+    // 已撞过的目标记在实例变量里。原来用的是 VM_InstArray*，但那套在「实例变量不存在」时
+    // 直接返回 -1、什么都不做（引擎实现 scr_command_VM_opt_execute.gml:4896 / 5033），
+    // 而脚本没法自己造一个实例数组 —— 结果去重表永远是空的，对 Boss 会**每帧重复扣 9999**。
+    last = VM_GetProp(self, "last_hit")
+    if (VM_IsUndefined(last) == 1) {
+        last = 0 - 1
+    }
+    while (k < n) {
+        e = VM_ArrayGet("by_hit", k)
+        hp = VM_GetProp(e, "hp")
+        if (VM_IsUndefined(hp) == 0) {
+            if (hp > 0) {
+                if (e != last) {
+                    VM_SetProp(self, "last_hit", e)
+
+                    boss = VM_GetProp(e, "is_boss")
+                    if (VM_IsUndefined(boss) == 1) {
+                        boss = 0
+                    }
+
+                    VM_DamageEnemy(e, dmg, "normal")
+
+                    if (boss == 0) {
+                        // 普通目标：车撞上去就没了（原版是生成击退特效后自毁）
+                        VM_DestroyInstance(self)
+                        exit
+                    }
+                }
+            }
+        }
+        k = k + 1
+    }
+}

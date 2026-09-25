@@ -1,0 +1,116 @@
+// 魔羯（生肖卡）：周期性对周围 3x3（2 转 5x5）范围造成伤害并冰冻，自身有寿命限制
+// 原版 obj_mojie：
+//   max_life_timer = 1440 帧，寿命最后 180 帧闪烁（alpha 0.5/1 交替）。
+//   attack_interval：0 转 240 帧、1 转及以上 180 帧。
+//   idle_duration = attack_interval - 13 * flash_speed，前段待机、后段攻击动画，
+//   在 attack_timer == idle_duration + 6 * flash_speed 时触发一次范围伤害。
+//   范围：0/1 转半径 1（3x3）、2 转半径 2（5x5）—— 按最终形态写死半径 2。
+//   命中：扣 atk 伤害，并把 ice_timer 设为 600（冰冻）。
+//
+//   ⚠️ 原版还会在范围内铺满 obj_mojie_bullet 地刺特效，那是独立对象，插件只能生成
+//      已有对象；这里跳过地刺，只做伤害 + 冰冻。
+//   贴图：本体 spr_mojie_2 = 27 帧、119x107、原点 (70, 89)
+
+_OBJECT_CFG {
+    if (VM_SpriteExists("spr_mojie_2") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_mojie_2_0.png", 26, 70, 89)
+        VM_AliasSpritePerm("spr_mojie_2", "tex/spr_mojie_2_0.png")
+    }
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+
+    VM_SetProp(self, "sprite_index", "spr_mojie_2")
+    VM_SetProp(self, "idle_anim", 13)
+    VM_SetProp(self, "attack_anim", 13)
+    VM_SetProp(self, "flash_speed", 5)
+    VM_SetProp(self, "plant_type", "normal")
+    VM_SetProp(self, "state", 0)
+    VM_SetProp(self, "mj_life", 1440)
+    VM_SetProp(self, "mj_timer", 0)
+    VM_SetProp(self, "mj_interval", 180)
+
+    // 每帧都要跑（自己管计时），不看敌人
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+
+    // 寿命
+    life = VM_GetProp(self, "mj_life")
+    if (VM_IsUndefined(life) == 1) {
+        life = 1440
+    }
+    life = life - 1
+    VM_SetProp(self, "mj_life", life)
+
+    // 寿命最后 180 帧闪烁
+    if (life < 180) {
+        ph = life % 10
+        if (ph < 5) {
+            VM_SetProp(self, "image_alpha", 0.5)
+        } else {
+            VM_SetProp(self, "image_alpha", 1)
+        }
+    }
+    if (life <= 0) {
+        VM_DestroyInstance(self)
+        exit
+    }
+
+    // 攻击周期
+    iv = VM_GetProp(self, "mj_interval")
+    if (VM_IsUndefined(iv) == 1) {
+        iv = 180
+    }
+    fs = VM_GetProp(self, "flash_speed")
+    if (VM_IsUndefined(fs) == 1) {
+        fs = 5
+    }
+    idle_dur = iv - 13 * fs
+    trigger_at = idle_dur + 6 * fs
+
+    t = VM_GetProp(self, "mj_timer")
+    if (VM_IsUndefined(t) == 1) {
+        t = 0
+    }
+    t = t + 1
+
+    if (t <= idle_dur) {
+        VM_SetProp(self, "state", 0)
+    } else {
+        VM_SetProp(self, "state", 1)
+    }
+
+    if (t >= iv) {
+        t = 0
+    }
+
+    if (t == trigger_at) {
+        // 最终形态半径 2
+        gr = VM_GetProp(self, "grid_row")
+        gc = VM_GetProp(self, "grid_col")
+        atk = VM_GetProp(self, "atk")
+
+        n = VM_GetInstancesInRange("mj_hit", gr - 2, gr + 2, gc - 2, gc + 2, "enemy", "")
+        k = 0
+        while (k < n) {
+            e = VM_ArrayGet("mj_hit", k)
+            if (VM_GetProp(e, "hp") > 0) {
+                VM_DamageEnemy(e, atk, "normal")
+                it = VM_GetProp(e, "ice_timer")
+                if (VM_IsUndefined(it) == 1) {
+                    it = 0
+                }
+                if (it < 600) {
+                    VM_SetProp(e, "ice_timer", 600)
+                }
+            }
+            k = k + 1
+        }
+        VM_PlaySound("snd_hit1")
+    }
+
+    VM_SetProp(self, "mj_timer", t)
+}

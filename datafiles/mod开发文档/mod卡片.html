@@ -44,11 +44,27 @@ hr { border:none; border-top:1px solid #e5e7eb; margin:2em 0; }
 VM 语言与全部函数见 <code>help.md</code>。</p>
 </blockquote>
 <h2>文件</h2>
-<pre><code class="language-text">mod/cards/my_card.json     卡配置（数值、形态、图标）
-mod/cards/my_card.bin      逻辑（VM 脚本编译产物）
-mod/cards/my_card.txt      源码（建议保留）
-mod/cards/tex/...          自带贴图（可选）
+<p>卡片放在<strong>游戏目录下的 <code>mod/cards/</code></strong> 里（游戏目录 = 跑游戏的那个文件夹）：</p>
+<pre><code class="language-text">游戏目录/                       ← 运行游戏的那个文件夹
+└─ mod/
+   └─ cards/                    ← 卡片这一类都放这里
+      ├─ my_card.json           卡配置（数值、形态、图标）—— 必须有，扫描入口就是它
+      ├─ my_card.bin            逻辑（由 my_card.txt 编译出来，游戏只读这个）
+      ├─ my_card.txt            源码（建议保留，游戏不读它）
+      └─ tex/                   自带贴图（可选）：用哪张贴图就丢哪张进来
+         └─ xxx.png
 </code></pre>
+<p><strong>也可以再分一层子目录归类</strong>（只扫一层、不往下递归）：</p>
+<pre><code class="language-text">mod/cards/snake/shegengbao.json
+mod/cards/snake/shegengbao.bin
+mod/cards/snake/shegengbao.txt
+mod/cards/snake/tex/xxx.png     ← tex 跟着 json 那一层放，不是放回 cards/ 根目录
+</code></pre>
+<ul>
+<li>平铺和子目录<strong>可以混用</strong>：<code>mod/cards/a.json</code> 和 <code>mod/cards/snake/b.json</code> 会一起加载</li>
+<li>id 只看 <strong>json 的文件名</strong>，子目录名随便取（中文也行），不写进 id</li>
+<li>再深一层（<code>cards/snake/2025/xxx.json</code>）<strong>扫不到</strong></li>
+</ul>
 <h2>一、JSON 字段</h2>
 <table>
 <thead>
@@ -86,12 +102,12 @@ mod/cards/tex/...          自带贴图（可选）
 <tr>
 <td><code>shapes[].plant_type</code></td>
 <td></td>
-<td>层级：<code>normal</code>（默认）/ <code>shield_inner</code> / <code>lilypad</code> / <code>shield_outer</code> / <code>coffee</code></td>
+<td>层级：<code>normal</code>（默认）/ <code>shield_inner</code> / <code>lilypad</code> / <code>shield_outer</code> / <code>coffee</code>。<strong>同时决定&quot;能不能落到占位格&quot;和&quot;会不会被替换掉&quot;</strong>，见下面的⚠️</td>
 </tr>
 <tr>
 <td><code>shapes[].feature_type</code></td>
 <td></td>
-<td>特性，默认 <code>normal</code>（水、替换类卡等会看它）</td>
+<td>特性，默认 <code>normal</code>。取值见下面的 <strong><code>feature_type</code> 取值</strong>：<code>normal</code> / <code>water</code> / <code>amphi</code> / <code>dwarf</code> / <code>low</code> / <code>upgrade</code> / <code>bun</code> / <code>king_bun</code> / <code>tbun</code> / <code>king_tbun</code></td>
 </tr>
 <tr>
 <td><code>shapes[].target_card</code></td>
@@ -128,23 +144,110 @@ mod/cards/tex/...          自带贴图（可选）
 <li><strong>17 档</strong>：写不满就用最后一个补齐（<code>[50, 60]</code> → 后面 15 档全是 60）</li>
 <li>JSON 只管卡面 / 数值；<strong>本体形象要在 <code>_OBJECT_CREATE</code> 里自己设</strong>：<code>VM_SetProp(self, &quot;sprite_index&quot;, &quot;xxx&quot;)</code></li>
 </ul>
-<p>最小例子：</p>
+<blockquote>
+<p>⚠️ <strong><code>plant_type</code> 必须按卡的用途选，写错了卡会&quot;吃掉目标却什么也没吃到&quot;</strong></p>
+<p>种植时用的是 <strong>JSON 里的 <code>plant_type</code></strong>（卡池里存的那份），它管两件事：</p>
+<ol>
+<li><strong>能不能落到占位格</strong>：<code>normal</code> 在&quot;替换放置&quot;关掉时<strong>不允许</strong>种到已有卡上；<code>coffee</code> 两种模式都允许；<code>lilypad</code> 只认水面；<code>shield_outer</code> 只认陆地。</li>
+<li><strong>目标卡会不会被替换掉</strong>：开着替换放置时，游戏只替换掉<strong>和本卡 <code>plant_type</code> 相同</strong>的卡（<code>normal</code> 换 <code>normal</code>，<code>coffee</code> 层永远不动），而且这一步<strong>发生在你被创建之前</strong>——那张卡已经被销毁、并从格子里移走了。</li>
+</ol>
+<p>所以「<strong>落到已有卡上，再把那张卡吃掉/换掉</strong>」的卡（例：蛇羹煲、替换类卡）：</p>
+<ul>
+<li>写 <code>normal</code> → 玩家开着替换放置时，目标卡在种植瞬间就被销毁并移出网格，你的 <code>_OBJECT_STEP</code> 里 <code>VM_GetInstancesInRange(..., &quot;card&quot;, ...)</code> <strong>只剩自己</strong>（现象：<code>n == 1</code>，循环永远进不到处理分支）。</li>
+<li>写 <code>coffee</code> → 占位格允许落下，且通用替换不动它，目标卡还在格子里，自己再动手吃 / 换 / 加成。</li>
+</ul>
+<p>注意：<code>_OBJECT_CREATE</code> 里的 <code>VM_SetProp(self, &quot;plant_type&quot;, ...)</code> 只改<strong>实例</strong>的绘制层级和被敌人吃的优先级，<strong>管不了种植判定与替换判定</strong>——那两项只看 JSON。</p>
+</blockquote>
+<h3><code>feature_type</code> 取值</h3>
+<p>默认 <code>normal</code>。它决定<strong>能不能种在水里 / 会不会被普通老鼠打 / 种下时吃不吃底座卡 / 和哪些卡算&quot;同族&quot;</strong>。</p>
+<table>
+<thead>
+<tr>
+<th>取值</th>
+<th>是什么</th>
+<th>具体影响</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>normal</code></td>
+<td>普通卡（默认）</td>
+<td>无特殊判定</td>
+</tr>
+<tr>
+<td><code>water</code></td>
+<td>水上卡（木盘子、水上茶杯、钢丝球…）</td>
+<td><strong>陆地上不许种</strong>；水面上可以压着莲叶/普通卡放（按&quot;水上卡&quot;那套判定）。<code>plant_type: &quot;normal&quot;</code> 配 <code>feature_type: &quot;water&quot;</code> 就是&quot;种在水里的普通卡&quot;</td>
+</tr>
+<tr>
+<td><code>amphi</code></td>
+<td>两栖卡（章鱼烧、炭烧海星、咖喱龙虾炮…）</td>
+<td>陆地和水面<strong>都能种</strong>；水面上只要那格没有（非替换模式下的）普通卡就能落</td>
+</tr>
+<tr>
+<td><code>dwarf</code></td>
+<td>低矮 / 陷阱类（鱼刺、老鼠夹…）</td>
+<td><strong>普通老鼠不会停下来打它</strong>（直接踩过去），只有巨型老鼠才会打；<strong>水里不许种</strong></td>
+</tr>
+<tr>
+<td><code>low</code></td>
+<td>低矮（原版咖啡杯、老鼠夹在用）</td>
+<td>目前游戏里<strong>没有任何判定读它</strong>，实际效果 = <code>normal</code>；为了和原版一致可以照写</td>
+</tr>
+<tr>
+<td><code>upgrade</code></td>
+<td>升级 / 替换类（大火炉、钢鱼刺、机枪小笼包…）</td>
+<td>种下时<strong>先吃掉格子里 <code>target_card</code> 指定的那张卡</strong>（例：大火炉吃 <code>small_fire</code>）→ 所以必须同时写 <code>target_card</code>；开着替换放置时也能落到同类卡上</td>
+</tr>
+<tr>
+<td><code>bun</code> / <code>king_bun</code></td>
+<td>包子 / 国王包子</td>
+<td>同一族内部<strong>不互相替换</strong>（国王小笼包还能&quot;填装&quot;吸收同族包子卡）</td>
+</tr>
+<tr>
+<td><code>tbun</code> / <code>king_tbun</code></td>
+<td>三向包子 / 三向国王包子</td>
+<td>同上，另一族</td>
+</tr>
+</tbody></table>
+<ul>
+<li>判定发生在<strong>种植那一刻</strong>，所以改 <code>feature_type</code> 要重启/重进游戏</li>
+<li>水/陆的两套落点判定都只认<strong>这一格</strong>（地形 + 格子里已有的卡）</li>
+<li>自己拿不准就写 <code>normal</code>；只有&quot;水里用&quot;&quot;矮到老鼠不打&quot;&quot;吃底座升级&quot;这三类才需要写别的</li>
+</ul>
+<p>最小例子（数值都是 <strong>17 档数组</strong> = 等级 0~16）：</p>
 <pre><code class="language-json">{
   &quot;name&quot;: &quot;我的卡片&quot;,
   &quot;shapes&quot;: [
     {
       &quot;shape&quot;: 0,
+      &quot;name&quot;: &quot;我的卡片&quot;,
+      &quot;description&quot;: &quot;说明文字&quot;,
       &quot;sprite&quot;: &quot;spr_small_fire&quot;,
-      &quot;hp&quot;: 50, &quot;cost&quot;: 50, &quot;atk&quot;: 0, &quot;range&quot;: 0,
-      &quot;cooldown&quot;: 420, &quot;cycle&quot;: 1500
+      &quot;plant_type&quot;: &quot;normal&quot;,
+      &quot;feature_type&quot;: &quot;normal&quot;,
+      &quot;target_card&quot;: &quot;none&quot;,
+      &quot;hp&quot;:       [50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50],
+      &quot;cost&quot;:     [50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50],
+      &quot;atk&quot;:      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      &quot;range&quot;:    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      &quot;cooldown&quot;: [420, 420, 420, 420, 420, 420, 420, 420, 420, 420, 420, 420, 420, 420, 420, 420, 420],
+      &quot;cycle&quot;:    [1500, 1440, 1380, 1320, 1260, 1200, 1140, 1080, 1020, 960, 900, 840, 780, 720, 660, 600, 540]
     }
-  ]
+  ],
+  &quot;skill&quot;: { &quot;attr&quot;: &quot;flame_produce&quot;, &quot;values&quot;: [25, 27, 29, 31, 34, 37, 40, 44, 48] },
+  &quot;shop&quot;: { &quot;cost&quot;: &quot;1000&quot;, &quot;description&quot;: &quot;商店里显示的文字&quot; },
+  &quot;info_island&quot;: &quot;图鉴里显示的说明&quot;
 }
 </code></pre>
+<ul>
+<li><code>hp</code> / <code>cost</code> / <code>atk</code> / <code>range</code> / <code>cooldown</code> / <code>cycle</code> / <code>flame_produce</code> 都是 <strong>17 档</strong>（0~16 级，17 个数）</li>
+<li>写不满会自动用最后一个补齐（<code>[50, 60]</code> → 后面 15 档全是 60）；也可以只写一个数字（<code>&quot;hp&quot;: 50</code>）＝所有等级一样</li>
+<li><code>skill.values</code> 是 <strong>9 档</strong>（技能 1~9 级）；<code>shop</code> / <code>info_island</code> 不写就不进商店 / 图鉴</li>
+</ul>
 <hr>
 <h2>二、卡片实例上的内置字段</h2>
-<p>卡片实例（<code>obj_card_mod</code>，继承 <code>obj_card_parent</code>）一建出来就带这些属性，<strong>大部分可以直接读写</strong>。</p>
-<h3>基础（来自 <code>obj_card_parent</code>）</h3>
+<p>卡片实例一建出来就带这些属性，<strong>大部分可以直接读写</strong>。</p>
+<h3>基础字段（每个卡片实例都有）</h3>
 <table>
 <thead>
 <tr>
@@ -162,7 +265,7 @@ mod/cards/tex/...          自带贴图（可选）
 </tr>
 <tr>
 <td><code>hp</code> / <code>max_hp</code></td>
-<td>当前 / 最大血量（<code>hp &lt;= 0</code> 会被父对象销毁）</td>
+<td>当前 / 最大血量（<code>hp &lt;= 0</code> 会被核心销毁）</td>
 </tr>
 <tr>
 <td><code>atk</code> / <code>range</code></td>
@@ -174,7 +277,7 @@ mod/cards/tex/...          自带贴图（可选）
 </tr>
 <tr>
 <td><code>attack_timer</code></td>
-<td>攻击计时器（自己推进，父对象不管）</td>
+<td>攻击计时器（自己推进，核心不管）</td>
 </tr>
 <tr>
 <td><code>attack_type</code></td>
@@ -229,7 +332,7 @@ mod/cards/tex/...          自带贴图（可选）
 <td>上一帧血量（受伤判定用）</td>
 </tr>
 </tbody></table>
-<h3>mod 专用（来自 <code>obj_card_mod</code>，进 VM 时机/索敌/批量改属性都靠它们）</h3>
+<h3>mod 专用（进 VM 时机 / 索敌 / 批量改属性都靠它们）</h3>
 <table>
 <thead>
 <tr>
@@ -294,6 +397,26 @@ mod/cards/tex/...          自带贴图（可选）
 <td>这帧命中的窗口下标（0 起）；不是窗口 = <code>-1</code></td>
 </tr>
 <tr>
+<td><code>mod_countdown</code></td>
+<td>可写</td>
+<td><strong>倒计时（帧）</strong>：<code>&gt; 0</code> 时每帧 <code>-1</code>（默认 0 = 不生效）</td>
+</tr>
+<tr>
+<td><code>mod_alpha_add</code></td>
+<td>可写</td>
+<td><strong>每帧透明度变化量</strong>（负数 = 渐隐）；只在 <code>mod_countdown &gt; 0</code> 时加到 <code>image_alpha</code> 上</td>
+</tr>
+<tr>
+<td><code>mod_hover_mask</code></td>
+<td>可写</td>
+<td><code>1</code> = <strong>鼠标移入时显示白色半透明遮罩</strong>（默认 0 = 不显示）</td>
+</tr>
+<tr>
+<td><code>mod_hover_alpha</code></td>
+<td>可写</td>
+<td>遮罩的透明度（默认 <code>0.35</code>，0~1，越大越白）</td>
+</tr>
+<tr>
 <td><code>mod_set_on</code> / <code>mod_set_id</code> / <code>mod_set_prop</code> / <code>mod_set_val</code></td>
 <td>可写</td>
 <td><strong>批量改属性</strong>：开关开着时每帧把第 i 个 id 的 <code>prop[i]</code> 设成 <code>val[i]</code>（三个数组按最短长度配对）</td>
@@ -304,6 +427,33 @@ mod/cards/tex/...          自带贴图（可选）
 <td>第二套，行为一样，各自独立</td>
 </tr>
 </tbody></table>
+<p><strong><code>mod_countdown</code> + <code>mod_alpha_add</code>：倒计时 + 淡出（<strong>所有 mod 对象通用</strong>，核心每帧帮你推，不用自己写 STEP）</strong></p>
+<pre><code class="language-gml">_OBJECT_CREATE {
+    self = VM_GetCurCard()
+    VM_SetProp(self, &quot;mod_countdown&quot;, 30)          // 30 帧后倒计时走完
+    VM_SetProp(self, &quot;mod_alpha_add&quot;, -1 / 30.0)   // 每帧 -1/30 → 30 帧正好淡到 0
+}
+</code></pre>
+<ul>
+<li>核心逻辑：<strong>倒计时 &gt; 0</strong> 时 → <code>mod_countdown -= 1</code> 且 <code>image_alpha += mod_alpha_add</code>（两个一起才生效）</li>
+<li>⚠️ <strong>两边都是整数时 <code>/</code> 走整除</strong>（和 C 的 <code>int /</code> 一样，向零取整）：<code>-1 / 30</code> 算出来是 <code>0</code>，淡出会<strong>一点效果都没有</strong>。要小数就把其中一个写成小数：<code>-1 / 30.0</code>，或者直接写 <code>-0.0333</code></li>
+<li>想&quot;淡入&quot;就把变化量写正数；想中途改方向/停手，直接改这两个字段的当前值</li>
+<li>倒计时走完（到 0）就不再动透明度了 —— 要消失就在 STEP 里判 <code>mod_countdown == 0</code> 自己销毁</li>
+<li>⚠️ 值按<strong>帧</strong>算（不是按秒）：30 帧 = 0.5 秒</li>
+</ul>
+<p><strong><code>mod_hover_mask</code>：鼠标移入时戴一层白色半透明遮罩（卡片 / 敌人都有）</strong></p>
+<pre><code class="language-gml">_OBJECT_CREATE {
+    self = VM_GetCurCard()
+    VM_SetProp(self, &quot;mod_hover_mask&quot;, 1)        // 打开
+    VM_SetProp(self, &quot;mod_hover_alpha&quot;, 0.45)    // 想更白就调大（默认 0.35）
+}
+</code></pre>
+<ul>
+<li>判定：鼠标<strong>压在实例的贴图碰撞掩码上</strong>才算移入（<code>position_meeting</code>）；贴图没有碰撞遮罩时按贴图的包围盒（bbox）兜底，两个都没命中才算没移入</li>
+<li>做法：用项目的 <code>hit_effect_2</code> 着色器把同一张贴图再画一遍 —— 那个着色器把 RGB 换成顶点色、保留贴图的 alpha，
+所以 <code>c_white</code> + <code>mod_hover_alpha</code> 得到的就是<strong>贴图形状的纯白半透明剪影</strong>，盖在本体上</li>
+<li>想改&quot;跟着鼠标走的声音/其它表现&quot;用 <code>_OBJECT_MOUSE_ENTER</code> / <code>_OBJECT_MOUSE_LEAVE</code> 块</li>
+</ul>
 <p>写数组只能用 VM 的实例数组接口：</p>
 <pre><code class="language-gml">_OBJECT_CREATE {
     self = VM_GetCurCard()
@@ -319,7 +469,7 @@ mod/cards/tex/...          自带贴图（可选）
     // 开火窗口：一轮里第 0 帧和第 (一轮-35) 帧（负数从末尾倒数）
     VM_InstArrayClear(self, &quot;mod_step_enter_arr&quot;)
     VM_InstArrayAdd(self, &quot;mod_step_enter_arr&quot;, 0)
-    VM_InstArrayAdd(self, &quot;mod_step_enter_arr&quot;, 0 - 35)
+    VM_InstArrayAdd(self, &quot;mod_step_enter_arr&quot;, -35)
     VM_SetProp(self, &quot;mod_step_enter_condition&quot;, &quot;norm_attack&quot;)
 }
 </code></pre>
@@ -327,20 +477,20 @@ mod/cards/tex/...          自带贴图（可选）
 <h2>三、STEP 的时机与执行顺序</h2>
 <h3>什么时候跑</h3>
 <ul>
-<li><strong><code>_OBJECT_CREATE</code></strong>：卡片被种下时，在 <code>obj_card_mod</code> 的 Create 里<strong>立刻执行</strong>（当帧）</li>
+<li><strong><code>_OBJECT_CREATE</code></strong>：卡片被种下当帧<strong>立刻执行</strong></li>
 <li><strong><code>_OBJECT_STEP</code></strong>：从这张卡第一个 Step 阶段开始，每帧一次，<strong>但会被下面的条件挡住</strong></li>
 <li><strong><code>_OBJECT_DESTROY</code></strong>：实例销毁时（血量归零、被铲、被清场）</li>
 <li><strong><code>_OBJECT_MOUSE_ENTER</code> / <code>_OBJECT_MOUSE_LEAVE</code> / <code>_OBJECT_CLICK</code></strong>：鼠标移入 / 移出 / 左键点在本卡上（按实例判定，鼠标要压在这张卡的贴图上）</li>
-<li>暂停（<code>global.is_paused</code>）时<strong>整块不跑</strong>；冻住（<code>is_frozen</code>）时<strong>不进 VM</strong>；<code>hp &lt;= 0</code>、实例已销毁也不进</li>
+<li><strong>游戏暂停</strong>时整块不跑；<strong>冻住</strong>（<code>is_frozen</code>）时不进 VM；<code>hp &lt;= 0</code>、实例已销毁也不进</li>
 </ul>
 <blockquote>
 <p>手牌点下去种的卡：鼠标事件在 Step 之前，所以<strong>当帧就会跑第一次 STEP</strong>。
 用 <code>VM_SpawnPlant</code> 在别的卡 / 地图脚本的 Step 里种下来的卡，Step 阶段里新建的实例当帧不再跑自己的 Step，
 <strong>第一次 STEP 落在下一帧</strong> —— 需要&quot;种下就立刻发生效果&quot;的逻辑，写进 <code>_OBJECT_CREATE</code> 更稳。</p>
 </blockquote>
-<h3>每帧顺序（<code>obj_card_mod/Step_0.gml</code>）</h3>
+<h3>每帧顺序（核心在什么时候跑你的块）</h3>
 <pre><code class="language-text">1. 暂停就整个 exit
-2. event_inherited()      → 跑父对象那一套（动画 / 攻击 / 生产等）
+2. 核心的逻辑        → 跑核心那一套（动画 / 攻击 / 生产等）
 3. 实例没了 / hp&lt;=0 / is_frozen → exit（冻住不进 VM）
 4. 一轮计时 mod_tick_cycle +1，到一轮长度（mod_tick_max，不设用 cycle）归零
 5. 索敌（仅当 mod_enemy_check=1 或条件为 norm_attack）
@@ -354,6 +504,15 @@ mod/cards/tex/...          自带贴图（可选）
 <p>也就是说：<strong>卡的 <code>_OBJECT_STEP</code> 里不用自己判&quot;有没有敌人&quot;、也不用自己切攻击动画</strong>
 （索敌和切动画由第 5、7 步做），只要设置好索敌区域和进 VM 条件。</p>
 <h3>进 VM 的时机（<code>mod_step_enter_condition</code>）</h3>
+<blockquote>
+<p>⚠️ <strong>别让卡片每帧进 VM</strong>（不设就是每帧，也就是 <code>&quot;&quot;</code>）。场上卡一多，这条就是掉帧最大的来源。</p>
+<ul>
+<li>射手类 → <code>&quot;norm_attack&quot;</code> + 一条<strong>开火窗口</strong>（只在开火那几帧进）</li>
+<li>生产 / 计时类 → <code>&quot;norm&quot;</code> + <strong>生产那一帧</strong>的窗口</li>
+<li>被打才有反应的卡 → <code>&quot;hp_change&quot;</code> / <code>&quot;hp_change_mod&quot;</code>（平时完全不进）</li>
+</ul>
+<p>窗口写<strong>从一轮末尾倒数的负数</strong>；一次能算完的常量和贴图放 <code>_OBJECT_CFG</code>。详见 <a href="mod%E5%BC%80%E5%8F%91%E5%B7%A5%E5%85%B7%E8%AF%B4%E6%98%8E.html">mod开发工具说明.md</a> 的「性能铁律」。</p>
+</blockquote>
 <table>
 <thead>
 <tr>
@@ -399,7 +558,7 @@ mod/cards/tex/...          自带贴图（可选）
 </tr>
 </tbody></table>
 <ul>
-<li><p><code>&quot;hp_change&quot;</code> / <code>&quot;hp_change_mod&quot;</code> 读的是父对象每帧维护的 <code>pre_hp</code>（上一帧末的血量），受伤当帧就能进 VM；
+<li><p><code>&quot;hp_change&quot;</code> / <code>&quot;hp_change_mod&quot;</code> 读的是核心每帧维护的 <code>pre_hp</code>（上一帧末的血量），受伤当帧就能进 VM；
 冷却期内的伤害会被吞掉，出冷却后不会因为攒着的旧变化补触发一次</p>
 </li>
 <li><p>命中窗口时 <code>mod_step_enter_index</code> = <strong>窗口下标</strong>（0 起，一轮里有多个窗口时用它区分是第几次），否则 <code>-1</code></p>
@@ -412,9 +571,34 @@ mod/cards/tex/...          自带贴图（可选）
 <li><strong>生产者 / 每帧逻辑</strong>（火苗、光环）→ 不设（每帧进）或 <code>&quot;norm&quot;</code></li>
 <li><strong>全场统一节奏 / 想省性能</strong>（大量同类卡）→ <code>&quot;mod&quot;</code> + 间隔</li>
 <li><strong>一次性延时</strong>（种下 60 帧后做某事）→ <code>&quot;wait&quot;</code> + 60</li>
+<li><strong>事件驱动</strong>（等敌人出现才开始动作、计时起点不固定）→ <code>&quot;norm_attack&quot;</code> + <strong>空窗口表</strong></li>
 </ul>
 </li>
 </ul>
+<h4>⚠️ 窗口表写「从一轮末尾倒数」的负数，别写绝对帧号</h4>
+<p>窗口值是拿去和<strong>当前</strong>的 <code>mod_tick_cycle</code> 比对的，而一轮长度是 <code>mod_tick_max</code>（不设 = 卡的 <code>cycle</code>）。
+<strong><code>cycle</code> 会被技能改</strong>：JSON 里 <code>&quot;skill&quot;: { &quot;attr&quot;: &quot;cycle&quot;, &quot;values&quot;: [...] }</code> 会在升级时把它改掉
+（实例：雷神 150 → 108、月神 180 → 102、大力神 180 → 72）。所以：</p>
+<ul>
+<li>✅ 写 <code>-30</code>（= 一轮末尾往前 30 帧）、<code>1 - 13 * flash_speed</code></li>
+<li>❌ 写 <code>120</code>（= 第 120 帧）—— <code>cycle</code> 一旦降到 120 以下，这个窗口<strong>永远轮不到</strong>，表现就是<strong>卡一发不发</strong></li>
+</ul>
+<p><strong>硬规则：窗口换算成实际帧号后必须落在 <code>0 ~ 一轮长度-1</code> 之间。</strong> 负数按 <code>一轮长度 + 值</code> 换算，
+换算结果仍为负的话同样永不触发（例：一轮 72 帧时写 <code>-84</code> = <code>-12</code>）。
+确实需要固定周期时，显式设 <code>mod_tick_max</code>（例：<code>VM_SetProp(self, &quot;mod_tick_max&quot;, 176)</code>），这时写绝对帧号才安全。</p>
+<p>自查：把 JSON 的 <code>cycle</code> 数组、<code>skill.values</code>（若 <code>attr == &quot;cycle&quot;</code>）里的<strong>最小值</strong>当作一轮长度，
+逐个验窗口是否还在范围内。</p>
+<h4>⚠️ <code>&quot;wait&quot;</code>：每次进 VM 都必须重设 <code>mod_step_enter_var</code></h4>
+<p>引擎把 <code>mod_step_enter_var</code> 减到 0、放你进 VM 之后，它就<strong>停在 0</strong>。卡里必须马上设回正数：</p>
+<pre><code class="language-gml">_OBJECT_STEP {
+    self = VM_GetCurCard()
+    ...
+    VM_SetProp(self, &quot;mod_step_enter_var&quot;, 600)   // 下一次等 600 帧；不设就会被清掉条件
+}
+</code></pre>
+<p>不设的后果：引擎判定「值不合法」并把 <code>mod_step_enter_condition</code> 清成 <code>&quot;&quot;</code> —— 条件被清掉后<strong>再也回不到 wait</strong>，
+卡退化成每帧进 VM。<strong>每一条 <code>exit</code> 路径都要先设好</strong>。
+<code>&quot;wait&quot;</code> 适合「等 N 帧做一件事」的卡（冷却、前摇、延时放技能），比自己每帧倒数省得多。</p>
 <hr>
 <h2>四、三个常用 demo</h2>
 <h3>Demo 1：产火苗</h3>
@@ -483,7 +667,7 @@ _OBJECT_STEP {
     // 有敌人才进 VM，一轮里第 0 帧和第 (一轮-35) 帧开火
     VM_InstArrayClear(self, &quot;mod_step_enter_arr&quot;)
     VM_InstArrayAdd(self, &quot;mod_step_enter_arr&quot;, 0)
-    VM_InstArrayAdd(self, &quot;mod_step_enter_arr&quot;, 0 - 35)
+    VM_InstArrayAdd(self, &quot;mod_step_enter_arr&quot;, -35)
     VM_SetProp(self, &quot;mod_step_enter_condition&quot;, &quot;norm_attack&quot;)
 }
 
@@ -535,13 +719,13 @@ _OBJECT_STEP {
     // VM_BulletScreenAdd_Ex(贴图,总帧数,打击范围,缩放,动画速度,x,y,vx,vy,伤害,伤害计数,
     //                       存活帧数,子弹类型,销毁对象,mod名字,伤害类型,标志数值,角度)
     // 三发平射（打击范围 0 = 只算本格；伤害计数 -1 = 不限次数；存活帧数 -1 = 不自动消失）
-    VM_BulletScreenAdd_Ex(&quot;spr_my_bullet&quot;, 1, 0, 1.8, 1, bx, by,  8,    0, dmg, 1, 0 - 1, &quot;normal&quot;, &quot;&quot;, &quot;&quot;, &quot;normal&quot;, 5, 0)
-    VM_BulletScreenAdd_Ex(&quot;spr_my_bullet&quot;, 1, 0, 1.8, 1, bx, by,  6,  5.6, dmg, 1, 0 - 1, &quot;normal&quot;, &quot;&quot;, &quot;&quot;, &quot;normal&quot;, 5, 0)
-    VM_BulletScreenAdd_Ex(&quot;spr_my_bullet&quot;, 1, 0, 1.8, 1, bx, by,  6, 0 - 5.6, dmg, 1, 0 - 1, &quot;normal&quot;, &quot;&quot;, &quot;&quot;, &quot;normal&quot;, 5, 0)
+    VM_BulletScreenAdd_Ex(&quot;spr_my_bullet&quot;, 1, 0, 1.8, 1, bx, by,  8,    0, dmg, 1, -1, &quot;normal&quot;, &quot;&quot;, &quot;&quot;, &quot;normal&quot;, 5, 0)
+    VM_BulletScreenAdd_Ex(&quot;spr_my_bullet&quot;, 1, 0, 1.8, 1, bx, by,  6,  5.6, dmg, 1, -1, &quot;normal&quot;, &quot;&quot;, &quot;&quot;, &quot;normal&quot;, 5, 0)
+    VM_BulletScreenAdd_Ex(&quot;spr_my_bullet&quot;, 1, 0, 1.8, 1, bx, by,  6, -5.6, dmg, 1, -1, &quot;normal&quot;, &quot;&quot;, &quot;&quot;, &quot;normal&quot;, 5, 0)
 
     // 会拐到目标行的（原版水管弹那种）：用 _Exs，最后多两个参数（目标行世界 y、靠拢比例）
-    ty = 0 - 1                                   // -1 = 不渐变
-    VM_BulletScreenAdd_Exs(&quot;spr_my_bullet&quot;, 1, 0, 1.8, 1, bx, by, 8, 0, dmg, 1, 0 - 1, &quot;normal&quot;, &quot;&quot;, &quot;&quot;, &quot;normal&quot;, 5, 0, ty, 0.15)
+    ty = -1                                   // -1 = 不渐变
+    VM_BulletScreenAdd_Exs(&quot;spr_my_bullet&quot;, 1, 0, 1.8, 1, bx, by, 8, 0, dmg, 1, -1, &quot;normal&quot;, &quot;&quot;, &quot;&quot;, &quot;normal&quot;, 5, 0, ty, 0.15)
 
     VM_PlaySound(&quot;snd_shot&quot;)
     VM_SetProp(self, &quot;state&quot;, 1)
@@ -639,29 +823,71 @@ _OBJECT_STEP {
 <hr>
 <h2>五、其它要点</h2>
 <ul>
-<li><strong>动画</strong>：<code>idle_anim</code>（待机帧数）、<code>attack_anim</code>（攻击帧数）、<code>flash_speed</code>（几帧走一格，默认 6）、
-<code>state</code>（0/1）驱动 <code>image_index</code>；默认 <code>idle_anim = 0</code> 会<strong>锁在第 0 帧不动</strong>，
-<code>idle_anim + attack_anim</code> 别超过精灵总帧数<ul>
+<li><p><strong>动画</strong>：<code>idle_anim</code>（待机帧数）、<code>attack_anim</code>（攻击帧数）、<code>flash_speed</code>（几帧走一格，默认 6）、
+<code>state</code>（0/1）驱动 <code>image_index</code>；默认 <code>idle_anim = 0</code> 会<strong>锁在第 0 帧不动</strong>。
+⚠️ 帧数要求是 <strong><code>idle_anim + attack_anim + 2 ≤ 精灵总帧数</code></strong>，不是 <code>+0</code>：待机播 <code>0..idle_anim</code>，
+攻击从 <code>idle_anim+1</code> 起跳、还会把 <code>idle_anim+attack_anim+1</code> 也显示一帧。
+超出的话攻击动画会回绕到待机帧，看着像「动画卡了 / 播了一半变回待机」</p>
+<ul>
 <li><strong>动画是核心自动推的，别碰 <code>image_speed</code></strong>（固定为 0）；想自己控制就在 <code>_OBJECT_STEP</code> 里直接写 <code>image_index</code></li>
 <li>卡片比武器多一条：<code>mod_step_enter_condition = &quot;norm_attack&quot;</code> 时，<strong>命中开火窗口且有敌人会自动切 <code>state = 1</code></strong>，
 没敌人时自动收回待机 —— 用这套的卡不用自己管 <code>state</code></li>
 </ul>
 </li>
-<li><strong>联动 / 计数</strong>用本卡 VM 的命名数组（<code>VM_ArrayGet</code> / <code>VM_ArraySet</code> / <code>VM_ArrayADD</code>，每局重置），
-别依赖全局变量 —— 命名数组是<strong>整个 mod 单元共享</strong>的：</li>
+<li><p><strong>联动 / 计数</strong>：先想清楚这份数据<strong>属于谁</strong>，它决定 <code>[reloadmod]</code> 之后还在不在：</p>
+<table>
+<thead>
+<tr>
+<th>数据挂在谁身上</th>
+<th>写法</th>
+<th><code>[reloadmod]</code> 之后</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>实例</strong></td>
+<td><code>VM_SetProp(self, &quot;名字&quot;, 值)</code> / <code>VM_InstArraySet(self, &quot;名字&quot;, k, 值)</code></td>
+<td>✅ 保留（不会帮你重置）</td>
+</tr>
+<tr>
+<td><strong>VM</strong>（命名数组，按 mod id 一份、全实例共享）</td>
+<td><code>VM_ArrayGet / Set / ADD</code></td>
+<td>❌ <strong>被清空</strong>（<code>VM_ArrayGet</code> 返回 0）</td>
+</tr>
+<tr>
+<td><strong>全局</strong></td>
+<td><code>VM_GetProp(0, &quot;名字&quot;)</code> 读、<code>VM_SetProp(0, ...)</code> 写</td>
+<td>✅ 保留（但要小心撞名）</td>
+</tr>
+</tbody></table>
+<p>由此得出三条写法：</p>
+<ol>
+<li><strong>常量表</strong>（按等级查的数值表）→ 建在 <strong><code>_OBJECT_CFG</code></strong>（每次加载/重载都跑），
+别放 <code>_OBJECT_CREATE</code> —— 重载<strong>只重跑 <code>_VM_CONST_INIT</code> + <code>_OBJECT_CFG</code>，不重跑 CREATE</strong>。</li>
+</ol>
+</li>
 </ul>
-<pre><code class="language-gml">_OBJECT_CREATE {
-    self = VM_GetCurCard()
-    VM_ArraySet(&quot;my_count&quot;, 0, VM_ArrayGet(&quot;my_count&quot;, 0) + 1)
-}
-
-_OBJECT_DESTROY {
-    self = VM_GetCurCard()
-    n = VM_ArrayGet(&quot;my_count&quot;, 0) - 1
-    if (n &lt; 0) { n = 0 }
-    VM_ArraySet(&quot;my_count&quot;, 0, n)
+<pre><code class="language-gml">_OBJECT_CFG {
+    // 常量表放这里：reloadmod 后数组被清空，而 CFG 每次加载/重载都会重跑，正好重建
+    if (VM_ArraySize(&quot;my_tbl&quot;) &lt; 16) {
+        VM_ArrayClear(&quot;my_tbl&quot;)
+        VM_ArrayADD(&quot;my_tbl&quot;, 10)
+        // ...
+    }
 }
 </code></pre>
+<ol start="2">
+<li><strong>「场上同类有多少个」这类活计数器</strong> → 别用命名数组记（重载清 0 后倍率就错了），
+用的时候<strong>现场数</strong>：<code>VM_GetInstancesInRange(&quot;arr&quot;, 0, 99, 0, 99, &quot;card&quot;, &quot;卡id&quot;)</code>。</li>
+</ol>
+<pre><code class="language-gml">_OBJECT_STEP {
+    self = VM_GetCurCard()
+    n = VM_GetInstancesInRange(&quot;my_same&quot;, 0, 99, 0, 99, &quot;card&quot;, &quot;my_card&quot;)   // 含自己
+    mult = 1 + 0.05 * (n - 1)
+}
+</code></pre>
+<ol start="3">
+<li>一定要用命名数组、又想扛住重载 → 读之前用 <code>VM_ArraySize(&quot;名字&quot;)</code> 判断为空就重建。</li>
+</ol>
 <ul>
 <li>常用查询：<code>VM_GetPlantAt(列,行,&quot;层级&quot;)</code>、<code>VM_GetInstancesInRange(...)</code>、<code>VM_EnemyInRange(...)</code>、
 <code>VM_CanPlace(&quot;卡名&quot;,列,行)</code>、<code>VM_EnemyInRange</code> 判&quot;这一行有没有敌人&quot;</li>

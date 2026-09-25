@@ -1,0 +1,125 @@
+// 至尊大力神（金卡 · 大力神·赫丘利最终形态）：四发追踪弹，只打空中鼠军
+// 按 mod 分支 obj_power_god（shape 3）移植。
+//
+//   Create：attack_anim = 17、idle_anim = 13、flash_speed = 5、target_type = "track"
+//   Step  ：**只认空中敌人**——原版是 `can_target_on(target_type, "air")`，
+//           没有空中目标就完全不开打（attack_timer 归零）。
+//           一轮 4 发：at == cycle - 8 / 6 / 4 / 2 * flash_speed 各一发。
+//
+//   子弹  ：走【追踪弹管理器】obj_Homing_Bullet_Management（结构体弹幕，不占实例），
+//           口径 = 每帧咬「全场最左的可命中敌人」。用 "air_only" 当可命中类型，
+//           和「只打空中鼠军」一致（原版是"索敌只挑空中、命中却允许 normal+air"，
+//           管理器一个类型同时管索敌和命中，这里取"只打空中"）。
+//           缩放 1.8、速度 10、出生点 (x, y-105)、自转 6 度/帧（原版 image_angle = -timer*6）。
+//
+//   和原版的两处差别（写死在主分支不存在的 obj_power_god_bullet_1 里，拿不到）：
+//     · 原版命中后有 30% 概率让敌人眩晕 240 帧（stun_timer）
+//     · 原版至尊击杀时走 obj_mouse_ash_death（灰烬）
+//   另外原版的命中特效 obj_power_god_bullet_effect 主分支也没有，所以 death_obj 先留空。
+//
+//   贴图：本体 25 帧 原点 (65,101)；子弹 5 帧 原点 (51,72)。
+
+_OBJECT_CFG {
+    if (VM_SpriteExists("spr_power_god_3") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_power_god_3_0.png", 25, 65, 101)
+        VM_AliasSpritePerm("spr_power_god_3", "tex/spr_power_god_3_0.png")
+    }
+
+    if (VM_SpriteExists("spr_power_god_bullet_3") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_power_god_bullet_3_0.png", 5, 51, 72)
+        VM_AliasSpritePerm("spr_power_god_bullet_3", "tex/spr_power_god_bullet_3_0.png")
+    }
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+
+    VM_SetProp(self, "sprite_index", "spr_power_god_3")
+    // 贴图 25 帧：idle 播 0..idle_anim、攻击从 idle_anim+1 起跳，要求 idle+attack+2 <= 25。
+    // 原版 13/17 超了 5 帧，按比例压到 10/13。
+    VM_SetProp(self, "idle_anim", 10)
+    VM_SetProp(self, "attack_anim", 13)
+    VM_SetProp(self, "flash_speed", 5)
+    VM_SetProp(self, "plant_type", "normal")
+
+    VM_SetProp(self, "attack_timer", 0)
+    VM_SetProp(self, "state", 0)
+
+    // 一轮 180 帧里只有 6 帧真有事做：第 1 帧收招、第 96 帧起播攻击动画、
+    // 第 140/150/160/170 帧各一发追踪弹。用 "norm" + 窗口表，其余 174 帧不进 VM。
+    VM_InstArrayClear(self, "mod_step_enter_arr")
+    // 窗口写成「从一轮末尾倒数」的负数：skill.attr = cycle 会把 cycle 从 180 压到 72
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 1)
+    // 状态动画窗口：cycle 被压到 72 时 -84 会落到负 ticker 上、永远不命中，所以先看装不装得下。
+    // 装不下就不加 —— 那种情况 at <= cyc-85 恒不成立，脚本本来就会一直保持攻击动画。
+    cyc0 = VM_GetProp(self, "cycle")
+    if (VM_IsUndefined(cyc0) == 1) {
+        cyc0 = 180
+    }
+    if (cyc0 - 14 * 5 >= 2) {
+        VM_InstArrayAdd(self, "mod_step_enter_arr", 1 - 14 * 5)
+    }
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 0 - 8 * 5)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 0 - 6 * 5)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 0 - 4 * 5)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 0 - 2 * 5)
+    VM_SetProp(self, "mod_step_enter_condition", "norm")
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+
+    if (VM_GetProp(self, "is_frozen") == 1) {
+        exit
+    }
+
+    fs = VM_GetProp(self, "flash_speed")
+    cfs = fs
+    if (VM_GetProp(self, "is_slowdown") == 1) {
+        cfs = cfs * 2
+    }
+
+    at = VM_GetProp(self, "mod_tick_cycle")
+    cyc = VM_GetProp(self, "cycle")
+    st = 0
+    shots = 0
+
+    // 只打空中：场上没有空中目标就整轮停摆
+    tgt = VM_GetHomingTarget("air")
+
+    if (tgt >= 0) {
+        // 计时交给引擎，这里只判断这一帧是待机还是攻击动画
+        if (at <= cyc - 14 * cfs) {
+            st = 0
+        } else {
+            st = 1
+        }
+
+        if (at == cyc - 8 * fs) {
+            shots = 1
+        }
+        if (at == cyc - 6 * fs) {
+            shots = 1
+        }
+        if (at == cyc - 4 * fs) {
+            shots = 1
+        }
+        if (at == cyc - 2 * fs) {
+            shots = 1
+        }
+    } else {
+        st = 0
+    }
+
+    if (shots == 1) {
+        atk = VM_GetProp(self, "atk")
+        bx = VM_GetProp(self, "x")
+        by = VM_GetProp(self, "y") - 105
+        r = VM_GetProp(self, "grid_row")
+
+        // 追踪弹统一走弹幕管理器（模式 0 = 只咬全场最左的可命中敌人）。
+        VM_HomingBulletAdd("spr_power_god_bullet_3", 1.8, bx, by, 10, atk, "air_only", "", "", "", 0)
+    }
+
+    VM_SetProp(self, "state", st)
+}

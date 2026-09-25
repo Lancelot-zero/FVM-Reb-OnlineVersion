@@ -1,0 +1,106 @@
+// 后羿的箭（mod 子弹）：向右飞；给了 target_row 就一边飞一边朝那一行靠拢
+// 命中按伤害类型命中，触发时按 fire_chance 概率点燃（点燃 = 给敌人加 burn_timer）。
+//
+// 卡片侧创建方式：
+//     VM_SetProp(0, "_mod_pending_bullet_id", "houyi_bullet")
+//     b = VM_CreateInstance("obj_bullet_mod", 最左列x, y - 75)
+//     VM_SetProp(b, "damage", atk * 5)
+//     VM_SetProp(b, "row", grid_row)
+//     VM_SetProp(b, "vx", 8) / "vy", 0
+//     VM_SetProp(b, "target_row", 目标行)     // 可选
+//
+//   ⚠️ 原版终转的"击杀灰烬 / 三昧真火叠层"依赖 damage_type 与灰烬系统，插件做不了，
+//      这里只保留"伤害 + 概率点燃"两项。
+
+_OBJECT_CFG {
+    if (VM_SpriteExists("spr_houyi_god_bullet") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_houyi_god_bullet_0.png", 10, 73, 9)
+        VM_AliasSpritePerm("spr_houyi_god_bullet", "tex/spr_houyi_god_bullet_0.png")
+    }
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+
+    spr = VM_GetProp(self, "sprite_index")
+    if (VM_IsUndefined(spr) == 1) {
+        spr = 0 - 1
+    }
+    if (spr == 0 - 1) {
+        VM_SetProp(self, "sprite_index", "spr_houyi_god_bullet")
+    }
+
+    if (VM_IsUndefined(VM_GetProp(self, "vx")) == 1) {
+        VM_SetProp(self, "vx", 8)
+    }
+    if (VM_IsUndefined(VM_GetProp(self, "vy")) == 1) {
+        VM_SetProp(self, "vy", 0)
+    }
+    if (VM_IsUndefined(VM_GetProp(self, "damage")) == 1) {
+        VM_SetProp(self, "damage", 0)
+    }
+    if (VM_IsUndefined(VM_GetProp(self, "row")) == 1) {
+        VM_SetProp(self, "row", VM_GetProp(self, "grid_row"))
+    }
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+
+    // 行渐变
+    tr = VM_GetProp(self, "target_row")
+    if (VM_IsUndefined(tr) == 0) {
+        if (tr >= 0) {
+            gy = VM_GetProp(0, "grid_offset_y")
+            if (VM_IsUndefined(gy) == 1) {
+                gy = 0
+            }
+            gcs = VM_GetProp(0, "grid_cell_size_y")
+            if (VM_IsUndefined(gcs) == 1) {
+                gcs = 116
+            }
+            ty = gy + gcs * tr
+            cy = VM_GetProp(self, "y")
+            dy = ty - cy
+            if (dy < 0) {
+                dy = 0 - dy
+            }
+            VM_SetProp(self, "vy", (ty - cy) * 0.15)
+            if (dy < 30) {
+                VM_SetProp(self, "row", tr)
+            }
+        }
+    }
+
+    r  = VM_GetProp(self, "row")
+    bc = VM_GetProp(self, "grid_col")
+    dmg = VM_GetProp(self, "damage")
+
+    // 只在「跨格」那一帧结算：本子弹上面那段转向逻辑要每帧跑（调 vy / row），
+    // 所以不能改成 mod_step_enter_condition = "cell"，改成在这里比对 prev_grid_col
+    //（obj_bullet_mod 每帧回写）。同一格只结算一次 = 同一敌人只命中一次 ——
+    // 原来那套 VM_InstArrayContains/Add 是无效的：脚本没法自己创建实例数组，
+    // 那两个函数在变量不存在时直接返回 -1 什么都不做，去重完全失效、穿透弹每帧都在扣血。
+    if (bc != VM_GetProp(self, "prev_grid_col")) {
+        n = VM_GetInstancesInRange("hy_hit", r, r, bc, bc, "enemy", "")
+        k = 0
+        while (k < n) {
+            e = VM_ArrayGet("hy_hit", k)
+            if (VM_GetProp(e, "hp") > 0) {
+                VM_DamageEnemy(e, dmg, "normal")
+
+                // 概率点燃（30%）：给目标加燃烧计时
+                if (VM_Random(1, 100) <= 30) {
+                    bt = VM_GetProp(e, "burn_timer")
+                    if (VM_IsUndefined(bt) == 1) {
+                        bt = 0
+                    }
+                    if (bt < 180) {
+                        VM_SetProp(e, "burn_timer", 180)
+                    }
+                }
+            }
+            k = k + 1
+        }
+    }
+}

@@ -356,6 +356,11 @@ static std::vector<FuncDef> FUNC_DEFS = {
     {"VM_DamageEnemyAsh",          3,  {PT_INT, PT_ANY, PT_STRING}}, // 142 — 灰烬伤害：接不下就一击必杀换成 obj_mouse_ash_death（照抄原版 obj_power_god_bullet_1，不看护盾）
     {"VM_BulletScreenAdd_Ex",     18,  {PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY}}, // 143 — 屏幕弹幕(带卡片效果)：同 VM_BulletScreenAdd，多【伤害类型】【标志数值 flag】【出生角度】；flag bit1=过火/bit2=解冻/4,8,16…=自定义，进格子中心带时与卡片的 bullet_flag 取且运算，>0 就应用并消位；angle 给后向子弹用（180=倒过来）
     {"VM_BulletScreenAdd_Exs",    20,  {PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY}}, // 144 — 同 VM_BulletScreenAdd_Ex，多【ty 目标行的世界 y，-1=不渐变】【lk 每帧靠拢比例，默认 0.15】：先朝目标行拐过去再直线飞（原版水管弹的 y 向 lerp），到位自动吸附并停掉渐变
+    {"VM_GetInfo",                -1,  {}, PT_ANY}, // 145 — 变长：按注册表逐级查一个对象的信息（类别, id, 字段1[, 字段2, ...]）。类别 card/enemy/weapon/gem；字符串段=取字段，数字段=取下标（落在 ds_map 上自动按字符串键查，注册表的 shapes/upgrades 键就是 "0"/"3"）；查到数组/结构体本身返回 undefined
+    {"VM_CatInRow",                1,  {PT_INT}, PT_INT}, // 146 — 该行第一只猫（obj_cat，海底图的螃蟹同对象）的实例 id；没有返回 -1
+    {"VM_MapObj",                 -1,  {}, PT_ANY}, // 147 — 变长：查格子上有没有地图物品（列, 行[, "名字"]），读 global.cell_terrain_flag 的位。名字 obstacle/mucus/lava/seawater/barrier/fog/cloud/wind_tunnel；"all"/""=任意一种；"list"=返回逗号分隔名字串；列或行传 -1 = 该方向不限；名字不认识返回 -1
+    {"VM_GetInstanceCount",        1,  {PT_STRING}, PT_INT}, // 148 — 某个对象类的实例个数（类名就是 obj_xxxx，和游戏里 object 名一致）；名字不存在返回 -1
+    {"VM_GetInstanceAt",           2,  {PT_STRING, PT_INT}, PT_INT}, // 149 — 某个对象类第 k 个实例的 id（k 从 0 起）；越界 / 名字不存在返回 -1
 };
 
 // ============================================================

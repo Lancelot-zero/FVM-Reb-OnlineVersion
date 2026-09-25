@@ -47,9 +47,10 @@ if button_select == 0{
 		
 	}
 	surface_set_target(card_surface)
+	craft_card_rows = craft_tab_rows(0)   // 卡片页行数自动扩容
 	//绘制右侧栏位
 	for(var i = 0 ; i < 7 ; i++){
-        for(var j = 0 ; j < 20 ; j++){
+        for(var j = 0 ; j < craft_card_rows ; j++){
             draw_sprite_ext(spr_package_slot_bg, 0, 42+i*84, 48+96 * j-y_offset, 0.9, 0.9, 0, c_white, 1)
         }
     }
@@ -215,6 +216,7 @@ if button_select == 0{
     
 }
 else if button_select == 1{
+	craft_gem_rows = craft_tab_rows(1)   // 宝石页行数自动扩容
 	//绘制宝石强化UI背景
 	draw_sprite_ext(spr_package_gem_bg, 0, x-305, y+110, 0.9, 0.9, 0, c_white, 1)
 	draw_sprite_ext(spr_craft_material_bg,0,x-305,y-40,1.8,1.8,0,c_white,1)
@@ -237,10 +239,12 @@ else if button_select == 1{
 			draw_text(x-752+i*84+40,y + 454+42,string(floor(get_material_amount(material_id)/10000))+"w")
 		}
 	}
-	//绘制右侧栏位
+	//绘制右侧栏位（列表超出可视区时靠滚动查看，用剪裁避免画到面板外面）
+	var _prev_scissor = gpu_get_scissor()
+	gpu_set_scissor(x + 154, y - 369, 588, 815)
 	for(var i = 0 ; i < 7 ; i++){
-        for(var j = 0 ; j < 9 ; j++){
-            draw_sprite_ext(spr_package_slot_bg, 1, x+196+i*84, y - 324 + 88 * j, 0.9, 0.9, 0, c_white, 1)
+        for(var j = 0 ; j < craft_gem_rows ; j++){
+            draw_sprite_ext(spr_package_slot_bg, 1, x+196+i*84, y - 324 + 88 * j - y_offset, 0.9, 0.9, 0, c_white, 1)
         }
     }
 	//绘制所有宝石
@@ -256,9 +260,9 @@ else if button_select == 1{
             var row = gem_index div 7
             var col = gem_index mod 7
             
-            if (row < 10) {
+            if (row < craft_gem_rows) {
                 var weapon_x = x + 196 + col * 84;
-                var weapon_y = y - 324 + row * 88;
+                var weapon_y = y - 324 + row * 88 - y_offset;
                 
                 // 绘制宝石图标
                 draw_sprite_ext(weapon_data.icon, 0, weapon_x, weapon_y, 0.7, 0.7, 0, c_white, 1);
@@ -273,7 +277,8 @@ else if button_select == 1{
                 
                 if (point_in_rectangle(mouse_x, mouse_y, 
                                       weapon_x - spr_width/2, weapon_y - spr_height/2,
-                                      weapon_x + spr_width/2, weapon_y + spr_height/2)) {
+                                      weapon_x + spr_width/2, weapon_y + spr_height/2))
+				&& mouse_y > y - 369 && mouse_y < y + 446 {
                     hover_gem_index = i;
                 }
                 
@@ -281,6 +286,7 @@ else if button_select == 1{
             }
         }
     }
+    gpu_set_scissor(_prev_scissor)
     
     // 绘制悬停提示
     if (hover_gem_index != -1) {

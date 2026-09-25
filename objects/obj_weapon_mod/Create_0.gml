@@ -57,6 +57,10 @@ mod_step_enter_var       = 0    // "mod" = 间隔帧数；"wait" = 还要等几�
 mod_step_enter_arr       = []   // 数组，开火窗口表（负数 = 从一轮末尾倒数）
 mod_step_enter_index     = -1   // 【只读】命中的窗口下标；不是窗口 = -1
 
+// 倒计时 + 每帧透明度变化（基础属性，所有 mod 对象都有）
+mod_countdown = 0    // 倒计时（帧）：> 0 时每帧 -1
+mod_alpha_add = 0    // 每帧加到 image_alpha 上的量（负数 = 渐隐）；只在倒计时 > 0 时加
+
 // 创建时加入该武器的实例容器，并执行该武器虚拟机里的创建块
 if (weapon_id != "" && variable_global_exists("mod_weapon_vms") && ds_map_exists(global.mod_weapon_vms, weapon_id)) {
 	var _vm = global.mod_weapon_vms[? weapon_id];

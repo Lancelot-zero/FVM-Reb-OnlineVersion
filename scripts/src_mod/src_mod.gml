@@ -2019,3 +2019,19 @@ function src_mod_reload_one(_key) {
 	return "[reloadmod] 没找到 mod: " + _key;
 }
 
+
+
+/// @function mod_base_tick(_inst)
+/// @desc 所有 mod 对象通用的"基础属性"推进：**倒计时 + 每帧透明度变化**
+///       倒计时 > 0 时：mod_countdown -= 1，image_alpha += mod_alpha_add
+///       两个字段的默认值在各自对象的 Create 里（mod_countdown = 0 / mod_alpha_add = 0）
+///       各对象 Step 里调一次（位置：暂停 / 冻结判断之后）—— 逻辑只有这一份
+function mod_base_tick(_inst) {
+	if (!instance_exists(_inst)) return;
+	if (!variable_instance_exists(_inst, "mod_countdown")) return;
+	if (!variable_instance_exists(_inst, "mod_alpha_add")) return;
+	if (_inst.mod_countdown > 0) {
+		_inst.mod_countdown -= 1;
+		_inst.image_alpha += _inst.mod_alpha_add;
+	}
+}

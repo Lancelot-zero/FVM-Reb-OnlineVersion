@@ -784,7 +784,35 @@ _VM_BATTLE_START {
 <td>int</td>
 <td>按<strong>游戏正规种植规则</strong>判断该格能不能种这张卡——地形、障碍、水域/莲叶、护盾层、底座卡、替换开关全都算进去（就是玩家手牌点下去时走的那套），1=能 0=不能</td>
 </tr>
+<tr>
+<td><code>VM_GetInfo(类别, id, 字段1[, 字段2, ...])</code></td>
+<td>任意</td>
+<td><strong>变长（3~16 个参数）</strong>：按<strong>注册表</strong>逐级查一个对象的信息。类别只有 <code>&quot;card&quot;</code> / <code>&quot;enemy&quot;</code> / <code>&quot;weapon&quot;</code> / <code>&quot;gem&quot;</code>；<strong>字符串参数=取字段，数字参数=取下标</strong>（注册表里按编号存的表，写数字就行，例：<code>&quot;shapes&quot;,0,&quot;upgrades&quot;,3,&quot;atk&quot;</code>）；查到的是<strong>整块数据</strong>（数组 / 一整个表）时返回 <code>undefined</code>，要求你继续往下写，只放行数字和字符串。例：<code>VM_GetInfo(&quot;card&quot;,&quot;small_fire&quot;,&quot;shapes&quot;,0,&quot;upgrades&quot;,3,&quot;atk&quot;)</code>。<code>card</code> 读的是<strong>卡池里那份卡数据</strong>（不是存档里你自己那张）</td>
+</tr>
+<tr>
+<td><code>VM_CatInRow(行号)</code></td>
+<td>int</td>
+<td>该行第一只猫（<code>obj_cat</code>，海底图里的螃蟹是同一个对象）的实例 id；没有返回 <code>-1</code></td>
+</tr>
+<tr>
+<td><code>VM_MapObj(列, 行[, &quot;名字&quot;])</code></td>
+<td>任意</td>
+<td><strong>变长（2~16 个参数）</strong>：这一格有没有<strong>地图物品</strong>，读每帧重建的格子快照。名字：<code>obstacle</code> 障碍 / <code>mucus</code> 黏液 / <code>lava</code> 岩浆 / <code>seawater</code> 海水 / <code>barrier</code> 屏障 / <code>fog</code> 雾 / <code>cloud</code> 云 / <code>wind_tunnel</code> 风道；<code>&quot;all&quot;</code> 或 <code>&quot;&quot;</code>=任意一种；<code>&quot;list&quot;</code>=返回逗号分隔名字串；<strong>列或行传 <code>-1</code> = 该方向不限</strong>；名字不认识返回 <code>-1</code>；战斗外这张快照是空的，返回 <code>0</code></td>
+</tr>
+<tr>
+<td><code>VM_GetInstanceCount(&quot;obj_xxxx&quot;)</code></td>
+<td>int</td>
+<td>某个对象类的实例个数。<strong>类名就是游戏里的 object 名（<code>obj_</code> 开头要写全）</strong>；名字不存在 / 不是对象 → <code>-1</code></td>
+</tr>
+<tr>
+<td><code>VM_GetInstanceAt(&quot;obj_xxxx&quot;, k)</code></td>
+<td>int</td>
+<td>某个对象类第 k 个实例的 id（k 从 0 起）；越界 / 名字不存在 → <code>-1</code></td>
+</tr>
 </tbody></table>
+<blockquote>
+<p>地形<strong>类型</strong>（<code>normal</code> / <code>water</code> / <code>obstacle</code>）用 <code>VM_GetTerrain(列,行)</code>；岩浆、海水、雾、云、风道、屏障、黏液、障碍这些<strong>摆上去的东西</strong>用 <code>VM_MapObj</code> 查。</p>
+</blockquote>
 <h3>BOSS 状态（BOSS_STATE）</h3>
 <p><code>_VM_BOSS_STATE_CHANGE</code> 事件及 <code>VM_GetLastBossOldState()</code> / <code>VM_GetLastBossNewState()</code> 返回的状态数值即下表枚举（从 0 开始递增）：</p>
 <table>
@@ -1415,7 +1443,7 @@ _VM_BATTLE_START {
 <tbody><tr>
 <td><code>VM_BulletScreenAdd(贴图,总帧数,打击范围,缩放,动画速度,x,y,vx,vy,伤害,伤害计数,存活帧数,子弹类型,销毁对象,mod名字)</code></td>
 <td>15个</td>
-<td>往屏幕弹幕管理器塞一颗子弹。管理器 <code>obj_Bullet_Screen_Management</code> 由 <code>obj_battle</code> 开局创建，全场只此一个实例，所有弹幕统一迭代与绘制、<strong>不占实例</strong>。<code>打击范围</code>=格子半径，0=只算本格；<code>伤害计数</code>=最多命中几个，<code>-1</code>=不限次数（此时范围内所有可命中敌人都结算）；<code>存活帧数</code>=倒计时，<code>&lt;=0</code>=不自动消失；<code>子弹类型</code>同 <code>can_hit</code>（all/normal/air/air_only/pierce/track/throw/rotate/d_fruit）；<code>销毁对象</code>非空则在该子弹消失处创建它，是 mod 对象时用 <code>mod名字</code> 指定 <code>mod_type</code>。出界（x&lt;0 / x&gt;2200 / y&lt;0 / y&gt;1200）静默删除、不生成销毁对象</td>
+<td>往屏幕弹幕管理器塞一颗子弹。管理器开局自动创建，全场只此一个，所有弹幕统一迭代与绘制、<strong>不占实例</strong>。<code>打击范围</code>=格子半径，0=只算本格；<code>伤害计数</code>=最多命中几个，<code>-1</code>=不限次数（此时范围内所有可命中敌人都结算）；<code>存活帧数</code>=倒计时，<code>&lt;=0</code>=不自动消失；<code>子弹类型</code>同 <code>can_hit</code>（all/normal/air/air_only/pierce/track/throw/rotate/d_fruit）；<code>销毁对象</code>非空则在该子弹消失处创建它，是 mod 对象时用 <code>mod名字</code> 指定 <code>mod_type</code>。出界（x&lt;0 / x&gt;2200 / y&lt;0 / y&gt;1200）静默删除、不生成销毁对象</td>
 </tr>
 <tr>
 <td><code>VM_BulletScreenAdd_Ex(贴图,总帧数,打击范围,缩放,动画速度,x,y,vx,vy,伤害,伤害计数,存活帧数,子弹类型,销毁对象,mod名字,伤害类型,标志数值,角度)</code></td>
@@ -1441,7 +1469,7 @@ _VM_BATTLE_START {
 <tbody><tr>
 <td><code>VM_HomingBulletAdd(贴图,缩放,x,y,速度,伤害,可命中类型,销毁对象,mod名字,销毁贴图,模式)</code></td>
 <td>11个</td>
-<td>往<strong>追踪弹管理器</strong> <code>obj_Homing_Bullet_Management</code> 塞一颗会拐弯的子弹（管理器不在时会自动创建，所以 <code>obj_battle</code> 不用改）。和 <code>VM_BulletScreenAdd</code> 的区别是<strong>每帧都改追目标</strong>（同原版糖葫芦 / 章鱼烧：出现更靠左的就换，可以来回换），然后按 <code>point_direction</code> 转向目标并重写 <code>vx/vy</code>；<code>速度</code>是每帧像素的<strong>标量</strong>。<code>模式</code>：<code>0</code>=只追全场最左的可命中敌人（同原版糖葫芦）；<code>1</code>=先找<strong>本行正前方 150 像素内血最多</strong>的敌人，找不到再退回全场最左（同原版章鱼烧 / 月神）。<strong>所有子弹都自转</strong>（每帧 6 度，和原版糖葫芦 / 章鱼烧的 <code>image_angle = -timer*6</code> 一致），朝向只用于飞行、不影响画面。命中：走敌人自己的受击事件（同原版 <code>event_user(0)</code>：闪白 / 音效 / 护盾，<code>normal</code> 有盾只打盾），而且<strong>只判定它当前锁定的那个目标</strong> —— 两者像素距离上下 85 / 左右 90 以内就算撞上，立刻结算并消失（不扫网格、不穿透）。<code>销毁对象</code>生成在<strong>命中点</strong>（还有 <code>mod名字</code> / <code>销毁贴图</code> 两个可选参数，用法同 <code>VM_BulletScreenAdd</code>）。固定项：动画速度 1、帧数取贴图自身、不自动消失</td>
+<td>往<strong>追踪弹管理器</strong>塞一颗会拐弯的子弹（管理器不在时会自动创建，不用改地图）。和 <code>VM_BulletScreenAdd</code> 的区别是<strong>每帧都改追目标</strong>（同原版糖葫芦 / 章鱼烧：出现更靠左的就换，可以来回换），然后朝目标转向并重写 <code>vx/vy</code>；<code>速度</code>是每帧像素的<strong>标量</strong>。<code>模式</code>：<code>0</code>=只追全场最左的可命中敌人（同原版糖葫芦）；<code>1</code>=先找<strong>本行正前方 150 像素内血最多</strong>的敌人，找不到再退回全场最左（同原版章鱼烧 / 月神）。<strong>所有子弹都自转</strong>（每帧 6 度，和原版糖葫芦 / 章鱼烧一样），朝向只用于飞行、不影响画面。命中：走敌人自己的受击流程（闪白 / 音效 / 护盾都对，<code>normal</code> 有盾只打盾），而且<strong>只判定它当前锁定的那个目标</strong> —— 两者像素距离上下 85 / 左右 90 以内就算撞上，立刻结算并消失（不扫网格、不穿透）。<code>销毁对象</code>生成在<strong>命中点</strong>（还有 <code>mod名字</code> / <code>销毁贴图</code> 两个可选参数，用法同 <code>VM_BulletScreenAdd</code>）。固定项：动画速度 1、帧数取贴图自身、不自动消失</td>
 </tr>
 <tr>
 <td><code>VM_GetHomingTarget(&quot;类型&quot;)</code></td>
@@ -1462,12 +1490,12 @@ _VM_BATTLE_START {
 <tbody><tr>
 <td><code>VM_DamageEnemy(敌人id, 伤害, 伤害类型)</code></td>
 <td>3个</td>
-<td>给敌人造成伤害：走敌人自己的受击事件 <code>event_user(0)</code>，所以<strong>闪白、受击音效、护盾判定全都对</strong>（含 <code>obj_butterfly_mouse</code> / <code>obj_charge_spring_mouse</code> / <code>obj_landlady_mouse</code> / <code>obj_oyster_mouse</code> 这 4 个自己重写了受击事件的），比直接改 <code>hp</code> 正确。<code>伤害类型</code>：<code>normal</code>=有盾只打盾，<code>pierce</code>=盾血一起掉，其它（如 <code>throw</code>）=无视护盾</td>
+<td>给敌人造成伤害：走敌人自己的受击流程，所以<strong>闪白、受击音效、护盾判定全都对</strong>（有几个原版敌人自己重写过受击表现，也照样对），比直接改 <code>hp</code> 正确。<code>伤害类型</code>：<code>normal</code>=有盾只打盾，<code>pierce</code>=盾血一起掉，其它（如 <code>throw</code>）=无视护盾</td>
 </tr>
 <tr>
 <td><code>VM_DamageEnemyAsh(敌人id, 伤害, 伤害类型)</code></td>
 <td>3个</td>
-<td>灰烬伤害：伤害接得下就按 <code>VM_DamageEnemy</code> 结算；接不下（<code>hp &lt;= 伤害</code>）就一击必杀、原地换成 <code>obj_mouse_ash_death</code>（<strong>不看护盾</strong>，照抄原版大力神）。若该敌人 <code>special_ash = true</code>，灰烬会继承它的贴图和当前帧</td>
+<td>灰烬伤害：伤害接得下就按 <code>VM_DamageEnemy</code> 结算；接不下（<code>hp &lt;= 伤害</code>）就一击必杀、敌人当场变成&quot;烧成灰&quot;的表现（<strong>不看护盾</strong>，和原版大力神一样）。本来就带灰烬表现的敌人，连它的贴图和当前帧一起继承</td>
 </tr>
 </tbody></table>
 <h3>永久贴图与别名</h3>
@@ -1558,8 +1586,8 @@ _VM_BATTLE_START {
 </tr>
 </tbody></table>
 <blockquote>
-<p>⚠️ 只对<strong>真正的 GML 数组</strong>有效。原版子弹身上像 <code>hitted_enemy</code> 那种是 <strong>ds_list</strong>，这套读不到。
-写操作内部会自动写回实例（GML 数组是值语义）。</p>
+<p>⚠️ 只对<strong>数组</strong>有效（<code>VM_InstArray*</code> 自己创建/写进去的那些）。原版子弹身上像 <code>hitted_enemy</code> 那种&quot;列表&quot;不是数组，这套读不到。
+写操作会自动同步回实例，不用另外写一遍。</p>
 </blockquote>
 <h3>表格查询（全局二维表）</h3>
 <p>引擎会把一些<strong>按格子排的全局变量表</strong>维护好（例如子弹的三张表 <code>bullet_array_special</code> / <code>bullet_array_normal</code> / <code>bullet_array_mod</code>），
@@ -1598,7 +1626,7 @@ _VM_BATTLE_START {
 （表不在时 n = -1，循环天然不跑）。<code>VM_CellContains</code> 正常返回 1 / 0。
 （按数组名查一维数组请用 <code>VM_ArrayContains(&quot;数组名&quot;,值)</code>，它返回下标，那套归上面的「数组」小节。）</p>
 <blockquote>
-<p>子弹表由 <code>obj_battle</code> 每帧重建，<strong>比敌人表更严格</strong>：实例的 x/y 必须落在格子长宽<strong>中间 50%</strong> 的内矩形里才收录
+<p>子弹表<strong>每帧重建</strong>，<strong>比敌人表更严格</strong>：实例的 x/y 必须落在格子长宽<strong>中间 50%</strong> 的内矩形里才收录
 （四周各留 25% 的三不管带），免得贴着格边飞的子弹被相邻两格的卡片同时触发。</p>
 </blockquote>
 <h3>按名字调用函数</h3>

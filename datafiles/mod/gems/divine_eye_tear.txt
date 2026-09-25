@@ -18,18 +18,10 @@ _OBJECT_CFG {
         VM_LoadSpritePerm_Ex("../effects/tex/spr_master_shield_effect_2_0.png", 18, 100, 102)
         VM_AliasSpritePerm("spr_master_shield_effect_2", "../effects/tex/spr_master_shield_effect_2_0.png")
     }
-}
-
-_OBJECT_CREATE {
-    self = VM_GetCurCard()
-    // 战场贴图 45×45 按 1.8 放大；背包图标是 82×82 那张
-    VM_SetProp(self, "sprite_index", "spr_divine_forbidden_gem")
-    VM_SetProp(self, "image_xscale", 1.8)
-    VM_SetProp(self, "image_yscale", 1.8)
-    VM_SetProp(self, "t", 0)
-    VM_SetProp(self, "fx", 0)
-    VM_SetProp(self, "cooldown_timer", 150)   // 预留属性：给图标显示冷却用
-
+    // tables live in _OBJECT_CFG, NOT _OBJECT_CREATE:
+    // reloadmod clears this VM's named arrays but only re-runs _VM_CONST_INIT + _OBJECT_CFG,
+    // never _OBJECT_CREATE -- if the tables were built in Create they come back empty after a
+    // reload and VM_ArrayGet returns 0 (bless spams flames every frame, tear/holy deal 0 damage).
     VM_ArrayClear("dvt_atk")
     VM_ArrayADD("dvt_atk", 8)
     VM_ArrayADD("dvt_atk", 16)
@@ -47,7 +39,6 @@ _OBJECT_CREATE {
     VM_ArrayADD("dvt_atk", 180)
     VM_ArrayADD("dvt_atk", 200)
     VM_ArrayADD("dvt_atk", 220)
-
     VM_ArrayClear("dvt_rate")
     VM_ArrayADD("dvt_rate", 0.02)
     VM_ArrayADD("dvt_rate", 0.03)
@@ -65,7 +56,6 @@ _OBJECT_CREATE {
     VM_ArrayADD("dvt_rate", 0.23)
     VM_ArrayADD("dvt_rate", 0.24)
     VM_ArrayADD("dvt_rate", 0.26)
-
     VM_ArrayClear("dvt_max")
     VM_ArrayADD("dvt_max", 150)
     VM_ArrayADD("dvt_max", 250)
@@ -83,6 +73,20 @@ _OBJECT_CREATE {
     VM_ArrayADD("dvt_max", 2500)
     VM_ArrayADD("dvt_max", 2800)
     VM_ArrayADD("dvt_max", 3200)
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+    // 战场贴图 45×45 按 1.8 放大；背包图标是 82×82 那张
+    VM_SetProp(self, "sprite_index", "spr_divine_forbidden_gem")
+    VM_SetProp(self, "image_xscale", 1.8)
+    VM_SetProp(self, "image_yscale", 1.8)
+    VM_SetProp(self, "t", 0)
+    VM_SetProp(self, "fx", 0)
+    VM_SetProp(self, "cooldown_timer", 150)   // 预留属性：给图标显示冷却用
+
+
+
 }
 
 _OBJECT_STEP {

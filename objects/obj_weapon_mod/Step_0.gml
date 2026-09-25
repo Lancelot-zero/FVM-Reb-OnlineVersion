@@ -2,6 +2,9 @@ if global.is_paused {
 	exit
 }
 
+// ── 基础属性：倒计时 + 每帧透明度变化（所有 mod 对象通用，实现在 src_mod.gml）──
+mod_base_tick(id);
+
 // 跟随放置它的玩家
 if (instance_exists(parent_player)) {
 	depth = parent_player.depth - 1

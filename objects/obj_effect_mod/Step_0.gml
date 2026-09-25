@@ -2,6 +2,9 @@ if global.is_paused {
   exit
 }
 
+// ── 基础属性：倒计时 + 每帧透明度变化（所有 mod 对象通用，实现在 src_mod.gml）──
+mod_base_tick(id);
+
 // ══════════════════════════════════════════════════════════════════════
 // 跟随目标：mod_follow_instance 有设且实例还在，就把 x/y 贴到它身上
 // 写在最前面，让后面的 _OBJECT_CREATE / _OBJECT_STEP 也读到跟随后的位置

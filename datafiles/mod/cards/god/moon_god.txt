@@ -1,0 +1,169 @@
+// 至尊月神（金卡 · 月神·狄安娜最终形态）：连发追踪弹，首发是超级弹
+// 按 mod 分支 obj_moon_god（shape 3）移植。
+//
+//   Create：attack_anim = 11、idle_anim = 7、flash_speed = 5、target_type = "track"
+//   Step  ：场上有能打的目标就开打，一轮里
+//             at == cycle - 8*flash_speed     → 首发超级弹（2*atk）
+//             at == cycle - 7..1*flash_speed  → 每帧一发普通弹，共 7 发
+//           attack_anim 之后的窗口内 state = 1（和原版一样）。
+//
+//   子弹  ：复用【章鱼烧】的 obj_takoyaki_bullet —— 两段式：
+//             第一阶段它只打「自己（发射卡）本行、正前方 150px 内」的敌人；
+//             前方没可命中敌人时，它把这颗子弹转交给追踪弹管理器
+//             obj_Homing_Bullet_Management，之后按「最左可命中敌人」继续追。
+//           所以卡片这边只要给贴图 / 伤害 / 速度 / 可命中类型 / 行 和 banding_card_obj。
+//           （原版章鱼烧自己那颗子弹也走同一条路，我们只是复用。）
+//
+//   叠加增伤：原版 final_atk = atk * min(0.95 + 场上月神数 * 0.05, 1.45)。
+//             但原代码 Step 每帧开头会把 final_atk 重置回 atk，实际只有同帧生成的
+//             超级弹吃到加成、后面 7 发普通弹吃不到（原版漏接）。
+//             这里按【设计意图】让整轮 8 发都吃加成。
+//
+//   贴图：本体 18 帧 原点 (57,112)；普通弹 / 超级弹都是 4 帧 原点 (49,49)。
+
+_OBJECT_CFG {
+    // 统一写内部 spr 名：内置有就直接用；内置没有才把本地图挂到这个名上。
+    if (VM_SpriteExists("spr_moon_god_3") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_moon_god_3_0.png", 18, 57, 112)
+        VM_AliasSpritePerm("spr_moon_god_3", "tex/spr_moon_god_3_0.png")
+    }
+
+    if (VM_SpriteExists("spr_moon_god_bullet_3") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_moon_god_bullet_3_0.png", 4, 49, 49)
+        VM_AliasSpritePerm("spr_moon_god_bullet_3", "tex/spr_moon_god_bullet_3_0.png")
+    }
+
+    if (VM_SpriteExists("spr_moon_god_bullet_3_s") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_moon_god_bullet_3_s_0.png", 4, 49, 49)
+        VM_AliasSpritePerm("spr_moon_god_bullet_3_s", "tex/spr_moon_god_bullet_3_s_0.png")
+    }
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+
+    VM_SetProp(self, "sprite_index", "spr_moon_god_3")
+    VM_SetProp(self, "idle_anim", 7)
+    VM_SetProp(self, "attack_anim", 11)
+    VM_SetProp(self, "flash_speed", 5)
+    VM_SetProp(self, "plant_type", "normal")
+
+    VM_SetProp(self, "attack_timer", 0)
+    VM_SetProp(self, "state", 0)
+
+    // 一轮 210 帧里只有 10 帧真有事做：开攻击动画、首发超级弹、7 发普通弹、归零收招。
+    // 用 "norm" + 窗口表，其余 200 帧不进 VM。
+    // mod_tick_cycle 由 obj_card_mod 每帧 +1（到 cycle 归零），数值逐帧等于原来的 attack_timer。
+    VM_InstArrayClear(self, "mod_step_enter_arr")
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 1 - 11 * 5)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 0 - 8 * 5)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 0 - 7 * 5)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 0 - 6 * 5)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 0 - 5 * 5)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 0 - 4 * 5)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 0 - 3 * 5)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 0 - 2 * 5)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 0 - 1 * 5)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 0)
+    VM_SetProp(self, "mod_step_enter_condition", "norm")
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+
+    if (VM_GetProp(self, "is_frozen") == 1) {
+        exit
+    }
+
+    fs = VM_GetProp(self, "flash_speed")
+    cfs = fs
+    if (VM_GetProp(self, "is_slowdown") == 1) {
+        cfs = cfs * 2
+    }
+
+    at = VM_GetProp(self, "mod_tick_cycle")
+    cyc = VM_GetProp(self, "cycle")
+    st = 0
+    shot = 0
+    sup = 0
+
+    // 索敌（原版 target_type = "track" → 可打 normal / diver / air）。
+    // VM_GetHomingTarget 的缓存每帧只扫一次全场，逐个类型问很便宜。
+    tgt = VM_GetHomingTarget("normal")
+    if (tgt < 0) {
+        tgt = VM_GetHomingTarget("air")
+    }
+    if (tgt < 0) {
+        tgt = VM_GetHomingTarget("diver")
+    }
+
+    if (tgt >= 0) {
+        // 计时器交给引擎推进，这里只判断这一帧是待机还是攻击动画
+        if (at <= cyc - 11 * cfs) {
+            st = 0
+        } else {
+            st = 1
+        }
+
+        if (at == cyc - 8 * fs) {
+            sup = 1
+        }
+        // 普通弹：原版就是 7 个离散时刻，不能写成范围（那样会变成每帧一发）
+        if (at == cyc - 7 * fs) {
+            shot = 1
+        }
+        if (at == cyc - 6 * fs) {
+            shot = 1
+        }
+        if (at == cyc - 5 * fs) {
+            shot = 1
+        }
+        if (at == cyc - 4 * fs) {
+            shot = 1
+        }
+        if (at == cyc - 3 * fs) {
+            shot = 1
+        }
+        if (at == cyc - 2 * fs) {
+            shot = 1
+        }
+        if (at == cyc - 1 * fs) {
+            shot = 1
+        }
+    } else {
+        st = 0
+    }
+
+    fire = 0
+    if (shot == 1) {
+        fire = 1
+    }
+    if (sup == 1) {
+        fire = 1
+    }
+
+    if (fire == 1) {
+        // 场上月神越多伤害越高：0.95 + 数量 * 0.05，上限 1.45
+        n = VM_GetInstancesInRange("mg_all", 0, 99, 0, 99, "card", "moon_god")
+        boost = 0.95 + n * 0.05
+        if (boost > 1.45) {
+            boost = 1.45
+        }
+
+        atk = VM_GetProp(self, "atk")
+        bx = VM_GetProp(self, "x")
+        by = VM_GetProp(self, "y") - 55
+        r = VM_GetProp(self, "grid_row")
+
+        if (shot == 1) {
+            // 追踪弹统一走弹幕管理器（模式 1 = 先打发射卡前方，再退回全场最左）
+            VM_HomingBulletAdd("spr_moon_god_bullet_3", 1.5, bx, by, 10, atk * boost, "track", "", "", "", 1)
+        }
+
+        if (sup == 1) {
+            VM_HomingBulletAdd("spr_moon_god_bullet_3_s", 1.5, bx, by, 10, 2 * atk * boost, "track", "", "", "", 1)
+        }
+    }
+
+    VM_SetProp(self, "state", st)
+}
