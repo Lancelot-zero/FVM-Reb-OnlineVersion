@@ -31,6 +31,12 @@ first_produce_delay = 0
 flame_produce = 0
 awake_buff_timer = 0
 
+// 弹幕联动：卡片把 bullet_charge_self 置 1 时，经过自己的子弹打出的伤害会累计到这里
+// bullet_pass_count 是穿过本卡的子弹次数（穿透弹不算），两者都由
+// obj_Bullet_Screen_Management 每帧写，卡片自己读来用；初值 0，不写会报未赋值变量
+bullet_charge_dmg = 0
+bullet_pass_count = 0
+
 // ========== 位置信息 ==========
 grid_col = -1
 grid_row = -1

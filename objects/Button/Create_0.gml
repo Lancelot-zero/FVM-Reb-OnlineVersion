@@ -195,6 +195,7 @@ function on_step() {
                 if (!is_undefined(_s.on_click)) _s.on_click();
                 global._VM_last_clicked_button = real(self.id);
                 if (buffer_exists(global._VM_BUTTON_CLICKED)) VM_Execute(global.__vm, global._VM_BUTTON_CLICKED, "_VM_BUTTON_CLICKED");
+                vm_hook_run("_VM_BUTTON_CLICKED");   // mod 侧：同一时机，各自查块
             }
         }
     }

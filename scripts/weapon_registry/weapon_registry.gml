@@ -65,11 +65,13 @@ function equip_gem(gem_id){
 	var gem_level = get_gem_level(gem_id)
 	var slot = gem_data.slot
 	var slot_gem = []
+	// 每把武器能戴几颗宝石：mod 模式 4 颗，普通模式 3 颗（原版）
+	var _cap = variable_global_exists("mod_enabled") && global.mod_enabled ? 4 : 3;
 	if slot == "main_weapon"{
 		if get_gem_index(gem_id) == -1{
 			slot_gem = global.save_data.equipped_items.main_weapon.gems
 			//show_debug_message(slot_gem)
-			if array_length(slot_gem) < 3{
+			if array_length(slot_gem) < _cap{
 				slot_gem[array_length(slot_gem)] = gem_id
 			}
 			//show_debug_message(slot_gem)
@@ -79,7 +81,7 @@ function equip_gem(gem_id){
 		if get_gem_index(gem_id) == -1{
 			slot_gem = global.save_data.equipped_items.secondary_weapon.gems
 			//show_debug_message(slot_gem)
-			if array_length(slot_gem) < 3{
+			if array_length(slot_gem) < _cap{
 				slot_gem[array_length(slot_gem)] = gem_id
 			}
 			//show_debug_message(slot_gem)
@@ -89,7 +91,7 @@ function equip_gem(gem_id){
 		if get_gem_index(gem_id) == -1{
 			slot_gem = global.save_data.equipped_items.super_weapon.gems
 			//show_debug_message(slot_gem)
-			if array_length(slot_gem) < 3{
+			if array_length(slot_gem) < _cap{
 				slot_gem[array_length(slot_gem)] = gem_id
 			}
 			//show_debug_message(slot_gem)

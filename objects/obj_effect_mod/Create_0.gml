@@ -8,6 +8,33 @@ _mod_initialized = false;
 _mod_vm = undefined;
 image_speed = 0;
 
+// ══════════════════════════════════════════════════════════════════════════
+// 进 VM 的入口条件（可选；不写 = 每帧进）
+//   mod_step_enter_condition
+//     "" / 认不出    每帧进（默认）
+//     "mod"          按全场帧号对齐：battle_time % mod_step_enter_var == 0
+//     "wait"         倒数：mod_step_enter_var 每帧 -1，减到 <= 0 进
+//                    ⚠️ 进完之后要把 var 设回正数，否则此后每帧都进
+//   mod_step_enter_var   "mod" = 间隔帧数；"wait" = 还要等几帧
+// ⚠️ 特效没有 hp、也不跟网格走（没有 grid_col/grid_row），
+//    所以 hp_change、cell、索敌那几类条件这里都没有
+// ══════════════════════════════════════════════════════════════════════════
+mod_step_enter_condition = ""   // "" / "mod" / "wait"
+mod_step_enter_var       = 0    // "mod" = 间隔帧数；"wait" = 还要等几帧
+
+// 偏移：每帧 Step 结束时把这两个量加到 x/y 上；0 = 不动
+// mod 特效脚本用 VM_SetProp(self, "mod_prestep_dx", 值) 改
+// ⚠️ 和 obj_weapon_mod 不同：武器每帧会按 parent_player 重置 x/y，所以那边是「固定偏移」；
+//    特效的 x/y 没人重置，每帧加一次 = 匀速移动（dx/dy 就是每帧位移量）
+//    —— 但设了 mod_follow_instance 之后 x/y 每帧会被跟随重置，这两个量又变回「固定偏移」
+mod_prestep_dx = 0
+mod_prestep_dy = 0
+
+// 跟随目标：设成一个实例（VM 给的实例 id 也能直接用），本特效的 x/y 每帧贴到它身上
+// undefined / 目标已销毁 = 不跟随（保持自己原来的 x/y）
+// mod 特效脚本用 VM_SetProp(self, "mod_follow_instance", 目标) 改
+mod_follow_instance = undefined
+
 // 如果创建前已经通过 global._mod_pending_effect_id 指定类型，则立即初始化
 if (mod_type != "" && variable_global_exists("mod_effect_vms") && ds_map_exists(global.mod_effect_vms, mod_type)) {
   _mod_vm = global.mod_effect_vms[? mod_type];

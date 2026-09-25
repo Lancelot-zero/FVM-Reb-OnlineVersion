@@ -3,11 +3,14 @@ if global.is_paused{
 	exit
 }
 
-if (buffer_exists(global._VM_BATTLE_START) && !global._VM_battle_start_done) {
-	VM_Execute(global.__vm, global._VM_BATTLE_START, "_VM_BATTLE_START");
+if (!global._VM_battle_start_done) {
 	global._VM_battle_start_done = true;
 	global._VM_prev_wave         = -1;
     global._VM_prev_subwave      = -1;
+	if (buffer_exists(global._VM_BATTLE_START)) {
+		VM_Execute(global.__vm, global._VM_BATTLE_START, "_VM_BATTLE_START");
+	}
+	vm_hook_run("_VM_BATTLE_START");   // mod 侧：同一时机，各自查块
 }
 
 // 客户端跳过，服务端开启日志

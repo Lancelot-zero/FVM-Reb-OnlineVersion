@@ -224,7 +224,7 @@ hr { border:none; border-top:1px solid #e5e7eb; margin:2em 0; }
 </tr>
 <tr>
 <td><code>_OBJECT_STEP</code></td>
-<td>每帧</td>
+<td>每帧（会被 <code>mod_step_enter_condition</code> 挡住，见各对象文档）</td>
 </tr>
 <tr>
 <td><code>_OBJECT_DRAW</code></td>
@@ -234,19 +234,43 @@ hr { border:none; border-top:1px solid #e5e7eb; margin:2em 0; }
 <td><code>_OBJECT_DESTROY</code></td>
 <td>实例销毁时</td>
 </tr>
+<tr>
+<td><code>_OBJECT_MOUSE_ENTER</code></td>
+<td>鼠标移入本实例</td>
+</tr>
+<tr>
+<td><code>_OBJECT_MOUSE_LEAVE</code></td>
+<td>鼠标移出本实例</td>
+</tr>
+<tr>
+<td><code>_OBJECT_CLICK</code></td>
+<td>鼠标左键在本实例上按下</td>
+</tr>
 </tbody></table>
 <p>各对象实际支持：</p>
-<pre><code class="language-text">obj_card_mod     CREATE / STEP / DRAW / DESTROY
-obj_weapon_mod   CREATE / STEP / DRAW
-obj_bullet_mod   CREATE / STEP / DRAW / DESTROY
-obj_effect_mod   CREATE / STEP / DRAW / DESTROY
-obj_enemy_mod    CREATE / STEP / DRAW / DESTROY
-obj_gem_mod      CREATE / STEP / DRAW（另外还有鼠标事件，见 mod宝石.md）
+<pre><code class="language-text">obj_card_mod     CREATE / STEP / DRAW / DESTROY / 移入 / 移出 / 点击
+obj_weapon_mod   CREATE / STEP / DRAW           / 移入 / 移出 / 点击
+obj_bullet_mod   CREATE / STEP / DRAW / DESTROY / 移入 / 移出 / 点击
+obj_effect_mod   CREATE / STEP / DRAW / DESTROY / 移入 / 移出 / 点击
+obj_enemy_mod    CREATE / STEP / DRAW / DESTROY / 移入 / 移出 / 点击
+obj_gem_mod      CREATE / STEP / DRAW           / 移入 / 移出 / 点击
 </code></pre>
 <ul>
-<li>写块之前先确认对应对象支持它 —— 写了没人执行的块等于没写</li>
-<li>取当前实例：<code>self = VM_GetCurCard()</code>（名字叫 Card，实际指&quot;当前对象实例&quot;）</li>
-<li>碰撞没有通用块（不存在 <code>_OBJECT_HIT</code>），要在 <code>_OBJECT_STEP</code> 里自己判</li>
+<li><p>鼠标三个块 <strong>6 个 mod 对象全都有</strong>；<code>_OBJECT_DESTROY</code> 只有武器和宝石没有（写了不会执行）</p>
+</li>
+<li><p>鼠标三个块是<strong>按实例</strong>判定的 —— 走 GameMaker 的实例鼠标事件，鼠标压在<strong>这个实例的贴图（碰撞掩码）<strong>上才算，
+所以</strong>没设 <code>sprite_index</code> 的实例收不到</strong>（子弹/特效尤其注意）</p>
+</li>
+<li><p>想判&quot;全场任意位置按了左键&quot;用 <code>_VM_MOUSE_LEFT</code> 事件块（地图脚本），不要用 <code>_OBJECT_CLICK</code></p>
+</li>
+<li><p>这三个块执行完都会 <code>event_inherited()</code>，所以宝石那种核心自己也处理鼠标的对象，核心逻辑照常跑</p>
+</li>
+<li><p>写块之前先确认对应对象支持它 —— 写了没人执行的块等于没写</p>
+</li>
+<li><p>取当前实例：<code>self = VM_GetCurCard()</code>（名字叫 Card，实际指&quot;当前对象实例&quot;）</p>
+</li>
+<li><p>碰撞没有通用块（不存在 <code>_OBJECT_HIT</code>），要在 <code>_OBJECT_STEP</code> 里自己判</p>
+</li>
 </ul>
 <h3>实例字段（GML 内置，读写都用 VM_GetProp / VM_SetProp）</h3>
 <pre><code class="language-gml">x = VM_GetProp(self, &quot;x&quot;)          // 读

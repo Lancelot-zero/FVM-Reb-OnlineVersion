@@ -98,6 +98,9 @@ static const std::vector<const char*> BLOCK_NAMES = {
     "_OBJECT_STEP",
     "_OBJECT_DRAW",
     "_OBJECT_DESTROY",
+    "_OBJECT_MOUSE_ENTER",
+    "_OBJECT_MOUSE_LEAVE",
+    "_OBJECT_CLICK",
 };
 
 // ============================================================

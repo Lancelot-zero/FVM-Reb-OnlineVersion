@@ -102,8 +102,11 @@ if (global.network.mode == "server" && is_boss && state != _state_prev) {
 }
 _state_prev = state;
 
-if (pre_hp>hp&&buffer_exists(global._VM_ENEMY_DAMAGED)) {	
+if (pre_hp>hp) {
 	global._VM_last_damaged_enemy = id;
-    VM_Execute(global.__vm, global._VM_ENEMY_DAMAGED, "_VM_ENEMY_DAMAGED");
+	if (buffer_exists(global._VM_ENEMY_DAMAGED)) {
+		VM_Execute(global.__vm, global._VM_ENEMY_DAMAGED, "_VM_ENEMY_DAMAGED");
+	}
+	vm_hook_run("_VM_ENEMY_DAMAGED");   // mod 侧：同一时机，各自查块
 }
 pre_hp = hp;

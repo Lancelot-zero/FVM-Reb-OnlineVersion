@@ -67,6 +67,10 @@ while (_i >= 0) {
     }
 	
     var _gone = false;
+    // 卡片要求立即销毁（bullet_destroy 为负）→ 置 true，交给第 6 步销毁流程。
+    // ⚠️ 必须声明在子弹循环的开头：卡片效果那段是条件进入的，
+    //    声明在里面的话"子弹不在中心带"这一帧会读到上一颗子弹残留的值。
+    var _kill_all = false;
 
     // 2. 出界：静默删除，不生成销毁对象（边界跟 obj_bullet_mod 一致）
     if (_b.x < 0 || _b.x > 2200 || _b.y < 0 || _b.y > 1200) {
@@ -141,14 +145,54 @@ while (_i >= 0) {
                         if (variable_instance_exists(_car, "bullet_flip_y") && _car.bullet_flip_y) _b.vy = -_b.vy;
                         // 旋转量也由卡片给（原版布丁是 +180）；不填就是 0，只反向不转
                         if (variable_instance_exists(_car, "bullet_angle_add")) _b.angle += _car.bullet_angle_add;
+
+                        // 缩放：乘法（默认 1 = 不变）
+                        if (variable_instance_exists(_car, "bullet_scale")) {
+                            var _sc = _car.bullet_scale;
+                            if (is_real(_sc) && _sc > 0) _b.scale = _b.scale * _sc;
+                        }
+
+                        // 穿透次数：加法。只在"正数 + 子弹不是穿透(-1)"时生效
+                        // （穿透弹 hits = -1 表示不限次数，加任何值都没有意义，直接忽略）
+                        if (variable_instance_exists(_car, "bullet_hits_add")) {
+                            var _ha = _car.bullet_hits_add;
+                            if (is_real(_ha) && _ha > 0 && _b.hits >= 0) _b.hits += _ha;
+                        }
+                    }
+
+                    // 销毁指令：0 = 不启用；负数 = 立即销毁；正数 = 只减穿透次数（减到 0 走自然销毁）
+                    if (variable_instance_exists(_car, "bullet_destroy")) {
+                        var _bd = _car.bullet_destroy;
+                        if (is_real(_bd) && _bd != 0) {
+                            if (_bd < 0) {
+                                _kill_all = true;
+                            } else if (_b.hits >= 0) {
+                                _b.hits -= _bd;
+                                if (_b.hits < 0) _b.hits = 0;
+                            }
+                        }
                     }
                     // ③ 消位（解冻后额外获得"能被点燃"的位）
                     _b.flag = _b.flag & (~_cf);
                     if (_thaw) _b.flag = _b.flag | 1;
+
+                    // ④ 结算"这张卡已生效过"之后才能做的事：放这里保证每颗子弹对每张卡只做一次
+                    //    （上面已经消过位，同一张卡不可能再匹配到这颗子弹）
+                    //    穿过计数：只要穿过就 +1，不看这块卡有没有写 bullet_charge_self；
+                    //    穿透弹也照算——每张卡只会记到一次，不会无限涨
+                    _car.bullet_pass_count += 1;
+                    if (variable_instance_exists(_car, "bullet_charge_self") && _car.bullet_charge_self) {
+                        _car.bullet_charge_dmg += _b.dmg;
+                    }
+
+                    if (_kill_all) break;         // 有卡片要求立即销毁：不用再看别的卡，出去走销毁流程
                     if (_b.flag <= 0) break;      // 没位可吃了，剩下的卡不用再看
                 }
             }
         }
+
+        // 卡片要求立即销毁（bullet_destroy 为负）→ 清空命中次数，交给第 6 步的销毁流程
+        if (_kill_all) _b.hits = 0;
 		
 		
 		

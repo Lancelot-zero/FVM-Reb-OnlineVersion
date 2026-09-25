@@ -150,8 +150,11 @@ if(global.network.mode!="offline"&&!ds_map_exists(global.network.map_instance_id
 }
 
 
-if (pre_hp>hp&&buffer_exists(global._VM_CARD_DAMAGED)) {	
+if (pre_hp>hp) {
 	global._VM_last_damaged_card = id;
-    VM_Execute(global.__vm, global._VM_CARD_DAMAGED, "_VM_CARD_DAMAGED");
+	if (buffer_exists(global._VM_CARD_DAMAGED)) {
+		VM_Execute(global.__vm, global._VM_CARD_DAMAGED, "_VM_CARD_DAMAGED");
+	}
+	vm_hook_run("_VM_CARD_DAMAGED");   // mod 侧：同一时机，各自查块
 }
 pre_hp = hp;

@@ -1,0 +1,352 @@
+{
+  "functions": [
+    {
+      "name": "VM_BulletScreenAdd",
+      "args": [
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any"
+      ],
+      "ret": "int",
+      "desc": "屏幕弹幕管理器：贴图,总帧数,打击范围,缩放,动画速度,x,y,vx,vy,伤害,伤害计数,存活帧数,子弹类型,销毁对象,mod名字"
+    },
+    {
+      "name": "VM_DrawSpriteExt",
+      "args": [
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any"
+      ],
+      "ret": "int",
+      "desc": "直接 draw_sprite_ext（贴图,子图,x,y,xscale,yscale,rot,alpha；固定 c_white），只能在 _OBJECT_DRAW 里用"
+    },
+    {
+      "name": "VM_RunStep",
+      "args": [
+        "int",
+        "int"
+      ],
+      "ret": "int",
+      "desc": "让实例额外跑 N 轮 Step（实例,轮数），一轮 = Begin Step + Step + End Step，做加速用"
+    },
+    {
+      "name": "VM_DestroyInstance",
+      "args": [
+        "int"
+      ],
+      "ret": "int",
+      "desc": "直接销毁一个实例（会触发它的 Destroy 事件）"
+    },
+    {
+      "name": "VM_GetCardProp",
+      "args": [
+        "string",
+        "string"
+      ],
+      "ret": "any",
+      "desc": "按属性名读一张卡的单值（返回类型取决于属性名）：存档类 shape/level/skill/max_level/max_shape，卡池类 plant_type/feature_type/target_card/cost/cooldown；失败返回 undefined"
+    },
+    {
+      "name": "VM_CanPlace",
+      "args": [
+        "string",
+        "int",
+        "int"
+      ],
+      "ret": "int",
+      "desc": "按游戏正规种植规则判断某格能不能种这张卡（地形/障碍/水域莲叶/护盾层/底座卡/替换开关全都算），1=能 0=不能"
+    },
+    {
+      "name": "VM_CallFunc",
+      "args": [
+        "string",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any"
+      ],
+      "minArgs": 1,
+      "maxArgs": -1,
+      "testCall": "VM_CallFunc(\"VM_GetFlame\")",
+      "desc": "按名字调用独立字典 global._VM_call_dict 里的函数（名字对编译器只是字符串，不校验）；第一个参数是函数名，后面是实参，最多 15 个"
+    },
+    {
+      "name": "VM_FuncExists",
+      "args": [
+        "string"
+      ],
+      "ret": "int",
+      "desc": "字典里有没有这个函数，1=有 0=没有（VM_CallFunc 的配套）"
+    },
+    {
+      "name": "VM_FuncDesc",
+      "args": [
+        "string"
+      ],
+      "ret": "string",
+      "desc": "返回字典里登记的该函数说明字符串，没有登记就返回空串（VM_CallFunc 的配套）"
+    },
+    {
+      "name": "VM_SpriteExists",
+      "args": [
+        "string"
+      ],
+      "ret": "int",
+      "desc": "贴图现在真的可用吗（项目资源→VM临时缓存→VM永久缓存→全局缓存，并排除 get_load_sprite 的空白占位图），1=可用 0=不可用"
+    },
+    {
+      "name": "VM_AliasSpritePerm",
+      "args": [
+        "string",
+        "string"
+      ],
+      "desc": "把名字永久指向一个已在永久缓存里的贴图（存精灵 id，进房间不会被清，[reloadmod] 时释放），配合 VM_SpriteExists 做「内置有就用内置、没有才外置覆盖」"
+    },
+    {
+      "name": "VM_ArrayExists",
+      "args": [
+        "string"
+      ],
+      "desc": "全局二维表存不存在（存在且是数组）1=有 0=没有；表名指 global.<表名>"
+    },
+    {
+      "name": "VM_CellCount",
+      "args": [
+        "string",
+        "int",
+        "int"
+      ],
+      "testCall": "VM_CellCount(\"enemy_array\", 1, 1)",
+      "desc": "表里第 i 列 j 行那一格的元素个数；表不存在 / 不是数组 / i,j 越界 → -1，所以 n = VM_CellCount(...) 之后直接 while 是安全的"
+    },
+    {
+      "name": "VM_CellItem",
+      "args": [
+        "string",
+        "int",
+        "int",
+        "int"
+      ],
+      "testCall": "VM_CellItem(\"enemy_array\", 1, 1, 0)",
+      "desc": "表里第 i 列 j 行那一格的第 k 个元素（k 从 0 起）；越界 → -1"
+    },
+    {
+      "name": "VM_CellContains",
+      "args": [
+        "string",
+        "int",
+        "int",
+        "any"
+      ],
+      "testCall": "VM_CellContains(\"enemy_array\", 1, 1, 1)",
+      "desc": "表里第 i 列 j 行那一格有没有这个值，1=有 0=没有；越界 → -1"
+    },
+    {
+      "name": "VM_ArrayContains",
+      "args": [
+        "string",
+        "any"
+      ],
+      "testCall": "VM_ArrayContains(\"a\", 1)",
+      "desc": "命名一维数组里找值（和 VM_ArrayADD / VM_ArraySet / VM_ArrayGet 同一套，不是 enemy_array 那种全局二维表）：返回它第一次出现的下标（从 0 起）；没有这个值 / 数组不存在 → -1"
+    },
+    {
+      "name": "VM_InstArrayExists",
+      "args": [
+        "int",
+        "string"
+      ],
+      "testCall": "VM_InstArrayExists(1, \"a\")",
+      "desc": "实例身上有没有这个一维数组，1=有 0=没有"
+    },
+    {
+      "name": "VM_InstArraySize",
+      "args": [
+        "int",
+        "string"
+      ],
+      "ret": "int",
+      "testCall": "VM_InstArraySize(1, \"a\")",
+      "desc": "实例身上一维数组的长度；实例不存在 / 变量不存在 → -1"
+    },
+    {
+      "name": "VM_InstArrayItem",
+      "args": [
+        "int",
+        "string",
+        "int"
+      ],
+      "ret": "any",
+      "testCall": "VM_InstArrayItem(1, \"a\", 0)",
+      "desc": "实例身上一维数组的第 k 个元素；越界 → -1"
+    },
+    {
+      "name": "VM_InstArraySet",
+      "args": [
+        "int",
+        "string",
+        "int",
+        "any"
+      ],
+      "testCall": "VM_InstArraySet(1, \"a\", 0, 1)",
+      "desc": "改实例身上一维数组的第 k 个元素；失败 → -1"
+    },
+    {
+      "name": "VM_InstArrayAdd",
+      "args": [
+        "int",
+        "string",
+        "any"
+      ],
+      "testCall": "VM_InstArrayAdd(1, \"a\", 1)",
+      "desc": "往实例身上一维数组的末尾追加一个值；失败 → -1"
+    },
+    {
+      "name": "VM_InstArrayDel",
+      "args": [
+        "int",
+        "string",
+        "int"
+      ],
+      "testCall": "VM_InstArrayDel(1, \"a\", 0)",
+      "desc": "删掉实例身上一维数组的第 k 个元素；失败 → -1"
+    },
+    {
+      "name": "VM_InstArrayClear",
+      "args": [
+        "int",
+        "string"
+      ],
+      "testCall": "VM_InstArrayClear(1, \"a\")",
+      "desc": "清空实例身上的一维数组；失败 → -1"
+    },
+    {
+      "name": "VM_InstArrayContains",
+      "args": [
+        "int",
+        "string",
+        "any"
+      ],
+      "testCall": "VM_InstArrayContains(1, \"a\", 1)",
+      "desc": "实例身上一维数组里有没有这个值，1=有 0=没有；实例/变量不存在 → -1"
+    },
+    {
+      "name": "VM_HomingBulletAdd",
+      "args": [
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any"
+      ],
+      "testCall": "VM_HomingBulletAdd(\"spr_bullet\", 1, 1, 1, 10, 1, \"all\", \"\", \"\", \"\", 0)",
+      "desc": "追踪弹管理器：贴图,缩放,x,y,速度,伤害,可命中类型,销毁对象,mod名字,销毁贴图,模式（模式 0=只追全场最左的敌人，1=优先本行正前方 150 像素内血最多的敌人；每帧重新索敌，命中按 normal 走护盾，打中一个就消失）"
+    },
+    {
+      "name": "VM_DamageEnemy",
+      "args": [
+        "int",
+        "any",
+        "string"
+      ],
+      "testCall": "VM_DamageEnemy(1, 1, \"normal\")",
+      "desc": "给敌人造成伤害（敌人id,伤害,伤害类型）：走敌人自己的受击事件，闪白 / 受击音效 / 护盾判定全都对，比直接改 hp 正确。伤害类型 normal=有盾只打盾，pierce=盾血一起掉，其它=无视护盾"
+    },
+    {
+      "name": "VM_DamageEnemyAsh",
+      "args": [
+        "int",
+        "any",
+        "string"
+      ],
+      "testCall": "VM_DamageEnemyAsh(1, 1, \"normal\")",
+      "desc": "灰烬伤害（敌人id,伤害,伤害类型）：伤害接得下就正常结算，接不下就一击必杀、原地换成 obj_mouse_ash_death（不看护盾，同原版大力神）"
+    },
+    {
+      "name": "VM_BulletScreenAdd_Ex",
+      "args": [
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any"
+      ],
+      "testCall": "VM_BulletScreenAdd_Ex(\"spr_bullet\", 1, 0, 1.6, 1, 1, 1, 8, 0, 1, 1, 0 - 1, \"normal\", \"\", \"\", \"normal\", 5, 0)",
+      "desc": "屏幕弹幕管理器（带卡片效果）：贴图,总帧数,打击范围,缩放,动画速度,x,y,vx,vy,伤害,伤害计数,存活帧数,子弹类型,销毁对象,mod名字,伤害类型,标志数值,角度。标志数值=这颗子弹还能接受哪些类别的卡片效果：bit1=过火(换火弹贴图+放大1.8+音效)、bit2=解冻(换包子贴图+音效，不启用增益、冰冻帧清零、之后或上bit1)、4/8/16…=自定义（效果全看卡片字段）。子弹进格子中心带时与卡片的 bullet_flag 取且运算，>0 就应用并消位，同类卡只生效一次。角度=出生角度（后向子弹传180）"
+    },
+    {
+      "name": "VM_BulletScreenAdd_Exs",
+      "args": [
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any"
+      ],
+      "testCall": "VM_BulletScreenAdd_Exs(\"spr_bullet\", 1, 0, 1.6, 1, 1, 1, 8, 0, 1, 1, 0 - 1, \"normal\", \"\", \"\", \"normal\", 5, 0, 0 - 1, 0.15)",
+      "desc": "同 VM_BulletScreenAdd_Ex，最后多两个行渐变参数：目标行y（要拐去那一行的世界 y，不想渐变传 -1）、靠拢比例（每帧朝目标 y 靠拢的比例，原版水管弹用 0.15，别传 0）。渐变到位（|目标行y - y| <= 8）自动吸附并停掉渐变，之后是纯直线；途中经过的行照常结算。20 个参数都要写满"
+    }
+  ]
+}

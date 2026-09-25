@@ -62,6 +62,7 @@ if (state == "idle") {
         // Hook: 平台 idle 结束
         global._VM_last_idle_platform = id;
 		VM_Execute(global.__vm,global._VM_PLATFORM_IDLE_END, "_VM_PLATFORM_IDLE_END");
+		vm_hook_run("_VM_PLATFORM_IDLE_END");   // mod 侧：同一时机，各自查块
     }
 } 
 else if (state == "moving") {

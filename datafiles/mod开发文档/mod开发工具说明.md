@@ -78,20 +78,29 @@
 |---|---|
 | `_OBJECT_CFG` | `.bin` **加载时**执行一次（不在任何实例上，只适合预加载贴图/常量），执行完就删掉 |
 | `_OBJECT_CREATE` | 实例创建时 |
-| `_OBJECT_STEP` | 每帧 |
+| `_OBJECT_STEP` | 每帧（会被 `mod_step_enter_condition` 挡住，见各对象文档） |
 | `_OBJECT_DRAW` | 绘制时（不写就自动 `draw_self()`） |
 | `_OBJECT_DESTROY` | 实例销毁时 |
+| `_OBJECT_MOUSE_ENTER` | 鼠标移入本实例 |
+| `_OBJECT_MOUSE_LEAVE` | 鼠标移出本实例 |
+| `_OBJECT_CLICK` | 鼠标左键在本实例上按下 |
 
 各对象实际支持：
 
 ```text
-obj_card_mod     CREATE / STEP / DRAW / DESTROY
-obj_weapon_mod   CREATE / STEP / DRAW
-obj_bullet_mod   CREATE / STEP / DRAW / DESTROY
-obj_effect_mod   CREATE / STEP / DRAW / DESTROY
-obj_enemy_mod    CREATE / STEP / DRAW / DESTROY
-obj_gem_mod      CREATE / STEP / DRAW（另外还有鼠标事件，见 mod宝石.md）
+obj_card_mod     CREATE / STEP / DRAW / DESTROY / 移入 / 移出 / 点击
+obj_weapon_mod   CREATE / STEP / DRAW           / 移入 / 移出 / 点击
+obj_bullet_mod   CREATE / STEP / DRAW / DESTROY / 移入 / 移出 / 点击
+obj_effect_mod   CREATE / STEP / DRAW / DESTROY / 移入 / 移出 / 点击
+obj_enemy_mod    CREATE / STEP / DRAW / DESTROY / 移入 / 移出 / 点击
+obj_gem_mod      CREATE / STEP / DRAW           / 移入 / 移出 / 点击
 ```
+
+- 鼠标三个块 **6 个 mod 对象全都有**；`_OBJECT_DESTROY` 只有武器和宝石没有（写了不会执行）
+- 鼠标三个块是**按实例**判定的 —— 走 GameMaker 的实例鼠标事件，鼠标压在**这个实例的贴图（碰撞掩码）**上才算，
+  所以**没设 `sprite_index` 的实例收不到**（子弹/特效尤其注意）
+- 想判"全场任意位置按了左键"用 `_VM_MOUSE_LEFT` 事件块（地图脚本），不要用 `_OBJECT_CLICK`
+- 这三个块执行完都会 `event_inherited()`，所以宝石那种核心自己也处理鼠标的对象，核心逻辑照常跑
 
 - 写块之前先确认对应对象支持它 —— 写了没人执行的块等于没写
 - 取当前实例：`self = VM_GetCurCard()`（名字叫 Card，实际指"当前对象实例"）

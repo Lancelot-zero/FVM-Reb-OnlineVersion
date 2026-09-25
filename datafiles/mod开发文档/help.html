@@ -1360,6 +1360,48 @@ _VM_BATTLE_START {
 <td>让该实例额外跑 N 轮 Step（一轮 = Begin Step + Step + End Step），用来做加速。同一个实例正在被重跑时再调会被忽略（防无限递归）。轮数夹在 1~60，返回实际跑了几轮</td>
 </tr>
 </tbody></table>
+<h3>mod 对象块</h3>
+<p>写 mod 卡 / 武器 / 宝石 / 子弹 / 特效 / 敌人时，插件的 <code>.bin</code> 里可以写下面这些块（各对象支持哪几个以对象自身为准）：</p>
+<table>
+<thead>
+<tr>
+<th>块</th>
+<th>触发时机</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>_OBJECT_CFG</code></td>
+<td>配置块：加载贴图等，<code>.bin</code> 载入时执行一次</td>
+</tr>
+<tr>
+<td><code>_OBJECT_CREATE</code></td>
+<td>对象创建时执行一次</td>
+</tr>
+<tr>
+<td><code>_OBJECT_STEP</code></td>
+<td>对象每帧执行（会被 <code>mod_step_enter_condition</code> 挡住，见各类别文档）</td>
+</tr>
+<tr>
+<td><code>_OBJECT_DRAW</code></td>
+<td>对象绘制时执行（只有这里能画东西）</td>
+</tr>
+<tr>
+<td><code>_OBJECT_DESTROY</code></td>
+<td>对象销毁时执行</td>
+</tr>
+<tr>
+<td><code>_OBJECT_MOUSE_ENTER</code></td>
+<td>鼠标移入该实例</td>
+</tr>
+<tr>
+<td><code>_OBJECT_MOUSE_LEAVE</code></td>
+<td>鼠标移出该实例</td>
+</tr>
+<tr>
+<td><code>_OBJECT_CLICK</code></td>
+<td>鼠标左键点击该实例（按实例判定，和全局的 <code>_VM_MOUSE_LEFT</code> 不同）</td>
+</tr>
+</tbody></table>
 <h3>屏幕弹幕</h3>
 <p>往全场唯一的弹幕管理器塞子弹（统一迭代与绘制，不占实例）。</p>
 <table>
@@ -1378,7 +1420,7 @@ _VM_BATTLE_START {
 <tr>
 <td><code>VM_BulletScreenAdd_Ex(贴图,总帧数,打击范围,缩放,动画速度,x,y,vx,vy,伤害,伤害计数,存活帧数,子弹类型,销毁对象,mod名字,伤害类型,标志数值,角度)</code></td>
 <td>18个</td>
-<td>同 <code>VM_BulletScreenAdd</code>，多三个参数：<code>伤害类型</code>（normal=有盾只打盾 / pierce=盾血一起掉 / 其它=无视护盾）、<code>标志数值</code>（位掩码，见下）、<code>角度</code>（出生角度，后向子弹传 <code>180</code> 就倒过来）。<br><strong>标志数值 = 这颗子弹还能接受哪些类别的卡片效果</strong>：<code>bit1</code>=过火类、<code>bit2</code>=解冻类、<code>4/8/16…</code>=自定义类。子弹进到<strong>格子中心带</strong>（x 落在该格 15%~85%，和 <code>bullet_array_special</code> 同口径）时，与本格卡片的 <code>bullet_flag</code> 做<strong>与运算</strong>，<code>&gt;0</code> 就应用效果并<strong>消位</strong> —— 所以同一类卡片对同一颗子弹只生效一次。<br><strong>内置表现</strong>：<code>bit1</code> → 换 <code>spr_fire_bullet</code> + 缩放设 1.8 + <code>snd_bullet_burnt</code>；<code>bit2</code> → 换 <code>spr_xiaolongbao_bullet</code> + <code>snd_bullet_burnt</code>，且<strong>不启用增益</strong>、把子弹的冰冻帧数清零，之后<strong>或上 bit1</strong>（解冻完就变成能被点燃）。<br><strong>卡片侧字段</strong>（实例变量，mod 卡用 <code>VM_SetProp</code> 写；原版火盆/布丁已在 Create+Step 里写好）：<code>bullet_flag</code>（去重位）、<code>bullet_mul_dmg</code>（乘伤害，默认1）、<code>bullet_add_dmg</code>（加伤害，默认0）、<code>bullet_flip_x</code>/<code>bullet_flip_y</code>（反向，0/1）、<code>bullet_angle_add</code>（画面旋转角度，默认0）、<code>bullet_freeze_mul</code>（乘冰冻帧，默认1）、<code>bullet_freeze_add</code>（加冰冻帧，默认0。子弹命中时把累计冰冻帧写给敌人的 <code>ice_timer</code>）</td>
+<td>同 <code>VM_BulletScreenAdd</code>，多三个参数：<code>伤害类型</code>（normal=有盾只打盾 / pierce=盾血一起掉 / 其它=无视护盾）、<code>标志数值</code>（位掩码，见下）、<code>角度</code>（出生角度，后向子弹传 <code>180</code> 就倒过来）。<br><strong>标志数值 = 这颗子弹还能接受哪些类别的卡片效果</strong>：<code>bit1</code>=过火类、<code>bit2</code>=解冻类、<code>4/8/16…</code>=自定义类。子弹进到<strong>格子中心带</strong>（x 落在该格 15%~85%，和 <code>bullet_array_special</code> 同口径）时，与本格卡片的 <code>bullet_flag</code> 做<strong>与运算</strong>，<code>&gt;0</code> 就应用效果并<strong>消位</strong> —— 所以同一类卡片对同一颗子弹只生效一次。<br><strong>内置表现</strong>：<code>bit1</code> → 换 <code>spr_fire_bullet</code> + 缩放设 1.8 + <code>snd_bullet_burnt</code>；<code>bit2</code> → 换 <code>spr_xiaolongbao_bullet</code> + <code>snd_bullet_burnt</code>，且<strong>不启用增益</strong>、把子弹的冰冻帧数清零，之后<strong>或上 bit1</strong>（解冻完就变成能被点燃）。<br><strong>卡片侧字段</strong>（实例变量，mod 卡用 <code>VM_SetProp</code> 写；原版火盆/布丁已在 Create+Step 里写好）：<code>bullet_flag</code>（去重位）、<code>bullet_mul_dmg</code>（乘伤害，默认1）、<code>bullet_add_dmg</code>（加伤害，默认0）、<code>bullet_flip_x</code>/<code>bullet_flip_y</code>（反向，0/1）、<code>bullet_angle_add</code>（画面旋转角度，默认0）、<code>bullet_freeze_mul</code>（乘冰冻帧，默认1）、<code>bullet_freeze_add</code>（加冰冻帧，默认0。子弹命中时把累计冰冻帧写给敌人的 <code>ice_timer</code>）、<code>bullet_scale</code>（<strong>乘</strong>缩放，默认1；只认正数）、<code>bullet_hits_add</code>（加穿透次数：只认正数，<strong>穿透弹 hits=-1 时忽略</strong>）、<code>bullet_destroy</code>（0=不启用；<strong>负数</strong>=立即销毁这颗子弹；<strong>正数</strong>=只减穿透次数、减到 0 自然销毁；穿透弹无效）、<code>bullet_charge_self</code>（1=每颗子弹穿过本卡时，把它当时的伤害累加到 <code>bullet_charge_dmg</code>）、<code>bullet_charge_dmg</code>（【只读】被累计的伤害，<strong>不自动清零</strong>）、<code>bullet_pass_count</code>（【只读】穿过本卡的子弹次数，<strong>自动累计、不用开关</strong>，穿透弹也算）</td>
 </tr>
 <tr>
 <td><code>VM_BulletScreenAdd_Exs(贴图,总帧数,打击范围,缩放,动画速度,x,y,vx,vy,伤害,伤害计数,存活帧数,子弹类型,销毁对象,mod名字,伤害类型,标志数值,角度,目标行y,靠拢比例)</code></td>

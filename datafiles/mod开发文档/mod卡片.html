@@ -281,7 +281,7 @@ mod/cards/tex/...          自带贴图（可选）
 <tr>
 <td><code>mod_step_enter_var</code></td>
 <td>可写</td>
-<td><code>&quot;mod&quot;</code> = 间隔帧数；<code>&quot;wait&quot;</code> = 还要等几帧</td>
+<td><code>&quot;mod&quot;</code> = 间隔帧数；<code>&quot;wait&quot;</code> = 还要等几帧；<code>&quot;hp_change_mod&quot;</code> = 冷却帧数</td>
 </tr>
 <tr>
 <td><code>mod_step_enter_arr</code></td>
@@ -330,6 +330,7 @@ mod/cards/tex/...          自带贴图（可选）
 <li><strong><code>_OBJECT_CREATE</code></strong>：卡片被种下时，在 <code>obj_card_mod</code> 的 Create 里<strong>立刻执行</strong>（当帧）</li>
 <li><strong><code>_OBJECT_STEP</code></strong>：从这张卡第一个 Step 阶段开始，每帧一次，<strong>但会被下面的条件挡住</strong></li>
 <li><strong><code>_OBJECT_DESTROY</code></strong>：实例销毁时（血量归零、被铲、被清场）</li>
+<li><strong><code>_OBJECT_MOUSE_ENTER</code> / <code>_OBJECT_MOUSE_LEAVE</code> / <code>_OBJECT_CLICK</code></strong>：鼠标移入 / 移出 / 左键点在本卡上（按实例判定，鼠标要压在这张卡的贴图上）</li>
 <li>暂停（<code>global.is_paused</code>）时<strong>整块不跑</strong>；冻住（<code>is_frozen</code>）时<strong>不进 VM</strong>；<code>hp &lt;= 0</code>、实例已销毁也不进</li>
 </ul>
 <blockquote>
@@ -386,11 +387,27 @@ mod/cards/tex/...          自带贴图（可选）
 <td><code>mod_step_enter_var</code> 每帧自减，减到 0 进（进之前保持 0，需自己再设）</td>
 <td><code>mod_step_enter_var</code> = 剩余帧数</td>
 </tr>
+<tr>
+<td><code>&quot;hp_change&quot;</code></td>
+<td><strong>血量相对上一帧变了</strong>就进（掉血、回血都算）；出生时基线 = 出生血量，所以出生当帧不进</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>&quot;hp_change_mod&quot;</code></td>
+<td>同 <code>&quot;hp_change&quot;</code>，但<strong>触发一次后进冷却</strong>：<code>mod_step_enter_var</code> 帧内再掉血也不再进</td>
+<td><code>mod_step_enter_var</code> = 冷却帧数（不写/写错 = 无冷却，等同 <code>&quot;hp_change&quot;</code>）</td>
+</tr>
 </tbody></table>
 <ul>
-<li>命中窗口时 <code>mod_step_enter_index</code> = <strong>窗口下标</strong>（0 起，一轮里有多个窗口时用它区分是第几次），否则 <code>-1</code></li>
-<li>窗口表里的负数从一轮末尾倒数：一轮 1500 帧时 <code>-35</code> = 第 1465 帧</li>
-<li>怎么选：<ul>
+<li><p><code>&quot;hp_change&quot;</code> / <code>&quot;hp_change_mod&quot;</code> 读的是父对象每帧维护的 <code>pre_hp</code>（上一帧末的血量），受伤当帧就能进 VM；
+冷却期内的伤害会被吞掉，出冷却后不会因为攒着的旧变化补触发一次</p>
+</li>
+<li><p>命中窗口时 <code>mod_step_enter_index</code> = <strong>窗口下标</strong>（0 起，一轮里有多个窗口时用它区分是第几次），否则 <code>-1</code></p>
+</li>
+<li><p>窗口表里的负数从一轮末尾倒数：一轮 1500 帧时 <code>-35</code> = 第 1465 帧</p>
+</li>
+<li><p>怎么选：</p>
+<ul>
 <li><strong>普通射手</strong>（有敌人才打、按 cycle 节奏）→ <code>&quot;norm_attack&quot;</code> + 一条窗口表</li>
 <li><strong>生产者 / 每帧逻辑</strong>（火苗、光环）→ 不设（每帧进）或 <code>&quot;norm&quot;</code></li>
 <li><strong>全场统一节奏 / 想省性能</strong>（大量同类卡）→ <code>&quot;mod&quot;</code> + 间隔</li>
@@ -537,6 +554,88 @@ _OBJECT_STEP {
 <li><strong><code>销毁对象</code></strong>：非空时在子弹消失处创建它（<code>mod名字</code> 指定 mod 特效的 <code>mod_type</code>），做命中特效最省事</li>
 <li>要会拐弯追人的，用 <code>VM_HomingBulletAdd(...)</code>（每帧重新索敌、自转）</li>
 </ul>
+<h4>卡片侧能吃子弹的字段</h4>
+<p>子弹带着 <code>标志数值</code> 进到<strong>本卡所在格的中心带</strong>时，会和这张卡的 <code>bullet_flag</code> 做与运算，<code>&gt;0</code> 就应用效果并<strong>消位</strong> ——
+所以同一类卡对同一颗子弹只生效一次。卡上能写的字段：</p>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>默认</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>bullet_flag</code></td>
+<td>—</td>
+<td><strong>去重位</strong>：本卡属于哪些类。<code>bit1</code>=过火、<code>bit2</code>=解冻、<code>4/8/16…</code>=自定义</td>
+</tr>
+<tr>
+<td><code>bullet_mul_dmg</code></td>
+<td><code>1</code></td>
+<td>乘伤害（<code>子弹伤害 × 倍率 + 加值</code>）</td>
+</tr>
+<tr>
+<td><code>bullet_add_dmg</code></td>
+<td><code>0</code></td>
+<td>加伤害</td>
+</tr>
+<tr>
+<td><code>bullet_flip_x</code> / <code>bullet_flip_y</code></td>
+<td><code>0</code></td>
+<td>反向（0/1）</td>
+</tr>
+<tr>
+<td><code>bullet_angle_add</code></td>
+<td><code>0</code></td>
+<td>画面旋转角度（原版布丁是 +180）</td>
+</tr>
+<tr>
+<td><code>bullet_freeze_mul</code></td>
+<td><code>1</code></td>
+<td>乘冰冻帧</td>
+</tr>
+<tr>
+<td><code>bullet_freeze_add</code></td>
+<td><code>0</code></td>
+<td>加冰冻帧（命中时写给敌人的 <code>ice_timer</code>）</td>
+</tr>
+<tr>
+<td><code>bullet_scale</code></td>
+<td><code>1</code></td>
+<td><strong>乘</strong>缩放；只认正数</td>
+</tr>
+<tr>
+<td><code>bullet_hits_add</code></td>
+<td><code>0</code></td>
+<td>加穿透次数；只认正数，<strong>穿透弹（<code>hits = -1</code>）无效</strong></td>
+</tr>
+<tr>
+<td><code>bullet_destroy</code></td>
+<td><code>0</code></td>
+<td><code>0</code>=不启用；<strong>负数</strong>=立即销毁这颗子弹；<strong>正数</strong>=只减穿透次数（减到 0 自然销毁）。穿透弹无效</td>
+</tr>
+<tr>
+<td><code>bullet_charge_self</code></td>
+<td><code>0</code></td>
+<td>置 <code>1</code> = 每颗子弹穿过本卡时，把它当时的伤害累加到 <code>bullet_charge_dmg</code></td>
+</tr>
+<tr>
+<td><code>bullet_charge_dmg</code></td>
+<td><code>0</code></td>
+<td>【只读】被 <code>bullet_charge_self</code> 累计的伤害（<strong>不自动清零</strong>，自己读、自己归零）</td>
+</tr>
+<tr>
+<td><code>bullet_pass_count</code></td>
+<td><code>0</code></td>
+<td>【只读】穿过本卡的子弹次数，<strong>自动累计、不用开关</strong>（穿透弹也算；靠消位保证一弹一卡只 +1）</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><code>bit1</code>（过火）/ <code>bit2</code>（解冻）有内置表现，见 <code>help.md</code> 里 <code>VM_BulletScreenAdd_Ex</code> 那一条；
+自定义类（<code>4/8/16…</code>）没有内置表现，效果全看上表。
+⚠️ 记得在 <code>_OBJECT_CREATE</code> 里先 <code>VM_SetProp</code> 设好默认值，不然读到的是 <code>undefined</code>。</p>
+</blockquote>
 <hr>
 <h2>五、其它要点</h2>
 <ul>

@@ -91,7 +91,7 @@ mod/cards/tex/...          自带贴图（可选）
 | `mod_step_enemy_area` | 可写（数组） | 索敌区域，**每 4 个值一组** `[上, 下, 左, 右]`（以自己那格为中心各扩几格）；可写多组，任一组有敌人就算有。不设 = `[1,1,0,99]`（本行 ±1、自己那格往右） |
 | `mod_enemy_types` | 可写（数组） | 索敌只看哪几类：`normal` / `obstacle` / `diver` / `air` / `dance` / `underground`；空 = 任意 |
 | `mod_step_enter_condition` | 可写 | 什么时候进 VM，见下节 |
-| `mod_step_enter_var` | 可写 | `"mod"` = 间隔帧数；`"wait"` = 还要等几帧 |
+| `mod_step_enter_var` | 可写 | `"mod"` = 间隔帧数；`"wait"` = 还要等几帧；`"hp_change_mod"` = 冷却帧数 |
 | `mod_step_enter_arr` | 可写（数组） | 开火窗口表（`"norm"` / `"norm_attack"` 用）；**负数 = 从一轮末尾倒数**（`-35` → 一轮长度-35） |
 | `mod_step_enter_index` | 只读 | 这帧命中的窗口下标（0 起）；不是窗口 = `-1` |
 | `mod_set_on` / `mod_set_id` / `mod_set_prop` / `mod_set_val` | 可写 | **批量改属性**：开关开着时每帧把第 i 个 id 的 `prop[i]` 设成 `val[i]`（三个数组按最短长度配对） |
@@ -128,6 +128,7 @@ _OBJECT_CREATE {
 - **`_OBJECT_CREATE`**：卡片被种下时，在 `obj_card_mod` 的 Create 里**立刻执行**（当帧）
 - **`_OBJECT_STEP`**：从这张卡第一个 Step 阶段开始，每帧一次，**但会被下面的条件挡住**
 - **`_OBJECT_DESTROY`**：实例销毁时（血量归零、被铲、被清场）
+- **`_OBJECT_MOUSE_ENTER` / `_OBJECT_MOUSE_LEAVE` / `_OBJECT_CLICK`**：鼠标移入 / 移出 / 左键点在本卡上（按实例判定，鼠标要压在这张卡的贴图上）
 - 暂停（`global.is_paused`）时**整块不跑**；冻住（`is_frozen`）时**不进 VM**；`hp <= 0`、实例已销毁也不进
 
 > 手牌点下去种的卡：鼠标事件在 Step 之前，所以**当帧就会跑第一次 STEP**。
@@ -162,6 +163,11 @@ _OBJECT_CREATE {
 | `"norm"` | `mod_tick_cycle` 命中窗口表（**不看敌人**） | `mod_step_enter_arr` 窗口表 |
 | `"norm_attack"` | **有敌人** 且命中窗口表；窗口表空 = 有敌人就每帧进 | `mod_step_enter_arr` + 索敌字段 |
 | `"wait"` | `mod_step_enter_var` 每帧自减，减到 0 进（进之前保持 0，需自己再设） | `mod_step_enter_var` = 剩余帧数 |
+| `"hp_change"` | **血量相对上一帧变了**就进（掉血、回血都算）；出生时基线 = 出生血量，所以出生当帧不进 | — |
+| `"hp_change_mod"` | 同 `"hp_change"`，但**触发一次后进冷却**：`mod_step_enter_var` 帧内再掉血也不再进 | `mod_step_enter_var` = 冷却帧数（不写/写错 = 无冷却，等同 `"hp_change"`） |
+
+- `"hp_change"` / `"hp_change_mod"` 读的是父对象每帧维护的 `pre_hp`（上一帧末的血量），受伤当帧就能进 VM；
+  冷却期内的伤害会被吞掉，出冷却后不会因为攒着的旧变化补触发一次
 
 - 命中窗口时 `mod_step_enter_index` = **窗口下标**（0 起，一轮里有多个窗口时用它区分是第几次），否则 `-1`
 - 窗口表里的负数从一轮末尾倒数：一轮 1500 帧时 `-35` = 第 1465 帧
@@ -323,6 +329,31 @@ _OBJECT_STEP {
 - **`伤害计数`**：`1` = 命中一个就消失，`-1` = 不限次数（范围内所有可命中敌人都结算）
 - **`销毁对象`**：非空时在子弹消失处创建它（`mod名字` 指定 mod 特效的 `mod_type`），做命中特效最省事
 - 要会拐弯追人的，用 `VM_HomingBulletAdd(...)`（每帧重新索敌、自转）
+
+#### 卡片侧能吃子弹的字段
+
+子弹带着 `标志数值` 进到**本卡所在格的中心带**时，会和这张卡的 `bullet_flag` 做与运算，`>0` 就应用效果并**消位** ——
+所以同一类卡对同一颗子弹只生效一次。卡上能写的字段：
+
+| 字段 | 默认 | 说明 |
+|---|---|---|
+| `bullet_flag` | — | **去重位**：本卡属于哪些类。`bit1`=过火、`bit2`=解冻、`4/8/16…`=自定义 |
+| `bullet_mul_dmg` | `1` | 乘伤害（`子弹伤害 × 倍率 + 加值`） |
+| `bullet_add_dmg` | `0` | 加伤害 |
+| `bullet_flip_x` / `bullet_flip_y` | `0` | 反向（0/1） |
+| `bullet_angle_add` | `0` | 画面旋转角度（原版布丁是 +180） |
+| `bullet_freeze_mul` | `1` | 乘冰冻帧 |
+| `bullet_freeze_add` | `0` | 加冰冻帧（命中时写给敌人的 `ice_timer`） |
+| `bullet_scale` | `1` | **乘**缩放；只认正数 |
+| `bullet_hits_add` | `0` | 加穿透次数；只认正数，**穿透弹（`hits = -1`）无效** |
+| `bullet_destroy` | `0` | `0`=不启用；**负数**=立即销毁这颗子弹；**正数**=只减穿透次数（减到 0 自然销毁）。穿透弹无效 |
+| `bullet_charge_self` | `0` | 置 `1` = 每颗子弹穿过本卡时，把它当时的伤害累加到 `bullet_charge_dmg` |
+| `bullet_charge_dmg` | `0` | 【只读】被 `bullet_charge_self` 累计的伤害（**不自动清零**，自己读、自己归零） |
+| `bullet_pass_count` | `0` | 【只读】穿过本卡的子弹次数，**自动累计、不用开关**（穿透弹也算；靠消位保证一弹一卡只 +1） |
+
+> `bit1`（过火）/ `bit2`（解冻）有内置表现，见 `help.md` 里 `VM_BulletScreenAdd_Ex` 那一条；
+> 自定义类（`4/8/16…`）没有内置表现，效果全看上表。
+> ⚠️ 记得在 `_OBJECT_CREATE` 里先 `VM_SetProp` 设好默认值，不然读到的是 `undefined`。
 
 ---
 
