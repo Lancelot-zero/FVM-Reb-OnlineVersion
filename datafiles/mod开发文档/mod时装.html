@@ -43,8 +43,13 @@ hr { border:none; border-top:1px solid #e5e7eb; margin:2em 0; }
 <p>通用前提（文件命名、生效方式）见 <a href="mod%E5%BC%80%E5%8F%91%E5%B7%A5%E5%85%B7%E8%AF%B4%E6%98%8E.html">mod开发工具说明.md</a>。</p>
 </blockquote>
 <h2>文件</h2>
-<pre><code class="language-text">mod/attires/my_attire.json     ← 只有 json，没有 bin / 没有逻辑
+<p>时装放在<strong>游戏目录下的 <code>mod/attires/</code></strong> 里：</p>
+<pre><code class="language-text">游戏目录/                       ← 运行游戏的那个文件夹
+└─ mod/
+   └─ attires/                  ← 时装这一类都放这里
+      └─ my_attire.json         ← 只有 json，没有 bin / 没有逻辑
 </code></pre>
+<p><strong>也可以再分一层子目录归类</strong>（只扫一层、不往下递归）：<code>mod/attires/xxx/my_attire.json</code>；id 只看 json 文件名。</p>
 <p>时装是<strong>纯外观</strong>，没有任何逻辑块可写。</p>
 <h2>JSON 字段</h2>
 <table>

@@ -1,0 +1,130 @@
+// 治愈苗（生肖卡）：定时给全场卡片回血
+// 照 warm_birds 的原始写法：不设 mod_step_enter_condition（默认每帧进 VM），
+// 卡自己用 attack_timer 数帧、自己切 state，动画才会正常推进。
+//
+//   节奏（照原版 obj_zhiyumiao，见 scripts/zhiyumiao_config）：
+//     first_produce_delay = 60 → 先等 60 帧
+//     然后播 attack_anim(8) 帧施法动画
+//     动画放完 → 全场治疗 5 点，attack_timer 归零
+//     之后每 cycle 帧重复一轮
+//   治疗量固定 5，取 min(5, maxhp - hp)，血满的不加。
+//   ⚠️ 原版的回血 buff 与治疗特效需要引擎脚本，插件调不到，本卡只做即时治疗。
+//
+//   贴图：本体 spr_zhiyumiao_2 = 20 帧、387x367、原点 (195, 211)
+
+_OBJECT_CFG {
+    if (VM_SpriteExists("spr_zhiyumiao_2") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_zhiyumiao_2_0.png", 20, 195, 211)
+        VM_AliasSpritePerm("spr_zhiyumiao_2", "tex/spr_zhiyumiao_2_0.png")
+    }
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+
+    VM_SetProp(self, "sprite_index", "spr_zhiyumiao_2")
+    VM_SetProp(self, "idle_anim", 8)
+    VM_SetProp(self, "attack_anim", 8)
+    VM_SetProp(self, "flash_speed", 5)
+    VM_SetProp(self, "plant_type", "normal")
+    VM_SetProp(self, "state", 0)
+
+    VM_SetProp(self, "first_produce_delay", 60)
+    VM_SetProp(self, "attack_timer", 0)
+    VM_SetProp(self, "first_produce", 0)
+
+    // 一轮 2820 帧里只有 4 帧真有事做：
+    //   首次：第 61 帧起播攻击动画、第 101 帧治疗全场（60 + 8*fs，fs=5）
+    //   之后：第 2781 帧起播攻击动画、第 0 帧（= 越过 cycle）治疗全场
+    VM_InstArrayClear(self, "mod_step_enter_arr")
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 0)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 61)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 101)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 1 - 8 * 5)
+    VM_SetProp(self, "mod_step_enter_condition", "norm")
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+
+    fs = VM_GetProp(self, "flash_speed")
+    if (VM_IsUndefined(fs)) {
+        fs = 5
+    }
+    if (VM_GetProp(self, "is_slowdown") == 1) {
+        fs = fs * 2
+    }
+
+    at = VM_GetProp(self, "mod_tick_cycle")
+    cyc = VM_GetProp(self, "cycle")
+    if (VM_IsUndefined(cyc)) {
+        cyc = 2820
+    }
+    fp = VM_GetProp(self, "first_produce")
+    if (VM_IsUndefined(fp)) {
+        fp = 0
+    }
+    dly = VM_GetProp(self, "first_produce_delay")
+    if (VM_IsUndefined(dly)) {
+        dly = 60
+    }
+
+    st = 0
+    heal = 0
+
+    if (fp == 0) {
+        if (at == (dly + 8 * fs) + 1) {
+            heal = 1
+            fp = 1
+        } else if (at <= dly + 8 * fs) {
+            st = 1
+        }
+    } else {
+        if (at == 0) {
+            heal = 1
+        } else if (at <= cyc - 8 * fs) {
+            st = 0
+        } else {
+            st = 1
+        }
+    }
+
+    if (heal == 1) {
+        // 最终形态：全屏治疗（取整场网格当范围）
+        gc = VM_GetProp(0, "grid_cols")
+        if (VM_IsUndefined(gc)) {
+            gc = 9
+        }
+        gr = VM_GetProp(0, "grid_rows")
+        if (VM_IsUndefined(gr)) {
+            gr = 5
+        }
+
+        n = VM_GetInstancesInRange("zym_heal", 0, gr - 1, 0, gc - 1, "card", "")
+        k = 0
+        while (k < n) {
+            c = VM_ArrayGet("zym_heal", k)
+            if (c != self) {
+                hp = VM_GetProp(c, "hp")
+                mx = VM_GetProp(c, "maxhp")
+                if (VM_IsUndefined(hp) == 0) {
+                    if (VM_IsUndefined(mx) == 0) {
+                        if (hp > 0) {
+                            if (hp < mx) {
+                                add = mx - hp
+                                if (add > 5) {
+                                    add = 5
+                                }
+                                VM_SetProp(c, "hp", hp + add)
+                            }
+                        }
+                    }
+                }
+            }
+            k = k + 1
+        }
+    }
+
+    VM_SetProp(self, "first_produce", fp)
+    VM_SetProp(self, "state", st)
+}

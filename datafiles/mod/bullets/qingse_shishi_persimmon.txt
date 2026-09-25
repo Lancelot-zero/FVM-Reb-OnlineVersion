@@ -1,0 +1,92 @@
+// 青涩柿柿的柿子（mod 子弹）：从上方加速下落 → 落地对 3x3 范围造成伤害 → 淡出销毁
+// 原版 obj_qingse_shishi_persimmon：y += fall_speed（每帧 +1 加速），到 target_y 时结算一次伤害。
+//
+// 卡片侧创建方式：
+//     VM_SetProp(0, "_mod_pending_bullet_id", "qingse_shishi_persimmon")
+//     p = VM_CreateInstance("obj_bullet_mod", x, y - 200)
+//     VM_SetProp(p, "damage", atk)
+//     VM_SetProp(p, "row", 目标行)
+//     VM_SetProp(p, "target_y", 落点世界 y)
+//     VM_SetProp(p, "fall_speed", 2)
+//     VM_SetProp(p, "hit_radius", 1)
+//
+//   ⚠️ 位移由 obj_bullet_mod 在跑完本块后做（y += vy），所以下落改的是 vy；
+//      原版是"y += fall_speed; fall_speed += 1"，这里等价成 vy = vy + 1。
+//   ⚠️ 落地判定用 y >= target_y。读到的 y 是移动前位置，会晚一帧，无碍。
+
+_OBJECT_CFG {
+    if (VM_SpriteExists("spr_shizi_2") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_shizi_2_0.png", 24, 177, 232)
+        VM_AliasSpritePerm("spr_shizi_2", "tex/spr_shizi_2_0.png")
+    }
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+
+    VM_SetProp(self, "destroy_timer", 120)     // 兜底寿命：落地逻辑万一没走到也不会赖着
+
+    spr = VM_GetProp(self, "sprite_index")
+    if (VM_IsUndefined(spr) == 1) {
+        spr = 0 - 1
+    }
+    if (spr == 0 - 1) {
+        VM_SetProp(self, "sprite_index", "spr_shizi_2")
+    }
+
+    if (VM_IsUndefined(VM_GetProp(self, "vx")) == 1) {
+        VM_SetProp(self, "vx", 0)
+    }
+    if (VM_IsUndefined(VM_GetProp(self, "vy")) == 1) {
+        VM_SetProp(self, "vy", 2)
+    }
+    if (VM_IsUndefined(VM_GetProp(self, "damage")) == 1) {
+        VM_SetProp(self, "damage", 0)
+    }
+    if (VM_IsUndefined(VM_GetProp(self, "hit_radius")) == 1) {
+        VM_SetProp(self, "hit_radius", 1)
+    }
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+
+    // 下落：vy 每帧 +1（原版 fall_speed += 1）
+    vy = VM_GetProp(self, "vy")
+    if (VM_IsUndefined(vy) == 1) {
+        vy = 2
+    }
+    cy = VM_GetProp(self, "y")
+    ty = VM_GetProp(self, "target_y")
+
+    if (VM_IsUndefined(ty) == 0) {
+        if (cy >= ty) {
+            // 落地即结算 + 立刻销毁（原来还要淡出 10 帧，显得赖着不走）
+            VM_SetProp(self, "vy", 0)
+
+            r  = VM_GetProp(self, "row")
+            hr = VM_GetProp(self, "hit_radius")
+            if (VM_IsUndefined(hr) == 1) {
+                hr = 1
+            }
+            // 落点列：按当前所在格
+            cc = VM_GetProp(self, "grid_col")
+
+            dmg = VM_GetProp(self, "damage")
+            n = VM_GetInstancesInRange("qss_hit", r - hr, r + hr, cc - hr, cc + hr, "enemy", "")
+            k = 0
+            while (k < n) {
+                e = VM_ArrayGet("qss_hit", k)
+                if (VM_GetProp(e, "hp") > 0) {
+                    VM_DamageEnemy(e, dmg, "normal")
+                }
+                k = k + 1
+            }
+
+            VM_DestroyInstance(self)
+            exit
+        }
+    }
+
+    VM_SetProp(self, "vy", vy + 1)
+}

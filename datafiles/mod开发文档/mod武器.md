@@ -5,9 +5,20 @@
 
 ## 文件
 
+武器放在**游戏目录下的 `mod/weapons/`** 里：
+
 ```text
-mod/weapons/my_weapon.json / .bin / .txt / tex/
+游戏目录/                       ← 运行游戏的那个文件夹
+└─ mod/
+   └─ weapons/                  ← 武器这一类都放这里
+      ├─ my_weapon.json         武器配置（槽位、数值、动画）
+      ├─ my_weapon.bin          逻辑（由 my_weapon.txt 编译出来，游戏只读这个）
+      ├─ my_weapon.txt          源码（建议保留）
+      └─ tex/                   自带贴图（可选）
+         └─ xxx.png
 ```
+
+**也可以再分一层子目录归类**（只扫一层、不往下递归）：`mod/weapons/xxx/my_weapon.json`，贴图跟 json 同一层放 `mod/weapons/xxx/tex/`；id 只看 json 文件名。
 
 ---
 
@@ -22,7 +33,7 @@ mod/weapons/my_weapon.json / .bin / .txt / tex/
 | `name` / `description` | | 名称 / 说明（商店、背包显示） |
 | `atk_impact` | | 可选，**攻击宝石**加成表：装备了 `attack_gem` 时 `atk` 改读这张表（按宝石等级取） |
 | `cycle_impact` | | 可选，**攻速宝石**用的周期表（同样按宝石等级取） |
-| `hp_increase` | | 可选，加血（副武器用；由 `obj_player_shield` 读，**不进 mod VM**） |
+| `hp_increase` | | 可选，加血（副武器用；**只有盾本体读它，mod 脚本读不到**） |
 | `shop` | | 商店 |
 
 > ⚠️ 除上面这些，**JSON 里的自定义字段不会挂到实例上**，要在 `_OBJECT_CREATE` 里自己 `VM_SetProp` 设一份
@@ -49,22 +60,22 @@ mod/weapons/my_weapon.json / .bin / .txt / tex/
 
 | | 主武器 / 超级武器 | 副武器（盾牌） |
 |---|---|---|
-| 注册对象 | `obj_weapon_mod` | `obj_player_shield` **+** 额外一个 `obj_weapon_mod` |
-| 谁创建实例 | 种卡时随卡片创建（放置逻辑） | 角色创建时（`obj_player_character/Mouse_53.gml`） |
-| `.bin` 的 `CREATE/STEP/DRAW` | 会执行 | **会执行**（跑在额外那个 `obj_weapon_mod` 上） |
-| 加血 `hp_increase` | — | 由 `obj_player_shield` 读，mod 管不到 |
-| 内置盾（cookie / oreo / cut_cake） | — | **只建 `obj_player_shield`，不挂 mod 实例**（所以它们的 `.bin` 不会跑） |
+| 游戏里怎么挂 | 一个武器实例 | 盾本体 **+** 一个武器实例 |
+| 谁创建实例 | 种卡时随卡片创建（放置逻辑） | 角色创建时 |
+| `.bin` 的 `CREATE/STEP/DRAW` | 会执行 | **会执行**（跑在额外的那个武器实例上） |
+| 加血 `hp_increase` | — | 盾本体读，**mod 脚本读不到** |
+| 内置盾（cookie / oreo / cut_cake） | — | **只有盾本体、不挂 mod 实例**（所以它们的 `.bin` 不会跑） |
 | 超级武器 | 会跟随玩家（同主武器） | — |
 
-副武器是**两个实例**：`obj_player_shield` 本体 `image_alpha = 0`、自己不画东西，只负责加血和原版 5 个盾宝石；
-形象和自定义逻辑走额外那个 `obj_weapon_mod`（它读 `global._mod_pending_weapon_id` 拿副武器 id，
-把 `sprite_index` 设成 `weapon_info.sprite`）。**只有注册过的 mod 盾才会挂这个实例。**
+副武器是**两个部分**：盾本体 `image_alpha = 0`、自己不画东西，只负责加血和原版 5 个盾宝石；
+形象和自定义逻辑走**额外那个武器实例**（它拿副武器 id 把 `sprite_index` 设成配置里的 `sprite`）。
+**只有注册过的 mod 盾才会挂这个实例。**
 
 ---
 
 ## 三、武器实例上的内置字段
 
-`obj_weapon_mod` 的 Create 建好下面这些（`weapon_info` 来自 JSON 注册数据）：
+武器实例一建出来就带下面这些（`weapon_info` 就是 JSON 注册进去的那份数据）：
 
 | 字段 | 初值 | 说明 |
 |---|---|---|
@@ -129,7 +140,7 @@ mod/weapons/my_weapon.json / .bin / .txt / tex/
 - **`_OBJECT_DESTROY`**：武器对象**不支持**（写了不会执行）
 - **`_OBJECT_MOUSE_ENTER` / `_OBJECT_MOUSE_LEAVE` / `_OBJECT_CLICK`**：鼠标移入 / 移出 / 左键点在武器上（按实例判定，鼠标要压在武器的贴图上）
 
-### 每帧顺序（`obj_weapon_mod/Step_0.gml`）
+### 每帧顺序（核心在什么时候跑你的块）
 
 ```text
 1. 暂停 → 整个 exit
@@ -162,7 +173,7 @@ mod/weapons/my_weapon.json / .bin / .txt / tex/
 // 例子：冥王战镰——固定在 x=500，高度用自己的 lock_y，深度压到最上层
 VM_SetProp(self, "x", 500)
 VM_SetProp(self, "y", VM_GetProp(self, "lock_y"))
-VM_SetProp(self, "depth", 0 - 500)
+VM_SetProp(self, "depth", -500)
 ```
 
 ```gml

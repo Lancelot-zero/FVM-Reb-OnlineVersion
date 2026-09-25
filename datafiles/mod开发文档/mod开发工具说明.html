@@ -88,16 +88,181 @@ hr { border:none; border-top:1px solid #e5e7eb; margin:2em 0; }
 <td>VM 脚本语言：语法、事件块、<strong>全部 VM 函数</strong></td>
 </tr>
 </tbody></table>
-<p><strong>配套工具</strong>：编辑器（<code>MapEditCreator.exe</code>）内置了 <code>help.md</code>（点「帮助」看语法与函数表），
-带语法检查、函数补全与悬停说明、代码折叠、一键编译（<code>Ctrl+B</code> / <code>F5</code>）；
-编译器 <code>LabMapCompiler.exe</code> 也可以单独命令行用（<code>LabMapCompiler.exe 你的脚本.txt</code>）。
-写脚本时的分工：<strong>语言和函数查 help.md / 编辑器帮助，各类 mod 怎么组查这几份文档</strong>。
-旁边的 <code>.html</code> 是转出来的（仓库里 <code>node tools/md2html.js</code>，用编辑器前端的 marked 渲染，不联网）——
-<strong>改了 md 记得重跑一次</strong>，html 要和 md 一起提交（yyp 里两种都登记了）。
-卡片 / 武器 / 宝石 / 敌人 / 子弹 / 特效这几份都按同一格式写：<strong>文件结构 → JSON 字段 →
-实例上的内置字段 → 块执行时机与顺序 → 可直接抄的 demo → 要点</strong>。</p>
-<p>源文件都在 <code>FVM-Reborn/datafiles/mod/</code>；构建时整个 <code>datafiles/</code> 会覆盖到游戏运行目录，
-所以游戏实际读的是 <code>&lt;游戏目录&gt;/mod/</code>（两棵树内容应保持一致）。</p>
+<hr>
+<h2>零、先弄明白这几个词</h2>
+<table>
+<thead>
+<tr>
+<th>词</th>
+<th>意思</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>mod</strong></td>
+<td>你自己加进游戏的东西：一张卡、一把武器、一个敌人……一个 mod = 一个 id</td>
+</tr>
+<tr>
+<td><strong>id</strong></td>
+<td>名字，同时也是<strong>文件名</strong>。<code>my_card.json</code> 的 id 就是 <code>my_card</code>，游戏里认的就是它</td>
+</tr>
+<tr>
+<td><strong>json</strong></td>
+<td><strong>配置</strong>（数值、贴图名、商店价格…），用记事本/编辑器直接改</td>
+</tr>
+<tr>
+<td><strong>txt / bin</strong></td>
+<td><strong>逻辑</strong>。<code>txt</code> 是你写的源码，<code>bin</code> 是编译出来的产物，<strong>游戏只读 bin</strong></td>
+</tr>
+<tr>
+<td><strong>VM 脚本</strong></td>
+<td>txt 里写的东西，语法见 <code>help.md</code>（不是 C / JS，一共十来条语法 + 一堆 <code>VM_*</code> 函数）</td>
+</tr>
+<tr>
+<td><strong>块</strong></td>
+<td>txt 里的 <code>_OBJECT_STEP { ... }</code> 这种段落。<strong>写进哪个块，就决定它什么时候跑</strong></td>
+</tr>
+<tr>
+<td><strong>编译</strong></td>
+<td>把 txt 变成 bin：编辑器 <code>Ctrl+B</code> / <code>F5</code>，或命令行 <code>LabMapCompiler.exe my_card.txt</code></td>
+</tr>
+<tr>
+<td><strong>tex</strong></td>
+<td>自带贴图放这个文件夹，PNG 丢进去，json / 脚本里写文件名</td>
+</tr>
+<tr>
+<td><strong>注册</strong></td>
+<td>游戏开局前把你的 mod 记进卡池 / 敌人池等表里。<strong>新加的 mod 得重开游戏或 <code>[reloadallmod]</code> 才会被扫到</strong></td>
+</tr>
+<tr>
+<td><strong>热重载</strong></td>
+<td>文件名没变、只改内容时，控制台 <code>[reloadmod]</code> 就能生效，不用重开</td>
+</tr>
+</tbody></table>
+<h2>最短上手路径（照着做一遍就会了）</h2>
+<p>目标：加一张自己的卡 <code>my_fire</code>（拿游戏内置的小火炉贴图凑合用）。</p>
+<ol>
+<li><p>在<strong>游戏目录</strong>（跑游戏的那个文件夹）里建 <code>mod/cards/</code></p>
+</li>
+<li><p>写 <code>mod/cards/my_fire.json</code> —— 配置（数值全是 <strong>17 档数组</strong>，对应等级 0~16，数一下是 17 个）：</p>
+<pre><code class="language-json">{
+  &quot;name&quot;: &quot;我的小火炉&quot;,
+  &quot;shapes&quot;: [
+    {
+      &quot;shape&quot;: 0,
+      &quot;name&quot;: &quot;我的小火炉&quot;,
+      &quot;description&quot;: &quot;我的小火炉：生产火苗&quot;,
+      &quot;sprite&quot;: &quot;spr_small_fire&quot;,
+      &quot;plant_type&quot;: &quot;normal&quot;,
+      &quot;feature_type&quot;: &quot;normal&quot;,
+      &quot;target_card&quot;: &quot;none&quot;,
+      &quot;hp&quot;:       [50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50],
+      &quot;cost&quot;:     [50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50],
+      &quot;atk&quot;:      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      &quot;range&quot;:    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      &quot;cooldown&quot;: [420, 420, 420, 420, 420, 420, 420, 420, 420, 420, 420, 420, 420, 420, 420, 420, 420],
+      &quot;cycle&quot;:    [1500, 1440, 1380, 1320, 1260, 1200, 1140, 1080, 1020, 960, 900, 840, 780, 720, 660, 600, 540]
+    }
+  ],
+  &quot;shop&quot;: { &quot;cost&quot;: &quot;1000&quot;, &quot;description&quot;: &quot;测试卡&quot; }
+}
+</code></pre>
+<ul>
+<li>每一档 = 一个等级（第 1 个数是 0 级，最后一档是 16 级）；写不满也能跑（缺的按最后一个补齐），但<strong>要改数值就得写满</strong></li>
+<li>想让某个属性所有等级都一样，也可以只写一个数字（<code>&quot;hp&quot;: 50</code>），引擎会自动铺成 17 档</li>
+<li>想加技能/图鉴，再加 <code>&quot;skill&quot;: { &quot;attr&quot;: &quot;flame_produce&quot;, &quot;values&quot;: [25, 27, 29, 31, 34, 37, 40, 44, 48] }</code>（9 档）和 <code>&quot;info_island&quot;: &quot;说明&quot;</code></li>
+</ul>
+</li>
+<li><p>写 <code>mod/cards/my_fire.txt</code> —— 逻辑，先只写最小的一段（<strong>先让形象出来</strong>）：</p>
+<pre><code class="language-text">_OBJECT_CREATE {
+    self = VM_GetCurCard()
+    VM_SetProp(self, &quot;sprite_index&quot;, &quot;spr_small_fire&quot;)   // 用游戏内置贴图当形象
+}
+</code></pre>
+</li>
+<li><p><strong>编译</strong>：编辑器里按 <code>Ctrl+B</code>（命令行就是 <code>LabMapCompiler.exe my_fire.txt</code>）→ 同目录出现 <code>my_fire.bin</code></p>
+</li>
+<li><p>进游戏，<strong>按 <code>F1</code> 打开控制台</strong>，敲 <code>[reloadallmod]</code>（<strong>新文件必须重扫</strong>）→ 再敲 <code>[listmod]</code></p>
+<ul>
+<li>列表里出现 <code>my_fire</code> ＝ 加载成功</li>
+</ul>
+</li>
+<li><p>以后每次改 txt：重新按 <code>Ctrl+B</code> → 控制台 <code>[reloadmod my_fire]</code> → 立刻能看到改动</p>
+</li>
+</ol>
+<blockquote>
+<p>控制台：游戏里按 <strong><code>F1</code></strong> 开关（再按一次 <code>F1</code> 或 <code>Esc</code> 关），命令直接敲、回车执行。</p>
+</blockquote>
+<blockquote>
+<p>想省事、又搞不清&quot;为什么没生效&quot;的时候：<strong>改完直接重启游戏</strong>，一定是最新的。</p>
+</blockquote>
+<h2>⚠️ 性能铁律：让 STEP 尽量少进 VM（卡片 / 子弹尤其重要）</h2>
+<p>解释一遍字节码是要花时间的，而且是<strong>每帧 × 每个实例</strong>都要花。卡片和子弹是场上的多数，
+<code>_OBJECT_STEP</code> 写得勤，就是掉帧最大的来源。</p>
+<p><strong>所以卡片 / 子弹的第一原则：能不进就不进 —— 用&quot;进 VM 的时机&quot;控制，别用默认的每帧进。</strong></p>
+<table>
+<thead>
+<tr>
+<th>情形</th>
+<th>推荐写法</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>卡片 · 射手（有敌人才打、按节奏开火）</td>
+<td><code>mod_step_enter_condition = &quot;norm_attack&quot;</code> + <code>mod_step_enter_arr</code> 里只写开火那几帧</td>
+</tr>
+<tr>
+<td>卡片 · 生产 / 计时</td>
+<td><code>&quot;norm&quot;</code> + 只在&quot;要生产那一帧&quot;的窗口</td>
+</tr>
+<tr>
+<td>卡片 · 被打才有反应</td>
+<td><code>&quot;hp_change&quot;</code> / <code>&quot;hp_change_mod&quot;</code>（平时完全不进）</td>
+</tr>
+<tr>
+<td>子弹</td>
+<td><code>&quot;cell&quot;</code>（<strong>跨格那一帧</strong>才进，正好对上路径碰撞）</td>
+</tr>
+</tbody></table>
+<p>配套要点：</p>
+<ul>
+<li><strong>窗口表一律写&quot;从一轮末尾倒数&quot;的负数</strong>（例 <code>-30</code>）。写绝对帧号，一吃技能（<code>skill.attr = &quot;cycle&quot;</code> 会把 <code>cycle</code> 改小）就永远命中不了 —— 见「常见坑速查」</li>
+<li><strong>一次能算完的别放 STEP</strong>：常量、预加载贴图放 <code>_OBJECT_CFG</code>（它只在加载/重载时跑一次）</li>
+<li><strong>别在 STEP 里做每帧都要查的重活</strong>：结果没变就存成实例字段，下一帧直接读；数组/查询能挪到窗口里做就挪</li>
+<li><strong>大量同质子弹优先用屏幕弹幕</strong>（<code>VM_BulletScreenAdd_Exs</code>）：整批由管理器一次迭代，<strong>不占实例、不各跑一个 VM</strong>，比&quot;一颗子弹一套 VM&quot;便宜得多</li>
+<li><strong>全场的每帧逻辑别塞进 <code>_OBJECT_STEP</code></strong>：真要每帧做就写地图脚本的 <code>_VM_FRAME</code>，而且那里也只放轻活</li>
+<li>判断标准很简单：<strong>这个字段/这段代码，是不是只有那 1~2 帧用得上？</strong> 是 → 就别每帧跑</li>
+<li><strong>子弹更狠一点：很多子弹连 STEP 都不用写</strong> —— 伤害、减速、冻结、眩晕、命中几次消失、抛物线
+这些都有预设字段（<code>bullet_*</code>），设好就由引擎在碰撞事件里自动结算；真要写逻辑，也用
+<code>&quot;attack_collision&quot;</code> / <code>&quot;cell_target_row&quot;</code> 这类条件只在关键那几帧进（见 <code>mod子弹.md</code>）</li>
+</ul>
+<h3>没效果 / 报错了，去哪看</h3>
+<table>
+<thead>
+<tr>
+<th>看哪里</th>
+<th>能看到什么</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>控制台</strong>（游戏里按 <code>F1</code>）</td>
+<td>VM 报错信息、<code>VM_ShellPrint</code> 打的字、<code>[reloadmod]</code> 这类命令的回显 —— <strong>先看这里</strong></td>
+</tr>
+<tr>
+<td><strong><code>mod/mod_errors.log</code></strong>（游戏目录的 <code>mod/</code> 下）</td>
+<td>控制台刷太快错过的报错会记到这里（时间 + 内容，只留最近 2000 行；同一个错连续刷屏时每 60 次才记一条）</td>
+</tr>
+<tr>
+<td>游戏窗口的 debug 输出</td>
+<td><code>show_debug_message</code> 的内容（编辑器里跑的时候才方便看）</td>
+</tr>
+</tbody></table>
+<p>几个<strong>不会报错</strong>的坑，只能自己查：</p>
+<ul>
+<li><strong>贴图找不到</strong> → 给一张占位图，静默；用 <code>VM_SpriteExists(&quot;名字&quot;)</code> 判断，自带图记得在 <code>_OBJECT_CFG</code> 里预加载</li>
+<li><strong>音效名写错</strong> → 静音，什么都不提示（必须是内置的 <code>snd_*</code>）</li>
+<li><strong>读了没设过的属性</strong> → <strong>报错并中断整个块</strong>（这一帧后面都不跑了），先在 <code>_OBJECT_CREATE</code> 里给一份默认值</li>
+<li><strong>地图脚本</strong>里的报错会被吞掉，调不出效果时先在 <code>_VM_BATTLE_START</code> 里 <code>VM_ShellPrint(&quot;进来了&quot;)</code> 确认块跑了</li>
+</ul>
 <hr>
 <h2>一、能做哪几种 Mod</h2>
 <table>
@@ -107,7 +272,6 @@ hr { border:none; border-top:1px solid #e5e7eb; margin:2em 0; }
 <th>目录</th>
 <th>需要的文件</th>
 <th>注册成什么</th>
-<th>逻辑对象</th>
 <th>分文件</th>
 </tr>
 </thead>
@@ -116,7 +280,6 @@ hr { border:none; border-top:1px solid #e5e7eb; margin:2em 0; }
 <td><code>mod/cards/</code></td>
 <td><code>.json</code> + <code>.bin</code>（+<code>tex/</code>）</td>
 <td>卡池 + 植物数据</td>
-<td><code>obj_card_mod</code></td>
 <td><a href="mod%E5%8D%A1%E7%89%87.html">mod卡片.md</a></td>
 </tr>
 <tr>
@@ -124,7 +287,6 @@ hr { border:none; border-top:1px solid #e5e7eb; margin:2em 0; }
 <td><code>mod/weapons/</code></td>
 <td><code>.json</code> + <code>.bin</code>（+<code>tex/</code>）</td>
 <td>主武器 / 超级武器 / 副武器</td>
-<td>主·超武用 <code>obj_weapon_mod</code>；副武是 <code>obj_player_shield</code> + 额外一个 <code>obj_weapon_mod</code></td>
 <td><a href="mod%E6%AD%A6%E5%99%A8.html">mod武器.md</a></td>
 </tr>
 <tr>
@@ -132,7 +294,6 @@ hr { border:none; border-top:1px solid #e5e7eb; margin:2em 0; }
 <td><code>mod/gems/</code></td>
 <td><code>.json</code> + <code>.bin</code>（+<code>tex/</code>）</td>
 <td>宝石（按装备槽位）</td>
-<td><code>obj_gem_mod</code>（<code>passive</code> 为真则没有实体）</td>
 <td><a href="mod%E5%AE%9D%E7%9F%B3.html">mod宝石.md</a></td>
 </tr>
 <tr>
@@ -140,7 +301,6 @@ hr { border:none; border-top:1px solid #e5e7eb; margin:2em 0; }
 <td><code>mod/enemies/</code></td>
 <td><code>.json</code> + <code>.bin</code>（+<code>tex/</code>）</td>
 <td>敌人池</td>
-<td><code>obj_enemy_mod</code></td>
 <td><a href="mod%E6%95%8C%E4%BA%BA.html">mod敌人.md</a></td>
 </tr>
 <tr>
@@ -148,7 +308,6 @@ hr { border:none; border-top:1px solid #e5e7eb; margin:2em 0; }
 <td><code>mod/bullets/</code></td>
 <td><code>.json</code> + <code>.bin</code></td>
 <td>不进任何池，只提供逻辑</td>
-<td><code>obj_bullet_mod</code></td>
 <td><a href="mod%E5%AD%90%E5%BC%B9.html">mod子弹.md</a></td>
 </tr>
 <tr>
@@ -156,7 +315,6 @@ hr { border:none; border-top:1px solid #e5e7eb; margin:2em 0; }
 <td><code>mod/effects/</code></td>
 <td><code>.json</code> + <code>.bin</code></td>
 <td>同上</td>
-<td><code>obj_effect_mod</code></td>
 <td><a href="mod%E7%89%B9%E6%95%88.html">mod特效.md</a></td>
 </tr>
 <tr>
@@ -164,15 +322,13 @@ hr { border:none; border-top:1px solid #e5e7eb; margin:2em 0; }
 <td><code>mod/attires/</code></td>
 <td>只要 <code>.json</code></td>
 <td>角色 / 卡片时装（纯外观）</td>
-<td>无</td>
 <td><a href="mod%E6%97%B6%E8%A3%85.html">mod时装.md</a></td>
 </tr>
 <tr>
 <td><strong>地图</strong></td>
 <td><code>mod/maps/&lt;地图id&gt;/</code></td>
 <td><code>world.json</code> + 每关 <code>json</code>/<code>bin</code></td>
-<td>实验室大地图</td>
-<td>无（关卡脚本用 LabMapCompiler）</td>
+<td>实验室大地图（关卡脚本用 LabMapCompiler 编译）</td>
 <td><a href="mod%E5%9C%B0%E5%9B%BE.html">mod地图.md</a></td>
 </tr>
 </tbody></table>
@@ -182,6 +338,17 @@ hr { border:none; border-top:1px solid #e5e7eb; margin:2em 0; }
 <li><strong>子弹 / 特效的 json 可以只是 <code>{}</code></strong>，但<strong>必须有 json</strong> —— 扫描入口是 json，没有它就找不到同名 bin</li>
 <li><strong>时装只有 json</strong>，没有逻辑块</li>
 </ol>
+<p><strong>可以在类别目录下再建一层子目录分类收纳</strong>（mod 多了的时候好用）：</p>
+<pre><code>mod/cards/snake/shegengbao.json      ← 卡片按系列分：cards/god/、cards/zodiac/、cards/snake/ …
+mod/cards/snake/shegengbao.bin
+mod/cards/snake/tex/xxx.png          ← 贴图跟着【json 所在目录】走，不是跟着 cards/ 根目录
+</code></pre>
+<ul>
+<li>每个类别（cards / weapons / gems / enemies / bullets / effects / attires / maps）都支持，<strong>只扫一层、不递归</strong>（<code>mod/cards/a/b/x.json</code> 扫不到）</li>
+<li><code>tex/</code> 认的是<strong>同一层</strong>，所以放进子目录就得建 <code>&lt;子目录&gt;/tex/</code></li>
+<li>子目录名随便取（中文也行），<strong>不影响 id</strong>（id 只看 json 文件名）</li>
+<li>平铺和子目录混用没问题：<code>mod/cards/a.json</code> 和 <code>mod/cards/snake/b.json</code> 会一起加载</li>
+</ul>
 <hr>
 <h2>二、大概怎么做（五步）</h2>
 <ol>
@@ -193,12 +360,12 @@ hr { border:none; border-top:1px solid #e5e7eb; margin:2em 0; }
 </li>
 <li><strong>写 json</strong>：字段见对应分文件</li>
 <li><strong>贴图</strong>：内置名直接用，自带 PNG 放 <code>tex/</code>（见下）</li>
-<li><strong>生效方式</strong>：<ul>
+<li><strong>生效方式</strong>（下面这些命令都在游戏里的控制台敲：<strong>按 <code>F1</code> 开关</strong>）：<ul>
 <li>改<strong>已有文件</strong> → 控制台 <code>[reloadmod]</code>（只重载载入的 bin，不动注册表）</li>
 <li>只改某一个 mod → <code>[reloadmod &lt;数字id | id | 名称&gt;]</code>（数字id 就是 <code>[listmod]</code> 里那个编号；重读那个 json/bin，数值重新注册；<strong>贴图换了还是要用全量 <code>reloadmod</code></strong>，因为贴图别名是所有 mod 共用一批登记的）</li>
 <li><strong>新增文件</strong> → <code>[reloadallmod]</code>（重扫所有目录，只注册新增的；不用重开游戏了）</li>
 <li>看现在加载了什么 → <code>[listmod]</code>（每行：<code>[数字id] [类别] id  名称  路径  简介</code>，简介取 json 的 <code>description</code>，没有就取 <code>shop.description</code>）</li>
-<li>改<strong>核心 GML</strong> → 要 GM 重编译（mod 层改动不需要）</li>
+<li><strong>重启游戏</strong> → 一定生效（最省心的一招）：卡池 / 商店 / 图鉴这类<strong>注册过的东西</strong>改了，热重载不一定跟得上，重启准没错</li>
 </ul>
 </li>
 </ol>
@@ -248,31 +415,24 @@ hr { border:none; border-top:1px solid #e5e7eb; margin:2em 0; }
 </tr>
 </tbody></table>
 <p>各对象实际支持：</p>
-<pre><code class="language-text">obj_card_mod     CREATE / STEP / DRAW / DESTROY / 移入 / 移出 / 点击
-obj_weapon_mod   CREATE / STEP / DRAW           / 移入 / 移出 / 点击
-obj_bullet_mod   CREATE / STEP / DRAW / DESTROY / 移入 / 移出 / 点击
-obj_effect_mod   CREATE / STEP / DRAW / DESTROY / 移入 / 移出 / 点击
-obj_enemy_mod    CREATE / STEP / DRAW / DESTROY / 移入 / 移出 / 点击
-obj_gem_mod      CREATE / STEP / DRAW           / 移入 / 移出 / 点击
+<pre><code class="language-text">卡片     CREATE / STEP / DRAW / DESTROY / 移入 / 移出 / 点击
+武器     CREATE / STEP / DRAW           / 移入 / 移出 / 点击
+子弹     CREATE / STEP / DRAW / DESTROY / 移入 / 移出 / 点击
+特效     CREATE / STEP / DRAW / DESTROY / 移入 / 移出 / 点击
+敌人     CREATE / STEP / DRAW / DESTROY / 移入 / 移出 / 点击
+宝石     CREATE / STEP / DRAW           / 移入 / 移出 / 点击
 </code></pre>
 <ul>
-<li><p>鼠标三个块 <strong>6 个 mod 对象全都有</strong>；<code>_OBJECT_DESTROY</code> 只有武器和宝石没有（写了不会执行）</p>
-</li>
-<li><p>鼠标三个块是<strong>按实例</strong>判定的 —— 走 GameMaker 的实例鼠标事件，鼠标压在<strong>这个实例的贴图（碰撞掩码）<strong>上才算，
-所以</strong>没设 <code>sprite_index</code> 的实例收不到</strong>（子弹/特效尤其注意）</p>
-</li>
-<li><p>想判&quot;全场任意位置按了左键&quot;用 <code>_VM_MOUSE_LEFT</code> 事件块（地图脚本），不要用 <code>_OBJECT_CLICK</code></p>
-</li>
-<li><p>这三个块执行完都会 <code>event_inherited()</code>，所以宝石那种核心自己也处理鼠标的对象，核心逻辑照常跑</p>
-</li>
-<li><p>写块之前先确认对应对象支持它 —— 写了没人执行的块等于没写</p>
-</li>
-<li><p>取当前实例：<code>self = VM_GetCurCard()</code>（名字叫 Card，实际指&quot;当前对象实例&quot;）</p>
-</li>
-<li><p>碰撞没有通用块（不存在 <code>_OBJECT_HIT</code>），要在 <code>_OBJECT_STEP</code> 里自己判</p>
-</li>
+<li>鼠标三个块 <strong>6 个 mod 对象全都有</strong>；<code>_OBJECT_DESTROY</code> 只有武器和宝石没有（写了不会执行）</li>
+<li>鼠标三个块是<strong>按实例</strong>判定的 —— 鼠标压在<strong>这个实例的贴图（碰撞掩码）<strong>上才算数，
+所以</strong>没设 <code>sprite_index</code> 的实例收不到</strong>（子弹/特效尤其注意）</li>
+<li>想判&quot;全场任意位置按了左键&quot;用 <code>_VM_MOUSE_LEFT</code> 事件块（地图脚本），不要用 <code>_OBJECT_CLICK</code></li>
+<li>这三个块执行完，<strong>核心自己的鼠标处理照常进行</strong>（宝石这类核心也处理鼠标的对象不会被打断）</li>
+<li>写块之前先确认对应对象支持它 —— 写了没人执行的块等于没写</li>
+<li>取当前实例：<code>self = VM_GetCurCard()</code>（名字叫 Card，实际指&quot;当前对象实例&quot;）</li>
+<li>碰撞没有通用块（不存在 <code>_OBJECT_HIT</code>），要在 <code>_OBJECT_STEP</code> 里自己判</li>
 </ul>
-<h3>实例字段（GML 内置，读写都用 VM_GetProp / VM_SetProp）</h3>
+<h3>实例字段（内置字段，读写都用 VM_GetProp / VM_SetProp）</h3>
 <pre><code class="language-gml">x = VM_GetProp(self, &quot;x&quot;)          // 读
 VM_SetProp(self, &quot;x&quot;, x + 40)      // 写（浮点直接写，如 1.8）
 </code></pre>
@@ -390,6 +550,38 @@ VM_SetProp(self, &quot;x&quot;, x + 40)      // 写（浮点直接写，如 1.8�
 <p>写了才进商店；<code>cost</code> 是字符串。</p>
 <h3>数值档位</h3>
 <p>卡片数值是 <strong>17 档数组</strong>（从最低等级往上排），写不满就用最后一个补齐。</p>
+<h3>倒计时与淡出（<strong>所有 mod 对象通用</strong>：卡片 / 武器 / 宝石 / 敌人 / 子弹 / 特效）</h3>
+<p>每个 mod 实例都带这两个属性，核心每帧帮你推，<strong>不用自己写 STEP</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>属性</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>mod_countdown</code></td>
+<td>倒计时（帧）。<code>&gt; 0</code> 时每帧 <code>-1</code></td>
+</tr>
+<tr>
+<td><code>mod_alpha_add</code></td>
+<td>每帧加到 <code>image_alpha</code> 上的变化量（负数 = 渐隐，正数 = 渐显）</td>
+</tr>
+</tbody></table>
+<pre><code class="language-gml">_OBJECT_CREATE {
+    self = VM_GetCurCard()          // 其它对象里是当前实例；子弹/特效写 `self = ...` 同理
+    VM_SetProp(self, &quot;mod_countdown&quot;, 30)          // 30 帧后走完
+    VM_SetProp(self, &quot;mod_alpha_add&quot;, -1 / 30.0)   // 每帧变化量 → 30 帧正好淡到 0
+}
+</code></pre>
+<ul>
+<li>判定顺序：<strong><code>mod_countdown &gt; 0</code></strong> 时才 <code>-1</code> 并把变化量加到 <code>image_alpha</code>（两个一起才生效，默认都是 0 = 不动）</li>
+<li>⚠️ <strong>两边都是整数时 <code>/</code> 走整除</strong>（同 C 的 <code>int /</code>，向零取整）：写成 <code>-1 / 30</code> 结果是 <code>0</code>，等于不淡。要小数就写 <code>-1 / 30.0</code> 或 <code>-0.0333</code></li>
+<li>变化量就是<strong>每帧</strong>的量，不用除 60；30 帧 = 0.5 秒</li>
+<li>走完（倒计时到 0）就不再动透明度；要在淡完时销毁，就在 <code>_OBJECT_STEP</code> 里判 <code>mod_countdown == 0</code> 自己 <code>VM_DestroyInstance(self)</code></li>
+<li>游戏暂停时不推进；卡片被冻住（<code>is_frozen</code>）时也不推进</li>
+<li>中途想改方向/停手：直接改这两个属性的当前值就行</li>
+</ul>
 <hr>
 <h2>四、常见坑速查</h2>
 <table>
@@ -440,6 +632,42 @@ VM_SetProp(self, &quot;x&quot;, x + 40)      // 写（浮点直接写，如 1.8�
 <td>命名数组是<strong>整个 mod 单元共享</strong>的，不是实例级；同名注册还会互相覆盖</td>
 </tr>
 <tr>
+<td>发完 A 的 mod 子弹后，B 的子弹行为/贴图变成了 A 的（例：双刃蛇打完，雷神/哈迪斯镰刀的子弹跑成刀刃弹）</td>
+<td><code>_mod_pending_bullet_id</code> 是<strong>全局</strong>且创建后没人清。B 若&quot;创建后才写 <code>mod_type</code>&quot;，Create 里已经按脏值初始化并把 <code>_mod_initialized</code> 置成 true，之后再改 <code>mod_type</code> 无效。改法：创建【前】用全局指定类型、创建后清空（见 <code>mod子弹.md</code>「一、怎么创建」的方案 A）</td>
+</tr>
+<tr>
+<td>想直接 <code>VM_CreateInstance(&quot;my_bullet&quot;, x, y)</code> 创建 mod 子弹</td>
+<td>不支持：该命令只认游戏对象名（会去找 <code>obj_my_bullet</code>，找不到返回 −1）。必须创建 <code>obj_bullet_mod</code> 再指定类型</td>
+</tr>
+<tr>
+<td><code>[reloadmod]</code> 之后数值全变 0：宝石每帧狂刷火苗、撕裂/神罚打不出伤害、护盾没减伤、联动倍率固定不动</td>
+<td>重载会<strong>清空该 VM 的全部命名数组</strong>，但<strong>不重跑 <code>_OBJECT_CREATE</code></strong>。所以数值表要建在 <code>_OBJECT_CFG</code>（每次加载/重载都跑），或读之前用 <code>VM_ArraySize</code> 判空重建；「场上同类有几个」这类活计数器别用命名数组记，改成现场 <code>VM_GetInstancesInRange</code>（详见 <code>mod卡片.md</code>「五、其它要点」的重载对照表）</td>
+</tr>
+<tr>
+<td>卡升级/吃到技能后<strong>完全没反应</strong>（一发不发）</td>
+<td>开火窗口表写成了<strong>绝对帧号</strong>，而 <code>skill.attr = &quot;cycle&quot;</code> 会把 <code>cycle</code> 改小（例：雷神 150→108）→ 窗口落在 ticker 范围外<strong>永不触发</strong>。窗口一律写「从一轮末尾倒数」的负数（<code>-30</code>），或用 <code>mod_tick_max</code> 固定周期</td>
+</tr>
+<tr>
+<td>攻击动画闪一下就回待机 / 播不完 / 缺帧</td>
+<td>帧数要求是 <code>idle_anim + attack_anim + 2 ≤ 精灵总帧数</code>（待机播 <code>0..idle_anim</code>，攻击从 <code>idle_anim+1</code> 起跳、还会多显示一帧）</td>
+</tr>
+<tr>
+<td><code>VM_PlaySound</code> 没声音、也不报错</td>
+<td>音效名必须是内置表里的 <code>snd_*</code>（见 <code>help.md</code>「内置音效」）。写不存在的名字是<strong>静音</strong>，不会报错、日志也没有提示</td>
+</tr>
+<tr>
+<td>看到 <code>VM_GetProp(0, &quot;grid_rows&quot;)</code> 以为是写错了</td>
+<td>这是<strong>合法</strong>写法：<code>inst_id == 0</code> 时走 <code>variable_global_get</code>，读的就是全局变量（写全局同理用 <code>VM_SetProp(0, ...)</code>）</td>
+</tr>
+<tr>
+<td>「落到已有卡上再吃/换那张卡」的卡，进 VM 后<strong>只查到自己</strong>（<code>VM_GetInstancesInRange(..., &quot;card&quot;, ...)</code> 返回 1）</td>
+<td>JSON 的 <code>plant_type</code> 写成了 <code>normal</code>：开着替换放置时，游戏在<strong>建你这张卡之前</strong>就把同 <code>plant_type</code> 的卡销毁、并从格子里移走了——目标早没了。改成 <code>coffee</code>（占位格允许落、替换不会动 coffee 层）。<strong>种植/替换判定只看 JSON</strong>，<code>_OBJECT_CREATE</code> 里的 <code>VM_SetProp(self,&quot;plant_type&quot;,...)</code> 只改实例层级，改不了这个（详见 <code>mod卡片.md</code>「一、JSON 字段」）</td>
+</tr>
+<tr>
+<td><code>mod_step_enter_condition</code> 设成 <code>&quot;wait&quot;</code> 后卡反而每帧都在跑</td>
+<td><code>&quot;wait&quot;</code> 减到 0 放你进 VM 后停在 0，卡里<strong>必须马上设回正数</strong>；不设引擎会把条件清成 <code>&quot;&quot;</code>，之后就再也回不到 wait 了</td>
+</tr>
+<tr>
 <td>贴图空白但不报错</td>
 <td><code>get_load_sprite</code> 找不到会给占位图；用 <code>VM_SpriteExists</code> 判断，自带图记得在 <code>_OBJECT_CFG</code> 预加载</td>
 </tr>
@@ -464,8 +692,7 @@ VM_SetProp(self, &quot;x&quot;, x + 40)      // 写（浮点直接写，如 1.8�
 <td>瓶颈是<strong>进 VM 解释器的次数</strong>：别在 <code>_VM_FRAME</code> / 每帧每实例里写重逻辑；大量同质子弹改用屏幕弹幕管理器（<code>VM_BulletScreenAdd_Ex</code>），少用 <code>VM_CallFunc</code></td>
 </tr>
 </tbody></table>
-<p>遇到&quot;原版是怎么做的&quot;这类问题，可以直接翻 <code>datafiles/mod/dev_test/</code> 里的样例，
-或对照游戏源码里对应的 <code>obj_*</code> 对象事件。</p>
+<p>遇到&quot;原版是怎么做的&quot;这类问题，可以直接翻 <code>datafiles/mod/dev_test/</code> 里的样例照着改。</p>
 
 </main>
 </body>

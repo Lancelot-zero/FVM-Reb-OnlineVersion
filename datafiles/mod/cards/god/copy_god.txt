@@ -1,0 +1,292 @@
+// 至尊创造神（复制卡）：复制 5 张「最近种下、且能复制的那张卡」
+// 按 mod 分支的梵天 shape3（obj_brahma/Step_0.gml）重写。
+//
+// ── 搜格方式：不是十字，是由内向外的螺旋 ──
+//   ① 先放自己那格（无条件）
+//   ② 然后 d = 1,2,3... 一圈圈往外，每圈里的顺序照原版排序结果：
+//        同一列（上/下）  ← priority 0
+//        同一行（左/右）  ← priority 1
+//        其余            ← priority 2，按 row 升序、同一行内 col 升序
+//   ③ 每格都用 VM_CanPlace(目标卡, 列, 行) 按**游戏正规种植规则**判定：
+//        地形、障碍、水域/莲叶、护盾层、底座卡全都算，跟自己手牌点下去时一样
+//      复制期间临时把 global.replace_placement 关掉，所以只会种在真正空得下的地方，
+//      不会把已有的卡顶掉（obj_wooden_plate 也是这个套路）；用完还原
+//      坐标要在场内；凑满 5 张就停
+//
+// ── 目标来源 ──
+//   原版读 global.last_placed_card_id / _shape，这两个全局在当前 main 分支**不存在**。
+//   这里改用 global._recent_card_type_1~5（card_created.gml:218-241 维护，去重、_1 最新），
+//   从 _1 开始依次挑第一个不在黑名单里的。
+//
+// ── ⚠️ 读取时机：必须在 _OBJECT_CREATE 里读 ──
+//   obj_card_slot 是「先建卡(261) → 再 card_created(265)」，所以在 CREATE 里读到的
+//   还是之前种的那些；到 STEP 里读就变成自己了（会无限套娃，踩过）。
+
+_OBJECT_CFG {
+    // 统一写内部 spr 名：内置有就直接用（性能好）；内置没有才把本地图挂到这个名上。
+    // VM_AliasSpritePerm 写的是永久缓存，进房间不会被清；[reloadmod] 时会释放让这里重跑。
+    // 卡面图标：1 帧，原点 (170, 215)
+    if (VM_SpriteExists("spr_brahma_icon_3") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_brahma_icon_3_0.png", 1, 170, 215)
+        VM_AliasSpritePerm("spr_brahma_icon_3", "tex/spr_brahma_icon_3_0.png")
+    }
+
+    // 本体：35 帧，原点 (170, 216)
+    if (VM_SpriteExists("spr_brahma_3") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_brahma_3_0.png", 35, 170, 216)
+        VM_AliasSpritePerm("spr_brahma_3", "tex/spr_brahma_3_0.png")
+    }
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+
+    VM_SetProp(self, "sprite_index", "spr_brahma_3")
+    VM_SetProp(self, "idle_anim", 35)
+    VM_SetProp(self, "attack_anim", 0)
+    VM_SetProp(self, "flash_speed", 5)
+
+    // 黑名单数组："" 和几张复制卡 + 自己
+    if (VM_ArraySize("cg_bl") < 1) {
+        VM_ArrayADD("cg_bl", "")
+        VM_ArrayADD("cg_bl", "copy_god")
+        VM_ArrayADD("cg_bl", "brahma")
+        VM_ArrayADD("cg_bl", "magic_chicken")
+        VM_ArrayADD("cg_bl", "ice_cream")
+    }
+
+    // 最近种植的 5 种卡（_1 最新）
+    r1 = VM_GetProp(0, "_recent_card_type_1")
+    r2 = VM_GetProp(0, "_recent_card_type_2")
+    r3 = VM_GetProp(0, "_recent_card_type_3")
+    r4 = VM_GetProp(0, "_recent_card_type_4")
+    r5 = VM_GetProp(0, "_recent_card_type_5")
+    if (VM_IsUndefined(r1)) {
+        r1 = ""
+    }
+    if (VM_IsUndefined(r2)) {
+        r2 = ""
+    }
+    if (VM_IsUndefined(r3)) {
+        r3 = ""
+    }
+    if (VM_IsUndefined(r4)) {
+        r4 = ""
+    }
+    if (VM_IsUndefined(r5)) {
+        r5 = ""
+    }
+    // 依次试，取第一个不在黑名单里的
+    bln = VM_ArraySize("cg_bl")
+    tg = ""
+    k = 1
+    while (k <= 5) {
+        cand = ""
+        if (k == 1) {
+            cand = r1
+        }
+        if (k == 2) {
+            cand = r2
+        }
+        if (k == 3) {
+            cand = r3
+        }
+        if (k == 4) {
+            cand = r4
+        }
+        if (k == 5) {
+            cand = r5
+        }
+        if (tg == "") {
+            if (cand != "") {
+                bad = 0
+                j = 0
+                while (j < bln) {
+                    if (VM_ArrayGet("cg_bl", j) == cand) {
+                        bad = 1
+                    }
+                    j = j + 1
+                }
+                if (bad == 0) {
+                    tg = cand
+                }
+            }
+        }
+        k = k + 1
+    }
+
+    VM_SetProp(self, "target", tg)
+
+    // 只在第 70 帧（复制）和第 175 帧（自毁）进 VM，中间 173 帧不跑脚本。
+    // mod_tick_cycle 由 obj_card_mod 每帧 +1、到 mod_tick_max 归零，和原来的 copy_timer 完全同步
+    //（引擎每帧先在 GML 里 +1 再进 VM，和原来「进 STEP 第一句 +1」同一时刻，数值一致）。
+    VM_SetProp(self, "copy_timer", 0)
+    VM_SetProp(self, "copied", 0)
+    VM_SetProp(self, "mod_tick_max", 176)
+    VM_InstArrayClear(self, "mod_step_enter_arr")
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 70)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 175)
+    VM_SetProp(self, "mod_step_enter_condition", "norm")
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+
+    t = VM_GetProp(self, "mod_tick_cycle")
+
+    if (t == 70) {
+        copied = VM_GetProp(self, "copied")
+        if (VM_IsUndefined(copied)) {
+            copied = 0
+        }
+        if (copied == 0) {
+            VM_SetProp(self, "copied", 1)
+
+            tg = VM_GetProp(self, "target")
+            if (VM_IsUndefined(tg)) {
+                tg = ""
+            }
+
+            c = VM_GetProp(self, "grid_col")
+            r = VM_GetProp(self, "grid_row")
+            bad = 0
+            if (tg == "") {
+                bad = 1
+            }
+            if (VM_IsUndefined(c)) {
+                bad = 1
+            }
+            if (VM_IsUndefined(r)) {
+                bad = 1
+            }
+
+            // 目标或坐标无效就整段跳过
+            if (bad == 0) {
+                // 目标卡的属性：存档里的外形/星级/技能 + 卡池里的层/特性
+                sh = VM_GetCardProp(tg, "shape")
+                lv = VM_GetCardProp(tg, "level")
+                sk = VM_GetCardProp(tg, "skill")
+                pt = VM_GetCardProp(tg, "plant_type")
+                ft = VM_GetCardProp(tg, "feature_type")
+                if (VM_IsUndefined(sh)) {
+                    sh = 0
+                }
+                if (VM_IsUndefined(lv)) {
+                    lv = 0
+                }
+                if (VM_IsUndefined(sk)) {
+                    sk = 0
+                }
+                if (VM_IsUndefined(pt)) {
+                    pt = "normal"
+                }
+                if (VM_IsUndefined(ft)) {
+                    ft = "normal"
+                }
+                gr = VM_GetProp(0, "grid_rows")
+                gc = VM_GetProp(0, "grid_cols")
+                if (VM_IsUndefined(gr)) {
+                    gr = 99
+                }
+                if (VM_IsUndefined(gc)) {
+                    gc = 99
+                }
+                // 复制期间临时关掉「替换模式」（玩家的设置项，obj_wooden_plate 也这么干）：
+                // VM_CanPlace 内部会读 global.replace_placement，开着的话格子被占也算能种，
+                // 复制就会把别人的卡顶掉。关掉之后它只往真正空得下的地方种。
+                rp_bak = VM_GetProp(0, "replace_placement")
+                if (VM_IsUndefined(rp_bak)) {
+                    rp_bak = 0
+                }
+                VM_SetProp(0, "replace_placement", 0)
+
+                // ① 自己那格：也走正规规则（地形/障碍/水陆/莲叶/护盾层/底座卡都算）
+                made = 0
+                if (VM_CanPlace(tg, c, r) == 1) {
+                    VM_SpawnPlant(tg, c, r, sh, lv, sk)
+                    made = 1
+                }
+
+                // ② 按原版顺序把候选格生成到命名数组（cgc = 列, cgr = 行）
+                VM_ArrayClear("cgc")
+                VM_ArrayClear("cgr")
+                n = 0
+                d = 1
+                while (d <= 8) {
+                    // 同一列：上、下
+                    VM_ArraySet("cgc", n, c)
+                    VM_ArraySet("cgr", n, r - d)
+                    n = n + 1
+                    VM_ArraySet("cgc", n, c)
+                    VM_ArraySet("cgr", n, r + d)
+                    n = n + 1
+                    // 同一行：左、右
+                    VM_ArraySet("cgc", n, c - d)
+                    VM_ArraySet("cgr", n, r)
+                    n = n + 1
+                    VM_ArraySet("cgc", n, c + d)
+                    VM_ArraySet("cgr", n, r)
+                    n = n + 1
+                    // 其余：按 row 升序、同行内 col 升序
+                    dr = 0 - d
+                    while (dr <= d) {
+                        if (dr != 0) {
+                            if (dr < 0) {
+                                w = 0 - dr
+                            } else {
+                                w = dr
+                            }
+                            w = d - w
+                            if (w > 0) {
+                                VM_ArraySet("cgc", n, c - w)
+                                VM_ArraySet("cgr", n, r + dr)
+                                n = n + 1
+                                VM_ArraySet("cgc", n, c + w)
+                                VM_ArraySet("cgr", n, r + dr)
+                                n = n + 1
+                            }
+                        }
+                        dr = dr + 1
+                    }
+                    d = d + 1
+                }
+
+                // ③ 按顺序填，凑满 5 张（自己那格已占 1 张）
+                i = 0
+                while (i < n) {
+                    if (made < 5) {
+                        cc = VM_ArrayGet("cgc", i)
+                        rr = VM_ArrayGet("cgr", i)
+                        ok = 1
+                        if (rr < 0) {
+                            ok = 0
+                        }
+                        if (rr >= gr) {
+                            ok = 0
+                        }
+                        if (cc < 0) {
+                            ok = 0
+                        }
+                        if (cc >= gc) {
+                            ok = 0
+                        }
+                        if (ok == 1) {
+                            if (VM_CanPlace(tg, cc, rr) == 1) {
+                                VM_SpawnPlant(tg, cc, rr, sh, lv, sk)
+                                made = made + 1
+                            }
+                        }
+                    }
+                    i = i + 1
+                }
+
+                // 还原玩家的替换模式设置
+                VM_SetProp(0, "replace_placement", rp_bak)
+            }
+        }
+    }
+
+    if (t >= 175) {
+        VM_SetProp(self, "hp", 0)
+    }
+}

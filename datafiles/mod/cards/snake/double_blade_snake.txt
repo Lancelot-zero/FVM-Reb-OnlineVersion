@@ -1,0 +1,123 @@
+// 双刃蛇（生肖卡）：直线四连发，命中带斩杀（残血直接秒，精英按倍率加伤）
+// 照 warm_birds 的原始写法：不设 mod_step_enter_condition（默认每帧进 VM），
+// 卡自己用 attack_timer 数帧、自己索敌、自己切 state。
+//
+//   索敌：本行、自己右侧到边界；有敌人才走 cycle 计时，没敌人计时清零。
+//   一轮末尾 attack_anim(7) 帧播攻击动画，动画走完发 4 发。
+//   最终形态：4 发、斩杀阈值 0.25、精英倍率 10；竖向偏移 [-75,-65,-85,-70]。
+//   子弹见 mod_bullets/shuangrenshe_bullet.txt
+//
+//   贴图：本体 spr_shuangrenshe_2 = 21 帧、104x101、原点 (39, 79)
+
+_OBJECT_CFG {
+    if (VM_SpriteExists("spr_shuangrenshe_2") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_shuangrenshe_2_0.png", 21, 39, 79)
+        VM_AliasSpritePerm("spr_shuangrenshe_2", "tex/spr_shuangrenshe_2_0.png")
+    }
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+
+    VM_SetProp(self, "sprite_index", "spr_shuangrenshe_2")
+    VM_SetProp(self, "idle_anim", 11)
+    VM_SetProp(self, "attack_anim", 7)
+    VM_SetProp(self, "flash_speed", 5)
+    VM_SetProp(self, "plant_type", "normal")
+    VM_SetProp(self, "state", 0)
+    VM_SetProp(self, "attack_timer", 0)
+
+    // 一轮 96 帧里只有 6 帧真有事做：收招/待机 2 帧（0、1）+ 攻击动画里错开的 4 发出弹帧。
+    // 用 "norm" + 窗口表，其余 90 帧不进 VM；原来每帧都跑的「本行右侧全扫描」降到每轮 6 次。
+    // 窗口一律写成相对 cycle 的负数（技能改 cycle 时会自动跟上）。
+    VM_InstArrayClear(self, "mod_step_enter_arr")
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 0)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 1)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 1 - 7 * 5)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 9 - 7 * 5)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 17 - 7 * 5)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 25 - 7 * 5)
+    VM_SetProp(self, "mod_step_enter_condition", "norm")
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+
+    fs = VM_GetProp(self, "flash_speed")
+    if (VM_IsUndefined(fs)) {
+        fs = 5
+    }
+    if (VM_GetProp(self, "is_slowdown") == 1) {
+        fs = fs * 2
+    }
+    cyc = VM_GetProp(self, "cycle")
+    if (VM_IsUndefined(cyc)) {
+        cyc = 96
+    }
+    gr = VM_GetProp(self, "grid_row")
+    gc = VM_GetProp(self, "grid_col")
+
+    // 索敌：本行、自己右侧
+    gcs = VM_GetProp(0, "grid_cols")
+    if (VM_IsUndefined(gcs)) {
+        gcs = 9
+    }
+    n = VM_GetInstancesInRange("srs_scan", gr, gr, gc, gcs + 1, "enemy", "")
+
+    at = VM_GetProp(self, "mod_tick_cycle")
+
+    if (n <= 0) {
+        VM_SetProp(self, "state", 0)
+        exit
+    }
+
+    st = 0
+    shot = 0
+    off = 0
+
+    // 计时交给引擎，这里只判断这一帧是待机还是攻击动画
+    if (at <= cyc - 7 * fs) {
+        st = 0
+    } else {
+        st = 1
+    }
+
+    // 4 发【错开】打，不再同一帧一起出：攻击动画（7*fs = 35 帧）里每 8 帧一发，
+    // 正好铺在动画上；每发保持原来的竖向错开偏移。
+    // ⚠️ 窗口值写成相对 cycle 的负数（技能改 cycle 时才会跟着走）。
+    if (at == cyc - 7 * fs + 1) {
+        shot = 1
+        off = 0 - 75
+    }
+    if (at == cyc - 7 * fs + 9) {
+        shot = 1
+        off = 0 - 65
+    }
+    if (at == cyc - 7 * fs + 17) {
+        shot = 1
+        off = 0 - 85
+    }
+    if (at == cyc - 7 * fs + 25) {
+        shot = 1
+        off = 0 - 70
+    }
+
+    if (shot == 1) {
+        atk = VM_GetProp(self, "atk")
+        bx  = VM_GetProp(self, "x")
+        by  = VM_GetProp(self, "y")
+
+        // 类型在创建【前】用全局指定，创建后清掉（别把脏值留给别的 mod）
+        VM_SetProp(0, "_mod_pending_bullet_id", "shuangrenshe_bullet")
+        b = VM_CreateInstance("obj_bullet_mod", bx + 40, by + off)
+        VM_SetProp(0, "_mod_pending_bullet_id", "")
+        VM_SetProp(b, "damage", atk)
+        VM_SetProp(b, "row", gr)
+        VM_SetProp(b, "vx", 8)
+        VM_SetProp(b, "vy", 0)
+        VM_SetProp(b, "exec_th", 0.25)
+        VM_SetProp(b, "exec_mul", 10)
+    }
+
+    VM_SetProp(self, "state", st)
+}

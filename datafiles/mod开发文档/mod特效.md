@@ -5,9 +5,20 @@
 
 ## 文件
 
+特效放在**游戏目录下的 `mod/effects/`** 里：
+
 ```text
-mod/effects/my_fx.json / .bin / .txt / tex/
+游戏目录/                       ← 运行游戏的那个文件夹
+└─ mod/
+   └─ effects/                  ← 特效这一类都放这里
+      ├─ my_fx.json             可以就是 {}
+      ├─ my_fx.bin              逻辑（由 my_fx.txt 编译出来，游戏只读这个）
+      ├─ my_fx.txt              源码（建议保留）
+      └─ tex/                   自带贴图（可选）
+         └─ xxx.png
 ```
+
+**也可以再分一层子目录归类**（只扫一层、不往下递归）：`mod/effects/xxx/my_fx.json`，贴图跟 json 同一层放 `mod/effects/xxx/tex/`；id 只看 json 文件名。
 
 和子弹同一套路：**不进任何池，只提供逻辑**，json 可以是 `{}`（但必须有 json 才会被扫描）。
 特效一般用在三处：**卡片/宝石/武器身上的光环**、**命中或死亡特效**、**纯表现（文字提示、爆炸）**。
@@ -54,7 +65,7 @@ VM_SetProp(0, "_mod_pending_effect_id", "")
 ```gml
 // ① 固定偏移：每帧贴到主人身上，再往上偏 40 像素（x/y 每帧被跟随重置，所以偏移是固定的）
 VM_SetProp(self, "mod_follow_instance", 主人实例)
-VM_SetProp(self, "mod_prestep_dy", 0 - 40)
+VM_SetProp(self, "mod_prestep_dy", -40)
 
 // ② 每帧位移：不设跟随 → x/y 没人重置，每帧加一次就是"匀速移动"
 VM_SetProp(self, "mod_prestep_dx", 3)      // 每帧往右 3 像素
@@ -75,7 +86,7 @@ VM_SetProp(self, "mod_prestep_dx", 3)      // 每帧往右 3 像素
 | **下一帧** | Step 开头发现 `mod_type` 有了 → 跑该特效的 `_OBJECT_CREATE`，紧接着**同帧**跑 `_OBJECT_STEP` |
 | 用 `_mod_pending_effect_id` 提前写好再创建 | Create 里直接初始化，**当帧**就生效（宝石挂光环就是这么写的） |
 
-每帧顺序（`obj_effect_mod/Step_0.gml`）：
+每帧顺序：
 
 ```text
 1. 暂停 → exit
@@ -114,8 +125,8 @@ VM_SetProp(self, "mod_prestep_dx", 3)      // 每帧往右 3 像素
 ```gml
 _OBJECT_CREATE {
     self = VM_GetCurCard()
-    VM_SetProp(self, "rel_x", 0 - 15)      // 相对主人的偏移
-    VM_SetProp(self, "rel_y", 0 - 5)
+    VM_SetProp(self, "rel_x", -15)      // 相对主人的偏移
+    VM_SetProp(self, "rel_y", -5)
     VM_SetProp(self, "frames", 9)          // 贴图帧数（自己推 image_index 用）
     VM_SetProp(self, "anim", 0)
     VM_SetProp(self, "image_speed", 0)

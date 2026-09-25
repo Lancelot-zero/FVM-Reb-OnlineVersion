@@ -1,0 +1,5 @@
+{
+  "name": "白羊冲撞车",
+  "description": "mod 子弹：沿本行向右一路冲，撞到普通敌人将其清走，撞到 Boss 则持续造成伤害",
+  "sprite": "spr_baiyang"
+}

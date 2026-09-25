@@ -108,6 +108,7 @@ else if info_button_select == 3{
 	draw_set_font(font_yuan)
 }
 if package_button_select == 1 {
+	package_rows = package_tab_rows(1)   // 本页行数自动扩容
 	if surface_exists(package_surface){
 		surface_set_target(package_surface)
 		draw_clear_alpha(c_black,0)
@@ -224,6 +225,7 @@ if package_button_select == 1 {
     }
 }
 else if package_button_select == 2 {
+	package_rows = package_tab_rows(2)   // 武器/宝石页行数自动扩容
 	if surface_exists(package_surface){
 		surface_set_target(package_surface)
 		draw_clear_alpha(c_black,0)
@@ -416,6 +418,7 @@ else if package_button_select == 2 {
 
 }
 else if package_button_select == 3{
+	package_rows = package_tab_rows(3)   // 材料页行数自动扩容
 	if surface_exists(package_surface){
 		surface_set_target(package_surface)
 		draw_clear_alpha(c_black,0)

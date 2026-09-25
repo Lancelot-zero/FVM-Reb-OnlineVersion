@@ -1,0 +1,129 @@
+// 蛇羹煲（生肖卡）：放下后吃掉同一格里已有的卡，按它们的耗能退还火苗，然后自己退场
+// 原版 obj_shegengbao：
+//   收集本格内其它卡（排除自己、玩家底座 plant_id = "player"、不可铲除的卡），
+//   逐个按卡的耗能产火苗（退还倍率：2 转 ×2，低形态 ×1），销毁那些卡，最后自己销毁。
+//   mod 卡只有形态 0 → 按最终形态写死 2 倍退还。
+//
+//   ⚠️ 退还量读【实例】上的 cost：它由 obj_card_parent 用户事件 0 用 get_plant_data_with_skill
+//      按 形态/等级/技能 算好写入，和原版口径一致。
+//   ⚠️ 原版还会调 card_destroyed()（登记"卡没了"，牵动死亡列表），插件调不到，这里只销毁实例。
+//
+//   ⚠️ JSON 里 plant_type 必须是 "coffee"（不是 normal）：开着"替换放置"时，
+//      obj_card_slot 的通用替换只销毁 plant_type 相同的卡，写成 normal 会在种植瞬间
+//      就把目标卡替换掉（card_destroyed 同时把它从 grid_plants 里删掉），本格只剩自己 → 吃不到东西。
+//      coffee 同时满足 can_place_at_position：占位格也允许落下。
+//
+//   贴图：本体 spr_shegengbao_2 = 14 帧、216x124、原点 (111, 117)
+//   节奏：第 1 个窗口（tick 1）吃卡 + 产火苗，第 2 个窗口（tick 36）本体才退场 —— 中间播一段动画。
+
+_OBJECT_CFG {
+    if (VM_SpriteExists("spr_shegengbao_2") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_shegengbao_2_0.png", 13, 111, 117)
+        VM_AliasSpritePerm("spr_shegengbao_2", "tex/spr_shegengbao_2_0.png")
+    }
+}
+
+// ── 全局事件：卡片被种下时触发（放进任意一个 mod 单位的 bin 里都生效，是全局块）──
+_VM_CARD_CREATED {
+    cid = VM_GetLastCreatedCard()
+    cpid = VM_GetProp(cid, "plant_id")
+    VM_ShowNotice("种下卡片：", cpid)
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+
+    VM_SetProp(self, "sprite_index", "spr_shegengbao_2")
+    VM_SetProp(self, "plant_type", "normal")
+    VM_SetProp(self, "state", 0)
+    // 贴图 14 帧；不设 idle_anim 会锁在第 0 帧不动（看不到动画）
+    VM_SetProp(self, "idle_anim", 13)
+
+    VM_SetProp(self, "sgb_done", 0)
+    VM_SetProp(self, "sgb_cnt", 0)
+    VM_SetProp(self, "sgb_total", 0)
+
+    // 第 1 帧吃卡，第 36 帧再退场。cycle 只有 60，顺手把一轮放大到 64（一次性卡，不影响别的）
+    VM_SetProp(self, "mod_tick_max", 64)
+    VM_InstArrayClear(self, "mod_step_enter_arr")
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 1)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 36)
+    VM_SetProp(self, "mod_step_enter_condition", "norm")
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+
+    done = VM_GetProp(self, "sgb_done")
+    if (VM_IsUndefined(done) == 1) {
+        done = 0
+    }
+    if (done == 1) {
+        // 第二次进 VM = 动画已经播了一小段，收工
+        cnt2 = VM_GetProp(self, "sgb_cnt")
+        tot2 = VM_GetProp(self, "sgb_total")
+        if (VM_IsUndefined(cnt2) == 1) {
+            cnt2 = 0
+        }
+        if (VM_IsUndefined(tot2) == 1) {
+            tot2 = 0
+        }
+        VM_DestroyInstance(self)
+        exit
+    }
+    VM_SetProp(self, "sgb_done", 1)
+
+    gr = VM_GetProp(self, "grid_row")
+    gc = VM_GetProp(self, "grid_col")
+    if (VM_IsUndefined(gr) == 1) {
+        gr = 0
+    }
+    if (VM_IsUndefined(gc) == 1) {
+        gc = 0
+    }
+
+    cnt = 0
+    total = 0
+
+    // 收本格内的卡（含自己）
+    n = VM_GetInstancesInRange("sgb_tg", gr, gr, gc, gc, "card", "")
+    k = 0
+    while (k < n) {
+        c = VM_ArrayGet("sgb_tg", k)
+        if (c != self) {
+            if (VM_IsDestroyed(c) == 0) {
+                pid = VM_GetProp(c, "plant_id")
+                ok = 1
+                if (VM_IsUndefined(pid) == 1) {
+                    ok = 0
+                }
+                if (ok == 1) {
+                    if (pid == "" || pid == "player") {
+                        ok = 0          // 空 / 玩家底座：不回收
+                    }
+                }
+                if (ok == 1) {
+                    // 按耗能退还火苗（最终形态 ×2）
+                    cst = VM_GetProp(c, "cost")
+                    if (VM_IsUndefined(cst) == 1) {
+                        cst = 0
+                    }
+                    if (cst > 0) {
+                        cx = VM_GetProp(c, "x")
+                        cy = VM_GetProp(c, "y")
+                        fl = VM_CreateInstance("flame", cx, cy - 30)
+                        VM_SetProp(fl, "value", cst * 2)
+                    }
+                    cnt = cnt + 1
+                    total = total + cst * 2
+                    VM_DestroyInstance(c)
+                }
+            }
+        }
+        k = k + 1
+    }
+
+    VM_SetProp(self, "sgb_cnt", cnt)
+    VM_SetProp(self, "sgb_total", total)
+    // 不在这里销毁：等第 36 帧那个窗口，中间让动画播完
+}

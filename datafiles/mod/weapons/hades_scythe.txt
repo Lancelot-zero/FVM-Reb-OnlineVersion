@@ -180,7 +180,13 @@ _OBJECT_STEP {
             if (fidx < n) {
                 if (at >= (first + fidx * gap)) {
                     // 生成 mod 子弹：obj_bullet_mod + mod_type 指定用哪套逻辑
+                    // ⚠️ 类型【必须】在创建前用全局指定：obj_bullet_mod 的 Create 会立刻按
+                    //    _mod_pending_bullet_id 初始化 VM 并置 _mod_initialized = true，
+                    //    创建后再写 mod_type 已经晚了 —— 会继承上一个 mod 的脏值（比如双刃蛇的子弹
+                    //    刚发过，镰刀的子弹就会跑成刀刃弹）。
+                    VM_SetProp(0, "_mod_pending_bullet_id", "hades_scythe_bullet")
                     b = VM_CreateInstance("obj_bullet_mod", 620, VM_GetProp(self, "lock_y") + VM_GetProp(self, "fire_dy"))
+                    VM_SetProp(0, "_mod_pending_bullet_id", "")
                     VM_SetProp(b, "mod_type", "hades_scythe_bullet")
                     VM_SetProp(b, "damage", ak)
                     VM_PlaySound("snd_shot")

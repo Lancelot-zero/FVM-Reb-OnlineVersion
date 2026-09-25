@@ -1,0 +1,137 @@
+// 后羿（神卡 · 终转）：一轮一次三路齐射，箭从后羿所在列射出
+// 照 warm_birds 的原始写法：不设 mod_step_enter_condition（默认每帧进 VM），
+// 卡自己用 attack_timer 数帧、自己索敌、自己切 state。
+//
+//   索敌：本行 ±1 行、自己右侧到边界；有敌人才走 cycle 计时，没敌人清零。
+//   一轮末尾 attack_anim(13) 帧播攻击动画，动画走完放三发。
+//   终转（按最终形态写死）：全弹 5 倍伤害、30% 概率点燃。
+//   起点 = 后羿自己那一列（原版是 get_world_position_from_grid(0,0).x，箭从屏幕最左飞进来；
+//   这里按需求改成从本体所在列出）。
+//
+//   贴图：本体 spr_houyi_god_3 = 22 帧、235x147、原点 (90, 116)
+
+_OBJECT_CFG {
+    if (VM_SpriteExists("spr_houyi_god_3") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_houyi_god_3_0.png", 22, 90, 116)
+        VM_AliasSpritePerm("spr_houyi_god_3", "tex/spr_houyi_god_3_0.png")
+    }
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+
+    VM_SetProp(self, "sprite_index", "spr_houyi_god_3")
+    // 贴图 22 帧：idle 播 0..idle_anim、攻击从 idle_anim+1 起跳，要求 idle+attack+2 <= 22。
+    // 原版 15/13 超了 6 帧，按比例压到 11/9。
+    VM_SetProp(self, "idle_anim", 11)
+    VM_SetProp(self, "attack_anim", 9)
+    VM_SetProp(self, "flash_speed", 5)
+    VM_SetProp(self, "plant_type", "normal")
+    VM_SetProp(self, "state", 0)
+    VM_SetProp(self, "attack_timer", 0)
+
+    // 一轮 120 帧里只有 3 帧真有事做：开火帧（第 0 帧 = 越过 cycle）、收招帧 1、开攻击动画帧 56。
+    // 用 "norm" + 窗口表，其余 117 帧不进 VM；原来每帧都跑的「本行±1 右侧全扫描」降到每轮 3 次。
+    VM_InstArrayClear(self, "mod_step_enter_arr")
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 0)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 1)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 1 - 10 * 5)
+    VM_SetProp(self, "mod_step_enter_condition", "norm")
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+
+    fs = VM_GetProp(self, "flash_speed")
+    if (VM_IsUndefined(fs)) {
+        fs = 5
+    }
+    if (VM_GetProp(self, "is_slowdown") == 1) {
+        fs = fs * 2
+    }
+    cyc = VM_GetProp(self, "cycle")
+    if (VM_IsUndefined(cyc)) {
+        cyc = 120
+    }
+    gr = VM_GetProp(self, "grid_row")
+    gc = VM_GetProp(self, "grid_col")
+
+    // 索敌：本行 ±1 行、自己右侧
+    grs = VM_GetProp(0, "grid_rows")
+    if (VM_IsUndefined(grs)) {
+        grs = 5
+    }
+    gcs = VM_GetProp(0, "grid_cols")
+    if (VM_IsUndefined(gcs)) {
+        gcs = 9
+    }
+    r1 = gr - 1
+    if (r1 < 0) {
+        r1 = 0
+    }
+    r2 = gr + 1
+    if (r2 > grs - 1) {
+        r2 = grs - 1
+    }
+    n = VM_GetInstancesInRange("hy_scan", r1, r2, gc, gcs + 1, "enemy", "")
+
+    at = VM_GetProp(self, "mod_tick_cycle")
+
+    if (n <= 0) {
+        VM_SetProp(self, "state", 0)
+        exit
+    }
+
+    st = 0
+    fire = 0
+
+    // 计时交给引擎，这里只判断这一帧是待机还是攻击动画
+    if (at == 0) {
+        fire = 1
+    } else if (at <= cyc - 10 * fs) {
+        st = 0
+    } else {
+        st = 1
+    }
+
+    if (fire == 1) {
+        atk = VM_GetProp(self, "atk")
+        midy = VM_GetProp(self, "y") - 75
+        // 起点 = 后羿自己那一列（原来用 grid_offset_x，也就是地图最左列，箭会从屏幕左侧飞进来）
+        bx = VM_GetProp(self, "x")
+        if (VM_IsUndefined(bx) == 1) {
+            bx = 0
+        }
+
+        // 中（5 倍伤害）
+        VM_SetProp(0, "_mod_pending_bullet_id", "houyi_bullet")
+        bm = VM_CreateInstance("obj_bullet_mod", bx, midy)
+        VM_SetProp(bm, "damage", atk * 5)
+        VM_SetProp(bm, "row", gr)
+        VM_SetProp(bm, "vx", 8)
+        VM_SetProp(bm, "vy", 0)
+
+        // 上
+        VM_SetProp(0, "_mod_pending_bullet_id", "houyi_bullet")
+        bu = VM_CreateInstance("obj_bullet_mod", bx, midy - 20)
+        VM_SetProp(bu, "damage", atk * 5)
+        VM_SetProp(bu, "row", gr)
+        VM_SetProp(bu, "target_row", r1)
+        VM_SetProp(bu, "vx", 8)
+        VM_SetProp(bu, "vy", 0)
+
+        // 下
+        VM_SetProp(0, "_mod_pending_bullet_id", "houyi_bullet")
+        bd = VM_CreateInstance("obj_bullet_mod", bx, midy + 20)
+        VM_SetProp(bd, "damage", atk * 5)
+        VM_SetProp(bd, "row", gr)
+        VM_SetProp(bd, "target_row", r2)
+        VM_SetProp(bd, "vx", 8)
+        VM_SetProp(bd, "vy", 0)
+
+        // 创建完清掉全局，别把脏值留给别的 mod（否则别人"创建后才写 mod_type"会跑成箭）
+        VM_SetProp(0, "_mod_pending_bullet_id", "")
+    }
+
+    VM_SetProp(self, "state", st)
+}

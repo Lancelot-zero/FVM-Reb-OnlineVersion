@@ -1,0 +1,125 @@
+// 光明神（神卡 · 终转）：范围内每 cycle 帧点名所有敌人打一次「圣光」，伤害按黑暗神是否在场放大
+// 照 warm_birds 的原始写法：不设 mod_step_enter_condition（默认每帧进 VM），
+// 卡自己用 attack_timer 数帧、自己切 state。
+//
+//   范围：终转 7x7（半径 3）。
+//   一轮末尾 attack_anim(21) 帧播攻击动画，动画走完对范围内每个敌人各打一次。
+//   倍率看场上有没有黑暗神：终转黑暗 ×8、普通黑暗 ×5、没有 ×1。
+//
+//   ⚠️ 原版每命中一个敌人会生成子弹 + 爆炸特效当视觉，插件建不了那种特效，这里只结算伤害。
+//   ⚠️ 原版光环 obj_guangming_god_effect 同样建不了。
+//   贴图：本体 spr_guangming_god_2 = 33 帧、151x153、原点 (62, 129)
+
+_OBJECT_CFG {
+    if (VM_SpriteExists("spr_guangming_god_2") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_guangming_god_2_0.png", 33, 62, 129)
+        VM_AliasSpritePerm("spr_guangming_god_2", "tex/spr_guangming_god_2_0.png")
+    }
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+
+    VM_SetProp(self, "sprite_index", "spr_guangming_god_2")
+    VM_SetProp(self, "idle_anim", 11)
+    VM_SetProp(self, "attack_anim", 21)
+    VM_SetProp(self, "flash_speed", 2)
+    VM_SetProp(self, "plant_type", "normal")
+    VM_SetProp(self, "state", 0)
+    VM_SetProp(self, "attack_timer", 0)
+
+    // 一轮 90 帧里只有 2 帧真有事做：第 49 帧起播攻击动画、第 0 帧（= 越过 cycle）结算伤害收招。
+    // 用 "norm" + 窗口表，其余 88 帧不进 VM。
+    VM_InstArrayClear(self, "mod_step_enter_arr")
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 0)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 1 - 21 * 2)
+    VM_SetProp(self, "mod_step_enter_condition", "norm")
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+
+    fs = VM_GetProp(self, "flash_speed")
+    if (VM_IsUndefined(fs)) {
+        fs = 2
+    }
+    if (VM_GetProp(self, "is_slowdown") == 1) {
+        fs = fs * 2
+    }
+    cyc = VM_GetProp(self, "cycle")
+    if (VM_IsUndefined(cyc)) {
+        cyc = 90
+    }
+    gr = VM_GetProp(self, "grid_row")
+    gc = VM_GetProp(self, "grid_col")
+
+    at = VM_GetProp(self, "mod_tick_cycle")
+
+    st = 0
+    hit = 0
+
+    // 计时交给引擎（mod_tick_cycle 逐帧等于原来的 attack_timer，到 cycle 归零）。
+    // at == 0 就是原来「at 越过 cycle」那一刻：结算伤害 + 收招。
+    if (at == 0) {
+        hit = 1
+        st = 0
+    } else if (at <= cyc - 21 * fs) {
+        st = 0
+    } else {
+        st = 1
+    }
+
+    if (hit == 1) {
+        atk = VM_GetProp(self, "atk")
+
+        // 先看场上有没有黑暗神（决定倍率）
+        gc_all = VM_GetProp(0, "grid_cols")
+        if (VM_IsUndefined(gc_all)) {
+            gc_all = 9
+        }
+        gr_all = VM_GetProp(0, "grid_rows")
+        if (VM_IsUndefined(gr_all)) {
+            gr_all = 5
+        }
+
+        has_dark = 0
+        dark_final = 0
+        nd = VM_GetInstancesInRange("gm_dark", 0, gr_all - 1, 0, gc_all - 1, "card", "heian_god")
+        if (nd > 0) {
+            has_dark = 1
+            dk = VM_ArrayGet("gm_dark", 0)
+            dsh = VM_GetProp(dk, "shape")
+            if (VM_IsUndefined(dsh) == 0) {
+                if (dsh >= 3) {
+                    dark_final = 1
+                }
+            }
+        }
+
+        mul = 1
+        if (dark_final == 1) {
+            mul = 8
+        } else {
+            if (has_dark == 1) {
+                mul = 5
+            }
+        }
+        dmg = atk * mul
+
+        // 7x7 范围内所有敌人各打一次
+        n = VM_GetInstancesInRange("gm_hit", gr - 3, gr + 3, gc - 3, gc + 3, "enemy", "")
+        k = 0
+        while (k < n) {
+            e = VM_ArrayGet("gm_hit", k)
+            hp = VM_GetProp(e, "hp")
+            if (VM_IsUndefined(hp) == 0) {
+                if (hp > 0) {
+                    VM_DamageEnemy(e, dmg, "normal")
+                }
+            }
+            k = k + 1
+        }
+    }
+
+    VM_SetProp(self, "state", st)
+}

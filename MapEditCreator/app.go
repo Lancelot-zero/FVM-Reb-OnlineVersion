@@ -94,6 +94,18 @@ const updateLog = `【本次更新】
   水域/莲叶、护盾层、底座卡、替换开关全都算进去（就是玩家手牌点下去时走的那套规则），1=能 0=不能
 - **VM_GetCardProp("卡名","属性名")**：按属性名读一张卡的单值。存档类 shape/level/skill/max_level/max_shape，
   卡池类 plant_type/feature_type/target_card/cost/cooldown；读不到返回 undefined（配合 VM_IsUndefined）
+- **VM_GetInfo(类别, id, 字段1[, 字段2, ...])**（变长）：按注册表逐级查一个对象的信息。
+  类别只有 card / enemy / weapon / gem；字符串参数=取字段，数字参数=取下标
+  （数字段落在 ds_map 上会自动当字符串键，注册表里 shapes/upgrades 的键就是 "0"/"3"）；
+  查到数组 / 结构体本身返回 undefined，要求继续往下写。
+  例：VM_GetInfo("card","small_fire","shapes",0,"upgrades",3,"atk")。
+  card 读的是 global.plant_registry（大池子，不是存档那份）
+- **VM_CatInRow(行号)**：该行第一只猫（obj_cat，海底图的螃蟹同对象）的实例 id，没有返回 -1
+- **VM_MapObj(列, 行[, "名字"])**（变长）：格子上有没有地图物品（读 global.cell_terrain_flag 的位）。
+  名字 obstacle / mucus / lava / seawater / barrier / fog / cloud / wind_tunnel；
+  "all" 或 ""=任意一种，"list"=返回逗号分隔名字串；列或行传 -1 = 该方向不限；名字不认识返回 -1
+- **VM_GetInstanceCount("obj_xxxx")**：某个对象类的实例个数（类名就是游戏里的 object 名，要写全）
+- **VM_GetInstanceAt("obj_xxxx", k)**：某个对象类第 k 个实例的 id（k 从 0 起）；越界返回 -1
 
 ## 三、新增函数 · 创建与实例
 

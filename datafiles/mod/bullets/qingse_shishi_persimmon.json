@@ -1,0 +1,5 @@
+{
+  "name": "青涩柿子",
+  "description": "mod 子弹：从上方加速下落，落地对 3x3 范围造成一次伤害后淡出",
+  "sprite": "spr_shizi_2"
+}

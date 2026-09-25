@@ -2,6 +2,9 @@ if global.is_paused{
 	exit
 }
 
+// ── 基础属性：倒计时 + 每帧透明度变化（所有 mod 对象通用，实现在 src_mod.gml）──
+mod_base_tick(id);
+
 // 记录上一帧格子坐标：下面 event_inherited() 里父类 Step 会重算 grid_col/grid_row
 prev_grid_col = grid_col;
 prev_grid_row = grid_row;

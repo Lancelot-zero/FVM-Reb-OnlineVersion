@@ -1,0 +1,104 @@
+// 白羊（生肖卡）：放下当帧，沿本行 + 上一行 + 下一行从场地左侧往右清，清完自己消失
+// 原版 obj_baiyang：放置当帧生成 obj_baiyang_effect（冲撞车），本体 instance_destroy。
+//
+//   ⚠️ 这里**不再生成冲撞车子弹**（也不需要任何特效/子弹单位），卡片自己直接结算：
+//      每行按列从左到右扫，撞到普通老鼠就把它清掉、那台"车"到此为止；撞到 Boss 只掉一次血、继续往右。
+//      和原版的差别只有"没有行进过程"——结果是等价的，省掉一个 mod 子弹单位。
+//   贴图：本体 spr_baiyang_2 = 5 帧、182x136、原点 (44, 119)
+
+_OBJECT_CFG {
+    if (VM_SpriteExists("spr_baiyang_2") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_baiyang_2_0.png", 4, 44, 119)
+        VM_AliasSpritePerm("spr_baiyang_2", "tex/spr_baiyang_2_0.png")
+    }
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+
+    VM_SetProp(self, "sprite_index", "spr_baiyang_2")
+    VM_SetProp(self, "plant_type", "normal")
+    VM_SetProp(self, "state", 0)
+    // 贴图 4 帧；不设 idle_anim 会锁在第 0 帧不动（看不到种下动画）
+    VM_SetProp(self, "idle_anim", 3)
+
+    VM_SetProp(self, "by_done", 0)
+
+    // 效果只在第 1 帧做一次，第 2 个窗口（36 帧后）再销毁自己 —— 留一小段让人看见卡片。
+    // ⚠️ 这张卡的 cycle 只有 20，ticker 也在 20 就回绕，36 这个窗口永远轮不到，
+    //    所以必须把 mod_tick_max 放大（一次性卡，不影响别的）。
+    VM_SetProp(self, "mod_tick_max", 64)
+    VM_InstArrayClear(self, "mod_step_enter_arr")
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 1)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 36)
+    VM_SetProp(self, "mod_step_enter_condition", "norm")
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+
+    done = VM_GetProp(self, "by_done")
+    if (VM_IsUndefined(done) == 1) {
+        done = 0
+    }
+    if (done == 1) {
+        // 第二次进 VM = 动画已经播了一小段，收工
+        VM_DestroyInstance(self)
+        exit
+    }
+    VM_SetProp(self, "by_done", 1)
+
+    gr = VM_GetProp(self, "grid_row")
+    gc = VM_GetProp(self, "grid_col")
+    if (VM_IsUndefined(gr) == 1) {
+        gr = 0
+    }
+    if (VM_IsUndefined(gc) == 1) {
+        gc = 0
+    }
+    atk = VM_GetProp(self, "atk")
+    grs = VM_GetProp(0, "grid_rows")
+    if (VM_IsUndefined(grs) == 1) {
+        grs = 5
+    }
+    gcs = VM_GetProp(0, "grid_cols")
+    if (VM_IsUndefined(gcs) == 1) {
+        gcs = 9
+    }
+
+    // 三行各扫一次（本行 + 上行 + 下行）。每行按列从左到右，等价于原版那台"从场地左侧冲到底"的车：
+    //   撞到普通老鼠 → 清掉它，这台车到此为止；
+    //   撞到 Boss     → 只掉一次血，车继续往右。
+    // VM_GetInstancesInRange 收集时是按 行→列 递增的顺序，所以单行拿到的就是从左到右的敌人。
+    j = 0 - 1
+    while (j <= 1) {
+        r = gr + j
+        if (r >= 0) {
+            if (r < grs) {
+                n = VM_GetInstancesInRange("by_hit", r, r, 0, gcs + 1, "enemy", "")
+                k = 0
+                while (k < n) {
+                    e = VM_ArrayGet("by_hit", k)
+                    hp = VM_GetProp(e, "hp")
+                    if (VM_IsUndefined(hp) == 0) {
+                        if (hp > 0) {
+                            VM_DamageEnemy(e, atk, "normal")
+
+                            boss = VM_GetProp(e, "is_boss")
+                            if (VM_IsUndefined(boss) == 1) {
+                                boss = 0
+                            }
+                            if (boss == 0) {
+                                k = n          // 车撞上普通老鼠就没了：这一行到此为止
+                            }
+                        }
+                    }
+                    k = k + 1
+                }
+            }
+        }
+        j = j + 1
+    }
+
+    // 三行都清完，不立刻退场：等第 36 帧那个窗口再销毁（能看见卡片被放下的动画）
+}

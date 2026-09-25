@@ -29,6 +29,14 @@ mod_step_enter_var       = 0    // "mod" = 间隔帧数；"wait" = 还要等几�
 mod_tick_cool            = 0    // 【obj 内部】*_mod 模式的冷却剩余帧数
 mod_has_card             = 0    // 【只读】card / card_mod 模式下 1 = 索敌有目标
 
+// 倒计时 + 每帧透明度变化（基础属性，所有 mod 对象都有）
+mod_countdown = 0    // 倒计时（帧）：> 0 时每帧 -1
+mod_alpha_add = 0    // 每帧加到 image_alpha 上的量（负数 = 渐隐）；只在倒计时 > 0 时加
+
+// 鼠标移入时的白色半透明遮罩（在 Draw 里画，用的还是自家贴图）
+mod_hover_mask  = 0      // 1 = 鼠标压在贴图上时显示白色半透明遮罩
+mod_hover_alpha = 0.35   // 遮罩的透明度（0~1，越大越白）
+
 // 上一帧格子坐标：按当前位置直接算，和第一帧 Step 里算出来的值一致，不会误触发一次 "cell"
 prev_grid_col = floor((x - global.grid_offset_x) / global.grid_cell_size_x)
 prev_grid_row = floor((y - global.grid_offset_y) / global.grid_cell_size_y)

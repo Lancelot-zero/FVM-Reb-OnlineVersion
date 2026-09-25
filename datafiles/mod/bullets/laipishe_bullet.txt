@@ -1,0 +1,99 @@
+// 赖皮蛇海胆弹（mod 子弹）：向本行最右列飞出 → 到边掉头 → 飞回发起格 → 销毁
+// 命中不消失，同一敌人只结算一次。
+//
+// 卡片侧创建方式（照 mod子弹.html 的两步法，先写全局再创建可当帧生效）：
+//     VM_SetProp(0, "_mod_pending_bullet_id", "laipishe_bullet")
+//     b = VM_CreateInstance("obj_bullet_mod", x, y - 40)
+//     VM_SetProp(b, "damage", atk)
+//     VM_SetProp(b, "row", grid_row)
+//     VM_SetProp(b, "col_home", grid_col)     // 出发格（回程目标）
+//   不写 sprite_index 就用自带的 spr_laipishe_bullet。
+//
+//   ⚠️ 位移在跑完本块之后由 obj_bullet_mod 做（x += vx），所以这里只改 vx / vy；
+//      读到的 x / y 是移动前的位置。
+//   ⚠️ VM_InstArray* 有效对象是"真正的 GML 数组"，不存在时 Contains 返回 -1，所以判"没打过"要 <= 0。
+//   ⚠️ 命中走 VM_DamageEnemy（闪白 / 音效 / 护盾都对），不要自己扣 hp。
+
+_OBJECT_CFG {
+    if (VM_SpriteExists("spr_laipishe_bullet") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_laipishe_bullet_0.png", 12, 20, 16)
+        VM_AliasSpritePerm("spr_laipishe_bullet", "tex/spr_laipishe_bullet_0.png")
+    }
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+    VM_SetProp(self, "image_xscale", 1)
+    VM_SetProp(self, "image_yscale", 1)
+
+    // sprite_index 是内置实例变量，没设时是 -1，不能用 undefined 兜底
+    spr = VM_GetProp(self, "sprite_index")
+    if (VM_IsUndefined(spr) == 1) {
+        spr = 0 - 1
+    }
+    if (spr == 0 - 1) {
+        VM_SetProp(self, "sprite_index", "spr_laipishe_bullet")
+    }
+
+    if (VM_IsUndefined(VM_GetProp(self, "vx")) == 1) {
+        VM_SetProp(self, "vx", 6)
+    }
+    if (VM_IsUndefined(VM_GetProp(self, "vy")) == 1) {
+        VM_SetProp(self, "vy", 0)
+    }
+    if (VM_IsUndefined(VM_GetProp(self, "damage")) == 1) {
+        VM_SetProp(self, "damage", 0)
+    }
+    if (VM_IsUndefined(VM_GetProp(self, "row")) == 1) {
+        VM_SetProp(self, "row", VM_GetProp(self, "grid_row"))
+    }
+    if (VM_IsUndefined(VM_GetProp(self, "col_home")) == 1) {
+        VM_SetProp(self, "col_home", VM_GetProp(self, "grid_col"))
+    }
+
+    VM_SetProp(self, "flying_out", 1)
+    // 寿命兜底：飞出去回不来时自己消失（原版 max_life_frames 是同样用途）
+    VM_SetProp(self, "destroy_timer", 300)
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+
+    r    = VM_GetProp(self, "row")
+    bc   = VM_GetProp(self, "grid_col")
+    fo   = VM_GetProp(self, "flying_out")
+    home = VM_GetProp(self, "col_home")
+
+    // 网格总列数（去程边界）；取不到按 9 列兜底
+    gc = VM_GetProp(0, "grid_cols")
+    if (VM_IsUndefined(gc) == 1) {
+        gc = 9
+    }
+
+    // 去程：到最右列掉头；回程：回到出发格销毁
+    if (fo == 1) {
+        if (bc >= gc - 1) {
+            VM_SetProp(self, "flying_out", 0)
+            VM_SetProp(self, "vx", 0 - 6)
+        }
+    } else {
+        if (bc <= home) {
+            VM_DestroyInstance(self)
+            exit
+        }
+    }
+
+    // 命中：本行、子弹所在那一格；同一发对同一敌人只结算一次（靠跨格判断）
+    dmg = VM_GetProp(self, "damage")
+    if (bc != VM_GetProp(self, "prev_grid_col")) {
+        n = VM_GetInstancesInRange("lp_hit", r, r, bc, bc, "enemy", "")
+        k = 0
+        while (k < n) {
+            e = VM_ArrayGet("lp_hit", k)
+            if (VM_GetProp(e, "hp") > 0) {
+                VM_DamageEnemy(e, dmg, "normal")
+            }
+            k = k + 1
+        }
+    }
+}

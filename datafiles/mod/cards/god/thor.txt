@@ -1,0 +1,208 @@
+// 至尊雷神（金卡 · 雷神最终形态）：连续投出冰锤，命中减速
+// 按 mod 分支 obj_thor（shape 3）移植。子弹不走弹幕管理器，而是**真子弹实例**：
+//   b = VM_CreateInstance("obj_bullet_mod", x, y)
+//   VM_SetProp(b, "mod_type", "thor_bullet")   → 逻辑在 mod/bullets/thor_bullet.txt
+// 因为冰锤是抛体（cgravity 重力）而且边飞边转，管理器只有直线速度、也不给旋转。
+// 真实例就没这些限制：每帧的位移写进 vx/vy、重力累积写回 cvspeed、自转直接写 image_angle。
+//
+//   Create：attack_anim = 13、idle_anim = 13、flash_speed = 5、target_type = "throw"
+//   Step  ：本行**前方**（自己那一格往右）找最近的敌人（原版取 grid_col 距离最小的）：
+//             at == cycle - 40 且 shape == 3 → 投一发超级冰锤
+//             at == cycle - 30              → 投一发普通冰锤
+//             at == cycle - 20              → 投一发普通冰锤
+//             at == cycle - 10              → 投一发普通冰锤（shape >= 1）
+//             at >  cycle                   → 归零
+//           一轮 3 发普通 + 1 发超级（终转「每轮增加一发超级子弹」）。
+//           ⚠️ 原版没有 is_frozen 判定，这里也不加。
+//   投掷  ：原版从 (x - 40, y - 125) 出手，按目标预判位置反算飞行参数：
+//             flight_time = clamp(30 + 距离/1000*45, 30, 75)
+//             predicted_x = 敌人.x - 敌人.move_speed*flight_time - 50（不比自己靠后就取自己）
+//             move_speed  = (predicted_x - 出手点x) / flight_time
+//             cgravity    = 1200 / flight_time²
+//             cvspeed     = 600 / flight_time
+//           没锁到目标就用 move_speed 8 / cvspeed 6 / cgravity 0.2。
+//   伤害  ：普通 = atk，超级 = 3*atk（原版 Other_13 写的是 3 * atk）。
+//           超级弹贴图原版忘了设（Other_13 也只给了 spr_thor_bullet_3，spr_thor_bullet_3_s
+//           从没被引用），这里按意图用 super 那张。
+
+_OBJECT_CFG {
+    // 统一写内部 spr 名：内置有就直接用；内置没有才把本地图挂到这个名上。
+    // 卡面图标：1 帧，原点 (97, 128)
+    if (VM_SpriteExists("spr_thor_icon_3") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_thor_icon_3_0.png", 1, 97, 128)
+        VM_AliasSpritePerm("spr_thor_icon_3", "tex/spr_thor_icon_3_0.png")
+    }
+
+    // 本体：26 帧，原点 (98, 129)
+    if (VM_SpriteExists("spr_thor_3") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_thor_3_0.png", 26, 98, 129)
+        VM_AliasSpritePerm("spr_thor_3", "tex/spr_thor_3_0.png")
+    }
+
+    // 冰锤（普通 / 超级）和命中特效的贴图归子弹自己管：
+    // 放在 mod/bullets/tex/，由 bullets/thor_bullet.txt 的 _OBJECT_CFG 加载。
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+
+    VM_SetProp(self, "sprite_index", "spr_thor_3")
+    VM_SetProp(self, "idle_anim", 13)
+    VM_SetProp(self, "attack_anim", 13)
+    VM_SetProp(self, "flash_speed", 5)
+    VM_SetProp(self, "plant_type", "normal")
+    VM_SetProp(self, "target_type", "throw")
+
+    VM_SetProp(self, "attack_timer", 0)
+    VM_SetProp(self, "state", 0)
+    VM_SetProp(self, "tgt", 0 - 4)
+
+    // 一轮 150 帧里只有 6 帧真有事做：第 1 帧收招、第 86 帧起播攻击动画、
+    // 第 110 帧超级冰锤、第 120/130/140 帧各一发。用 "norm" + 窗口表，其余 144 帧不进 VM。
+    // 顺带把原来每帧都跑的「本行右侧全扫描挑最近目标」降到每轮 6 次。
+    VM_InstArrayClear(self, "mod_step_enter_arr")
+    // 窗口一律写成「从一轮末尾倒数」的负数：技能的 skill.attr = cycle 会把 cycle 从 150 压到 108，
+    // 写绝对帧号的话 ticker 永远轮不到那几个窗口，直接变成一发不发。
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 1)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 1 - 13 * 5)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 0 - 40)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 0 - 30)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 0 - 20)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 0 - 10)
+    VM_SetProp(self, "mod_step_enter_condition", "norm")
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+
+    cfs = VM_GetProp(self, "flash_speed")
+    if (VM_GetProp(self, "is_slowdown") == 1) {
+        cfs = cfs * 2
+    }
+
+    at = VM_GetProp(self, "mod_tick_cycle")
+    r = VM_GetProp(self, "grid_row")
+    c = VM_GetProp(self, "grid_col")
+    st = 0
+    fire = 0
+    sup = 0
+
+    // 索敌：本行、自己前方最近的敌人（原版取 grid_col 距离最小那个）
+    n = VM_GetInstancesInRange("thor_scan", r, r, c, 99, "enemy", "")
+    tgt = 0 - 4
+    best = 9999
+    k = 0
+    while (k < n) {
+        e = VM_ArrayGet("thor_scan", k)
+        gc = VM_GetProp(e, "grid_col")
+        if (VM_IsUndefined(gc)) {
+            gc = c
+        }
+        d = gc - c
+        if (d < best) {
+            best = d
+            tgt = e
+        }
+        k = k + 1
+    }
+    VM_SetProp(self, "tgt", tgt)
+
+    if (n > 0) {
+        cyc = VM_GetProp(self, "cycle")
+
+        // 计时交给引擎，这里只判断这一帧是待机还是攻击动画
+        if (at <= cyc - 13 * cfs) {
+            st = 0
+        } else if (at == cyc - 30) {
+            fire = 1
+        } else if (at <= cyc) {
+            if (at == cyc - 40) {
+                sup = 1
+            }
+            if (at == cyc - 20) {
+                fire = 1
+            }
+            if (at == cyc - 10) {
+                fire = 1
+            }
+            st = 1
+        }
+    } else {
+        st = 0
+    }
+
+    fire_any = 0
+    if (fire == 1) {
+        fire_any = 1
+    }
+    if (sup == 1) {
+        fire_any = 1
+    }
+
+    if (fire_any == 1) {
+        atk = VM_GetProp(self, "atk")
+        self_x = VM_GetProp(self, "x")
+        self_y = VM_GetProp(self, "y")
+        sx = self_x - 40
+        sy = self_y - 125
+
+        dmg = atk
+        spr = "spr_thor_bullet_3"
+        if (sup == 1) {
+            dmg = 3 * atk
+            spr = "spr_thor_bullet_3_s"
+        }
+
+        // ⚠️ 类型【必须】在创建前用全局指定：obj_bullet_mod 的 Create 会立刻按
+        //    _mod_pending_bullet_id 初始化 VM 并置 _mod_initialized = true，创建后再写
+        //    mod_type 已经晚了 —— 会继承上一个 mod 的脏值（双刃蛇刚发过子弹，雷神的锤子
+        //    就会跑成刀刃弹）。创建后清掉全局，避免以后有人忘了设而继承脏值。
+        VM_SetProp(0, "_mod_pending_bullet_id", "thor_bullet")
+        b = VM_CreateInstance("obj_bullet_mod", sx, sy)
+        VM_SetProp(0, "_mod_pending_bullet_id", "")
+        VM_SetProp(b, "mod_type", "thor_bullet")
+        VM_SetProp(b, "sprite_index", spr)
+        VM_SetProp(b, "image_xscale", 1.4)
+        VM_SetProp(b, "image_yscale", 1.4)
+        VM_SetProp(b, "damage", dmg)
+        VM_SetProp(b, "row", r)
+        VM_SetProp(b, "thrower_y", self_y)
+
+        // 预判落点（原版那套）
+        if (tgt != 0 - 4) {
+            ex = VM_GetProp(tgt, "x")
+            es = VM_GetProp(tgt, "move_speed")
+            if (VM_IsUndefined(ex)) {
+                ex = self_x
+            }
+            if (VM_IsUndefined(es)) {
+                es = 0
+            }
+
+            ft = 30 + ((ex - sx) / 1000.0) * 45   // 除数带小数：整数相除会被截断（原来恒为 30）
+            if (ft < 30) {
+                ft = 30
+            }
+            if (ft > 75) {
+                ft = 75
+            }
+
+            px = ex - es * ft - 50
+            if (px < self_x) {
+                px = self_x
+            }
+
+            VM_SetProp(b, "move_speed", (px - sx) / (ft * 1.0))
+            VM_SetProp(b, "cgravity", 1200.0 / (ft * ft))
+            VM_SetProp(b, "cvspeed", 600.0 / ft)
+        } else {
+            VM_SetProp(b, "move_speed", 8)
+            VM_SetProp(b, "cvspeed", 6)
+            VM_SetProp(b, "cgravity", 0.2)
+        }
+
+        VM_PlaySound("snd_throw")
+    }
+
+    VM_SetProp(self, "state", st)
+}

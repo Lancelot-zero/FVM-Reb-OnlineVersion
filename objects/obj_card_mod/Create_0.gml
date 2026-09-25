@@ -32,6 +32,9 @@ plant_id = variable_global_exists("_mod_pending_card_id") ? global._mod_pending_
 //                            写：VM_InstArrayClear(self,"mod_step_enter_arr")
 //                                再 VM_InstArrayAdd(self,"mod_step_enter_arr", 0-7*fs) 多次
 //                            "norm"/"norm_attack" 用；下标就是进来后读到的 mod_step_enter_index
+//   mod_countdown            倒计时（帧）。> 0 时每帧 -1，同时把 mod_alpha_add 加到 image_alpha 上
+//   mod_alpha_add            每帧透明度变化量（-0.02 = 慢慢变透明，+ 变不透明）
+//                            两个配合 = "播完就淡出消失"：倒计时设 30、变化量设 -1/30
 //
 //   —— 批量改属性（两套，行为一样，各自独立；每套 = 三个数组 + 一个开关）——
 //   mod_set_on /  mod_set_id /  mod_set_prop /  mod_set_val      第一套
@@ -65,6 +68,14 @@ mod_step_enter_arr       = []   // 数组，开火窗口表（负数 = 从一轮
 mod_step_enter_index     = -1   // 【只读】命中的窗口下标；不是窗口 = -1
 mod_hp_last              = 0    // 【obj 内部】上一帧血量，"hp_change" / "hp_change_mod" 拿它比
 mod_tick_cool            = 0    // 【obj 内部】"hp_change_mod" 的冷却剩余帧数
+
+// 倒计时 + 每帧透明度变化
+mod_countdown = 0    // 倒计时（帧）：> 0 时每帧 -1
+mod_alpha_add = 0    // 每帧加到 image_alpha 上的量（负数 = 渐隐）；只在倒计时 > 0 时加
+
+// 鼠标移入时的白色半透明遮罩（在 Draw 里画，用的还是自家贴图）
+mod_hover_mask  = 0      // 1 = 鼠标压在贴图上时显示白色半透明遮罩
+mod_hover_alpha = 0.35   // 遮罩的透明度（0~1，越大越白）
 
 // ── 批量改属性：两套，每套 = 三个数组（id / 属性 / 值）+ 一个开关 ──
 //   开关开着时，每帧遍历 id 数组，把第 i 个 id 的 mod_set_prop[i] 属性设成 mod_set_val[i]

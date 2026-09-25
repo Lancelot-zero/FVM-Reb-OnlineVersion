@@ -18,20 +18,10 @@ _OBJECT_CFG {
         VM_LoadSpritePerm_Ex("../effects/tex/spr_master_shield_effect_1_0.png", 9, 70, 40)
         VM_AliasSpritePerm("spr_master_shield_effect_1", "../effects/tex/spr_master_shield_effect_1_0.png")
     }
-}
-
-_OBJECT_CREATE {
-    self = VM_GetCurCard()
-    // 战场贴图 45×45 按 1.8 放大；背包图标是 82×82 那张
-    VM_SetProp(self, "sprite_index", "spr_divine_blessing_gem")
-    VM_SetProp(self, "image_xscale", 1.8)
-    VM_SetProp(self, "image_yscale", 1.8)
-    VM_SetProp(self, "t", 0)
-    VM_SetProp(self, "first", 0)
-    VM_SetProp(self, "fx", 0)      // 光环特效实例（第一次 STEP 里创建）
-    VM_SetProp(self, "dbg", 0)
-    VM_SetProp(self, "cooldown_timer", 60)   // 预留属性：首发 1 秒，给图标显示冷却用
-    // 每档周期（秒，原版 cycle）
+    // tables live in _OBJECT_CFG, NOT _OBJECT_CREATE:
+    // reloadmod clears this VM's named arrays but only re-runs _VM_CONST_INIT + _OBJECT_CFG,
+    // never _OBJECT_CREATE -- if the tables were built in Create they come back empty after a
+    // reload and VM_ArrayGet returns 0 (bless spams flames every frame, tear/holy deal 0 damage).
     VM_ArrayClear("dvb_cy")
     VM_ArrayADD("dvb_cy", 15)
     VM_ArrayADD("dvb_cy", 15)
@@ -49,9 +39,6 @@ _OBJECT_CREATE {
     VM_ArrayADD("dvb_cy", 10)
     VM_ArrayADD("dvb_cy", 10)
     VM_ArrayADD("dvb_cy", 10)
-
-    // 每档【单朵】产量（一次出 6~13 朵，朵朵一样多；星级越高单朵越大）
-    // 单朵 25 → 50 线性递增
     VM_ArrayClear("dvb_fv")
     VM_ArrayADD("dvb_fv", 25)
     VM_ArrayADD("dvb_fv", 27)
@@ -69,6 +56,23 @@ _OBJECT_CREATE {
     VM_ArrayADD("dvb_fv", 47)
     VM_ArrayADD("dvb_fv", 48)
     VM_ArrayADD("dvb_fv", 50)
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+    // 战场贴图 45×45 按 1.8 放大；背包图标是 82×82 那张
+    VM_SetProp(self, "sprite_index", "spr_divine_blessing_gem")
+    VM_SetProp(self, "image_xscale", 1.8)
+    VM_SetProp(self, "image_yscale", 1.8)
+    VM_SetProp(self, "t", 0)
+    VM_SetProp(self, "first", 0)
+    VM_SetProp(self, "fx", 0)      // 光环特效实例（第一次 STEP 里创建）
+    VM_SetProp(self, "dbg", 0)
+    VM_SetProp(self, "cooldown_timer", 60)   // 预留属性：首发 1 秒，给图标显示冷却用
+    // 每档周期（秒，原版 cycle）
+
+    // 每档【单朵】产量（一次出 6~13 朵，朵朵一样多；星级越高单朵越大）
+    // 单朵 25 → 50 线性递增
 }
 
 _OBJECT_STEP {

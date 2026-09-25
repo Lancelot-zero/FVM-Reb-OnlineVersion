@@ -347,6 +347,86 @@
       ],
       "testCall": "VM_BulletScreenAdd_Exs(\"spr_bullet\", 1, 0, 1.6, 1, 1, 1, 8, 0, 1, 1, 0 - 1, \"normal\", \"\", \"\", \"normal\", 5, 0, 0 - 1, 0.15)",
       "desc": "同 VM_BulletScreenAdd_Ex，最后多两个行渐变参数：目标行y（要拐去那一行的世界 y，不想渐变传 -1）、靠拢比例（每帧朝目标 y 靠拢的比例，原版水管弹用 0.15，别传 0）。渐变到位（|目标行y - y| <= 8）自动吸附并停掉渐变，之后是纯直线；途中经过的行照常结算。20 个参数都要写满"
+    },
+    {
+      "name": "VM_GetInfo",
+      "args": [
+        "string",
+        "string",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any"
+      ],
+      "minArgs": 3,
+      "maxArgs": 16,
+      "ret": "any",
+      "testCall": "VM_GetInfo(\"card\", \"small_fire\", \"shapes\", 0, \"upgrades\", 3, \"atk\")",
+      "desc": "变长（3~16 个参数）：按注册表逐级查一个对象的信息，写法 VM_GetInfo(类别, id, 字段1[, 字段2, ...])。类别只有 card/enemy/weapon/gem；字符串参数=取字段，数字参数=取下标（落在 ds_map 上自动按字符串键查，注册表的 shapes/upgrades 键就是 \"0\"/\"3\"）；查到数组/结构体本身返回 undefined，只有数字/字符串才返回。card 读 global.plant_registry（大池子，不是存档那份）"
+    },
+    {
+      "name": "VM_CatInRow",
+      "args": [
+        "int"
+      ],
+      "ret": "int",
+      "testCall": "VM_CatInRow(2)",
+      "desc": "该行第一只猫（obj_cat，海底图的螃蟹同对象）的实例 id；没有返回 -1"
+    },
+    {
+      "name": "VM_MapObj",
+      "args": [
+        "int",
+        "int",
+        "string",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any"
+      ],
+      "minArgs": 2,
+      "maxArgs": 16,
+      "ret": "any",
+      "testCall": "VM_MapObj(1, 2, \"lava\")",
+      "desc": "变长（2~16 个参数）：查格子上有没有地图物品，VM_MapObj(列, 行[, \"名字\"])。读 global.cell_terrain_flag 的位：obstacle/mucus/lava/seawater/barrier/fog/cloud/wind_tunnel；\"all\" 或 \"\"=任意一种；\"list\"=返回逗号分隔名字串；列或行传 -1 = 该方向不限；名字不认识返回 -1；战斗中表由 obj_battle 每帧重建，战斗外返回 0"
+    },
+    {
+      "name": "VM_GetInstanceCount",
+      "args": [
+        "string"
+      ],
+      "ret": "int",
+      "testCall": "VM_GetInstanceCount(\"obj_cat\")",
+      "desc": "某个对象类的实例个数（类名就是游戏里的 object 名 obj_xxxx，必须写全）；名字不存在 / 不是对象 → -1"
+    },
+    {
+      "name": "VM_GetInstanceAt",
+      "args": [
+        "string",
+        "int"
+      ],
+      "ret": "int",
+      "testCall": "VM_GetInstanceAt(\"obj_cat\", 0)",
+      "desc": "某个对象类第 k 个实例的 id（k 从 0 起）；越界 / 名字不存在 → -1"
     }
   ]
 }

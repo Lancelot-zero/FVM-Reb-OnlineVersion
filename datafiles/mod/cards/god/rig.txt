@@ -1,0 +1,147 @@
+// 至尊守护神（里格最后一个形态）：前方 5 方向发射穿透子弹
+//
+// 参考 mod 系统里的 obj_rig / shape 3：
+//   Create：attack_anim 16 / idle_anim 9 / flash_speed 5，target_type "pierce"
+//   Step  ：前方（自己右侧）有敌人 → 开打
+//           第 (16-10)*5 = 30 帧 打一轮
+//           第 (16-7)*5  = 45 帧 再打一轮   ← 只有 shape 3 有第二轮
+//           第 78 帧（>= cycle）收招
+//   一轮 5 发，出生点 (x+60, y-40)：
+//      直射        (8,     0)
+//      ±45°        (5.658, ±5.658)
+//      ±22.5°      (7.391, ±3.062)
+//   联动：场上每多一个里格，伤害 ×(1 + 5%)，上限 145%
+//
+// 子弹不再单独写 mod 子弹对象，直接推进弹幕管理器 obj_Bullet_Screen_Management：
+//   VM_BulletScreenAdd(贴图, 总帧数, 打击范围, 缩放, 动画速度, x, y, vx, vy, 伤害, 伤害计数, 存活帧数, 子弹类型, 销毁对象, mod名字)
+//     · 打击范围 0  = 只算子弹所在那一格
+//     · 伤害计数 -1 = 不限次数 → 管理器把该格内所有 pierce 能打到的敌人**全部**结算
+//     · 存活帧数 -1 = 不自动到期，飞出界（x<0 / x>2200 / y<0 / y>1200）静默删除
+//     · 伤害按「每帧等量」换算：原弹每 5 帧打 atk/20，现在每帧打 atk/100，打出去的总量一致
+//
+// 原版用 GML 做的两件事，这里用等价手段替代：
+//   1. can_target_on(敌人类型, "pierce") → 管理器内部走 can_hit，填 target_type "pierce" 即可
+//   2. global.rig_count                  → 改用本卡 VM 的命名数组，不依赖全局
+
+_OBJECT_CFG {
+    // 统一写内部 spr 名：内置有就直接用（性能好）；内置没有才把本地图挂到这个名上。
+    // 本体：25 帧，原点 (90, 129)
+    if (VM_SpriteExists("spr_rig_3") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_rig_3_0.png", 25, 90, 129)
+        VM_AliasSpritePerm("spr_rig_3", "tex/spr_rig_3_0.png")
+    }
+
+    // 子弹：7 帧，原点 (55, 59)
+    // 管理器画弹幕时按名字查缓存（get_load_sprite → 永久缓存里就是真 id）
+    if (VM_SpriteExists("spr_rig_bullet_3") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_rig_bullet_3_0.png", 7, 55, 59)
+        VM_AliasSpritePerm("spr_rig_bullet_3", "tex/spr_rig_bullet_3_0.png")
+    }
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+
+    VM_SetProp(self, "sprite_index", "spr_rig_3")
+    VM_SetProp(self, "idle_anim", 9)
+    VM_SetProp(self, "attack_anim", 16)
+    VM_SetProp(self, "flash_speed", 5)
+    VM_SetProp(self, "plant_type", "normal")
+    VM_SetProp(self, "target_type", "pierce")
+    VM_SetProp(self, "is_slowdown", 0)
+
+    // 冷却先走一个 cycle（原版 cooldown_timer = cycle）
+    VM_SetProp(self, "cd", 78)
+    VM_SetProp(self, "atk_timer", 0)
+    VM_SetProp(self, "attacking", 0)
+    VM_SetProp(self, "state", 0)
+
+    // 联动数量不再用命名数组记：reloadmod 会清空该 VM 的命名数组、又不重跑 _OBJECT_CREATE，
+    // 计数器会被清 0（倍率掉成固定 0.95×）。改成开火时现场数场上的里格（见 _OBJECT_STEP）。
+
+    // 进 VM 的时机：只要求"前方有敌人"，窗口表留空 = 有敌人就每帧进、没敌人一次都不进。
+    // 空格子/window 表为空时 mod_step_enter_index 恒为 -1，引擎那套自动切 ATTACK 不会插手，
+    // 卡自己管 attacking/atk_timer/state 的状态机原样保留。
+    // 索敌区域与自己那句 VM_EnemyInRange(0,6,c+1,15,"") 同口径：不限行、从自己那格往右。
+    VM_InstArrayClear(self, "mod_step_enemy_area")
+    VM_InstArrayAdd(self, "mod_step_enemy_area", 99)   // 上
+    VM_InstArrayAdd(self, "mod_step_enemy_area", 99)   // 下
+    VM_InstArrayAdd(self, "mod_step_enemy_area", 0)    // 左（含自己那格）
+    VM_InstArrayAdd(self, "mod_step_enemy_area", 99)   // 右
+    VM_SetProp(self, "mod_step_enter_condition", "norm_attack")
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+
+    // 冷却中
+    cd = VM_GetProp(self, "cd")
+    if (cd > 0) {
+        VM_SetProp(self, "cd", cd - 1)
+        exit
+    }
+
+    attacking = VM_GetProp(self, "attacking")
+    c = VM_GetProp(self, "grid_col")
+
+    if (attacking == 0) {
+        // 前方（自己右侧所有行）有敌人就开打——原版不限行，只看列
+        if (VM_EnemyInRange(0, 6, c + 1, 15, "") == 1) {
+            VM_SetProp(self, "attacking", 1)
+            VM_SetProp(self, "atk_timer", 0)
+            VM_SetProp(self, "state", 1)
+        }
+    } else {
+        at = VM_GetProp(self, "atk_timer") + 1
+        VM_SetProp(self, "atk_timer", at)
+
+        // 第 30 帧第一轮、第 45 帧第二轮（至尊守护神专属）
+        fire_now = 0
+        if (at == 30) {
+            fire_now = 1
+        }
+        if (at == 45) {
+            fire_now = 1
+        }
+
+        if (fire_now == 1) {
+            // 伤害 = atk × 联动加成（场上每多一个里格 +5%，上限 145%）÷ 100（换算成每帧等量）
+            dmg = VM_GetProp(self, "atk")
+            // 现场数场上的里格（含自己）：不用计数器，避免 reloadmod 清空命名数组后读数变 0
+            n = VM_GetInstancesInRange("rig_arr", 0, 99, 0, 99, "card", "rig")
+            mult = 1 + 0.05 * (n - 1)
+            if (mult > 1.45) {
+                mult = 1.45
+            }
+            dmg = dmg * mult / 100
+
+            bx = VM_GetProp(self, "x") + 60
+            by = VM_GetProp(self, "y") - 40
+
+            // ① 直射
+            VM_BulletScreenAdd("spr_rig_bullet_3", 7, 0, 1.2, 2, bx, by, 8, 0, dmg, 0 - 1, 0 - 1, "pierce", "", "")
+
+            // ② +45°
+            VM_BulletScreenAdd("spr_rig_bullet_3", 7, 0, 1.2, 2, bx, by, 5.658, 5.658, dmg, 0 - 1, 0 - 1, "pierce", "", "")
+
+            // ③ -45°
+            VM_BulletScreenAdd("spr_rig_bullet_3", 7, 0, 1.2, 2, bx, by, 5.658, 0 - 5.658, dmg, 0 - 1, 0 - 1, "pierce", "", "")
+
+            // ④ +22.5°
+            VM_BulletScreenAdd("spr_rig_bullet_3", 7, 0, 1.2, 2, bx, by, 7.391, 3.062, dmg, 0 - 1, 0 - 1, "pierce", "", "")
+
+            // ⑤ -22.5°
+            VM_BulletScreenAdd("spr_rig_bullet_3", 7, 0, 1.2, 2, bx, by, 7.391, 0 - 3.062, dmg, 0 - 1, 0 - 1, "pierce", "", "")
+
+            VM_PlaySound("snd_shot")
+        }
+
+        // 收招：>= cycle(78)
+        if (at >= 78) {
+            VM_SetProp(self, "attacking", 0)
+            VM_SetProp(self, "atk_timer", 0)
+            VM_SetProp(self, "state", 0)
+            VM_SetProp(self, "cd", 0)
+        }
+    }
+}

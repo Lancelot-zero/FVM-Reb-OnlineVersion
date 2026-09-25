@@ -46,11 +46,16 @@ var _ncells = _cols * _rows;
 if (!variable_global_exists("cell_flag") || array_length(global.cell_flag) != _ncells) global.cell_flag = array_create(_ncells, 0);
 if (!variable_global_exists("cell_terrain_flag") || array_length(global.cell_terrain_flag) != _ncells) global.cell_terrain_flag = array_create(_ncells, 0);
 
-// 障碍 / 黏液 / 岩浆 / 海水：四个地面环境位合并到 cell_terrain_flag
+// 障碍 / 黏液 / 岩浆 / 海水 / 屏障 / 雾 / 云 / 风道：八个地面环境位合并到 cell_terrain_flag
+//   读位的地方都用具体掩码（敌人减速看 bit1/bit2、子弹撞障碍看 bit0），加位不影响它们
 var _BIT_OBSTACLE  = 1 << 0;
 var _BIT_MUCUS     = 1 << 1;
 var _BIT_LAVA      = 1 << 2;
 var _BIT_SEAWATER  = 1 << 3;
+var _BIT_BARRIER   = 1 << 4;
+var _BIT_FOG       = 1 << 5;
+var _BIT_CLOUD     = 1 << 6;
+var _BIT_WIND      = 1 << 7;
 
 // 卡片加成位
 if (variable_global_exists("grid_plants")) {
@@ -114,6 +119,25 @@ for (var _si = 0; _si < _nsea; _si++) {
           var _swi = _sw.row * _cols + _sw.col;
           global.cell_terrain_flag[_swi] = global.cell_terrain_flag[_swi] | _BIT_SEAWATER;
   }
+}
+
+// 屏障 / 雾 / 云 / 风道：这四种的 row/col 不是每条创建路径都写全（雾只写 col、风道默认 -1、屏障只有 grid_row/grid_col），
+// 所以和上面的障碍物一样**按 x/y 反算格子**，不读实例上的 row/col
+var _env_objs = [obj_barrier, obj_fog, obj_cloud, obj_wind_tunnel];
+var _env_bits = [_BIT_BARRIER, _BIT_FOG, _BIT_CLOUD, _BIT_WIND];
+for (var _ei = 0; _ei < array_length(_env_objs); _ei++) {
+    var _eobj = _env_objs[_ei];
+    var _ebit = _env_bits[_ei];
+    var _enum = instance_number(_eobj);
+    for (var _ej = 0; _ej < _enum; _ej++) {
+        var _einst = instance_find(_eobj, _ej);
+        var _ecc = floor((_einst.x - global.grid_offset_x) / global.grid_cell_size_x);
+        var _err = floor((_einst.y - global.grid_offset_y) / global.grid_cell_size_y);
+        if (_err >= 0 && _err < _rows && _ecc >= 0 && _ecc < _cols) {
+            var _eidx = _err * _cols + _ecc;
+            global.cell_terrain_flag[_eidx] = global.cell_terrain_flag[_eidx] | _ebit;
+        }
+    }
 }
 
 // obj_controller STEP 事件

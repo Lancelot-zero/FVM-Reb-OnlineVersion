@@ -1,0 +1,88 @@
+// 黑暗神（神卡 · 终转）：每 30 帧放一次范围脉冲，命中范围内所有敌人并概率冰冻；自身有寿命
+// 原版 obj_heian_god：
+//   range_x / range_y = 200 / 300（终转），attack_interval = 30（终转）。
+//   放一次脉冲 → 生成 obj_heian_god_bullet 对范围内敌人结算（终转的脉冲贴图是 _3）。
+//   freeze_chance = 15（15% 冰冻）、freeze_duration = 180 帧。
+//   寿命：按技能 900 / 1440 / 1860 帧，到时自己消失并收掉光环。
+//
+//   ⚠️ mod 卡只有形态 0，按终转写死：范围 200x300、间隔 30 帧、15% 冰冻 180 帧、寿命 1860。
+//   ⚠️ 原版光环是独立对象 obj_heian_god_effect，插件建不了，本卡无光环。
+//   ⚠️ 原版 has_fired / 动画帧推进依赖 sprite 的 image_index，插件这里用计数近似。
+
+_OBJECT_CFG {
+    if (VM_SpriteExists("spr_heian_god_3") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_heian_god_3_0.png", 32, 96, 138)
+        VM_AliasSpritePerm("spr_heian_god_3", "tex/spr_heian_god_3_0.png")
+    }
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+
+    VM_SetProp(self, "sprite_index", "spr_heian_god_3")
+    VM_SetProp(self, "idle_anim", 10)
+    VM_SetProp(self, "attack_anim", 20)
+    VM_SetProp(self, "flash_speed", 5)
+    VM_SetProp(self, "plant_type", "coffee")
+    VM_SetProp(self, "state", 0)
+    VM_SetProp(self, "hg_life", 1860)
+    VM_SetProp(self, "hg_timer", 0)
+
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+
+    // 寿命
+    life = VM_GetProp(self, "hg_life")
+    if (VM_IsUndefined(life) == 1) {
+        life = 1860
+    }
+    life = life - 1
+    VM_SetProp(self, "hg_life", life)
+    if (life <= 0) {
+        VM_DestroyInstance(self)
+        exit
+    }
+
+    // 攻击间隔（终转 30 帧）
+    t = VM_GetProp(self, "hg_timer")
+    if (VM_IsUndefined(t) == 1) {
+        t = 0
+    }
+    t = t + 1
+
+    if (t >= 30) {
+        t = 0
+        VM_SetProp(self, "state", 1)
+
+        // 范围脉冲：以自己为中心 200x300（按格子近似为 ±2 列、±3 行）
+        gr = VM_GetProp(self, "grid_row")
+        gc = VM_GetProp(self, "grid_col")
+        atk = VM_GetProp(self, "atk")
+
+        n = VM_GetInstancesInRange("hg_hit", gr - 3, gr + 3, gc - 2, gc + 2, "enemy", "")
+        k = 0
+        while (k < n) {
+            e = VM_ArrayGet("hg_hit", k)
+            if (VM_GetProp(e, "hp") > 0) {
+                VM_DamageEnemy(e, atk, "normal")
+                // 15% 概率冰冻 180 帧
+                if (VM_Random(1, 100) <= 15) {
+                    it = VM_GetProp(e, "ice_timer")
+                    if (VM_IsUndefined(it) == 1) {
+                        it = 0
+                    }
+                    if (it < 180) {
+                        VM_SetProp(e, "ice_timer", 180)
+                    }
+                }
+            }
+            k = k + 1
+        }
+    } else {
+        VM_SetProp(self, "state", 0)
+    }
+
+    VM_SetProp(self, "hg_timer", t)
+}

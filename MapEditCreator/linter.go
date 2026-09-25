@@ -155,6 +155,16 @@ var terrainTypes = set("normal", "water", "obstacle")
 var rowFeatures = set("land", "water")
 var plantLayers = set("normal", "shield_inner", "lilypad", "shield_outer", "coffee", "all")
 
+// VM_MapObj 的地图物品名（cell_terrain_flag 的 8 个位）+ 两个特殊值
+var mapObjNames = set(
+	"obstacle", "mucus", "lava", "seawater",
+	"barrier", "fog", "cloud", "wind_tunnel",
+	"all", "list", "",
+)
+
+// VM_GetInfo 的查询类别（只这四个注册表）
+var infoKinds = set("card", "enemy", "weapon", "gem")
+
 // 键名（不区分大小写）
 var keyNames = func() map[string]bool {
 	m := map[string]bool{}
@@ -406,6 +416,11 @@ var funcTable = map[string]fnSpec{
 	"VM_DamageEnemyAsh":      {3, 3, []paramType{ptInt, ptAny, ptString}, nil},
 	"VM_BulletScreenAdd_Ex":  {18, 18, []paramType{ptAny, ptAny, ptAny, ptAny, ptAny, ptAny, ptAny, ptAny, ptAny, ptAny, ptAny, ptAny, ptAny, ptAny, ptAny, ptAny, ptAny, ptAny}, nil},
 	"VM_BulletScreenAdd_Exs": {20, 20, []paramType{ptAny, ptAny, ptAny, ptAny, ptAny, ptAny, ptAny, ptAny, ptAny, ptAny, ptAny, ptAny, ptAny, ptAny, ptAny, ptAny, ptAny, ptAny, ptAny, ptAny}, nil},
+	"VM_GetInfo":             {3, 16, nil, map[int]enumSpec{0: {"查询类别", infoKinds, false, "warning"}}},
+	"VM_CatInRow":            {1, 1, []paramType{ptInt}, nil},
+	"VM_MapObj":              {2, 16, nil, map[int]enumSpec{2: {"地图物品名", mapObjNames, false, "warning"}}},
+	"VM_GetInstanceCount":    {1, 1, []paramType{ptString}, nil},
+	"VM_GetInstanceAt":       {2, 2, []paramType{ptString, ptInt}, nil},
 }
 
 // funcDescs 函数中文描述（悬停提示 / 补全说明，来自 help.md 函数表）
@@ -555,6 +570,11 @@ var funcDescs = map[string]string{
 	"VM_DamageEnemyAsh":          "灰烬伤害（敌人id,伤害,伤害类型）：伤害接得下就正常结算，接不下就一击必杀、原地换成 obj_mouse_ash_death（不看护盾，同原版大力神）",
 	"VM_BulletScreenAdd_Ex":      "屏幕弹幕管理器（带卡片效果）：贴图,总帧数,打击范围,缩放,动画速度,x,y,vx,vy,伤害,伤害计数,存活帧数,子弹类型,销毁对象,mod名字,伤害类型,标志数值,角度。标志数值=这颗子弹还能接受哪些类别的卡片效果：bit1=过火(换火弹贴图+放大1.8+音效)、bit2=解冻(换包子贴图+音效，不启用增益、冰冻帧清零、之后或上bit1)、4/8/16…=自定义（效果全看卡片字段）。子弹进格子中心带时与卡片的 bullet_flag 取且运算，>0 就应用并消位，同类卡只生效一次。角度=出生角度（后向子弹传180）",
 	"VM_BulletScreenAdd_Exs":     "同 VM_BulletScreenAdd_Ex，最后多两个行渐变参数：目标行y（要拐去那一行的世界 y，不想渐变传 -1）、靠拢比例（每帧朝目标 y 靠拢的比例，原版水管弹用 0.15，别传 0）。渐变到位（|目标行y - y| <= 8）自动吸附并停掉渐变，之后是纯直线；途中经过的行照常结算。20 个参数都要写满",
+	"VM_GetInfo":                 "变长（3~16 个参数）：按注册表逐级查一个对象的信息，写法 VM_GetInfo(类别, id, 字段1[, 字段2, ...])。类别只有 card/enemy/weapon/gem；字符串参数=取字段，数字参数=取下标（落在 ds_map 上自动按字符串键查，注册表的 shapes/upgrades 键就是 \"0\"/\"3\"）；查到数组/结构体本身返回 undefined，只有数字/字符串才返回。card 读 global.plant_registry（大池子，不是存档那份）",
+	"VM_CatInRow":                "该行第一只猫（obj_cat，海底图的螃蟹同对象）的实例 id；没有返回 -1",
+	"VM_MapObj":                  "变长（2~16 个参数）：查格子上有没有地图物品，VM_MapObj(列, 行[, \"名字\"])。读 global.cell_terrain_flag 的位：obstacle/mucus/lava/seawater/barrier/fog/cloud/wind_tunnel；\"all\" 或 \"\"=任意一种；\"list\"=返回逗号分隔名字串；列或行传 -1 = 该方向不限；名字不认识返回 -1；战斗中表由 obj_battle 每帧重建，战斗外返回 0",
+	"VM_GetInstanceCount":        "某个对象类的实例个数（类名就是游戏里的 object 名 obj_xxxx，必须写全）；名字不存在 / 不是对象 → -1",
+	"VM_GetInstanceAt":           "某个对象类第 k 个实例的 id（k 从 0 起）；越界 / 名字不存在 → -1",
 }
 
 // funcSigs 函数原型（由 sync_vmfuncs.py 从 help.md 函数表自动提取）
@@ -580,6 +600,11 @@ var funcSigs = map[string]string{
 	"VM_BulletScreenAdd": "VM_BulletScreenAdd(贴图,总帧数,打击范围,缩放,动画速度,x,y,vx,vy,伤害,伤害计数,存活帧数,子弹类型,销毁对象,mod名字)",
 	"VM_BulletScreenAdd_Ex": "VM_BulletScreenAdd_Ex(贴图,总帧数,打击范围,缩放,动画速度,x,y,vx,vy,伤害,伤害计数,存活帧数,子弹类型,销毁对象,mod名字,伤害类型,标志数值,角度)",
 	"VM_BulletScreenAdd_Exs": "VM_BulletScreenAdd_Exs(贴图,总帧数,打击范围,缩放,动画速度,x,y,vx,vy,伤害,伤害计数,存活帧数,子弹类型,销毁对象,mod名字,伤害类型,标志数值,角度,目标行y,靠拢比例)",
+	"VM_GetInfo": "VM_GetInfo(\"card\", \"small_fire\", \"shapes\", 0, \"upgrades\", 3, \"atk\")",
+	"VM_CatInRow": "VM_CatInRow(行号)",
+	"VM_MapObj": "VM_MapObj(列,行,\"名字\")",
+	"VM_GetInstanceCount": "VM_GetInstanceCount(\"obj_cat\")",
+	"VM_GetInstanceAt": "VM_GetInstanceAt(\"obj_cat\",k)",
 	"VM_CalcCardSlotProp": "VM_CalcCardSlotProp(\"name\", \"prop\", op, val)",
 	"VM_CallFunc": "VM_CallFunc(\"函数名\", 参数...)",
 	"VM_CanPlace": "VM_CanPlace(\"卡名\",列,行)",

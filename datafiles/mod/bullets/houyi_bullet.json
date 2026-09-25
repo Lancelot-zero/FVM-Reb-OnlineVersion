@@ -1,0 +1,5 @@
+{
+  "name": "后羿箭",
+  "description": "mod 子弹：向右飞，可朝指定行靠拢，命中造成伤害并有概率点燃目标",
+  "sprite": "spr_houyi_god_bullet"
+}

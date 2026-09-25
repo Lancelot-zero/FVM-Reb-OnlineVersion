@@ -1,0 +1,118 @@
+// 至尊主神（金卡 · 奥丁最终形态）：本行前方发射穿透的冈格尼尔
+// 按 mod 分支 obj_odin（shape 3）+ obj_odin_bullet 移植。
+//
+//   Create：attack_anim = 11、idle_anim = 9、flash_speed = 4
+//   Step  ：本行**前方**（自己那一格往右）有敌人就开打：
+//             attack_timer == cycle - 2*flash_speed  → 发一发
+//             attack_timer == cycle - 4*flash_speed  → 再发   （原版 shape >= 2）
+//             attack_timer == cycle - 6*flash_speed  → 再发   （原版 shape >= 3）
+//             attack_timer >  cycle                  → 收招那一发，然后归零
+//           一轮共 4 发。注意那三发额外判定用的是**未减速**的 flash_speed（原版就这么写的）。
+//   子弹  ：原版 obj_odin_bullet 直线向右 move_speed = 8，pierce、每个敌人只结算一次 `atk`，
+//           出界才销毁。这里交给弹幕管理器（VM_BulletScreenAdd）：
+//             · 贴图 spr_odin_bullet_3，1 帧，缩放 1.8（原版 image_xscale/yscale = 1.8）
+//             · 打击范围 0（只算子弹所在格）、伤害计数 -1（不限次数＝穿透）、存活 -1（不自动到期）
+//             · 类型 "normal"：原弹 target_type = "normal" → can_hit 能打 normal + obstacle
+//             · 伤害按「穿一格的总量 = atk」换算：格子宽 107、速度 8 → 每帧 atk * 8 / 107
+//           （管理器每帧对格内敌人扣一次 dmg，穿一格约 107/8 ≈ 13.4 帧）
+//   原弹的碰撞里还有「被火神/金牛/火盆点燃」「被水神/樱桃布丁弹回」这些联动，
+//   那些要别的卡存在才触发，这里不做。
+
+_OBJECT_CFG {
+    // 统一写内部 spr 名：内置有就直接用；内置没有才把本地图挂到这个名上。
+    // 本体：22 帧，原点 (100, 119)
+    if (VM_SpriteExists("spr_odin_3") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_odin_3_0.png", 22, 100, 119)
+        VM_AliasSpritePerm("spr_odin_3", "tex/spr_odin_3_0.png")
+    }
+
+    // 子弹：1 帧，原点 (92, 14)
+    if (VM_SpriteExists("spr_odin_bullet_3") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_odin_bullet_3_0.png", 1, 92, 14)
+        VM_AliasSpritePerm("spr_odin_bullet_3", "tex/spr_odin_bullet_3_0.png")
+    }
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+
+    VM_SetProp(self, "sprite_index", "spr_odin_3")
+    VM_SetProp(self, "idle_anim", 9)
+    VM_SetProp(self, "attack_anim", 11)
+    VM_SetProp(self, "flash_speed", 4)
+    VM_SetProp(self, "plant_type", "normal")
+
+    VM_SetProp(self, "attack_timer", 0)
+    VM_SetProp(self, "state", 0)
+
+    // 一轮 78 帧里只有 5 帧真有事做：第 1 帧收招、第 36 帧起播攻击动画、第 54/62/70 帧各一发。
+    // 用 "norm" + 窗口表，其余 73 帧不进 VM。mod_tick_cycle 由引擎每帧 +1（到 cycle 归零）。
+    VM_InstArrayClear(self, "mod_step_enter_arr")
+    // 窗口写成「从一轮末尾倒数」的负数：skill.attr = cycle 会把 cycle 从 78 压到 48
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 1)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 1 - 11 * 4)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 0 - 2 * 4)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 0 - 4 * 4)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 0 - 6 * 4)
+    VM_SetProp(self, "mod_step_enter_condition", "norm")
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+
+    if (VM_GetProp(self, "is_frozen") == 1) {
+        exit
+    }
+
+    fs = VM_GetProp(self, "flash_speed")
+    cfs = fs
+    if (VM_GetProp(self, "is_slowdown") == 1) {
+        cfs = cfs * 2
+    }
+
+    at = VM_GetProp(self, "mod_tick_cycle")
+    r = VM_GetProp(self, "grid_row")
+    c = VM_GetProp(self, "grid_col")
+    st = 0
+    fire = 0
+
+    // 原版：本行 grid_col 及之后有能打的目标才开打（这里不限类型，只看有没有敌人）
+    if (VM_EnemyInRange(r, r, c, 99, "") == 1) {
+        cyc = VM_GetProp(self, "cycle")
+
+        // 计时交给引擎，这里只判断这一帧是待机还是攻击动画
+        if (at <= cyc - 11 * cfs) {
+            st = 0
+        } else {
+            st = 1
+        }
+
+        // 最终形态：收招前还有三发（原版 shape >= 2 / shape >= 3 那两段）
+        if (at == cyc - 2 * fs) {
+            fire = 1
+        }
+        if (at == cyc - 4 * fs) {
+            fire = 1
+        }
+        if (at == cyc - 6 * fs) {
+            fire = 1
+        }
+    } else {
+        st = 0
+    }
+
+    if (fire == 1) {
+        atk = VM_GetProp(self, "atk")
+        bx = VM_GetProp(self, "x") + 80
+        // ⚠️ 弹幕管理器是拿**子弹自己的 y** 反推格子行的
+        //    （floor((y - grid_offset_y) / 116)），所以出膛点必须留在本行格子内。
+        //    格子高 116（半格 58），原版那个 -95 会直接落到上一行 → 永远打不到本行敌人。
+        by = VM_GetProp(self, "y") - 30
+
+        // 每帧伤害 = 穿一格的总量 atk ÷ 穿一格所需帧数 (107 / 8)
+        dmg = atk * 8 / 107
+        VM_BulletScreenAdd("spr_odin_bullet_3", 1, 0, 1.8, 1, bx, by, 8, 0, dmg, 0 - 1, 0 - 1, "normal", "", "")
+    }
+
+    VM_SetProp(self, "state", st)
+}

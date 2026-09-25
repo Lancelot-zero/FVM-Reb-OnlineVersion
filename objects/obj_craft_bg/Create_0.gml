@@ -25,6 +25,18 @@ close_timer = -1
 y_offset = 0
 card_surface = -1
 
+/// @function craft_tab_rows(_tab)
+/// @desc 本页需要的行数，按已解锁内容自动算（每行 7 张）：
+///       0=卡片（96px 行高，下限 20 行） 1=宝石（88px 行高，下限 10 行）
+function craft_tab_rows(_tab) {
+	if (_tab == 0) {
+		return max(20, (array_length(global.save_data.unlocked_cards) + 6) div 7);
+	}
+	return max(10, (array_length(global.save_data.unlocked_gems) + 6) div 7);
+}
+craft_card_rows = craft_tab_rows(0)
+craft_gem_rows = craft_tab_rows(1)
+
 current_uprade_target_id = ""
 
 spices_use_order = ["natural_spices","secret_spices","royal_spices"]

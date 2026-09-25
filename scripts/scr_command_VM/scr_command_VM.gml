@@ -33,8 +33,10 @@
 // VM_Decode 认出 VM_GetProp(id, "x") 这种（属性名是字面量常量字符串）时，
 // 把函数 id 换成下面这 9 个之一（argc 2→1），handler 直接读 inst.x，
 // 省掉 variable_instance_get 的"字符串→变量"查找。
-// 编号紧接现有的 144 之后，顺序与 VM_RegisterFunction / compiler_defs.h 的 FUNC_DEFS 一致。
-#macro VM_FID_GETPROPX 145
+// ⚠️ 这 9 个是**运行时专用 id，编译器表里没有**。原来接在 144 后面（145~153），
+//    但 145 起已经被公开 VM 函数占用了（VM_GetInfo 等，见 compiler_defs.h），所以挪到 200 起，
+//    145~199 留给公开函数。改这里的编号必须同步改 scr_command_VM_opt_execute.gml 里那 9 行派发表。
+#macro VM_FID_GETPROPX 200
 
 // 内存类型 (u8)
 #macro VM_TYPE_INT    0
@@ -2657,9 +2659,14 @@ function VM_SetProp(inst_id_addr, prop_addr, value_addr) {
 		
 		
 	if(prop=="grid_col"||prop=="grid_row"){
-		if( object_is_ancestor(obj_card_parent, instance_id) ){
-			var _list = ds_grid_get(global.grid_plants, instance_id.grid_col, instance_id.grid_row);
-			ds_list_delete(_list,ds_list_find_index(_list,inst_id))
+		// ⚠️ 这里原来写的是 GML 内置的 instance_id（= 跑这段 VM 的当前实例），不是被改的 inst_id：
+		//    任何 mod 脚本对【别的实例】写 grid_col/grid_row，都会去「自己那格」的 plants 列表里
+		//    删目标 id —— 找不到时 ds_list_find_index 返回 -1，ds_list_delete(_list, -1) 会误删
+		//    列表末尾那张卡（同格的底座卡 / 莲叶）。
+		if( object_is_ancestor(obj_card_parent, inst_id) ){
+			var _list = ds_grid_get(global.grid_plants, inst_id.grid_col, inst_id.grid_row);
+			var _idx = ds_list_find_index(_list, inst_id);
+			if (_idx >= 0) ds_list_delete(_list, _idx);
 		}
 	}
     variable_instance_set(inst_id, prop, value);
@@ -2667,9 +2674,9 @@ function VM_SetProp(inst_id_addr, prop_addr, value_addr) {
 		update_plant_bindings(inst_id);
 	}
 	if(prop=="grid_col"||prop=="grid_row"){
-		if( object_is_ancestor(obj_card_parent, instance_id) ){
-			var _list = ds_grid_get(global.grid_plants, instance_id.grid_col, instance_id.grid_row);
-			ds_list_add(_list,instance_id)
+		if( object_is_ancestor(obj_card_parent, inst_id) ){
+			var _list = ds_grid_get(global.grid_plants, inst_id.grid_col, inst_id.grid_row);
+			ds_list_add(_list, inst_id)
 		}
 	}
 	if(prop=="shape" || prop=="skill"|| prop=="current_level" ){
@@ -3477,7 +3484,10 @@ function VM_LineOf(vm, name, ip, _is_byte = false) {
 ///          检查放在 vm_hook_run 里做，这样重载后不需要重新注册（见那里的注释）。
 ///       同一个 VM 重复挂同一个点会被去重（重载/重复加载时安全）。
 function vm_hook_register(_name, _vm) {
-    if (!variable_global_exists("_VM_hooks")) return;
+    // ⚠️ 按需建表：不能指望"注册前表一定已经建好"。开游戏时的注册跑在 VM_Create 之前，
+    //    那时表还不存在 → 老写法在这里直接 return，注册全部静默丢掉，
+    //    结果所有 mod 的挂载点在**正常开局**下永远是死的（只有 reloadmod 之后才活）。
+    if (!variable_global_exists("_VM_hooks")) global._VM_hooks = ds_map_create();
     if (is_undefined(_vm)) return;
     if (!ds_map_exists(global._VM_hooks, _name)) {
         global._VM_hooks[? _name] = [];
@@ -3527,7 +3537,9 @@ function vm_hook_run(_name) {
 ///       再把 blocks 里的**每个块名**都登记一遍（不设白名单）。
 ///       ⚠️ 热重载换掉 blocks 之后必须再调一次，否则新加/删掉的块不会生效。
 function vm_hook_register_all(_vm) {
-    if (!variable_global_exists("_VM_hooks")) return;
+    // ⚠️ 按需建表（同 vm_hook_register）：正常开局的注册跑在 VM_Create 之前，
+    //    老写法在这里直接 return → 所有 mod 的挂载点静默失效（只有 reloadmod 之后才活）
+    if (!variable_global_exists("_VM_hooks")) global._VM_hooks = ds_map_create();
     if (is_undefined(_vm)) return;
     vm_hook_unregister(_vm);
     if (!variable_struct_exists(_vm, "blocks")) return;
@@ -4929,7 +4941,24 @@ function VM_BuildDeadSnap(_inst) {
 }
 
 function VM_QueueHook(buf, key, id) {
-    if (!buffer_exists(buf)) return;
+    // ⚠️ 以前这里是 `if (!buffer_exists(buf)) return;`：全局 buffer 只有**地图脚本**定义了同名块才有值，
+    //    导致「只有 mod 单位（卡/武器/宝石…）定义了这个块」时永远排不进队列 → 挂载点 vm_hook_run 也不会被调到。
+    //    现在改成：全局没有 buffer，但只要挂载点上有 VM 注册过这个事件，就照样入队；
+    //    两边都没有才真的跳过（保持零开销）。
+    var _hook_name = "";
+    switch (key) {
+        case "card":          _hook_name = "_VM_CARD_CREATED";      break;
+        case "card_del":      _hook_name = "_VM_CARD_DESTROYED";    break;
+        case "enemy":         _hook_name = "_VM_ENEMY_SPAWNED";     break;
+        case "enemy_kill":    _hook_name = "_VM_ENEMY_KILLED";      break;
+        case "platform_idle": _hook_name = "_VM_PLATFORM_IDLE_END"; break;
+    }
+    var _has = buffer_exists(buf);
+    if (!_has && _hook_name != "" && variable_global_exists("_VM_hooks")
+        && ds_map_exists(global._VM_hooks, _hook_name)) {
+        _has = (array_length(global._VM_hooks[? _hook_name]) > 0);
+    }
+    if (!_has) return;
     var _snap = undefined;
     if (key == "card_del" || key == "enemy_kill") {
         _snap = VM_BuildDeadSnap(id);
@@ -4961,7 +4990,9 @@ function VM_FlushHooks() {
                 case "platform_idle":   _hook_name = "_VM_PLATFORM_IDLE_END"; break;
             }
             global._VM_cur_dead_snap = _e.snap;
-            VM_Execute(global.__vm, _e.buf, _hook_name);
+            // 全局（地图脚本）没定义这个块时 _e.buf 是 undefined —— 只有 mod 单位挂了这个事件，
+            // 那就跳过地图脚本的执行，直接交给 vm_hook_run 跑各 mod 的块
+            if (buffer_exists(_e.buf)) VM_Execute(global.__vm, _e.buf, _hook_name);
             vm_hook_run(_hook_name);   // mod 侧：同一时机，各自查块（读上面刚设好的 _VM_last_* 全局）
             global._VM_cur_dead_snap = undefined;
         }
@@ -5123,6 +5154,232 @@ function VM_GetCardProp(card_id_addr, prop_addr) {
     }
 
     return undefined;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// 145 VM_GetInfo / 146 VM_CatInRow / 147 VM_MapObj
+// 148 VM_GetInstanceCount / 149 VM_GetInstanceAt
+// 变长函数用 16 个形参收地址（和 VM_ShellPrint 同一套），实际几个参数看后面续没续地址
+// ══════════════════════════════════════════════════════════════════
+
+/// @function vm_args_of_16(a..p)
+/// @desc 把变长函数的 16 个地址参数转成值数组（遇到 undefined 就停，说明后面没传）
+function vm_args_of_16(a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p) {
+    var _addrs = [a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p];
+    var _out = [];
+    for (var _i = 0; _i < 16; _i++) {
+        if (is_undefined(_addrs[_i])) break;
+        array_push(_out, vm_read_mem(global.__vm, _addrs[_i]));
+    }
+    return _out;
+}
+
+/// @function vm_info_query(_args)
+/// @desc VM_GetInfo 的实现体（非专用操作码和专用操作码两条路共用）。
+///       _args = [类别, id, 字段1, 字段2, ...]
+///       字符串段 = 取字段（struct 用 [$]、ds_map 用 [?]），数字段 = 取下标；
+///       数字段落在 ds_map 上时自动转成字符串键（注册表的 shapes/upgrades 键就是 "0"/"3"）。
+///       查到数组 / 结构体 / ds_map 本身 → undefined（要求继续往下写）。
+///       card 读 global.plant_registry（大池子，不是存档那份）。
+function vm_info_query(_args) {
+    if (!is_array(_args) || array_length(_args) < 3) return undefined;
+    var _kind = _args[0];
+    var _id   = _args[1];
+    if (!is_string(_kind) || !is_string(_id) || _id == "") return undefined;
+
+    var _root = undefined;
+    switch (_kind) {
+        case "card":
+            if (!variable_global_exists("plant_registry")) {
+                shell_print("[GetInfo] 没有 global.plant_registry 这个全局");   // 正常不该出现；出现说明初始化顺序坏了
+                break;
+            }
+            if (!ds_map_exists(global.plant_registry, _id)) {
+                shell_print("[GetInfo] plant_registry 里没有 \"" + _id + "\"（现有 " + string(ds_map_size(global.plant_registry)) + " 个键）");
+                break;
+            }
+            _root = global.plant_registry[? _id];
+            break;
+        case "enemy":
+            if (variable_global_exists("enemy_map") && ds_map_exists(global.enemy_map, _id)) {
+                _root = global.enemy_map[? _id];
+            }
+            break;
+        case "weapon":
+            if (variable_global_exists("weapon_pool") && ds_map_exists(global.weapon_pool, _id)) {
+                _root = global.weapon_pool[? _id];
+            }
+            break;
+        case "gem":
+            if (variable_global_exists("gems_pool") && ds_map_exists(global.gems_pool, _id)) {
+                _root = global.gems_pool[? _id];
+            }
+            break;
+        default:
+            return undefined;
+    }
+    if (is_undefined(_root)) return undefined;
+
+    var _node = _root;
+    for (var _i = 2; _i < array_length(_args); _i++) {
+        var _seg = _args[_i];
+        if (is_undefined(_node)) return undefined;
+
+        // 三种取法挨个试（数组下标 / ds_map 键 / 结构体字段），谁成功用谁。
+        // ⚠️ 不靠 is_real / is_struct / ds_exists 判类型：运行时里 ds id 的类型和 is_real()
+        //    的判定并不一致（本仓库 div 那里就踩过 int64 的坑），直接"试着访问"最稳。
+        //    VM_GetInfo 是低频查询，这点开销无所谓。
+        var _next = undefined;
+        var _got  = false;
+
+        if (!_got && is_real(_seg)) {                       // ① 数组下标
+            try {
+                var _k = floor(_seg);
+                if (is_array(_node) && _k >= 0 && _k < array_length(_node)) { _next = _node[_k]; _got = true; }
+            } catch (_e1) { _got = false; }
+        }
+        if (!_got) {                                        // ② ds_map：数字段自动转字符串键
+            var _key = is_real(_seg) ? string(floor(_seg)) : _seg;
+            try {
+                if (is_string(_key) && ds_map_exists(_node, _key)) { _next = _node[? _key]; _got = true; }
+            } catch (_e2) { _got = false; }
+        }
+        if (!_got && is_string(_seg)) {                     // ③ 结构体字段
+            try {
+                if (variable_struct_exists(_node, _seg)) { _next = _node[$ _seg]; _got = true; }
+            } catch (_e3) { _got = false; }
+        }
+
+        if (!_got) return undefined;
+        _node = _next;
+    }
+    if (is_int64(_node)) return real(_node);                // int64 转回 real，别把 int64 丢给 VM
+    if (is_real(_node) || is_string(_node)) return _node;   // 只放行数字 / 字符串
+    return undefined;
+}
+
+function VM_GetInfo(a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p) {
+    return vm_info_query(vm_args_of_16(a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p));
+}
+
+/// @function vm_cat_first_in_row(_row)
+/// @desc 该行第一只猫（obj_cat；海底图的螃蟹是同一个对象）的实例 id，没有返回 -1
+function vm_cat_first_in_row(_row) {
+    if (!is_real(_row)) return -1;
+    var _want = floor(_row);
+    var _found = -1;
+    with (obj_cat) {
+        if (_found == -1 && variable_instance_exists(id, "row") && row == _want) _found = id;
+    }
+    if (_found == -1) return -1;
+    return VM_ClientWrapId(_found);
+}
+
+function VM_CatInRow(row_addr) {
+    return vm_cat_first_in_row(vm_read_mem(global.__vm, row_addr));
+}
+
+/// @function vm_mapobj_query(_args)
+/// @desc VM_MapObj 的实现体。_args = [列, 行] 或 [列, 行, 名字]。
+///       读 global.cell_terrain_flag[row * grid_cols + col] 的位：
+///         bit0 obstacle / bit1 mucus / bit2 lava / bit3 seawater
+///         bit4 barrier / bit5 fog / bit6 cloud / bit7 wind_tunnel
+///       名字 "all" 或 "" = 任意一种；"list" = 返回逗号分隔名字串；其它名字不认识 → -1。
+///       列或行传 -1 = 该方向不限。返回 1 / 0（"list" 时返回字符串）。
+function vm_mapobj_query(_args) {
+    if (!is_array(_args) || array_length(_args) < 2) return -1;
+    var _col = _args[0];
+    var _row = _args[1];
+    if (!is_real(_col) || !is_real(_row)) return -1;
+    _col = floor(_col);
+    _row = floor(_row);
+
+    var _name = (array_length(_args) >= 3) ? _args[2] : "";
+    if (!is_string(_name)) _name = "";
+
+    if (!variable_global_exists("cell_terrain_flag") || !variable_global_exists("grid_cols")) return 0;
+    var _cols = global.grid_cols;
+    var _rows = global.grid_rows;
+    if (_cols <= 0 || _rows <= 0) return 0;
+    if (array_length(global.cell_terrain_flag) != _cols * _rows) return 0;
+
+    var _names = ["obstacle", "mucus", "lava", "seawater", "barrier", "fog", "cloud", "wind_tunnel"];
+
+    var _c1 = (_col == -1) ? 0 : _col;
+    var _c2 = (_col == -1) ? _cols - 1 : _col;
+    var _r1 = (_row == -1) ? 0 : _row;
+    var _r2 = (_row == -1) ? _rows - 1 : _row;
+
+    // "list"：这一格（或这一行/列）上有哪些
+    if (_name == "list") {
+        var _out = "";
+        for (var _b = 0; _b < 8; _b++) {
+            var _hit = 0;
+            for (var _rr = _r1; _rr <= _r2 && _hit == 0; _rr++) {
+                if (_rr < 0 || _rr >= _rows) continue;
+                for (var _cc = _c1; _cc <= _c2; _cc++) {
+                    if (_cc < 0 || _cc >= _cols) continue;
+                    if ((global.cell_terrain_flag[_rr * _cols + _cc] & (1 << _b)) != 0) { _hit = 1; break; }
+                }
+            }
+            if (_hit == 1) {
+                if (_out != "") _out += ",";
+                _out += _names[_b];
+            }
+        }
+        return _out;
+    }
+
+    // 掩码
+    var _mask = 0;
+    if (_name == "" || _name == "all") {
+        _mask = 255;
+    } else {
+        var _idx = -1;
+        for (var _b2 = 0; _b2 < 8; _b2++) { if (_names[_b2] == _name) { _idx = _b2; break; } }
+        if (_idx == -1) return -1;
+        _mask = 1 << _idx;
+    }
+
+    for (var _r = _r1; _r <= _r2; _r++) {
+        if (_r < 0 || _r >= _rows) continue;
+        for (var _c = _c1; _c <= _c2; _c++) {
+            if (_c < 0 || _c >= _cols) continue;
+            if ((global.cell_terrain_flag[_r * _cols + _c] & _mask) != 0) return 1;
+        }
+    }
+    return 0;
+}
+
+function VM_MapObj(a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p) {
+    return vm_mapobj_query(vm_args_of_16(a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p));
+}
+
+/// @function vm_obj_of_name(_name)
+/// @desc 类名 → 对象资源索引。类名就是游戏里的 object 名（obj_xxxx），必须写全；
+///       不是对象资源（写错成贴图名 / 不存在）返回 -1
+function vm_obj_of_name(_name) {
+    if (!is_string(_name) || _name == "") return -1;
+    // 判据和 VM_CreateInstance 完全一致（那边实测能建出实例），不加别的类型检查
+    var _idx = asset_get_index(_name);
+    if (_idx < 0) return -1;
+    return _idx;
+}
+
+function VM_GetInstanceCount(name_addr) {
+    var _obj = vm_obj_of_name(vm_read_mem(global.__vm, name_addr));
+    if (_obj < 0) return -1;
+    return instance_number(_obj);
+}
+
+function VM_GetInstanceAt(name_addr, k_addr) {
+    var _obj = vm_obj_of_name(vm_read_mem(global.__vm, name_addr));
+    if (_obj < 0) return -1;
+    var _k = vm_read_mem(global.__vm, k_addr);
+    if (!is_real(_k)) return -1;
+    _k = floor(_k);
+    if (_k < 0 || _k >= instance_number(_obj)) return -1;
+    return VM_ClientWrapId(instance_find(_obj, _k));
 }
 
 /// @function VM_DestroyInstance(inst)
@@ -5746,6 +6003,11 @@ VM_RegisterFunction(global.__vm, VM_DamageEnemy);      // 141
 VM_RegisterFunction(global.__vm, VM_DamageEnemyAsh);   // 142
 VM_RegisterFunction(global.__vm, VM_BulletScreenAdd_Ex);   // 143
 VM_RegisterFunction(global.__vm, VM_BulletScreenAdd_Exs);  // 144
+VM_RegisterFunction(global.__vm, VM_GetInfo);              // 145 — 变长：按注册表逐级查（类别, id, 字段1[, 字段2, ...]）
+VM_RegisterFunction(global.__vm, VM_CatInRow);             // 146 — 该行第一只猫的实例 id
+VM_RegisterFunction(global.__vm, VM_MapObj);               // 147 — 变长：格子上有没有地图物品（列, 行[, 名字/"list"]）
+VM_RegisterFunction(global.__vm, VM_GetInstanceCount);     // 148 — obj_xxxx 的实例个数
+VM_RegisterFunction(global.__vm, VM_GetInstanceAt);        // 149 — obj_xxxx 的第 k 个实例 id
 ds_map_add(global._VM_remote_funcs, "VM_SwapPlants", VM_SwapPlants);
 ds_map_add(global._VM_remote_funcs, "VM_SwapPlantRects", VM_SwapPlantRects);
 ds_map_add(global._VM_remote_funcs, "VM_CompactColumn", VM_CompactColumn);
@@ -5827,8 +6089,14 @@ function VM_InitRoomEntry(buf) {
     //   ⚠️ 地图专属的 _VM_ROOM_READY_ENTRY / _VM_CONST_INIT 不走这套，
     //      它们在 bin 加载当场直接执行。
     // ══════════════════════════════════════════════════════════════════
-    if (variable_global_exists("_VM_hooks")) ds_map_destroy(global._VM_hooks);
-    global._VM_hooks = ds_map_create();
+    // ⚠️ 只在**第一次**建 VM 时建表，绝不能每次 VM_Create 都 destroy+重建：
+    //    VM_Create 是**每个 mod 单位各调一次**的（每张卡/武器/宝石/敌人/子弹/特效一个 VM），
+    //    每次重建都会把先前加载的单位注册的挂载点全清掉 →
+    //    结果是"只有最后加载的那个 mod 的挂载点还在"，_VM_CARD_CREATED / _VM_ENEMY_SPAWNED /
+    //    _VM_WAVE_START … 对其它所有 mod 全部失效。
+    //    地图 VM 是复用 global.__vm 的（加载器只灌块不再建 VM），且 vm_hook_register 自带去重，
+    //    所以不重建也不会留下旧关卡的重复注册。
+    if (!variable_global_exists("_VM_hooks")) global._VM_hooks = ds_map_create();
     global._VM_prev_wave         = -1;
     global._VM_prev_subwave      = -1;
     global._VM_event_enabled     = true;

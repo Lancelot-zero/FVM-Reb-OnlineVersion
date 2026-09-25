@@ -1,0 +1,95 @@
+// 赖皮蛇（生肖卡）：按固定间隔发海胆弹，弹飞到本行最右列再折返
+// 照 warm_birds 的原始写法：不设 mod_step_enter_condition（默认每帧进 VM），
+// 卡自己用 attack_timer 数帧、自己切 state。
+//
+//   节奏（照原版 obj_laipishe）：**不看有没有敌人**，每 cycle 帧发一轮；
+//   一轮末尾 attack_anim(8) 帧播攻击动画，动画走完发弹，attack_timer 归零。
+//   最终形态一次 3 发，起点纵向错开：偏移 = (i - 1) * 14
+//
+//   子弹：见 mod_bullets/laipishe_bullet.txt
+//   贴图：本体 spr_laipishe_2 = 26 帧、118x92、原点 (61, 82)
+
+_OBJECT_CFG {
+    if (VM_SpriteExists("spr_laipishe_2") == 0) {
+        VM_LoadSpritePerm_Ex("tex/spr_laipishe_2_0.png", 26, 61, 82)
+        VM_AliasSpritePerm("spr_laipishe_2", "tex/spr_laipishe_2_0.png")
+    }
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+
+    VM_SetProp(self, "sprite_index", "spr_laipishe_2")
+    VM_SetProp(self, "idle_anim", 11)
+    VM_SetProp(self, "attack_anim", 8)
+    VM_SetProp(self, "flash_speed", 5)
+    VM_SetProp(self, "plant_type", "normal")
+    VM_SetProp(self, "state", 0)
+    VM_SetProp(self, "attack_timer", 0)
+
+    // 一轮 1500 帧里只有 3 帧真有事做：开火帧（第 0 帧 = 越过 cycle）、收招帧 1、开攻击动画帧 1461。
+    // 用 "norm" + 窗口表，其余 1497 帧不进 VM。
+    VM_InstArrayClear(self, "mod_step_enter_arr")
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 0)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 1)
+    VM_InstArrayAdd(self, "mod_step_enter_arr", 1 - 8 * 5)
+    VM_SetProp(self, "mod_step_enter_condition", "norm")
+}
+
+_OBJECT_STEP {
+    self = VM_GetCurCard()
+
+    fs = VM_GetProp(self, "flash_speed")
+    if (VM_IsUndefined(fs)) {
+        fs = 5
+    }
+    if (VM_GetProp(self, "is_slowdown") == 1) {
+        fs = fs * 2
+    }
+    cyc = VM_GetProp(self, "cycle")
+    if (VM_IsUndefined(cyc)) {
+        cyc = 1500
+    }
+    at = VM_GetProp(self, "mod_tick_cycle")
+
+    st = 0
+    fire = 0
+
+    // 每 cycle 帧一轮，末尾 8 帧播攻击动画
+    // 计时交给引擎，这里只判断这一帧是待机还是攻击动画
+    if (at == 0) {
+        fire = 1
+    } else if (at <= cyc - 8 * fs) {
+        st = 0
+    } else {
+        st = 1
+    }
+
+    if (fire == 1) {
+        atk = VM_GetProp(self, "atk")
+        bx  = VM_GetProp(self, "x")
+        by  = VM_GetProp(self, "y") - 40
+        gc  = VM_GetProp(self, "grid_col")
+        gr  = VM_GetProp(self, "grid_row")
+
+        // 最终形态 3 发，纵向错开
+        i = 0
+        while (i < 3) {
+            off = (i - 1) * 14
+            VM_SetProp(0, "_mod_pending_bullet_id", "laipishe_bullet")
+            b = VM_CreateInstance("obj_bullet_mod", bx, by + off)
+            VM_SetProp(0, "_mod_pending_bullet_id", "")
+            VM_SetProp(b, "damage", atk)
+            VM_SetProp(b, "row", gr)
+            VM_SetProp(b, "col_home", gc)
+            // ⚠️ 速度必须显式给：obj_bullet_mod 的 Create 已经把 vx/vy 定义成 0，
+            //    所以子弹脚本里那句「没设才给默认 6」永远不会生效（0 不是 undefined）
+            //    —— 不写这两行，海胆弹会原地不动、也永远不会折返。
+            VM_SetProp(b, "vx", 6)
+            VM_SetProp(b, "vy", 0)
+            i = i + 1
+        }
+    }
+
+    VM_SetProp(self, "state", st)
+}

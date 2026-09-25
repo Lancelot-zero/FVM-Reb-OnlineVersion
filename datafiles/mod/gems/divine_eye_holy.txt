@@ -17,17 +17,10 @@ _OBJECT_CFG {
         VM_LoadSpritePerm_Ex("../effects/tex/spr_master_shield_effect_4_0.png", 25, 152, 160)
         VM_AliasSpritePerm("spr_master_shield_effect_4", "../effects/tex/spr_master_shield_effect_4_0.png")
     }
-}
-
-_OBJECT_CREATE {
-    self = VM_GetCurCard()
-    // 战场贴图 45×45 按 1.8 放大；背包图标是 82×82 那张
-    VM_SetProp(self, "sprite_index", "spr_divine_holy_gem")
-    VM_SetProp(self, "image_xscale", 1.8)
-    VM_SetProp(self, "image_yscale", 1.8)
-    VM_SetProp(self, "t", 0)
-    VM_SetProp(self, "fx", 0)
-
+    // tables live in _OBJECT_CFG, NOT _OBJECT_CREATE:
+    // reloadmod clears this VM's named arrays but only re-runs _VM_CONST_INIT + _OBJECT_CFG,
+    // never _OBJECT_CREATE -- if the tables were built in Create they come back empty after a
+    // reload and VM_ArrayGet returns 0 (bless spams flames every frame, tear/holy deal 0 damage).
     VM_ArrayClear("dvh_atk")
     VM_ArrayADD("dvh_atk", 150)
     VM_ArrayADD("dvh_atk", 200)
@@ -45,8 +38,6 @@ _OBJECT_CREATE {
     VM_ArrayADD("dvh_atk", 800)
     VM_ArrayADD("dvh_atk", 850)
     VM_ArrayADD("dvh_atk", 1000)
-
-    // 每档减速（秒，原版 ice_timer）
     VM_ArrayClear("dvh_ice")
     VM_ArrayADD("dvh_ice", 3)
     VM_ArrayADD("dvh_ice", 3)
@@ -64,6 +55,19 @@ _OBJECT_CREATE {
     VM_ArrayADD("dvh_ice", 5)
     VM_ArrayADD("dvh_ice", 5)
     VM_ArrayADD("dvh_ice", 6)
+}
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+    // 战场贴图 45×45 按 1.8 放大；背包图标是 82×82 那张
+    VM_SetProp(self, "sprite_index", "spr_divine_holy_gem")
+    VM_SetProp(self, "image_xscale", 1.8)
+    VM_SetProp(self, "image_yscale", 1.8)
+    VM_SetProp(self, "t", 0)
+    VM_SetProp(self, "fx", 0)
+
+
+    // 每档减速（秒，原版 ice_timer）
 }
 
 _OBJECT_STEP {

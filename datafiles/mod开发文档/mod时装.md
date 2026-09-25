@@ -4,9 +4,16 @@
 
 ## 文件
 
+时装放在**游戏目录下的 `mod/attires/`** 里：
+
 ```text
-mod/attires/my_attire.json     ← 只有 json，没有 bin / 没有逻辑
+游戏目录/                       ← 运行游戏的那个文件夹
+└─ mod/
+   └─ attires/                  ← 时装这一类都放这里
+      └─ my_attire.json         ← 只有 json，没有 bin / 没有逻辑
 ```
+
+**也可以再分一层子目录归类**（只扫一层、不往下递归）：`mod/attires/xxx/my_attire.json`；id 只看 json 文件名。
 
 时装是**纯外观**，没有任何逻辑块可写。
 

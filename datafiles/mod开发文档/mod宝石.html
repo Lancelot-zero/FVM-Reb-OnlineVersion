@@ -44,8 +44,17 @@ hr { border:none; border-top:1px solid #e5e7eb; margin:2em 0; }
 VM 语言与全部函数见 <code>help.md</code>。</p>
 </blockquote>
 <h2>文件</h2>
-<pre><code class="language-text">mod/gems/my_gem.json / .bin / .txt / tex/
+<p>宝石放在<strong>游戏目录下的 <code>mod/gems/</code></strong> 里：</p>
+<pre><code class="language-text">游戏目录/                       ← 运行游戏的那个文件夹
+└─ mod/
+   └─ gems/                     ← 宝石这一类都放这里
+      ├─ my_gem.json            宝石配置（被动/主动、数值、图标）
+      ├─ my_gem.bin             逻辑（由 my_gem.txt 编译出来，游戏只读这个）
+      ├─ my_gem.txt             源码（建议保留）
+      └─ tex/                   自带贴图（可选）
+         └─ xxx.png
 </code></pre>
+<p><strong>也可以再分一层子目录归类</strong>（只扫一层、不往下递归）：<code>mod/gems/xxx/my_gem.json</code>，贴图跟 json 同一层放 <code>mod/gems/xxx/tex/</code>；id 只看 json 文件名。</p>
 <hr>
 <h2>一、JSON 字段</h2>
 <table>
@@ -101,7 +110,7 @@ VM 语言与全部函数见 <code>help.md</code>。</p>
 （要在 <code>.bin</code> 里用就自己 <code>VM_SetProp</code> 设一份到实例上，或者读实例上现成的那几个，见下）。</p>
 <hr>
 <h2>二、宝石实例上的内置字段</h2>
-<p><code>obj_gem_mod</code> 的 Create 建好这些：</p>
+<p>宝石实例一建出来就带好这些：</p>
 <table>
 <thead>
 <tr>
@@ -149,6 +158,16 @@ VM 语言与全部函数见 <code>help.md</code>。</p>
 <td><code>mod_point_gem_level</code></td>
 <td>存档等级</td>
 <td>同上</td>
+</tr>
+<tr>
+<td><code>mod_has_enemy</code> / <code>mod_has_card</code></td>
+<td>只读</td>
+<td>&quot;区域里有敌人 / 有卡片&quot;的结果（<code>&quot;enemy_area*&quot;</code> / <code>&quot;card_area*&quot;</code> 条件用）</td>
+</tr>
+<tr>
+<td><code>mod_tick_cool</code></td>
+<td>只读</td>
+<td><code>&quot;*_area_mod&quot;</code> 的冷却剩余帧数</td>
 </tr>
 <tr>
 <td><code>image_speed</code> / <code>timer</code> / <code>flash_speed</code></td>
@@ -212,7 +231,7 @@ VM 语言与全部函数见 <code>help.md</code>。</p>
 <li><strong><code>_OBJECT_DESTROY</code></strong>：宝石对象<strong>不支持</strong>（写了不会执行）</li>
 <li><strong><code>_OBJECT_MOUSE_ENTER</code> / <code>_OBJECT_MOUSE_LEAVE</code> / <code>_OBJECT_CLICK</code></strong>：鼠标移入 / 移出 / 左键点在宝石图标上（按实例判定，鼠标要压在宝石贴图上）</li>
 </ul>
-<h3>每帧顺序（<code>obj_gem_mod/Step_0.gml</code>）</h3>
+<h3>每帧顺序（核心在什么时候跑你的块）</h3>
 <pre><code class="language-text">1. 暂停 → 整个 exit
 2. cooldown_timer 每帧自减 1（到 0 停）
 3. 动画自动播放（timer/flash_speed 驱动 image_index，state 选待机/攻击区间）
@@ -252,10 +271,54 @@ VM 语言与全部函数见 <code>help.md</code>。</p>
 <td><strong>冷却结束才进</strong>（<code>cooldown_timer &lt;= 0</code>）</td>
 <td>—</td>
 </tr>
+<tr>
+<td><code>&quot;enemy_area&quot;</code></td>
+<td><strong>索敌区域里有敌人</strong>就进</td>
+<td><code>mod_step_enemy_area</code>（区域）/ <code>mod_enemy_types</code>（类型筛选）；<code>mod_has_enemy</code>（只读）</td>
+</tr>
+<tr>
+<td><code>&quot;enemy_area_mod&quot;</code></td>
+<td>同上，但<strong>进一次后要等冷却</strong>再进</td>
+<td>再加 <code>mod_step_enter_var</code> = 冷却帧数；<code>mod_tick_cool</code>（只读）</td>
+</tr>
+<tr>
+<td><code>&quot;card_area&quot;</code></td>
+<td><strong>指定区域里有卡片</strong>就进（玩家底座不算）</td>
+<td><code>mod_step_card_area</code>（区域）；<code>mod_has_card</code>（只读）</td>
+</tr>
+<tr>
+<td><code>&quot;card_area_mod&quot;</code></td>
+<td>同上，但<strong>进一次后要等冷却</strong>再进</td>
+<td>再加 <code>mod_step_enter_var</code> = 冷却帧数；<code>mod_tick_cool</code>（只读）</td>
+</tr>
 </tbody></table>
+<p><strong>区域怎么写</strong>（<code>mod_step_enemy_area</code> / <code>mod_step_card_area</code> 都是同一套）：<strong>每 4 个值一组</strong> <code>[上, 下, 左, 右]</code>，
+以&quot;<strong>锚点格</strong>&quot;为中心各扩几格；可以写多组，任一组命中就算命中。不设 / 凑不满 4 个 = 默认 <code>[1,1,0,99]</code>。</p>
+<pre><code class="language-gml">_OBJECT_CREATE {
+    self = VM_GetCurCard()
+    // 只看本行往右 → [0,0,0,99]
+    VM_InstArrayClear(self, &quot;mod_step_enemy_area&quot;)
+    VM_InstArrayAdd(self, &quot;mod_step_enemy_area&quot;, 0)
+    VM_InstArrayAdd(self, &quot;mod_step_enemy_area&quot;, 0)
+    VM_InstArrayAdd(self, &quot;mod_step_enemy_area&quot;, 0)
+    VM_InstArrayAdd(self, &quot;mod_step_enemy_area&quot;, 99)
+    // 只看空中敌人
+    VM_InstArrayClear(self, &quot;mod_enemy_types&quot;)
+    VM_InstArrayAdd(self, &quot;mod_enemy_types&quot;, &quot;air&quot;)
+    // 有敌人就进，进一次后至少等 30 帧
+    VM_SetProp(self, &quot;mod_step_enter_condition&quot;, &quot;enemy_area_mod&quot;)
+    VM_SetProp(self, &quot;mod_step_enter_var&quot;, 30)
+}
+</code></pre>
+<ul>
+<li><strong>锚点格</strong>：优先用&quot;<strong>放置这颗宝石的角色</strong>&quot;当前所在格（角色会动，区域跟着走）；
+角色不在了就退回创建时记下的 <code>mod_point_grid_row</code> / <code>mod_point_grid_col</code></li>
+<li><code>mod_enemy_types</code> 可写 <code>normal</code> / <code>obstacle</code> / <code>diver</code> / <code>air</code> / <code>dance</code> / <code>underground</code>；空 = 任意类型</li>
+<li>这两种区域检测<strong>只在用这些条件时才算</strong>，其它条件零开销</li>
+</ul>
 <blockquote>
 <p>宝石<strong>没有</strong> <code>hp</code>、图标也不移动（钉在 <code>390, 213 + 序号*80</code>），所以卡片/敌人那套
-<code>hp_change</code> / <code>cell</code> / 索敌条件这里都没有。<code>&quot;cool&quot;</code> 就是给主动宝石用的：冷却中不进 VM，冷却一结束就进。</p>
+<code>hp_change</code> / <code>cell</code> 这里没有。<code>&quot;cool&quot;</code> 是给主动宝石用的：冷却中不进 VM，冷却一结束就进。</p>
 </blockquote>
 <h3>鼠标事件（核心挂的，插件不用写）</h3>
 <table>
@@ -282,7 +345,7 @@ VM 语言与全部函数见 <code>help.md</code>。</p>
 <code>cooldown_timer</code> 由插件自己写。</p>
 <blockquote>
 <p>想自己接管鼠标，就写 <code>_OBJECT_MOUSE_ENTER</code> / <code>_OBJECT_MOUSE_LEAVE</code> / <code>_OBJECT_CLICK</code> 块 ——
-核心那套照常跑（三个块最后都会 <code>event_inherited()</code>），不会互相顶掉。</p>
+核心那套照常跑（三个块跑完，核心自己的鼠标处理还会继续），不会互相顶掉。</p>
 </blockquote>
 <hr>
 <h2>四、demo</h2>
@@ -371,8 +434,8 @@ _OBJECT_STEP {
                 VM_SetProp(0, &quot;_mod_pending_effect_id&quot;, &quot;&quot;)            // 用完清掉
                 VM_SetProp(fx, &quot;parent_inst&quot;, p)                       // 交给特效自己跟随
                 VM_SetProp(fx, &quot;sprite_index&quot;, &quot;spr_my_aura&quot;)
-                VM_SetProp(fx, &quot;rel_x&quot;, 0 - 15)
-                VM_SetProp(fx, &quot;rel_y&quot;, 0 - 5)
+                VM_SetProp(fx, &quot;rel_x&quot;, -15)
+                VM_SetProp(fx, &quot;rel_y&quot;, -5)
                 VM_SetProp(self, &quot;fx&quot;, fx)
             }
         }
@@ -390,6 +453,12 @@ _OBJECT_STEP {
 <li>战场形象自己设（<code>sprite_index</code> + <code>image_xscale/yscale</code>），背包/槽位图标用 JSON 的 <code>icon</code></li>
 <li>宝石实例由<strong>放置逻辑</strong>创建，插件创建不了宝石；要跟角色/格子就靠 <code>mod_point_*</code></li>
 <li><code>parent_player</code> 保持 <code>noone</code>（原版语义），别拿它当&quot;发射方&quot;</li>
+<li>⚠️ <strong>按等级查的数值表要建在 <code>_OBJECT_CFG</code>，别放 <code>_OBJECT_CREATE</code></strong>：
+<code>[reloadmod]</code> 会<strong>清空这个 VM 的全部命名数组</strong>，但<strong>不会重跑 <code>_OBJECT_CREATE</code></strong>（实例是保留的）。
+放 CREATE 的表重载后全空，<code>VM_ArrayGet</code> 静默返回 <strong>0</strong>，症状很隐蔽：
+产火苗的宝石会把「<code>t &gt;= 0×60</code>」判成恒真 → <strong>每帧狂刷火苗</strong>；伤害/减伤类则变成<strong>打不出伤害、没有护盾</strong>。
+活计数器（场上同类数量）同理，别用命名数组记，用的时候现场 <code>VM_GetInstancesInRange</code>。
+详见 <code>mod开发工具说明.md</code>「四、常见坑速查」</li>
 </ul>
 
 </main>

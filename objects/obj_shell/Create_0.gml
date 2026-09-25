@@ -387,10 +387,14 @@ function _execute_script(args, deferred = false) {
 		}
 		if (!deferred) {
 			array_push(history, consoleString);
-			if (response != "") { array_push(output, ">" + consoleString); }
+			if (response != "") {
+				array_push(output, ">" + consoleString);
+				shell_log_write(">" + consoleString);   // sudo 认证后落盘
+			}
 		}
 		if (is_string(response)) {
 			array_push(output, response);
+			shell_log_write(response);   // sudo 认证后落盘
 		}
 		
 		self._update_positions();

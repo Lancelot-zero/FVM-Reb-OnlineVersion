@@ -1,0 +1,5 @@
+{
+  "name": "赖皮蛇海胆弹",
+  "description": "mod 子弹：向本行最右列飞出，到边折返，回到发起格销毁；命中不消失，同一敌人只结算一次",
+  "sprite": "spr_laipishe_bullet"
+}

@@ -283,6 +283,13 @@ _VM_BATTLE_START {
 | `VM_EnemyInRange(行1,行2,列1,列2,"类型")` | int | 矩形范围是否存在敌人（前缀和）。行列都是闭区间、可反序、自动夹取到场内。类型: normal/obstacle/diver/air/dance/underground，`""`或`"all"`=任意 |
 | `VM_GetCardProp("卡名","属性名")` | 任意 | 按属性名读一张卡的**单值**。存档类（玩家自己那张卡的进度）：`"shape"` `"level"` `"skill"` `"max_level"` `"max_shape"`；卡池类（卡片本身的配置）：`"plant_type"` `"feature_type"` `"target_card"` `"cost"` `"cooldown"`。读不到返回 undefined，用 `VM_IsUndefined` 判断 |
 | `VM_CanPlace("卡名",列,行)` | int | 按**游戏正规种植规则**判断该格能不能种这张卡——地形、障碍、水域/莲叶、护盾层、底座卡、替换开关全都算进去（就是玩家手牌点下去时走的那套），1=能 0=不能 |
+| `VM_GetInfo(类别, id, 字段1[, 字段2, ...])` | 任意 | **变长（3~16 个参数）**：按**注册表**逐级查一个对象的信息。类别只有 `"card"` / `"enemy"` / `"weapon"` / `"gem"`；**字符串参数=取字段，数字参数=取下标**（注册表里按编号存的表，写数字就行，例：`"shapes",0,"upgrades",3,"atk"`）；查到的是**整块数据**（数组 / 一整个表）时返回 `undefined`，要求你继续往下写，只放行数字和字符串。例：`VM_GetInfo("card","small_fire","shapes",0,"upgrades",3,"atk")`。`card` 读的是**卡池里那份卡数据**（不是存档里你自己那张） |
+| `VM_CatInRow(行号)` | int | 该行第一只猫（`obj_cat`，海底图里的螃蟹是同一个对象）的实例 id；没有返回 `-1` |
+| `VM_MapObj(列, 行[, "名字"])` | 任意 | **变长（2~16 个参数）**：这一格有没有**地图物品**，读 `global.cell_terrain_flag` 的位。名字：`obstacle` 障碍 / `mucus` 黏液 / `lava` 岩浆 / `seawater` 海水 / `barrier` 屏障 / `fog` 雾 / `cloud` 云 / `wind_tunnel` 风道；`"all"` 或 `""`=任意一种；`"list"`=返回逗号分隔名字串；**列或行传 `-1` = 该方向不限**；名字不认识返回 `-1`；这张表由 `obj_battle` 每帧重建，战斗外返回 `0` |
+| `VM_GetInstanceCount("obj_xxxx")` | int | 某个对象类的实例个数。**类名就是游戏里的 object 名（`obj_` 开头要写全）**；名字不存在 / 不是对象 → `-1` |
+| `VM_GetInstanceAt("obj_xxxx", k)` | int | 某个对象类第 k 个实例的 id（k 从 0 起）；越界 / 名字不存在 → `-1` |
+
+> 地形**类型**（`normal` / `water` / `obstacle`）用 `VM_GetTerrain(列,行)`；岩浆、海水、雾、云、风道、屏障、黏液、障碍这些**实例**用 `VM_MapObj` 查（`cell_terrain_flag` 的 8 个位依次是 obstacle / mucus / lava / seawater / barrier / fog / cloud / wind_tunnel）。
 
 ### BOSS 状态（BOSS_STATE）
 
@@ -501,8 +508,8 @@ _VM_BATTLE_START {
 
 | 函数 | 参数 / 返回 | 说明 |
 |---|---|---|
-| `VM_DamageEnemy(敌人id, 伤害, 伤害类型)` | 3个 | 给敌人造成伤害：走敌人自己的受击事件 `event_user(0)`，所以**闪白、受击音效、护盾判定全都对**（含 `obj_butterfly_mouse` / `obj_charge_spring_mouse` / `obj_landlady_mouse` / `obj_oyster_mouse` 这 4 个自己重写了受击事件的），比直接改 `hp` 正确。`伤害类型`：`normal`=有盾只打盾，`pierce`=盾血一起掉，其它（如 `throw`）=无视护盾 |
-| `VM_DamageEnemyAsh(敌人id, 伤害, 伤害类型)` | 3个 | 灰烬伤害：伤害接得下就按 `VM_DamageEnemy` 结算；接不下（`hp <= 伤害`）就一击必杀、原地换成 `obj_mouse_ash_death`（**不看护盾**，照抄原版大力神）。若该敌人 `special_ash = true`，灰烬会继承它的贴图和当前帧 |
+| `VM_DamageEnemy(敌人id, 伤害, 伤害类型)` | 3个 | 给敌人造成伤害：走敌人自己的受击流程，所以**闪白、受击音效、护盾判定全都对**（有几个原版敌人自己重写过受击表现，也照样对），比直接改 `hp` 正确。`伤害类型`：`normal`=有盾只打盾，`pierce`=盾血一起掉，其它（如 `throw`）=无视护盾 |
+| `VM_DamageEnemyAsh(敌人id, 伤害, 伤害类型)` | 3个 | 灰烬伤害：伤害接得下就按 `VM_DamageEnemy` 结算；接不下（`hp <= 伤害`）就一击必杀、敌人当场变成"烧成灰"的表现（**不看护盾**，和原版大力神一样）。本来就带灰烬表现的敌人，连它的贴图和当前帧一起继承 |
 
 ### 永久贴图与别名
 
@@ -534,8 +541,8 @@ _VM_BATTLE_START {
 | `VM_InstArrayClear(id,"数组名")` | int | 清空；失败 → -1 |
 | `VM_InstArrayContains(id,"数组名",值)` | int | 有没有这个值；不存在 → -1 |
 
-> ⚠️ 只对**真正的 GML 数组**有效。原版子弹身上像 `hitted_enemy` 那种是 **ds_list**，这套读不到。
-> 写操作内部会自动写回实例（GML 数组是值语义）。
+> ⚠️ 只对**数组**有效（`VM_InstArray*` 自己创建/写进去的那些）。原版子弹身上像 `hitted_enemy` 那种"列表"不是数组，这套读不到。
+> 写操作会自动同步回实例，不用另外写一遍。
 
 ### 表格查询（全局二维表）
 
