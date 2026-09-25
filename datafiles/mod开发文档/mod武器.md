@@ -80,11 +80,42 @@ mod/weapons/my_weapon.json / .bin / .txt / tex/
 | `timer` / `flash_speed` | `0` / `5` | **核心动画用**（不要拿来当自己的计时器） |
 | `idle_anim` / `attack_anim` | `0` / `0` | 待机帧数 / 攻击帧数 |
 | `state` | `CARD_STATE.IDLE` | `0`=待机 `1`=攻击 |
+| `mod_prestep_dx` / `mod_prestep_dy` | `0` / `0` | 位置偏移：每帧 Step **结束时**把这两个量加到 `x` / `y` 上 |
 
 现成可以读的还有 `x` / `y` / `depth`（每帧被核心写，见下）。
 
-> ⚠️ **武器没有卡片那套 `mod_tick_*` / `mod_has_enemy` / `mod_step_enter_*` / `mod_set_*` 设施**
-> —— 索敌、开火节奏、进 VM 时机全部要自己在 `_OBJECT_STEP` 里写（用自己设的属性当计时器，例如 `cd` / `atk_timer`）。
+**进 VM 相关的字段**（和卡片同一套，含索敌）：
+
+| 字段 | 读写 | 说明 |
+|---|---|---|
+| `mod_tick_cycle` | 只读 | 一轮计时：每帧 +1，到一轮长度归零 |
+| `mod_tick_max` | 可写 | 一轮多少帧；**不设 = 用武器的 `cycle`** |
+| `mod_tick_enemy` | 只读 | 有敌人才 +1（没敌人清 0） |
+| `mod_has_enemy` | 只读 | 索敌区域里有没有敌人（0/1） |
+| `mod_enemy_check` | 可写 | `1` = 让对象每帧帮这把武器索敌（`norm_attack` 会自动开） |
+| `mod_step_enemy_area` | 可写（数组） | 索敌区域，**每 4 个值一组** `[上, 下, 左, 右]`；可写多组。不设 = `[1,1,0,99]` |
+| `mod_enemy_types` | 可写（数组） | 索敌只看哪几类：`normal` / `obstacle` / `diver` / `air` / `dance` / `underground`；空 = 任意 |
+| `mod_step_enter_condition` | 可写 | 什么时候进 VM，见下 |
+| `mod_step_enter_var` | 可写 | `"mod"` = 间隔帧数；`"wait"` = 还要等几帧 |
+| `mod_step_enter_arr` | 可写（数组） | 开火窗口表（`"norm"` / `"norm_attack"` 用）；**负数 = 从一轮末尾倒数** |
+| `mod_step_enter_index` | 只读 | 这帧命中的窗口下标（0 起）；不是窗口 = `-1` |
+
+**进 VM 的时机（`mod_step_enter_condition`）** —— 和卡片完全一样，只是没有 `hp_change` 那两个：
+
+| 值 | 什么时候进 | 配合字段 |
+|---|---|---|
+| `""`（默认，写错也按这个兜底） | **每帧进** | — |
+| `"mod"` | `battle_time % 间隔 == 0`（全场共享） | `mod_step_enter_var` = 间隔帧数 |
+| `"norm"` | `mod_tick_cycle` 命中窗口表（**不看敌人**） | `mod_step_enter_arr` 窗口表 |
+| `"norm_attack"` | **有敌人** 且命中窗口表；窗口表空 = 有敌人就每帧进 | `mod_step_enter_arr` + 索敌字段 |
+| `"wait"` | `mod_step_enter_var` 每帧自减，减到 0 进 | `mod_step_enter_var` = 剩余帧数 |
+
+- 索敌区域是**以玩家那格为中心**算的（武器的 `grid_col` / `grid_row` 每帧从 `parent_player` 抄）
+- 命中开火窗口且确实有敌人时，会自动把 `state` 切成 `CARD_STATE.ATTACK`（同卡片）
+
+> 武器**有**卡片那套 `mod_tick_*` / `mod_has_enemy` / `mod_step_enter_*` 设施（进 VM 时机的用法和卡片完全一样，见下）。
+> **没有**的只有 `mod_set_*` 批量改属性、以及 `hp_change` / `hp_change_mod`（武器不挨打，没有 `hp`）。
+> 另有武器专属的两个偏移字段 `mod_prestep_dx` / `mod_prestep_dy`。
 
 ---
 
@@ -93,9 +124,10 @@ mod/weapons/my_weapon.json / .bin / .txt / tex/
 ### 什么时候跑
 
 - **`_OBJECT_CREATE`**：实例创建时立刻执行（主/超武在种卡的那一刻；副武器在角色创建时）
-- **`_OBJECT_STEP`**：**每帧都跑**（没有卡那种"进 VM 条件"），只要没暂停
+- **`_OBJECT_STEP`**：每帧，**但会被 `mod_step_enter_condition` 挡住**（默认 `""` 才是每帧进）
 - **`_OBJECT_DRAW`**：写了就跑 VM 的绘制块（**不再自动 `draw_self()`**），没写就自动画 `sprite_index`
 - **`_OBJECT_DESTROY`**：武器对象**不支持**（写了不会执行）
+- **`_OBJECT_MOUSE_ENTER` / `_OBJECT_MOUSE_LEAVE` / `_OBJECT_CLICK`**：鼠标移入 / 移出 / 左键点在武器上（按实例判定，鼠标要压在武器的贴图上）
 
 ### 每帧顺序（`obj_weapon_mod/Step_0.gml`）
 
@@ -108,8 +140,18 @@ mod/weapons/my_weapon.json / .bin / .txt / tex/
       grid_row / grid_col = 玩家那格
 3. 动画自动播放：timer/flash_speed 驱动 image_index，
       state=0 循环 0..idle_anim，state=1 循环 idle_anim+1 .. idle_anim+attack_anim
-4. 跑武器 .bin 的 _OBJECT_STEP
+4. 一轮计时 mod_tick_cycle +1，到一轮长度（mod_tick_max，不设用 cycle）归零
+5. 索敌（仅当 mod_enemy_check=1 或条件为 norm_attack）
+      → 算 mod_has_enemy；没敌人时顺手把 state 收回 IDLE
+6. mod_tick_enemy：有敌人才 +1
+7. 判断这一帧进不进 VM（mod_step_enter_condition）
+      → 命中开火窗口且确实有敌人时，自动把 state 切成 ATTACK
+8. 进 VM：执行武器的 _OBJECT_STEP（被上面条件挡住时不执行）
+9. 偏移：x += mod_prestep_dx; y += mod_prestep_dy
 ```
+
+> 第 2 步每帧把 `x`/`y` 钉回玩家身上，所以第 9 步的偏移是**固定偏移**（每帧加一次、当帧就被重置回去），
+> 不是每帧位移。想改站位就设 `mod_prestep_dx` / `mod_prestep_dy`，不用每帧自己覆盖 `x`/`y`。
 
 两个由此而来的"特别用法"：
 

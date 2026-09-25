@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>美食大战老鼠重生-实验室地图插件编辑工具V2.4.9</title>
+</head>
+<body>
+<div id="app">
+  <!-- 标题栏 -->
+  <div id="custom-title-bar">
+    <div class="title-drag-region" style="--wails-draggable: drag">
+      <img class="titlebar-icon" src="/icon.png" alt="">
+      <span class="app-title">美食大战老鼠重生-实验室地图插件编辑工具V2.4.9</span>
+    </div>
+    <div class="window-controls" style="--wails-draggable: no-drag">
+      <div class="control-btn" id="w-min-btn" title="最小化">
+        <svg viewBox="0 0 12 12" width="12" height="12"><path d="M3 6h6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+      </div>
+      <div class="control-btn" id="w-max-btn" title="最大化/还原">
+        <svg viewBox="0 0 12 12" width="12" height="12"><rect x="2.6" y="2.6" width="6.8" height="6.8" rx="1.4" stroke="currentColor" stroke-width="1.2" fill="none"/></svg>
+      </div>
+      <div class="control-btn" id="w-close-btn" title="关闭">
+        <svg viewBox="0 0 12 12" width="12" height="12"><path d="M3.5 3.5l5 5m0-5l-5 5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- 菜单栏 -->
+  <div id="menu-bar">
+    <div class="menu-left">
+      <button class="btn menu-btn" id="btn-new" title="Ctrl+N">新建</button>
+      <button class="btn menu-btn" id="btn-open" title="Ctrl+O">打开</button>
+      <button class="btn menu-btn" id="btn-save" title="Ctrl+S">保存</button>
+      <button class="btn btn-primary menu-btn" id="btn-compile" title="F5 / Ctrl+B">编译</button>
+      <button class="btn menu-btn" id="btn-help" title="查看语法帮助">帮助</button>
+      <button class="btn menu-btn" id="btn-output" title="显示/隐藏编译输出面板">输出</button>
+    </div>
+    <div class="menu-right">
+      <button class="btn menu-btn" id="btn-theme" title="切换白天/夜间模式">🌞 白天</button>
+      <span id="dirty-dot" class="dirty-dot hidden" title="有未保存的修改">●</span>
+      <span id="file-name" class="file-name">未命名.txt</span>
+    </div>
+  </div>
+
+  <!-- 编辑区 -->
+  <div id="editor-host"></div>
+
+  <!-- 编译输出面板 -->
+  <div id="output-panel" class="hidden">
+    <div class="output-header">
+      <span class="output-title">编译输出</span>
+      <div class="output-actions">
+        <button class="btn btn-small" id="btn-open-dir">在资源管理器中查看</button>
+        <button class="btn btn-small" id="btn-close-output">收起</button>
+      </div>
+    </div>
+    <div id="compile-output" class="output-content"></div>
+  </div>
+
+  <!-- 状态栏 -->
+  <div id="status-bar">
+    <span id="status-pos">行 1, 列 1</span>
+    <span id="status-block" class="status-block hidden"></span>
+    <span id="status-diags" class="hidden"></span>
+    <span class="status-spacer"></span>
+    <span id="status-compiler"></span>
+  </div>
+
+  <!-- 帮助模态框 -->
+  <div id="help-modal" class="modal hidden">
+    <div class="modal-mask"></div>
+    <div class="modal-box modal-large">
+      <div class="modal-header">
+        <span>语法帮助（help.md）</span>
+        <button class="btn btn-small" id="btn-close-help">关闭</button>
+      </div>
+      <div class="help-search-bar">
+        <input id="help-search" type="text" placeholder="搜索函数 / 关键字…（Ctrl+F）" spellcheck="false" />
+        <span id="help-search-count"></span>
+        <button class="btn btn-small" id="btn-search-prev" title="上一个（Shift+Enter）">↑</button>
+        <button class="btn btn-small" id="btn-search-next" title="下一个（Enter）">↓</button>
+      </div>
+      <div class="modal-body">
+        <div id="help-content" class="markdown-body"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 确认模态框 -->
+  <div id="confirm-modal" class="modal hidden">
+    <div class="modal-mask"></div>
+    <div class="modal-box">
+      <div class="modal-header">
+        <span id="confirm-title">确认</span>
+      </div>
+      <div class="modal-body">
+        <p id="confirm-message"></p>
+      </div>
+      <div class="modal-footer" id="confirm-buttons"></div>
+    </div>
+  </div>
+
+  <!-- 更新内容模态框 -->
+  <div id="update-modal" class="modal hidden">
+    <div class="modal-mask"></div>
+    <div class="modal-box">
+      <div class="modal-header">
+        <span>本次更新</span>
+        <button class="btn btn-small" id="btn-close-update">关闭</button>
+      </div>
+      <div class="modal-body">
+        <div id="update-content" class="markdown-body"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="hidden"></div>
+</div>
+<script>
+  // 前端未捕获错误转发到后端日志（模块加载阶段的错误也能捕获）
+  window.addEventListener("error", (e) => {
+    const stack = e.error && e.error.stack ? "\n" + e.error.stack : "";
+    try { window.go && window.go.main && window.go.main.App.LogJsError("JS错误: " + e.message + stack + " @ " + (e.filename || "") + ":" + (e.lineno || 0)); } catch (_) {}
+  });
+  window.addEventListener("unhandledrejection", (e) => {
+    const r = e.reason;
+    const stack = r && r.stack ? "\n" + r.stack : "";
+    try { window.go && window.go.main && window.go.main.App.LogJsError("未处理的Promise: " + String(r) + stack); } catch (_) {}
+  });
+</script>
+<script src="./src/main.js" type="module"></script>
+</body>
+</html>

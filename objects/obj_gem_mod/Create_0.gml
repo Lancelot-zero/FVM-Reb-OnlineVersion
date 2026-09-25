@@ -42,6 +42,21 @@ if (is_struct(gem_info)) {
 	}
 }
 
+// ══════════════════════════════════════════════════════════════════════════
+// 进 VM 的入口条件（可选；不写 = 每帧进）
+//   mod_step_enter_condition
+//     "" / 认不出    每帧进（默认）
+//     "mod"          按全场帧号对齐：battle_time % mod_step_enter_var == 0
+//     "wait"         倒数：mod_step_enter_var 每帧 -1，减到 <= 0 进
+//                    ⚠️ 进完之后要把 var 设回正数，否则此后每帧都进
+//     "cool"         冷却结束才进（cooldown_timer <= 0）；主动宝石用这个
+//   mod_step_enter_var   "mod" = 间隔帧数；"wait" = 还要等几帧
+// ⚠️ 宝石没有 hp、不移动（图标钉在 390, 213 + gem_index*80），
+//    所以卡片/敌人那套 hp_change、cell、索敌条件这里都没有
+// ══════════════════════════════════════════════════════════════════════════
+mod_step_enter_condition = ""   // "" / "mod" / "wait" / "cool"
+mod_step_enter_var       = 0    // "mod" = 间隔帧数；"wait" = 还要等几帧
+
 // 创建时加入该宝石的实例容器，并执行该宝石虚拟机里的创建块
 if (gem_id != "" && variable_global_exists("mod_gem_vms") && ds_map_exists(global.mod_gem_vms, gem_id)) {
 	var _vm = global.mod_gem_vms[? gem_id];

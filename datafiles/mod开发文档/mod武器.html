@@ -233,20 +233,131 @@ VM 语言与全部函数见 <code>help.md</code>。</p>
 <td><code>CARD_STATE.IDLE</code></td>
 <td><code>0</code>=待机 <code>1</code>=攻击</td>
 </tr>
+<tr>
+<td><code>mod_prestep_dx</code> / <code>mod_prestep_dy</code></td>
+<td><code>0</code> / <code>0</code></td>
+<td>位置偏移：每帧 Step <strong>结束时</strong>把这两个量加到 <code>x</code> / <code>y</code> 上</td>
+</tr>
 </tbody></table>
 <p>现成可以读的还有 <code>x</code> / <code>y</code> / <code>depth</code>（每帧被核心写，见下）。</p>
+<p><strong>进 VM 相关的字段</strong>（和卡片同一套，含索敌）：</p>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>读写</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>mod_tick_cycle</code></td>
+<td>只读</td>
+<td>一轮计时：每帧 +1，到一轮长度归零</td>
+</tr>
+<tr>
+<td><code>mod_tick_max</code></td>
+<td>可写</td>
+<td>一轮多少帧；<strong>不设 = 用武器的 <code>cycle</code></strong></td>
+</tr>
+<tr>
+<td><code>mod_tick_enemy</code></td>
+<td>只读</td>
+<td>有敌人才 +1（没敌人清 0）</td>
+</tr>
+<tr>
+<td><code>mod_has_enemy</code></td>
+<td>只读</td>
+<td>索敌区域里有没有敌人（0/1）</td>
+</tr>
+<tr>
+<td><code>mod_enemy_check</code></td>
+<td>可写</td>
+<td><code>1</code> = 让对象每帧帮这把武器索敌（<code>norm_attack</code> 会自动开）</td>
+</tr>
+<tr>
+<td><code>mod_step_enemy_area</code></td>
+<td>可写（数组）</td>
+<td>索敌区域，<strong>每 4 个值一组</strong> <code>[上, 下, 左, 右]</code>；可写多组。不设 = <code>[1,1,0,99]</code></td>
+</tr>
+<tr>
+<td><code>mod_enemy_types</code></td>
+<td>可写（数组）</td>
+<td>索敌只看哪几类：<code>normal</code> / <code>obstacle</code> / <code>diver</code> / <code>air</code> / <code>dance</code> / <code>underground</code>；空 = 任意</td>
+</tr>
+<tr>
+<td><code>mod_step_enter_condition</code></td>
+<td>可写</td>
+<td>什么时候进 VM，见下</td>
+</tr>
+<tr>
+<td><code>mod_step_enter_var</code></td>
+<td>可写</td>
+<td><code>&quot;mod&quot;</code> = 间隔帧数；<code>&quot;wait&quot;</code> = 还要等几帧</td>
+</tr>
+<tr>
+<td><code>mod_step_enter_arr</code></td>
+<td>可写（数组）</td>
+<td>开火窗口表（<code>&quot;norm&quot;</code> / <code>&quot;norm_attack&quot;</code> 用）；<strong>负数 = 从一轮末尾倒数</strong></td>
+</tr>
+<tr>
+<td><code>mod_step_enter_index</code></td>
+<td>只读</td>
+<td>这帧命中的窗口下标（0 起）；不是窗口 = <code>-1</code></td>
+</tr>
+</tbody></table>
+<p><strong>进 VM 的时机（<code>mod_step_enter_condition</code>）</strong> —— 和卡片完全一样，只是没有 <code>hp_change</code> 那两个：</p>
+<table>
+<thead>
+<tr>
+<th>值</th>
+<th>什么时候进</th>
+<th>配合字段</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>&quot;&quot;</code>（默认，写错也按这个兜底）</td>
+<td><strong>每帧进</strong></td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>&quot;mod&quot;</code></td>
+<td><code>battle_time % 间隔 == 0</code>（全场共享）</td>
+<td><code>mod_step_enter_var</code> = 间隔帧数</td>
+</tr>
+<tr>
+<td><code>&quot;norm&quot;</code></td>
+<td><code>mod_tick_cycle</code> 命中窗口表（<strong>不看敌人</strong>）</td>
+<td><code>mod_step_enter_arr</code> 窗口表</td>
+</tr>
+<tr>
+<td><code>&quot;norm_attack&quot;</code></td>
+<td><strong>有敌人</strong> 且命中窗口表；窗口表空 = 有敌人就每帧进</td>
+<td><code>mod_step_enter_arr</code> + 索敌字段</td>
+</tr>
+<tr>
+<td><code>&quot;wait&quot;</code></td>
+<td><code>mod_step_enter_var</code> 每帧自减，减到 0 进</td>
+<td><code>mod_step_enter_var</code> = 剩余帧数</td>
+</tr>
+</tbody></table>
+<ul>
+<li>索敌区域是<strong>以玩家那格为中心</strong>算的（武器的 <code>grid_col</code> / <code>grid_row</code> 每帧从 <code>parent_player</code> 抄）</li>
+<li>命中开火窗口且确实有敌人时，会自动把 <code>state</code> 切成 <code>CARD_STATE.ATTACK</code>（同卡片）</li>
+</ul>
 <blockquote>
-<p>⚠️ <strong>武器没有卡片那套 <code>mod_tick_*</code> / <code>mod_has_enemy</code> / <code>mod_step_enter_*</code> / <code>mod_set_*</code> 设施</strong>
-—— 索敌、开火节奏、进 VM 时机全部要自己在 <code>_OBJECT_STEP</code> 里写（用自己设的属性当计时器，例如 <code>cd</code> / <code>atk_timer</code>）。</p>
+<p>武器<strong>有</strong>卡片那套 <code>mod_tick_*</code> / <code>mod_has_enemy</code> / <code>mod_step_enter_*</code> 设施（进 VM 时机的用法和卡片完全一样，见下）。
+<strong>没有</strong>的只有 <code>mod_set_*</code> 批量改属性、以及 <code>hp_change</code> / <code>hp_change_mod</code>（武器不挨打，没有 <code>hp</code>）。
+另有武器专属的两个偏移字段 <code>mod_prestep_dx</code> / <code>mod_prestep_dy</code>。</p>
 </blockquote>
 <hr>
 <h2>四、STEP 的时机与执行顺序</h2>
 <h3>什么时候跑</h3>
 <ul>
 <li><strong><code>_OBJECT_CREATE</code></strong>：实例创建时立刻执行（主/超武在种卡的那一刻；副武器在角色创建时）</li>
-<li><strong><code>_OBJECT_STEP</code></strong>：<strong>每帧都跑</strong>（没有卡那种&quot;进 VM 条件&quot;），只要没暂停</li>
+<li><strong><code>_OBJECT_STEP</code></strong>：每帧，<strong>但会被 <code>mod_step_enter_condition</code> 挡住</strong>（默认 <code>&quot;&quot;</code> 才是每帧进）</li>
 <li><strong><code>_OBJECT_DRAW</code></strong>：写了就跑 VM 的绘制块（<strong>不再自动 <code>draw_self()</code></strong>），没写就自动画 <code>sprite_index</code></li>
 <li><strong><code>_OBJECT_DESTROY</code></strong>：武器对象<strong>不支持</strong>（写了不会执行）</li>
+<li><strong><code>_OBJECT_MOUSE_ENTER</code> / <code>_OBJECT_MOUSE_LEAVE</code> / <code>_OBJECT_CLICK</code></strong>：鼠标移入 / 移出 / 左键点在武器上（按实例判定，鼠标要压在武器的贴图上）</li>
 </ul>
 <h3>每帧顺序（<code>obj_weapon_mod/Step_0.gml</code>）</h3>
 <pre><code class="language-text">1. 暂停 → 整个 exit
@@ -257,8 +368,19 @@ VM 语言与全部函数见 <code>help.md</code>。</p>
       grid_row / grid_col = 玩家那格
 3. 动画自动播放：timer/flash_speed 驱动 image_index，
       state=0 循环 0..idle_anim，state=1 循环 idle_anim+1 .. idle_anim+attack_anim
-4. 跑武器 .bin 的 _OBJECT_STEP
+4. 一轮计时 mod_tick_cycle +1，到一轮长度（mod_tick_max，不设用 cycle）归零
+5. 索敌（仅当 mod_enemy_check=1 或条件为 norm_attack）
+      → 算 mod_has_enemy；没敌人时顺手把 state 收回 IDLE
+6. mod_tick_enemy：有敌人才 +1
+7. 判断这一帧进不进 VM（mod_step_enter_condition）
+      → 命中开火窗口且确实有敌人时，自动把 state 切成 ATTACK
+8. 进 VM：执行武器的 _OBJECT_STEP（被上面条件挡住时不执行）
+9. 偏移：x += mod_prestep_dx; y += mod_prestep_dy
 </code></pre>
+<blockquote>
+<p>第 2 步每帧把 <code>x</code>/<code>y</code> 钉回玩家身上，所以第 9 步的偏移是<strong>固定偏移</strong>（每帧加一次、当帧就被重置回去），
+不是每帧位移。想改站位就设 <code>mod_prestep_dx</code> / <code>mod_prestep_dy</code>，不用每帧自己覆盖 <code>x</code>/<code>y</code>。</p>
+</blockquote>
 <p>两个由此而来的&quot;特别用法&quot;：</p>
 <ul>
 <li><strong>位置每帧被核心钉在玩家头上</strong>（<code>x = 玩家.x - 10</code>、<code>y = 玩家.y - 100</code>）。

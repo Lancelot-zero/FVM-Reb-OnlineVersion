@@ -30,6 +30,32 @@ function src_mod_stat_17(_arr) {
 	return _out;
 }
 
+/// @function src_mod_scan_dirs(_dir)
+/// @desc 返回一个类别目录下**要扫 json 的目录**：类别根 + 它下面每个子目录（只多一层，不递归）。
+///       mod 文件多了可以往子目录里分组收纳，扫描照旧 —— `mod/cards/*.json` 和
+///       `mod/cards/生肖/xxx.json` 都会被扫到。
+///       ⚠️ file_find 是全局单迭代器，所以这里先把子目录收完再返回，
+///          调用方拿到目录列表后再各自 file_find_first，不能边遍历边开新的查找
+/// @param _dir 类别目录（如 working_directory + "mod/cards/"）
+/// @return 字符串数组（目录，带尾斜杠）；_dir 为空返回空数组
+function src_mod_scan_dirs(_dir) {
+	var _out = [];
+	if (_dir == "") return _out;
+	if (!string_ends_with(_dir, "/") && !string_ends_with(_dir, "\\")) _dir += "/";
+	array_push(_out, _dir);
+
+	var _subs = [];
+	var _d = file_find_first(_dir + "*", fa_directory);
+	while (_d != "") {
+		if (_d != "." && _d != "..") array_push(_subs, _dir + _d + "/");
+		_d = file_find_next();
+	}
+	file_find_close();
+
+	for (var _i = 0; _i < array_length(_subs); _i++) array_push(_out, _subs[_i]);
+	return _out;
+}
+
 /// @function src_mod_bullets_init(_dir)
 /// @desc 扫描 mod/bullets/ 下的 json，只加载 VM，不注册进任何游戏卡池/敌人池。
 ///       空 json 也能用来给 obj_bullet_mod 提供同名 .bin 逻辑。
@@ -42,25 +68,29 @@ function src_mod_bullets_init(_dir = "") {
   if (!variable_global_exists("mod_bullet_vms")) { global.mod_bullet_vms = ds_map_create(); }
 
   var _count = 0;
-  var _file = file_find_first(_dir + "*.json", 0);
-  while (_file != "") {
-    var _path = _dir + _file;
-    var _json = json_parse(src_mod_read_text(_path));
-    if (!is_struct(_json)) {
-      show_debug_message("src_mod: 子弹 JSON 解析失败 " + _path);
-    } else {
-      var _name = filename_name(_file);
-      var _id = string_copy(_name, 1, string_length(_name) - 5);
-      var _bin_path = string_replace(_path, ".json", ".bin");
-      var _bin_buf = file_exists(_bin_path) ? buffer_load(_bin_path) : undefined;
-      global.mod_bullet_vms[? _id] = src_mod_card_vm_load(_bin_buf, _dir, _id);
-      global.mod_bullet_vms[? _id][$ "card_data"] = _json;
-      global.mod_bullet_vms[? _id][$ "mod_dir"] = _dir;
-      _count++;
+  var _dirs = src_mod_scan_dirs(_dir);          // 类别根 + 各子目录（只多一层）
+  for (var _di = 0; _di < array_length(_dirs); _di++) {
+    var _d = _dirs[_di];
+    var _file = file_find_first(_d + "*.json", 0);
+    while (_file != "") {
+      var _path = _d + _file;
+      var _json = json_parse(src_mod_read_text(_path));
+      if (!is_struct(_json)) {
+        show_debug_message("src_mod: 子弹 JSON 解析失败 " + _path);
+      } else {
+        var _name = filename_name(_file);
+        var _id = string_copy(_name, 1, string_length(_name) - 5);
+        var _bin_path = string_replace(_path, ".json", ".bin");
+        var _bin_buf = file_exists(_bin_path) ? buffer_load(_bin_path) : undefined;
+        global.mod_bullet_vms[? _id] = src_mod_card_vm_load(_bin_buf, _d, _id);
+        global.mod_bullet_vms[? _id][$ "card_data"] = _json;
+        global.mod_bullet_vms[? _id][$ "mod_dir"] = _d;   // 贴图跟着 json 走：从它所在目录找 tex/
+        _count++;
+      }
+      _file = file_find_next();
     }
-    _file = file_find_next();
+    file_find_close();
   }
-  file_find_close();
   return _count;
 }
 
@@ -75,25 +105,29 @@ function src_mod_effects_init(_dir = "") {
   if (!variable_global_exists("mod_effect_vms")) { global.mod_effect_vms = ds_map_create(); }
 
   var _count = 0;
-  var _file = file_find_first(_dir + "*.json", 0);
-  while (_file != "") {
-    var _path = _dir + _file;
-    var _json = json_parse(src_mod_read_text(_path));
-    if (!is_struct(_json)) {
-      show_debug_message("src_mod: 特效 JSON 解析失败 " + _path);
-    } else {
-      var _name = filename_name(_file);
-      var _id = string_copy(_name, 1, string_length(_name) - 5);
-      var _bin_path = string_replace(_path, ".json", ".bin");
-      var _bin_buf = file_exists(_bin_path) ? buffer_load(_bin_path) : undefined;
-      global.mod_effect_vms[? _id] = src_mod_card_vm_load(_bin_buf, _dir, _id);
-      global.mod_effect_vms[? _id][$ "card_data"] = _json;
-      global.mod_effect_vms[? _id][$ "mod_dir"] = _dir;
-      _count++;
+  var _dirs = src_mod_scan_dirs(_dir);          // 类别根 + 各子目录（只多一层）
+  for (var _di = 0; _di < array_length(_dirs); _di++) {
+    var _d = _dirs[_di];
+    var _file = file_find_first(_d + "*.json", 0);
+    while (_file != "") {
+      var _path = _d + _file;
+      var _json = json_parse(src_mod_read_text(_path));
+      if (!is_struct(_json)) {
+        show_debug_message("src_mod: 特效 JSON 解析失败 " + _path);
+      } else {
+        var _name = filename_name(_file);
+        var _id = string_copy(_name, 1, string_length(_name) - 5);
+        var _bin_path = string_replace(_path, ".json", ".bin");
+        var _bin_buf = file_exists(_bin_path) ? buffer_load(_bin_path) : undefined;
+        global.mod_effect_vms[? _id] = src_mod_card_vm_load(_bin_buf, _d, _id);
+        global.mod_effect_vms[? _id][$ "card_data"] = _json;
+        global.mod_effect_vms[? _id][$ "mod_dir"] = _d;
+        _count++;
+      }
+      _file = file_find_next();
     }
-    _file = file_find_next();
+    file_find_close();
   }
-  file_find_close();
   return _count;
 }
 
@@ -107,31 +141,35 @@ function src_mod_bullets_reload() {
   if (!variable_global_exists("mod_bullet_vms")) { global.mod_bullet_vms = ds_map_create(); }
 
   var _count = 0;
-  var _file = file_find_first(_dir + "*.json", 0);
-  while (_file != "") {
-    var _path = _dir + _file;
-    var _json = json_parse(src_mod_read_text(_path));
-    if (!is_struct(_json)) {
-      show_debug_message("src_mod: 子弹 JSON 解析失败 " + _path);
-    } else {
-      var _name = filename_name(_file);
-      var _id = string_copy(_name, 1, string_length(_name) - 5);
-      var _bin_path = string_replace(_path, ".json", ".bin");
-      var _bin_buf = file_exists(_bin_path) ? buffer_load(_bin_path) : undefined;
-      var _vm;
-      if (ds_map_exists(global.mod_bullet_vms, _id)) {
-        _vm = src_mod_card_vm_fill(global.mod_bullet_vms[? _id], _bin_buf, _dir);
+  var _dirs = src_mod_scan_dirs(_dir);
+  for (var _di = 0; _di < array_length(_dirs); _di++) {
+    var _d = _dirs[_di];
+    var _file = file_find_first(_d + "*.json", 0);
+    while (_file != "") {
+      var _path = _d + _file;
+      var _json = json_parse(src_mod_read_text(_path));
+      if (!is_struct(_json)) {
+        show_debug_message("src_mod: 子弹 JSON 解析失败 " + _path);
       } else {
-        _vm = src_mod_card_vm_load(_bin_buf, _dir, _id);
-        global.mod_bullet_vms[? _id] = _vm;   // 新建的 VM 必须写回，否则这次重载白干
+        var _name = filename_name(_file);
+        var _id = string_copy(_name, 1, string_length(_name) - 5);
+        var _bin_path = string_replace(_path, ".json", ".bin");
+        var _bin_buf = file_exists(_bin_path) ? buffer_load(_bin_path) : undefined;
+        var _vm;
+        if (ds_map_exists(global.mod_bullet_vms, _id)) {
+          _vm = src_mod_card_vm_fill(global.mod_bullet_vms[? _id], _bin_buf, _d);
+        } else {
+          _vm = src_mod_card_vm_load(_bin_buf, _d, _id);
+          global.mod_bullet_vms[? _id] = _vm;   // 新建的 VM 必须写回，否则这次重载白干
+        }
+        _vm[$ "card_data"] = _json;
+        _vm[$ "mod_dir"] = _d;
+        _count++;
       }
-      _vm[$ "card_data"] = _json;
-      _vm[$ "mod_dir"] = _dir;
-      _count++;
+      _file = file_find_next();
     }
-    _file = file_find_next();
+    file_find_close();
   }
-  file_find_close();
   return _count;
 }
 
@@ -145,31 +183,35 @@ function src_mod_effects_reload() {
   if (!variable_global_exists("mod_effect_vms")) { global.mod_effect_vms = ds_map_create(); }
 
   var _count = 0;
-  var _file = file_find_first(_dir + "*.json", 0);
-  while (_file != "") {
-    var _path = _dir + _file;
-    var _json = json_parse(src_mod_read_text(_path));
-    if (!is_struct(_json)) {
-      show_debug_message("src_mod: 特效 JSON 解析失败 " + _path);
-    } else {
-      var _name = filename_name(_file);
-      var _id = string_copy(_name, 1, string_length(_name) - 5);
-      var _bin_path = string_replace(_path, ".json", ".bin");
-      var _bin_buf = file_exists(_bin_path) ? buffer_load(_bin_path) : undefined;
-      var _vm;
-      if (ds_map_exists(global.mod_effect_vms, _id)) {
-        _vm = src_mod_card_vm_fill(global.mod_effect_vms[? _id], _bin_buf, _dir);
+  var _dirs = src_mod_scan_dirs(_dir);
+  for (var _di = 0; _di < array_length(_dirs); _di++) {
+    var _d = _dirs[_di];
+    var _file = file_find_first(_d + "*.json", 0);
+    while (_file != "") {
+      var _path = _d + _file;
+      var _json = json_parse(src_mod_read_text(_path));
+      if (!is_struct(_json)) {
+        show_debug_message("src_mod: 特效 JSON 解析失败 " + _path);
       } else {
-        _vm = src_mod_card_vm_load(_bin_buf, _dir, _id);
-        global.mod_effect_vms[? _id] = _vm;   // 新建的 VM 必须写回，否则这次重载白干
+        var _name = filename_name(_file);
+        var _id = string_copy(_name, 1, string_length(_name) - 5);
+        var _bin_path = string_replace(_path, ".json", ".bin");
+        var _bin_buf = file_exists(_bin_path) ? buffer_load(_bin_path) : undefined;
+        var _vm;
+        if (ds_map_exists(global.mod_effect_vms, _id)) {
+          _vm = src_mod_card_vm_fill(global.mod_effect_vms[? _id], _bin_buf, _d);
+        } else {
+          _vm = src_mod_card_vm_load(_bin_buf, _d, _id);
+          global.mod_effect_vms[? _id] = _vm;   // 新建的 VM 必须写回，否则这次重载白干
+        }
+        _vm[$ "card_data"] = _json;
+        _vm[$ "mod_dir"] = _d;
+        _count++;
       }
-      _vm[$ "card_data"] = _json;
-      _vm[$ "mod_dir"] = _dir;
-      _count++;
+      _file = file_find_next();
     }
-    _file = file_find_next();
+    file_find_close();
   }
-  file_find_close();
   return _count;
 }
 /// @function src_mod_default_map_icon()
@@ -913,6 +955,8 @@ function src_mod_card_vm_load(_buf = undefined, _dir = "", _id = "") {
 		ds_map_delete(_vm.blocks, "_OBJECT_CFG");
 		buffer_delete(_cfg_buf);
 	}
+	// 挂载点注册：只把**确实有这个块**的挂载点挂上（数组里不留空挂的 VM）
+	vm_hook_register_all(_vm);
 	return _vm;
 }
 
@@ -944,6 +988,25 @@ function src_mod_card_vm_fill(_vm, _buf, _dir = "") {
 	if (variable_struct_exists(_vm, "codes") && ds_exists(_vm[$ "codes"], ds_type_map)) {
 		ds_map_clear(_vm[$ "codes"]);
 	}
+
+	// 行号表：旧 bin 的块名→行号映射，不清的话新版 bin 会往里叠，
+	// 而且被删掉的块名会残留，报错时定位到旧行号
+	if (variable_struct_exists(_vm, "line_tab") && ds_exists(_vm[$ "line_tab"], ds_type_map)) {
+		ds_map_clear(_vm[$ "line_tab"]);
+	}
+
+	// 命名数组（VM_ArrayGet/Set、VM_InstArray* 用的）：块换掉之后这些名字多半没人读了，
+	// 留着就是死数据；万一新代码用同名数组，还会读到上一版的旧值
+	if (variable_struct_exists(_vm, "arrays") && ds_exists(_vm[$ "arrays"], ds_type_map)) {
+		ds_map_clear(_vm[$ "arrays"]);
+	}
+
+	// 内存槽：整块归零。清掉是安全的（槽位复用时块执行会自己覆盖），
+	// 而且**必须清** —— 槽里可能存着按【旧字符串池】编的下标，新池里那个下标
+	// 指向的是另一个字符串，留着就是变量读出个别的词。
+	var _mem_n = array_length(_vm.mem_type);
+	_vm.mem_type = array_create(_mem_n, VM_TYPE_INT);
+	_vm.mem_val  = array_create(_mem_n, 0);
 
 	if (!buffer_exists(_buf)) return _vm;
 	buffer_seek(_buf, buffer_seek_start, 0);
@@ -1024,6 +1087,8 @@ function src_mod_card_vm_fill(_vm, _buf, _dir = "") {
 		ds_map_delete(_vm.blocks, "_OBJECT_CFG");
 		buffer_delete(_cfg_buf);
 	}
+	// 热重载换掉了 blocks → 按新块重新挂载（新增/删掉的挂载点块在这里生效）
+	vm_hook_register_all(_vm);
 	return _vm;
 }
 
@@ -1042,10 +1107,13 @@ function src_mod_init(_dir = "") {
 	if (!variable_global_exists("mod_card_vms")) { global.mod_card_vms = ds_map_create(); }
 
 	var _count = 0;
-	var _file = file_find_first(_dir + "*.json", 0);
+	var _dirs = src_mod_scan_dirs(_dir);          // 类别根 + 各子目录（只多一层）
+	for (var _di = 0; _di < array_length(_dirs); _di++) {
+	var _d = _dirs[_di];
+	var _file = file_find_first(_d + "*.json", 0);
 	while (_file != "") {
 		// file_find_first 只返回文件名，补全目录
-		var _path = _dir + _file;
+		var _path = _d + _file;
 		if (file_exists(_file)) { _path = _file; }
 		var _json = json_parse(src_mod_read_text(_path));
 		if (!is_struct(_json)) {
@@ -1057,9 +1125,9 @@ function src_mod_init(_dir = "") {
 			// 必须先执行，下方注册时 get_load_sprite 才能命中永久缓存）
 			var _bin_path = string_replace(_path, ".json", ".bin");
 			var _bin_buf = file_exists(_bin_path) ? buffer_load(_bin_path) : undefined;
-			global.mod_card_vms[? _id] = src_mod_card_vm_load(_bin_buf, _dir, _id);
+			global.mod_card_vms[? _id] = src_mod_card_vm_load(_bin_buf, _d, _id);
 			global.mod_card_vms[? _id][$ "card_data"] = _json;   // 保留原始 JSON，创建实例时取 plant_type/feature_type
-			global.mod_card_vms[? _id][$ "mod_dir"] = _dir;      // 记录 JSON/bin 所在目录，贴图加载时作为候选路径
+			global.mod_card_vms[? _id][$ "mod_dir"] = _d;   // 贴图跟着 json 走：从它所在目录找 tex/
 			if (buffer_exists(_bin_buf)) {
 				show_debug_message("src_mod: 加载卡片虚拟机 " + _id + "（块数 " + string(ds_map_size(global.mod_card_vms[? _id].blocks)) + "）");
 			}
@@ -1071,6 +1139,7 @@ function src_mod_init(_dir = "") {
 		_file = file_find_next();
 	}
 	file_find_close();
+	}
 	return _count;
 }
 
@@ -1087,9 +1156,12 @@ function src_mod_reload() {
 	if (!variable_global_exists("mod_card_vms")) { global.mod_card_vms = ds_map_create(); }
 
 	var _count = 0;
-	var _file = file_find_first(_dir + "*.json", 0);
+	var _dirs = src_mod_scan_dirs(_dir);
+	for (var _di = 0; _di < array_length(_dirs); _di++) {
+	var _d = _dirs[_di];
+	var _file = file_find_first(_d + "*.json", 0);
 	while (_file != "") {
-		var _path = _dir + _file;
+		var _path = _d + _file;
 		if (file_exists(_file)) { _path = _file; }
 		var _json = json_parse(src_mod_read_text(_path));
 		if (!is_struct(_json)) {
@@ -1103,13 +1175,13 @@ function src_mod_reload() {
 			var _vm;
 			if (ds_map_exists(global.mod_card_vms, _id)) {
 				// 已有 VM：把新 bin 灌进同一个 VM（保留 mem/instances，场上实例状态不丢）
-				_vm = src_mod_card_vm_fill(global.mod_card_vms[? _id], _bin_buf, _dir);
+				_vm = src_mod_card_vm_fill(global.mod_card_vms[? _id], _bin_buf, _d);
 			} else {
-				_vm = src_mod_card_vm_load(_bin_buf, _dir, _id);
+				_vm = src_mod_card_vm_load(_bin_buf, _d, _id);
 				global.mod_card_vms[? _id] = _vm;   // 新建的 VM 必须写回，否则这次重载白干
 			}
 			_vm[$ "card_data"] = _json;
-			_vm[$ "mod_dir"] = _dir;
+			_vm[$ "mod_dir"] = _d;
 			if (buffer_exists(_bin_buf)) {
 				show_debug_message("src_mod: 重载卡片虚拟机 " + _id + "（块数 " + string(ds_map_size(_vm[$ "blocks"])) + "）");
 			}
@@ -1118,6 +1190,7 @@ function src_mod_reload() {
 		_file = file_find_next();
 	}
 	file_find_close();
+	}
 	return _count;
 }
 
@@ -1191,9 +1264,12 @@ function src_mod_weapons_init(_dir = "") {
 	if (!variable_global_exists("mod_weapon_vms")) { global.mod_weapon_vms = ds_map_create(); }
 
 	var _count = 0;
-	var _file = file_find_first(_dir + "*.json", 0);
+	var _dirs = src_mod_scan_dirs(_dir);
+	for (var _di = 0; _di < array_length(_dirs); _di++) {
+	var _d = _dirs[_di];
+	var _file = file_find_first(_d + "*.json", 0);
 	while (_file != "") {
-		var _path = _dir + _file;
+		var _path = _d + _file;
 		var _json = json_parse(src_mod_read_text(_path));
 		if (!is_struct(_json)) {
 			show_debug_message("src_mod: 武器 JSON 解析失败 " + _path);
@@ -1202,9 +1278,9 @@ function src_mod_weapons_init(_dir = "") {
 			var _id = string_copy(_name, 1, string_length(_name) - 5);  // 去掉 .json
 			var _bin_path = string_replace(_path, ".json", ".bin");
 			var _bin_buf = file_exists(_bin_path) ? buffer_load(_bin_path) : undefined;
-			global.mod_weapon_vms[? _id] = src_mod_card_vm_load(_bin_buf, _dir, _id);
+			global.mod_weapon_vms[? _id] = src_mod_card_vm_load(_bin_buf, _d, _id);
 			global.mod_weapon_vms[? _id][$ "card_data"] = _json;
-			global.mod_weapon_vms[? _id][$ "mod_dir"] = _dir;
+			global.mod_weapon_vms[? _id][$ "mod_dir"] = _d;
 			if (src_mod_register_weapon(_id, _json)) {
 				show_debug_message("src_mod: 注册武器 " + _id);
 				_count++;
@@ -1213,6 +1289,7 @@ function src_mod_weapons_init(_dir = "") {
 		_file = file_find_next();
 	}
 	file_find_close();
+	}
 	return _count;
 }
 
@@ -1229,9 +1306,12 @@ function src_mod_weapons_reload() {
 	if (!variable_global_exists("mod_weapon_vms")) { global.mod_weapon_vms = ds_map_create(); }
 
 	var _count = 0;
-	var _file = file_find_first(_dir + "*.json", 0);
+	var _dirs = src_mod_scan_dirs(_dir);
+	for (var _di = 0; _di < array_length(_dirs); _di++) {
+	var _d = _dirs[_di];
+	var _file = file_find_first(_d + "*.json", 0);
 	while (_file != "") {
-		var _path = _dir + _file;
+		var _path = _d + _file;
 		var _json = json_parse(src_mod_read_text(_path));
 		if (!is_struct(_json)) {
 			show_debug_message("src_mod: 武器 JSON 解析失败 " + _path);
@@ -1242,18 +1322,19 @@ function src_mod_weapons_reload() {
 			var _bin_buf = file_exists(_bin_path) ? buffer_load(_bin_path) : undefined;
 			var _vm;
 			if (ds_map_exists(global.mod_weapon_vms, _id)) {
-				_vm = src_mod_card_vm_fill(global.mod_weapon_vms[? _id], _bin_buf, _dir);
+				_vm = src_mod_card_vm_fill(global.mod_weapon_vms[? _id], _bin_buf, _d);
 			} else {
-				_vm = src_mod_card_vm_load(_bin_buf, _dir, _id);
+				_vm = src_mod_card_vm_load(_bin_buf, _d, _id);
 				global.mod_weapon_vms[? _id] = _vm;   // 新建的 VM 必须写回，否则这次重载白干
 			}
 			_vm[$ "card_data"] = _json;
-			_vm[$ "mod_dir"] = _dir;
+			_vm[$ "mod_dir"] = _d;
 			_count++;
 		}
 		_file = file_find_next();
 	}
 	file_find_close();
+	}
 	return _count;
 }
 
@@ -1323,9 +1404,12 @@ function src_mod_gems_init(_dir = "") {
 	if (!variable_global_exists("mod_gem_vms")) { global.mod_gem_vms = ds_map_create(); }
 
 	var _count = 0;
-	var _file = file_find_first(_dir + "*.json", 0);
+	var _dirs = src_mod_scan_dirs(_dir);
+	for (var _di = 0; _di < array_length(_dirs); _di++) {
+	var _d = _dirs[_di];
+	var _file = file_find_first(_d + "*.json", 0);
 	while (_file != "") {
-		var _path = _dir + _file;
+		var _path = _d + _file;
 		var _json = json_parse(src_mod_read_text(_path));
 		if (!is_struct(_json)) {
 			show_debug_message("src_mod: 宝石 JSON 解析失败 " + _path);
@@ -1334,9 +1418,9 @@ function src_mod_gems_init(_dir = "") {
 			var _id = string_copy(_name, 1, string_length(_name) - 5);  // 去掉 .json
 			var _bin_path = string_replace(_path, ".json", ".bin");
 			var _bin_buf = file_exists(_bin_path) ? buffer_load(_bin_path) : undefined;
-			global.mod_gem_vms[? _id] = src_mod_card_vm_load(_bin_buf, _dir, _id);
+			global.mod_gem_vms[? _id] = src_mod_card_vm_load(_bin_buf, _d, _id);
 			global.mod_gem_vms[? _id][$ "card_data"] = _json;
-			global.mod_gem_vms[? _id][$ "mod_dir"] = _dir;
+			global.mod_gem_vms[? _id][$ "mod_dir"] = _d;
 			if (src_mod_register_gem(_id, _json)) {
 				show_debug_message("src_mod: 注册宝石 " + _id);
 				_count++;
@@ -1345,6 +1429,7 @@ function src_mod_gems_init(_dir = "") {
 		_file = file_find_next();
 	}
 	file_find_close();
+	}
 	return _count;
 }
 
@@ -1361,9 +1446,12 @@ function src_mod_gems_reload() {
 	if (!variable_global_exists("mod_gem_vms")) { global.mod_gem_vms = ds_map_create(); }
 
 	var _count = 0;
-	var _file = file_find_first(_dir + "*.json", 0);
+	var _dirs = src_mod_scan_dirs(_dir);
+	for (var _di = 0; _di < array_length(_dirs); _di++) {
+	var _d = _dirs[_di];
+	var _file = file_find_first(_d + "*.json", 0);
 	while (_file != "") {
-		var _path = _dir + _file;
+		var _path = _d + _file;
 		var _json = json_parse(src_mod_read_text(_path));
 		if (!is_struct(_json)) {
 			show_debug_message("src_mod: 宝石 JSON 解析失败 " + _path);
@@ -1374,18 +1462,19 @@ function src_mod_gems_reload() {
 			var _bin_buf = file_exists(_bin_path) ? buffer_load(_bin_path) : undefined;
 			var _vm;
 			if (ds_map_exists(global.mod_gem_vms, _id)) {
-				_vm = src_mod_card_vm_fill(global.mod_gem_vms[? _id], _bin_buf, _dir);
+				_vm = src_mod_card_vm_fill(global.mod_gem_vms[? _id], _bin_buf, _d);
 			} else {
-				_vm = src_mod_card_vm_load(_bin_buf, _dir, _id);
+				_vm = src_mod_card_vm_load(_bin_buf, _d, _id);
 				global.mod_gem_vms[? _id] = _vm;   // 新建的 VM 必须写回，否则这次重载白干
 			}
 			_vm[$ "card_data"] = _json;
-			_vm[$ "mod_dir"] = _dir;
+			_vm[$ "mod_dir"] = _d;
 			_count++;
 		}
 		_file = file_find_next();
 	}
 	file_find_close();
+	}
 	return _count;
 }
 
@@ -1466,9 +1555,12 @@ function src_mod_attires_init(_dir = "") {
 	}
 
 	var _count = 0;
-	var _file = file_find_first(_dir + "*.json", 0);
+	var _dirs = src_mod_scan_dirs(_dir);
+	for (var _di = 0; _di < array_length(_dirs); _di++) {
+	var _d = _dirs[_di];
+	var _file = file_find_first(_d + "*.json", 0);
 	while (_file != "") {
-		var _path = _dir + _file;
+		var _path = _d + _file;
 		var _json = json_parse(src_mod_read_text(_path));
 		if (!is_struct(_json)) {
 			show_debug_message("src_mod: 时装 JSON 解析失败 " + _path);
@@ -1483,6 +1575,7 @@ function src_mod_attires_init(_dir = "") {
 		_file = file_find_next();
 	}
 	file_find_close();
+	}
 	return _count;
 }
 
@@ -1539,9 +1632,12 @@ function src_mod_enemies_init(_dir = "") {
 	if (!variable_global_exists("mod_enemy_vms")) { global.mod_enemy_vms = ds_map_create(); }
 
 	var _count = 0;
-	var _file = file_find_first(_dir + "*.json", 0);
+	var _dirs = src_mod_scan_dirs(_dir);
+	for (var _di = 0; _di < array_length(_dirs); _di++) {
+	var _d = _dirs[_di];
+	var _file = file_find_first(_d + "*.json", 0);
 	while (_file != "") {
-		var _path = _dir + _file;
+		var _path = _d + _file;
 		var _json = json_parse(src_mod_read_text(_path));
 		if (!is_struct(_json)) {
 			show_debug_message("src_mod: 敌人 JSON 解析失败 " + _path);
@@ -1550,9 +1646,9 @@ function src_mod_enemies_init(_dir = "") {
 			var _id = string_copy(_name, 1, string_length(_name) - 5);  // 去掉 .json
 			var _bin_path = string_replace(_path, ".json", ".bin");
 			var _bin_buf = file_exists(_bin_path) ? buffer_load(_bin_path) : undefined;
-			global.mod_enemy_vms[? _id] = src_mod_card_vm_load(_bin_buf, _dir, _id);
+			global.mod_enemy_vms[? _id] = src_mod_card_vm_load(_bin_buf, _d, _id);
 			global.mod_enemy_vms[? _id][$ "card_data"] = _json;
-			global.mod_enemy_vms[? _id][$ "mod_dir"] = _dir;
+			global.mod_enemy_vms[? _id][$ "mod_dir"] = _d;
 			if (src_mod_register_enemy(_id, _json)) {
 				show_debug_message("src_mod: 注册敌人 " + _id);
 				_count++;
@@ -1561,6 +1657,7 @@ function src_mod_enemies_init(_dir = "") {
 		_file = file_find_next();
 	}
 	file_find_close();
+	}
 	return _count;
 }
 
@@ -1577,9 +1674,12 @@ function src_mod_enemies_reload() {
 	if (!variable_global_exists("mod_enemy_vms")) { global.mod_enemy_vms = ds_map_create(); }
 
 	var _count = 0;
-	var _file = file_find_first(_dir + "*.json", 0);
+	var _dirs = src_mod_scan_dirs(_dir);
+	for (var _di = 0; _di < array_length(_dirs); _di++) {
+	var _d = _dirs[_di];
+	var _file = file_find_first(_d + "*.json", 0);
 	while (_file != "") {
-		var _path = _dir + _file;
+		var _path = _d + _file;
 		var _json = json_parse(src_mod_read_text(_path));
 		if (!is_struct(_json)) {
 			show_debug_message("src_mod: 敌人 JSON 解析失败 " + _path);
@@ -1590,18 +1690,19 @@ function src_mod_enemies_reload() {
 			var _bin_buf = file_exists(_bin_path) ? buffer_load(_bin_path) : undefined;
 			var _vm;
 			if (ds_map_exists(global.mod_enemy_vms, _id)) {
-				_vm = src_mod_card_vm_fill(global.mod_enemy_vms[? _id], _bin_buf, _dir);
+				_vm = src_mod_card_vm_fill(global.mod_enemy_vms[? _id], _bin_buf, _d);
 			} else {
-				_vm = src_mod_card_vm_load(_bin_buf, _dir, _id);
+				_vm = src_mod_card_vm_load(_bin_buf, _d, _id);
 				global.mod_enemy_vms[? _id] = _vm;   // 新建的 VM 必须写回，否则这次重载白干
 			}
 			_vm[$ "card_data"] = _json;
-			_vm[$ "mod_dir"] = _dir;
+			_vm[$ "mod_dir"] = _d;
 			_count++;
 		}
 		_file = file_find_next();
 	}
 	file_find_close();
+	}
 	return _count;
 }
 
@@ -1700,20 +1801,23 @@ function src_mod_list() {
 	// 时装：只有 json + 贴图，没 bin/VM
 	var _adir = working_directory + "mod/attires/";
 	if (directory_exists(_adir)) {
-		var _f = file_find_first(_adir + "*.json", 0);
+		var _adirs = src_mod_scan_dirs(_adir);
+		for (var _ai = 0; _ai < array_length(_adirs); _ai++) {
+		var _f = file_find_first(_adirs[_ai] + "*.json", 0);
 		while (_f != "") {
 			var _an = filename_name(_f);
 			var _aid = string_copy(_an, 1, string_length(_an) - 5);
 			if (variable_global_exists("attire_pool") && ds_map_exists(global.attire_pool, _aid)) {
-				var _aj = json_parse(src_mod_read_text(_adir + _f));
+				var _aj = json_parse(src_mod_read_text(_adirs[_ai] + _f));
 				var _anm = is_struct(_aj) ? string(_aj[$ "name"] ?? _aid) : _aid;
 				var _anum = src_mod_num("attire", _aid);
-				array_push(_lines, "[" + string(_anum) + "] [时装] " + _aid + "  " + _anm + "  mod/attires/  " + src_mod_desc_of(_aj, _aid));
+				array_push(_lines, "[" + string(_anum) + "] [时装] " + _aid + "  " + _anm + "  " + string_replace(_adirs[_ai], working_directory, "") + "  " + src_mod_desc_of(_aj, _aid));
 				_total++;
 			}
 			_f = file_find_next();
 		}
 		file_find_close();
+		}
 	}
 	if (_total == 0) return "[listmod] 没有已加载的 mod";
 	var _out = "[listmod] 共 " + string(_total) + " 项（格式：[数字id] [类别] id  名称  路径  简介）\n";
@@ -1738,18 +1842,21 @@ function src_mod_register_new() {
 		}
 		var _m = variable_global_get(_cat.vmap);
 		var _n = 0;
-		var _f = file_find_first(_dir + "*.json", 0);
+		var _dirs = src_mod_scan_dirs(_dir);
+		for (var _di = 0; _di < array_length(_dirs); _di++) {
+		var _d = _dirs[_di];
+		var _f = file_find_first(_d + "*.json", 0);
 		while (_f != "") {
 			var _fn = filename_name(_f);
 			var _id = string_copy(_fn, 1, string_length(_fn) - 5);
 			if (!ds_map_exists(_m, _id)) {           // 已加载过的跳过
-				var _jd = json_parse(src_mod_read_text(_dir + _f));
+				var _jd = json_parse(src_mod_read_text(_d + _f));
 				if (is_struct(_jd)) {
-					var _bin_path = _dir + _id + ".bin";
+					var _bin_path = string_replace(_d + _f, ".json", ".bin");
 					var _buf = file_exists(_bin_path) ? buffer_load(_bin_path) : undefined;
-					var _vm = src_mod_card_vm_load(_buf, _dir, _id);
+					var _vm = src_mod_card_vm_load(_buf, _d, _id);
 					_vm[$ "card_data"] = _jd;
-					_vm[$ "mod_dir"] = _dir;
+					_vm[$ "mod_dir"] = _d;
 					_m[? _id] = _vm;
 					switch (_cat.kind) {
 						case "card":   src_mod_register_card(_id, _jd);   break;
@@ -1764,6 +1871,7 @@ function src_mod_register_new() {
 			_f = file_find_next();
 		}
 		file_find_close();
+		}
 		_total += _n;
 		_sum += _cat.label + string(_n) + " ";
 	}
@@ -1771,18 +1879,21 @@ function src_mod_register_new() {
 	var _an = 0;
 	var _adir = working_directory + "mod/attires/";
 	if (directory_exists(_adir)) {
-		var _f2 = file_find_first(_adir + "*.json", 0);
+		var _adirs = src_mod_scan_dirs(_adir);
+		for (var _ai = 0; _ai < array_length(_adirs); _ai++) {
+		var _f2 = file_find_first(_adirs[_ai] + "*.json", 0);
 		while (_f2 != "") {
 			var _fn2 = filename_name(_f2);
 			var _aid = string_copy(_fn2, 1, string_length(_fn2) - 5);
 			var _has = variable_global_exists("attire_pool") && ds_map_exists(global.attire_pool, _aid);
 			if (!_has) {
-				var _aj = json_parse(src_mod_read_text(_adir + _f2));
+				var _aj = json_parse(src_mod_read_text(_adirs[_ai] + _f2));
 				if (is_struct(_aj) && src_mod_register_attire(_aid, _aj)) _an++;
 			}
 			_f2 = file_find_next();
 		}
 		file_find_close();
+		}
 	}
 	_total += _an;
 	_sum += "时装" + string(_an);
@@ -1797,7 +1908,7 @@ function src_mod_reload_id(_cat, _id) {
 	var _m = variable_global_get(_cat.vmap);
 	var _vm = _m[? _id];
 	if (!is_struct(_vm)) return false;
-	var _dir = _vm[$ "mod_dir"] ?? "";
+	var _dir = _vm[$ "mod_dir"] ?? "";                          // json/bin 实际所在目录
 	if (_dir == "") _dir = working_directory + "mod/" + _cat.folder + "/";
 	var _json_path = _dir + _id + ".json";
 	if (!file_exists(_json_path)) return false;
@@ -1825,24 +1936,32 @@ function src_mod_reload_id(_cat, _id) {
 function src_mod_reload_attire(_key) {
 	var _adir = working_directory + "mod/attires/";
 	if (!directory_exists(_adir)) return false;
-	var _by_id = _adir + _key + ".json";
-	if (file_exists(_by_id)) {
-		var _jd = json_parse(src_mod_read_text(_by_id));
-		if (is_struct(_jd)) return src_mod_register_attire(_key, _jd);
-		return false;
-	}
-	var _f = file_find_first(_adir + "*.json", 0);
-	while (_f != "") {
-		var _jd2 = json_parse(src_mod_read_text(_adir + _f));
-		if (is_struct(_jd2) && string(_jd2[$ "name"] ?? "") == _key) {
-			var _fn = filename_name(_f);
-			var _id2 = string_copy(_fn, 1, string_length(_fn) - 5);
-			file_find_close();
-			return src_mod_register_attire(_id2, _jd2);
+	var _dirs = src_mod_scan_dirs(_adir);       // 类别根 + 各子目录
+
+	// ① 文件名 = id
+	for (var _di = 0; _di < array_length(_dirs); _di++) {
+		var _by_id = _dirs[_di] + _key + ".json";
+		if (file_exists(_by_id)) {
+			var _jd = json_parse(src_mod_read_text(_by_id));
+			if (is_struct(_jd)) return src_mod_register_attire(_key, _jd);
+			return false;
 		}
-		_f = file_find_next();
 	}
-	file_find_close();
+	// ② 按 name 找
+	for (var _di2 = 0; _di2 < array_length(_dirs); _di2++) {
+		var _f = file_find_first(_dirs[_di2] + "*.json", 0);
+		while (_f != "") {
+			var _jd2 = json_parse(src_mod_read_text(_dirs[_di2] + _f));
+			if (is_struct(_jd2) && string(_jd2[$ "name"] ?? "") == _key) {
+				var _fn = filename_name(_f);
+				var _id2 = string_copy(_fn, 1, string_length(_fn) - 5);
+				file_find_close();
+				return src_mod_register_attire(_id2, _jd2);
+			}
+			_f = file_find_next();
+		}
+		file_find_close();
+	}
 	return false;
 }
 

@@ -151,6 +151,8 @@ if (mod_has_enemy) {
 //    "norm"        mod_tick_cycle 命中窗口表（不看敌人）
 //    "norm_attack" 有敌人 且 命中窗口表；窗口表空 = 有敌人就每帧进（类型看 mod_enemy_types）
 //    "wait"        mod_step_enter_var 每帧自减 1，减到 0 进；值非法 → 进一次 + 清空条件
+//    "hp_change"   血量相对上一帧变了才进（掉血、回血都算；出生时基线 = 当前血量）
+//    "hp_change_mod" 同 "hp_change"，但触发后进 mod_step_enter_var 帧冷却，冷却内再掉血也不进
 //    窗口表 mod_step_enter_arr：负数 = 从一轮末尾倒数（-35 → 一轮长度-35）
 //    命中窗口 → mod_step_enter_index = 窗口下标（0 起），否则 -1
 // ══════════════════════════════════════════════════════════════════════
@@ -190,6 +192,29 @@ if (_cond == "mod") {
 	} else {
 		mod_step_enter_condition = "";        // 不合法：进一次 + 清空
 	}
+
+} else if (_cond == "hp_change") {
+	// 血量相对上一帧变了才进（掉血、回血都算，只要 != 就触发）
+	// 基线每帧无条件跟上：见过一次之后要立刻归位，不然下一帧还是"变了"，就退化成每帧进
+	_enter = (hp != mod_hp_last);
+	mod_hp_last = hp;
+
+} else if (_cond == "hp_change_mod") {
+	// 同 "hp_change"，但触发一次后进冷却：mod_step_enter_var 帧内再掉血也不再进
+	var _cdv = mod_step_enter_var;
+	if (!is_real(_cdv) || _cdv < 0) _cdv = 0;   // 没写 / 写错 → 无冷却，等同 "hp_change"
+
+	if (mod_tick_cool > 0) {
+		mod_tick_cool -= 1;
+		_enter = false;
+	} else if (hp != mod_hp_last) {
+		_enter = true;
+		mod_tick_cool = _cdv;                   // 触发即上冷却
+	} else {
+		_enter = false;
+	}
+	// 基线照样每帧跟上：冷却期内的伤害算吞掉，出冷却后不会被旧变化再骗进一次
+	mod_hp_last = hp;
 }
 
 // 命中开火窗口 + 确实有敌人 → 进攻击动画

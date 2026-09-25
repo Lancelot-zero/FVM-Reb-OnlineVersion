@@ -74,20 +74,48 @@ Create 时按上面 JSON 套用数值，所以实例上一建出来就有：
 ### 什么时候跑
 
 - **`_OBJECT_CREATE`**：实例创建时立刻执行（刷怪时）
-- **`_OBJECT_STEP`**：每帧；暂停时不跑
+- **`_OBJECT_STEP`**：每帧；暂停时不跑，**且会被 `mod_step_enter_condition` 挡住**（默认 `""` 才是每帧进）
 - **`_OBJECT_DRAW`**：父类先画，然后跑 VM 的绘制块（**叠加绘制**，不会替代父类的画）
 - **`_OBJECT_DESTROY`**：父类处理完，再跑 VM 的 `_OBJECT_DESTROY`，最后把实例移出列表
+- **`_OBJECT_MOUSE_ENTER` / `_OBJECT_MOUSE_LEAVE` / `_OBJECT_CLICK`**：鼠标移入 / 移出 / 左键点在敌人身上（按实例判定，鼠标要压在敌人的贴图上）
 
 ### 每帧顺序
 
 ```text
 1. 暂停 → exit
-2. event_inherited()   → 父类：移动 / 攻击 / 死亡 / 受击状态推进
-3. 跑敌人 .bin 的 _OBJECT_STEP       ← 每帧，没有条件门槛
+2. 记下上一帧格子坐标：prev_grid_col / prev_grid_row = 当前 grid_col / grid_row
+3. event_inherited()   → 父类：移动 / 攻击 / 死亡 / 受击状态推进（并刷新 target_plant / grid_col / grid_row）
+4. 判断这一帧进不进 VM（mod_step_enter_condition）
+5. 跑敌人 .bin 的 _OBJECT_STEP（被上面条件挡住时不执行）
 ```
 
 > 因为父类先跑，VM 里读到的是**父类推进之后**的位置/状态；想改速度就改 `move_speed`（下一帧生效），
 > 想改位置直接写 `x` / `y`。
+
+### 进 VM 的时机（`mod_step_enter_condition`）
+
+| 值 | 什么时候进 | 配合字段 |
+|---|---|---|
+| `""`（默认，写错也按这个兜底） | **每帧进** | — |
+| `"mod"` | `battle_time % 间隔 == 0`（全场共享，同间隔的敌人同帧进） | `mod_step_enter_var` = 间隔帧数 |
+| `"wait"` | `mod_step_enter_var` 每帧自减，减到 0 进（进之前保持 0，需自己再设） | `mod_step_enter_var` = 剩余帧数 |
+| `"cell"` | **跨格**那一帧进（`grid_col` 或 `grid_row` 相对上一帧变了） | — |
+| `"hp_change"` | **血量相对上一帧变了**就进（掉血、回血都算） | — |
+| `"hp_change_mod"` | 同 `"hp_change"`，但触发一次后进 `mod_step_enter_var` 帧冷却 | `mod_step_enter_var` = 冷却帧数 |
+| `"card"` | **父类索敌当前有目标才进**（`target_plant` 有效） | — |
+| `"card_mod"` | 同 `"card"`，但触发一次后进 `mod_step_enter_var` 帧冷却 | `mod_step_enter_var` = 冷却帧数 |
+
+| 字段 | 读写 | 说明 |
+|---|---|---|
+| `mod_step_enter_condition` | 可写 | 见上表 |
+| `mod_step_enter_var` | 可写 | `"mod"` = 间隔帧数；`"wait"` = 还要等几帧；`*_mod` = 冷却帧数 |
+| `mod_tick_cool` | 只读 | `*_mod` 模式下的冷却剩余帧数 |
+| `mod_has_card` | 只读 | `"card"` / `"card_mod"` 模式下 1 = 父类索敌有目标 |
+| `prev_grid_col` / `prev_grid_row` | 只读 | 上一帧格子坐标（`"cell"` 用） |
+
+- `"cell"` 触发的是**进格后的第一帧**（格子坐标在父类 Step 里算，比移动晚一帧）
+- `"hp_change"` 读的是父类的 `pre_hp`（写在 **End Step**，而这段 Step 先跑），所以拿到的是上一帧末的血量
+- `"card"` 用的是**父类自己那套索敌**（和 "有没有卡片能打" 同一口径），不用自己再查一遍
 
 ---
 
@@ -185,4 +213,6 @@ _OBJECT_DESTROY {
 - 敌人受伤走自己的受击事件（闪白 / 音效 / 护盾判定）；插件主动给别人伤害用
   `VM_DamageEnemy(敌人id, 伤害, 伤害类型)`，灰烬那套用 `VM_DamageEnemyAsh(...)`
 - `feature` 只有 `land` / `water` 有意义（决定刷在哪种行），其它值＝不限
-- 敌人**没有**卡片的 `mod_tick_*` / `mod_step_enter_*` 那套；要节奏就自己设计时器属性
+- 敌人有 `mod_step_enter_*` 那套进 VM 条件（`""` / `mod` / `wait` / `cell` / `hp_change` / `hp_change_mod` / `card` / `card_mod`），
+  用法见上面「进 VM 的时机」；**没有**卡片那套 `mod_tick_*` / `mod_enemy_check` / `mod_step_enemy_area` 区域索敌
+  （要"有卡片才动"直接用 `"card"`）

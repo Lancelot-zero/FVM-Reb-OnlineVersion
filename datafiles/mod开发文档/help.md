@@ -461,6 +461,21 @@ _VM_BATTLE_START {
 | `VM_DestroyInstance(实例ID)` | 1个 | 直接销毁实例（会触发它的 Destroy 事件）。在 `_OBJECT_STEP` 里销毁自己时，本帧剩下的语句还会继续执行，要用 `VM_IsDestroyed` 兜底 |
 | `VM_RunStep(实例, 轮数)` | 2个 | 让该实例额外跑 N 轮 Step（一轮 = Begin Step + Step + End Step），用来做加速。同一个实例正在被重跑时再调会被忽略（防无限递归）。轮数夹在 1~60，返回实际跑了几轮 |
 
+### mod 对象块
+
+写 mod 卡 / 武器 / 宝石 / 子弹 / 特效 / 敌人时，插件的 `.bin` 里可以写下面这些块（各对象支持哪几个以对象自身为准）：
+
+| 块 | 触发时机 |
+|---|---|
+| `_OBJECT_CFG` | 配置块：加载贴图等，`.bin` 载入时执行一次 |
+| `_OBJECT_CREATE` | 对象创建时执行一次 |
+| `_OBJECT_STEP` | 对象每帧执行（会被 `mod_step_enter_condition` 挡住，见各类别文档） |
+| `_OBJECT_DRAW` | 对象绘制时执行（只有这里能画东西） |
+| `_OBJECT_DESTROY` | 对象销毁时执行 |
+| `_OBJECT_MOUSE_ENTER` | 鼠标移入该实例 |
+| `_OBJECT_MOUSE_LEAVE` | 鼠标移出该实例 |
+| `_OBJECT_CLICK` | 鼠标左键点击该实例（按实例判定，和全局的 `_VM_MOUSE_LEFT` 不同） |
+
 ### 屏幕弹幕
 
 往全场唯一的弹幕管理器塞子弹（统一迭代与绘制，不占实例）。
@@ -468,7 +483,7 @@ _VM_BATTLE_START {
 | 函数 | 参数 / 返回 | 说明 |
 |---|---|---|
 | `VM_BulletScreenAdd(贴图,总帧数,打击范围,缩放,动画速度,x,y,vx,vy,伤害,伤害计数,存活帧数,子弹类型,销毁对象,mod名字)` | 15个 | 往屏幕弹幕管理器塞一颗子弹。管理器 `obj_Bullet_Screen_Management` 由 `obj_battle` 开局创建，全场只此一个实例，所有弹幕统一迭代与绘制、**不占实例**。`打击范围`=格子半径，0=只算本格；`伤害计数`=最多命中几个，`-1`=不限次数（此时范围内所有可命中敌人都结算）；`存活帧数`=倒计时，`<=0`=不自动消失；`子弹类型`同 `can_hit`（all/normal/air/air_only/pierce/track/throw/rotate/d_fruit）；`销毁对象`非空则在该子弹消失处创建它，是 mod 对象时用 `mod名字` 指定 `mod_type`。出界（x<0 / x>2200 / y<0 / y>1200）静默删除、不生成销毁对象 |
-| `VM_BulletScreenAdd_Ex(贴图,总帧数,打击范围,缩放,动画速度,x,y,vx,vy,伤害,伤害计数,存活帧数,子弹类型,销毁对象,mod名字,伤害类型,标志数值,角度)` | 18个 | 同 `VM_BulletScreenAdd`，多三个参数：`伤害类型`（normal=有盾只打盾 / pierce=盾血一起掉 / 其它=无视护盾）、`标志数值`（位掩码，见下）、`角度`（出生角度，后向子弹传 `180` 就倒过来）。<br>**标志数值 = 这颗子弹还能接受哪些类别的卡片效果**：`bit1`=过火类、`bit2`=解冻类、`4/8/16…`=自定义类。子弹进到**格子中心带**（x 落在该格 15%~85%，和 `bullet_array_special` 同口径）时，与本格卡片的 `bullet_flag` 做**与运算**，`>0` 就应用效果并**消位** —— 所以同一类卡片对同一颗子弹只生效一次。<br>**内置表现**：`bit1` → 换 `spr_fire_bullet` + 缩放设 1.8 + `snd_bullet_burnt`；`bit2` → 换 `spr_xiaolongbao_bullet` + `snd_bullet_burnt`，且**不启用增益**、把子弹的冰冻帧数清零，之后**或上 bit1**（解冻完就变成能被点燃）。<br>**卡片侧字段**（实例变量，mod 卡用 `VM_SetProp` 写；原版火盆/布丁已在 Create+Step 里写好）：`bullet_flag`（去重位）、`bullet_mul_dmg`（乘伤害，默认1）、`bullet_add_dmg`（加伤害，默认0）、`bullet_flip_x`/`bullet_flip_y`（反向，0/1）、`bullet_angle_add`（画面旋转角度，默认0）、`bullet_freeze_mul`（乘冰冻帧，默认1）、`bullet_freeze_add`（加冰冻帧，默认0。子弹命中时把累计冰冻帧写给敌人的 `ice_timer`） |
+| `VM_BulletScreenAdd_Ex(贴图,总帧数,打击范围,缩放,动画速度,x,y,vx,vy,伤害,伤害计数,存活帧数,子弹类型,销毁对象,mod名字,伤害类型,标志数值,角度)` | 18个 | 同 `VM_BulletScreenAdd`，多三个参数：`伤害类型`（normal=有盾只打盾 / pierce=盾血一起掉 / 其它=无视护盾）、`标志数值`（位掩码，见下）、`角度`（出生角度，后向子弹传 `180` 就倒过来）。<br>**标志数值 = 这颗子弹还能接受哪些类别的卡片效果**：`bit1`=过火类、`bit2`=解冻类、`4/8/16…`=自定义类。子弹进到**格子中心带**（x 落在该格 15%~85%，和 `bullet_array_special` 同口径）时，与本格卡片的 `bullet_flag` 做**与运算**，`>0` 就应用效果并**消位** —— 所以同一类卡片对同一颗子弹只生效一次。<br>**内置表现**：`bit1` → 换 `spr_fire_bullet` + 缩放设 1.8 + `snd_bullet_burnt`；`bit2` → 换 `spr_xiaolongbao_bullet` + `snd_bullet_burnt`，且**不启用增益**、把子弹的冰冻帧数清零，之后**或上 bit1**（解冻完就变成能被点燃）。<br>**卡片侧字段**（实例变量，mod 卡用 `VM_SetProp` 写；原版火盆/布丁已在 Create+Step 里写好）：`bullet_flag`（去重位）、`bullet_mul_dmg`（乘伤害，默认1）、`bullet_add_dmg`（加伤害，默认0）、`bullet_flip_x`/`bullet_flip_y`（反向，0/1）、`bullet_angle_add`（画面旋转角度，默认0）、`bullet_freeze_mul`（乘冰冻帧，默认1）、`bullet_freeze_add`（加冰冻帧，默认0。子弹命中时把累计冰冻帧写给敌人的 `ice_timer`）、`bullet_scale`（**乘**缩放，默认1；只认正数）、`bullet_hits_add`（加穿透次数：只认正数，**穿透弹 hits=-1 时忽略**）、`bullet_destroy`（0=不启用；**负数**=立即销毁这颗子弹；**正数**=只减穿透次数、减到 0 自然销毁；穿透弹无效）、`bullet_charge_self`（1=每颗子弹穿过本卡时，把它当时的伤害累加到 `bullet_charge_dmg`）、`bullet_charge_dmg`（【只读】被累计的伤害，**不自动清零**）、`bullet_pass_count`（【只读】穿过本卡的子弹次数，**自动累计、不用开关**，穿透弹也算） |
 | `VM_BulletScreenAdd_Exs(贴图,总帧数,打击范围,缩放,动画速度,x,y,vx,vy,伤害,伤害计数,存活帧数,子弹类型,销毁对象,mod名字,伤害类型,标志数值,角度,目标行y,靠拢比例)` | 20个 | 同 `VM_BulletScreenAdd_Ex`，最后多两个**行渐变**参数（原版水管弹那种"先拐到目标行、再直线飞"）：<br>`目标行y` = 要拐去的那一行的**世界 y**（自己算：`grid_offset_y + grid_cell_size_y * 行号`）；**不想渐变就传 `-1`**，那就是普通直线子弹。<br>`靠拢比例` = 每帧朝目标 y 靠拢的比例，原版水管弹用 `0.15`（**别传 0**，会原地不动）。<br>渐变到位（`|目标行y - y| <= 8`）会自动吸附、并**停掉渐变**（之后这颗弹是纯直线，不再有额外开销）。渐变途中子弹会依次经过中间几行，那些行的敌人/卡片照常结算。<br>⚠️ 编译器按固定个数校验，**20 个参数都要写满**，不渐变时尾部写 `, -1, 0.15` |
 
 ### 追踪弹

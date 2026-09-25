@@ -75,12 +75,34 @@ b = VM_CreateInstance("obj_bullet_mod", x, y)
 1. 暂停 → exit
 2. prev_grid_col/row = 当前格子；再用 get_grid_position_from_world 更新 grid_col/row
 3. 延迟初始化（mod_type 有了就跑 _OBJECT_CREATE）
-4. 跑子弹 .bin 的 _OBJECT_STEP
-5. 实例没了（你在 VM 里销毁了自己）→ exit
-6. 自动销毁：destroy_timer == 0 → 立即销毁；> 0 每帧 −1，到 0 销毁
-7. 位移：x += vx; y += vy
-8. 出界销毁：x > 2200 / y > 1200 / x < 0 / y < 0
+4. 判断这一帧进不进 VM（mod_step_enter_condition）
+5. 跑子弹 .bin 的 _OBJECT_STEP（被上面条件挡住时不执行）
+6. 实例没了（你在 VM 里销毁了自己）→ exit
+7. 自动销毁：destroy_timer == 0 → 立即销毁；> 0 每帧 −1，到 0 销毁
+8. 位移：x += vx; y += vy
+9. 出界销毁：x > 2200 / y > 1200 / x < 0 / y < 0
 ```
+
+### 进 VM 的时机（`mod_step_enter_condition`）
+
+| 值 | 什么时候进 | 配合字段 |
+|---|---|---|
+| `""`（默认，写错也按这个兜底） | **每帧进** | — |
+| `"mod"` | `battle_time % 间隔 == 0`（全场共享） | `mod_step_enter_var` = 间隔帧数 |
+| `"wait"` | `mod_step_enter_var` 每帧自减，减到 0 进（进之前保持 0，需自己再设） | `mod_step_enter_var` = 剩余帧数 |
+| `"cell"` | **跨格**那一帧进（`grid_col` 或 `grid_row` 相对上一帧变了） | — |
+| `"cell_row"` | **只跨行**那一帧进（`grid_row` 变了）；直线弹用不上，抛物弹有用 | — |
+| `"attack"` | **场上还有敌人才进**（`instance_number(obj_enemy_parent) > 0`） | `mod_has_enemy`（只读） |
+
+- **子弹最常用 `"cell"`**：只有跨格那一帧进 VM，正好对上"路径碰撞"的需求
+- ⚠️ `"cell"` 触发的是**进格后的第一帧** —— 格子坐标是在 `x += vx` **之前**算的，比实际越界晚一帧；
+  一帧跨多格也只触发一次
+- `"attack"` 是**全局判定**（只看场上还有没有敌人），不像卡片那样按区域/类型索敌 —— 子弹数量多，这样便宜
+
+### 鼠标三个块
+
+`_OBJECT_MOUSE_ENTER` / `_OBJECT_MOUSE_LEAVE` / `_OBJECT_CLICK` 子弹也有，是按实例判定的
+（鼠标要压在子弹的贴图上）。⚠️ 子弹飞得快、通常又没设 `sprite_index`，**实际很少用得上**。
 
 两个由此而来的要点：
 

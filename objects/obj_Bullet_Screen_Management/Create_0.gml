@@ -39,7 +39,14 @@
 //   卡片侧字段（实例变量，mod 卡用 VM_SetProp 写）：
 //                bullet_flag（去重位）、bullet_mul_dmg（乘伤害，默认1）、bullet_add_dmg（加伤害，默认0）、
 //                bullet_flip_x / bullet_flip_y（反向，0/1）、bullet_angle_add（画面旋转角度，默认0）、
-//                bullet_freeze_mul（乘冰冻帧，默认1）、bullet_freeze_add（加冰冻帧，默认0）
+//                bullet_freeze_mul（乘冰冻帧，默认1）、bullet_freeze_add（加冰冻帧，默认0）、
+//                bullet_scale（**乘**缩放，默认1不变）、
+//                bullet_hits_add（加穿透次数：只认正数；穿透弹 hits=-1 时忽略）、
+//                bullet_destroy（0=不启用；负数=立即销毁子弹；正数=只减穿透次数，减到 0 自然销毁）、
+//                bullet_charge_self（1=把这颗子弹当前的伤害累加到本卡的 bullet_charge_dmg 上，
+//                                    obj_card_parent 在 Create 里已把该属性初始化为 0）、
+//                另外每颗子弹穿过本卡时，一定会给本卡的 bullet_pass_count 加 1
+//                （不用开关、不用在卡片里写字段；靠消位保证一弹一卡只记一次）
 //
 // 消失条件有三条：出界（x<0 / x>2200 / y<0 / y>1200，静默删）、伤害次数用完、存活帧数走完。
 

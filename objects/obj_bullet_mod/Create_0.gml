@@ -11,6 +11,28 @@ vector_x = 0
 vx = 0
 vy = 0
 
+// ══════════════════════════════════════════════════════════════════════════
+// 进 VM 的入口条件（卡在创建后用 VM_SetProp 写；不写 = 每帧进）
+//   mod_step_enter_condition
+//     "" / 认不出     每帧进（默认）
+//     "mod"           按全场帧号对齐：battle_time % mod_step_enter_var == 0
+//     "wait"          倒数：mod_step_enter_var 每帧 -1，减到 <= 0 进
+//                      ⚠️ 进完之后要卡自己把 var 设回正数，否则此后每帧都进
+//     "cell"          跨格才进：grid_col 或 grid_row 相对上一帧变了
+//                     （两个值 obj 每帧已经算好，零成本；子弹最常用这个）
+//                     ⚠️ 时机：格子坐标是在 x += vx 之前算的，所以触发的是
+//                        "进格后的第一帧"，比实际越界晚一帧；一帧跨多格也只触发一次
+//     "cell_row"      只跨行才进（grid_row 变了）；直线弹用不上，抛物弹有用
+//     "attack"        场上还有敌人才进（全局判定，不看具体位置）
+//   mod_step_enter_var   "mod" = 间隔帧数；"wait" = 还要等几帧
+// obj 每帧回写（卡只读）：
+//   mod_has_enemy    "attack" 模式下：1 = 场上还有敌人（其他模式恒为 0）
+//   grid_col / grid_row / prev_grid_col / prev_grid_row  当前帧 / 上一帧格子坐标
+// ══════════════════════════════════════════════════════════════════════════
+mod_step_enter_condition = ""   // "" / "mod" / "wait" / "cell" / "cell_row" / "attack"
+mod_step_enter_var       = 0    // "mod" = 间隔帧数；"wait" = 还要等几帧
+mod_has_enemy            = 0    // 【只读】"attack" 模式下 1 = 场上还有敌人
+
 
 // 当前帧/上一帧格子坐标（用于子弹路径碰撞检测）
 grid_col = -1;

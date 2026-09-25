@@ -3413,6 +3413,73 @@ function VM_LineOf(vm, name, ip, _is_byte = false) {
     return _f + ":" + string(_line_no);
 }
 
+/// @function vm_hook_register(_name, _vm)
+/// @desc 把一个 VM 挂到某个挂载点上。地图 bin 与每个 mod 的 VM 加载后各挂一次。
+///       ⚠️ **不检查**该 VM 此时有没有这个块 —— 热重载会换掉 vm.blocks，
+///          检查放在 vm_hook_run 里做，这样重载后不需要重新注册（见那里的注释）。
+///       同一个 VM 重复挂同一个点会被去重（重载/重复加载时安全）。
+function vm_hook_register(_name, _vm) {
+    if (!variable_global_exists("_VM_hooks")) return;
+    if (is_undefined(_vm)) return;
+    if (!ds_map_exists(global._VM_hooks, _name)) {
+        global._VM_hooks[? _name] = [];
+    }
+    var _list = global._VM_hooks[? _name];
+    if (array_get_index(_list, _vm) != -1) return;
+    array_push(_list, _vm);
+}
+
+/// @function vm_hook_unregister(_vm)
+/// @desc 把一个 VM 从所有挂载点摘掉（丢弃 VM 时用；热重载复用的是同一个 VM 结构体，
+///       所以重载**不需要**调这个）。
+function vm_hook_unregister(_vm) {
+    if (!variable_global_exists("_VM_hooks")) return;
+    var _names = ds_map_keys_to_array(global._VM_hooks);
+    for (var _n = 0; _n < array_length(_names); _n++) {
+        var _list = global._VM_hooks[? _names[_n]];
+        var _i = array_get_index(_list, _vm);
+        if (_i != -1) array_delete(_list, _i, 1);
+    }
+}
+
+/// @function vm_hook_run(_name)
+/// @desc 依次执行挂在 _name 上的所有 VM 的该块。
+///       没块的直接跳过（热重载换了 bin 之后，旧的挂载会自动失效，不用手动清）。
+///       执行期间把 global.__vm 切到目标 VM、跑完切回 —— VM 的 API 函数只认 global.__vm。
+function vm_hook_run(_name) {
+    if (!variable_global_exists("_VM_hooks")) return;
+    if (!ds_map_exists(global._VM_hooks, _name)) return;
+    var _list = global._VM_hooks[? _name];
+    if (array_length(_list) == 0) return;
+
+    var _bak = global.__vm;
+    for (var _i = 0; _i < array_length(_list); _i++) {
+        var _vm = _list[_i];
+        if (is_undefined(_vm)) continue;
+        if (!variable_struct_exists(_vm, "blocks")) continue;
+        if (!ds_map_exists(_vm.blocks, _name)) continue;   // 这个 VM 没有这个块 → 跳过
+        global.__vm = _vm;
+        VM_Execute(_vm, _vm.blocks[? _name], _name);
+    }
+    global.__vm = _bak;
+}
+
+/// @function vm_hook_register_all(_vm)
+/// @desc 按 _vm 当前的 blocks 重新挂载：先摘掉它在所有挂载点上的旧注册，
+///       再把 blocks 里的**每个块名**都登记一遍（不设白名单）。
+///       ⚠️ 热重载换掉 blocks 之后必须再调一次，否则新加/删掉的块不会生效。
+function vm_hook_register_all(_vm) {
+    if (!variable_global_exists("_VM_hooks")) return;
+    if (is_undefined(_vm)) return;
+    vm_hook_unregister(_vm);
+    if (!variable_struct_exists(_vm, "blocks")) return;
+    if (!ds_exists(_vm.blocks, ds_type_map)) return;
+    var _bnames = ds_map_keys_to_array(_vm.blocks);
+    for (var _i = 0; _i < array_length(_bnames); _i++) {
+        vm_hook_register(_bnames[_i], _vm);
+    }
+}
+
 /// @function mod_error_log(_msg)
 /// @desc 把一条 mod 运行错误追加到本地日志 mod/mod_errors.log（时间 + 内容）。
 ///       同一个错误连续刷屏时每 60 次才再记一条；日志只保留最近 400 行。
@@ -4837,6 +4904,7 @@ function VM_FlushHooks() {
             }
             global._VM_cur_dead_snap = _e.snap;
             VM_Execute(global.__vm, _e.buf, _hook_name);
+            vm_hook_run(_hook_name);   // mod 侧：同一时机，各自查块（读上面刚设好的 _VM_last_* 全局）
             global._VM_cur_dead_snap = undefined;
         }
     }
@@ -4879,21 +4947,26 @@ function VM_HandleNotify(json) {
     switch (_hook) {
         case "wave_start":
             if (buffer_exists(global._VM_WAVE_START)) VM_Execute(global.__vm, global._VM_WAVE_START, "_VM_WAVE_START");
+            vm_hook_run("_VM_WAVE_START");
             break;
         case "wave_end":
             if (buffer_exists(global._VM_WAVE_END)) VM_Execute(global.__vm, global._VM_WAVE_END, "_VM_WAVE_END");
+            vm_hook_run("_VM_WAVE_END");
             break;
         case "subwave_start":
             if (buffer_exists(global._VM_SUBWAVE_START)) VM_Execute(global.__vm, global._VM_SUBWAVE_START, "_VM_SUBWAVE_START");
+            vm_hook_run("_VM_SUBWAVE_START");
             break;
         case "subwave_end":
             if (buffer_exists(global._VM_SUBWAVE_END)) VM_Execute(global.__vm, global._VM_SUBWAVE_END, "_VM_SUBWAVE_END");
+            vm_hook_run("_VM_SUBWAVE_END");
             break;
         case "boss_state_change":
             if (!is_undefined(_data[$ "id"]))  global._VM_last_boss_state_change_id = _data[$ "id"];
             if (!is_undefined(_data[$ "old"])) global._VM_last_boss_old_state = _data[$ "old"];
             if (!is_undefined(_data[$ "new"])) global._VM_last_boss_new_state = _data[$ "new"];
             if (buffer_exists(global._VM_BOSS_STATE_CHANGE)) VM_Execute(global.__vm, global._VM_BOSS_STATE_CHANGE, "_VM_BOSS_STATE_CHANGE");
+            vm_hook_run("_VM_BOSS_STATE_CHANGE");
             break;
         case "call":
         {
@@ -5685,6 +5758,19 @@ function VM_InitRoomEntry(buf) {
     global._VM_TIMER_15f         = undefined;
     global._VM_TIMER_30f         = undefined;
     global._VM_TIMER_60f         = undefined;
+
+    // ══════════════════════════════════════════════════════════════════
+    // 挂载点注册表：挂载点名 → VM 引用数组
+    //   地图 bin 与每个 mod 的 VM 在加载后把自己挂进来，挂载点触发时逐个跑。
+    //   一个 VM 可以同时挂在多个挂载点上（在哪个数组里，取决于它有哪些块）。
+    //   ⚠️ 注册不设白名单：块名第一次出现时 vm_hook_register 自动建数组。
+    //      新增挂载点只需在触发处写 vm_hook_run("_VM_新名字")，不用回来登记。
+    //   ⚠️ 热重载换掉 blocks 之后要重新挂一次，见 src_mod_card_vm_fill。
+    //   ⚠️ 地图专属的 _VM_ROOM_READY_ENTRY / _VM_CONST_INIT 不走这套，
+    //      它们在 bin 加载当场直接执行。
+    // ══════════════════════════════════════════════════════════════════
+    if (variable_global_exists("_VM_hooks")) ds_map_destroy(global._VM_hooks);
+    global._VM_hooks = ds_map_create();
     global._VM_prev_wave         = -1;
     global._VM_prev_subwave      = -1;
     global._VM_event_enabled     = true;
@@ -5705,6 +5791,21 @@ function VM_InitRoomEntry(buf) {
     global.__vm.strings = global._VM_strings;
     global.__vm.mem_type = array_create(array_length(global.__vm.mem_type), VM_TYPE_INT);
     global.__vm.mem_val  = array_create(array_length(global.__vm.mem_val), 0);
+
+    // 地图 VM 的块表：和 mod VM 统一用 vm.blocks（块名 → 字节码 buffer），
+    // 挂载点执行时按同一套逻辑取块，不用再区分"地图的块在 global._VM_XXX"。
+    // 旧的先释放掉，否则每次进关卡都会漏一批 buffer。
+    if (variable_struct_exists(global.__vm, "blocks")
+        && ds_exists(global.__vm.blocks, ds_type_map)) {
+        var _old_bn = ds_map_keys_to_array(global.__vm.blocks);
+        for (var _ob = 0; _ob < array_length(_old_bn); _ob++) {
+            var _old_buf = global.__vm.blocks[? _old_bn[_ob]];
+            if (buffer_exists(_old_buf)) buffer_delete(_old_buf);
+        }
+        ds_map_clear(global.__vm.blocks);
+    } else {
+        global.__vm[$ "blocks"] = ds_map_create();
+    }
     // 释放 VM 临时贴图
     var _tmp_keys = ds_map_keys_to_array(global._VM_sprite_temp_cache);
     for (var _k = 0; _k < array_length(_tmp_keys); _k++) {
@@ -5880,5 +5981,15 @@ function VM_InitRoomEntry(buf) {
                 buffer_delete(_bc_buf);
                 break;
         }
+
+        // 块统一进 vm.blocks（挂载点执行时和 mod VM 走同一套取块逻辑）。
+        // 注册不设白名单：任何块名都登记，以后新增挂载点只需要在触发处写
+        // vm_hook_run("_VM_新名字")，不必回来改清单。
+        // 没被 vm_hook_run 调用的块（_OBJECT_STEP 之类）挂在表里也无害，只是不会被执行。
+        if (variable_struct_exists(global.__vm, "blocks")
+            && !ds_map_exists(global.__vm.blocks, _block_name)) {
+            global.__vm.blocks[? _block_name] = _bc_buf;
+        }
+        vm_hook_register(_block_name, global.__vm);
     }
 }

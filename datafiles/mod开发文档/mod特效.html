@@ -95,9 +95,41 @@ VM_SetProp(0, &quot;_mod_pending_effect_id&quot;, &quot;&quot;)
 <td>没有</td>
 <td><strong>插件自己设的</strong>（跟随类特效常用这套命名）</td>
 </tr>
+<tr>
+<td><code>mod_follow_instance</code></td>
+<td><code>undefined</code></td>
+<td>设成一个实例，本特效的 <code>x</code>/<code>y</code> <strong>每帧贴到它身上</strong>（跟随）；<code>undefined</code> / 目标已销毁 = 不跟随</td>
+</tr>
+<tr>
+<td><code>mod_prestep_dx</code> / <code>mod_prestep_dy</code></td>
+<td><code>0</code> / <code>0</code></td>
+<td>每帧 Step <strong>结束时</strong>把这两个量加到 <code>x</code> / <code>y</code> 上</td>
+</tr>
+<tr>
+<td><code>mod_step_enter_condition</code></td>
+<td><code>&quot;&quot;</code></td>
+<td>什么时候进 VM：<code>&quot;&quot;</code> 每帧 / <code>&quot;mod&quot;</code> 每 N 帧 / <code>&quot;wait&quot;</code> 倒数</td>
+</tr>
+<tr>
+<td><code>mod_step_enter_var</code></td>
+<td><code>0</code></td>
+<td><code>&quot;mod&quot;</code> = 间隔帧数；<code>&quot;wait&quot;</code> = 还要等几帧</td>
+</tr>
 </tbody></table>
 <blockquote>
 <p>特效<strong>没有</strong> <code>vx</code>/<code>vy</code>、也没有出界销毁（那是子弹才有的）；位置完全由你自己控制。</p>
+</blockquote>
+<p><strong>跟随与偏移的配合（注意区别）：</strong></p>
+<pre><code class="language-gml">// ① 固定偏移：每帧贴到主人身上，再往上偏 40 像素（x/y 每帧被跟随重置，所以偏移是固定的）
+VM_SetProp(self, &quot;mod_follow_instance&quot;, 主人实例)
+VM_SetProp(self, &quot;mod_prestep_dy&quot;, 0 - 40)
+
+// ② 每帧位移：不设跟随 → x/y 没人重置，每帧加一次就是&quot;匀速移动&quot;
+VM_SetProp(self, &quot;mod_prestep_dx&quot;, 3)      // 每帧往右 3 像素
+</code></pre>
+<blockquote>
+<p>⚠️ <code>mod_prestep_dx</code> / <code>mod_prestep_dy</code> 的语义<strong>取决于有没有跟随</strong>：
+设了 <code>mod_follow_instance</code> 就是<strong>固定偏移</strong>（和武器那两个字段一样）；没设就是<strong>每帧位移</strong>（等于速度）。</p>
 </blockquote>
 <hr>
 <h2>三、STEP 的时机与执行顺序</h2>
@@ -124,11 +156,45 @@ VM_SetProp(0, &quot;_mod_pending_effect_id&quot;, &quot;&quot;)
 </tbody></table>
 <p>每帧顺序（<code>obj_effect_mod/Step_0.gml</code>）：</p>
 <pre><code class="language-text">1. 暂停 → exit
-2. 延迟初始化（mod_type 有了就跑 _OBJECT_CREATE）
-3. 跑特效 .bin 的 _OBJECT_STEP
-4. 实例没了（你在 VM 里销毁了自己）→ exit
-5. 自动销毁：destroy_timer == 0 → 立即销毁；&gt; 0 每帧 −1，到 0 销毁
+2. 跟随目标：mod_follow_instance 有设且实例还在 → x = 目标.x; y = 目标.y
+3. 延迟初始化（mod_type 有了就跑 _OBJECT_CREATE）
+4. 判断这一帧进不进 VM（mod_step_enter_condition）
+5. 跑特效 .bin 的 _OBJECT_STEP（被上面条件挡住时不执行）
+6. 实例没了（你在 VM 里销毁了自己）→ exit
+7. 自动销毁：destroy_timer == 0 → 立即销毁；&gt; 0 每帧 −1，到 0 销毁
+8. 偏移：x += mod_prestep_dx; y += mod_prestep_dy
 </code></pre>
+<h3>进 VM 的时机（<code>mod_step_enter_condition</code>）</h3>
+<table>
+<thead>
+<tr>
+<th>值</th>
+<th>什么时候进</th>
+<th>配合字段</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>&quot;&quot;</code>（默认，写错也按这个兜底）</td>
+<td><strong>每帧进</strong></td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>&quot;mod&quot;</code></td>
+<td><code>battle_time % 间隔 == 0</code>（全场共享）</td>
+<td><code>mod_step_enter_var</code> = 间隔帧数</td>
+</tr>
+<tr>
+<td><code>&quot;wait&quot;</code></td>
+<td><code>mod_step_enter_var</code> 每帧自减，减到 0 进（进之前保持 0，需自己再设）</td>
+<td><code>mod_step_enter_var</code> = 剩余帧数</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p>特效没有 <code>hp</code>、也没有格子坐标，所以 <code>hp_change</code> / <code>cell</code> / 索敌那几类条件这里都没有。</p>
+</blockquote>
+<h3>鼠标三个块</h3>
+<p><code>_OBJECT_MOUSE_ENTER</code> / <code>_OBJECT_MOUSE_LEAVE</code> / <code>_OBJECT_CLICK</code> 特效也有，按实例判定
+（鼠标要压在特效的贴图上）。</p>
 <p>绘制：<code>_OBJECT_DRAW</code> 写了就跑 VM 的绘制块（<strong>不再自动画 sprite</strong>），没写就 <code>draw_self()</code>。</p>
 <hr>
 <h2>四、demo</h2>

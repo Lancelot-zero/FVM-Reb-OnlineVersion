@@ -42,8 +42,26 @@ VM_SetProp(0, "_mod_pending_effect_id", "")
 | `image_speed` | `0` | 要帧动画自己设（或自己在 STEP 里推 `image_index`） |
 | `x` / `y` / `sprite_index` / `image_alpha` / `image_angle` / `image_xscale` / `image_yscale` / `depth` | 普通实例属性 | 直接读写 |
 | `parent_inst` / `rel_x` / `rel_y` / `frames` / `anim` | 没有 | **插件自己设的**（跟随类特效常用这套命名） |
+| `mod_follow_instance` | `undefined` | 设成一个实例，本特效的 `x`/`y` **每帧贴到它身上**（跟随）；`undefined` / 目标已销毁 = 不跟随 |
+| `mod_prestep_dx` / `mod_prestep_dy` | `0` / `0` | 每帧 Step **结束时**把这两个量加到 `x` / `y` 上 |
+| `mod_step_enter_condition` | `""` | 什么时候进 VM：`""` 每帧 / `"mod"` 每 N 帧 / `"wait"` 倒数 |
+| `mod_step_enter_var` | `0` | `"mod"` = 间隔帧数；`"wait"` = 还要等几帧 |
 
 > 特效**没有** `vx`/`vy`、也没有出界销毁（那是子弹才有的）；位置完全由你自己控制。
+
+**跟随与偏移的配合（注意区别）：**
+
+```gml
+// ① 固定偏移：每帧贴到主人身上，再往上偏 40 像素（x/y 每帧被跟随重置，所以偏移是固定的）
+VM_SetProp(self, "mod_follow_instance", 主人实例)
+VM_SetProp(self, "mod_prestep_dy", 0 - 40)
+
+// ② 每帧位移：不设跟随 → x/y 没人重置，每帧加一次就是"匀速移动"
+VM_SetProp(self, "mod_prestep_dx", 3)      // 每帧往右 3 像素
+```
+
+> ⚠️ `mod_prestep_dx` / `mod_prestep_dy` 的语义**取决于有没有跟随**：
+> 设了 `mod_follow_instance` 就是**固定偏移**（和武器那两个字段一样）；没设就是**每帧位移**（等于速度）。
 
 ---
 
@@ -61,11 +79,29 @@ VM_SetProp(0, "_mod_pending_effect_id", "")
 
 ```text
 1. 暂停 → exit
-2. 延迟初始化（mod_type 有了就跑 _OBJECT_CREATE）
-3. 跑特效 .bin 的 _OBJECT_STEP
-4. 实例没了（你在 VM 里销毁了自己）→ exit
-5. 自动销毁：destroy_timer == 0 → 立即销毁；> 0 每帧 −1，到 0 销毁
+2. 跟随目标：mod_follow_instance 有设且实例还在 → x = 目标.x; y = 目标.y
+3. 延迟初始化（mod_type 有了就跑 _OBJECT_CREATE）
+4. 判断这一帧进不进 VM（mod_step_enter_condition）
+5. 跑特效 .bin 的 _OBJECT_STEP（被上面条件挡住时不执行）
+6. 实例没了（你在 VM 里销毁了自己）→ exit
+7. 自动销毁：destroy_timer == 0 → 立即销毁；> 0 每帧 −1，到 0 销毁
+8. 偏移：x += mod_prestep_dx; y += mod_prestep_dy
 ```
+
+### 进 VM 的时机（`mod_step_enter_condition`）
+
+| 值 | 什么时候进 | 配合字段 |
+|---|---|---|
+| `""`（默认，写错也按这个兜底） | **每帧进** | — |
+| `"mod"` | `battle_time % 间隔 == 0`（全场共享） | `mod_step_enter_var` = 间隔帧数 |
+| `"wait"` | `mod_step_enter_var` 每帧自减，减到 0 进（进之前保持 0，需自己再设） | `mod_step_enter_var` = 剩余帧数 |
+
+> 特效没有 `hp`、也没有格子坐标，所以 `hp_change` / `cell` / 索敌那几类条件这里都没有。
+
+### 鼠标三个块
+
+`_OBJECT_MOUSE_ENTER` / `_OBJECT_MOUSE_LEAVE` / `_OBJECT_CLICK` 特效也有，按实例判定
+（鼠标要压在特效的贴图上）。
 
 绘制：`_OBJECT_DRAW` 写了就跑 VM 的绘制块（**不再自动画 sprite**），没写就 `draw_self()`。
 

@@ -153,12 +153,62 @@ b = VM_CreateInstance(&quot;obj_bullet_mod&quot;, x, y)
 <pre><code class="language-text">1. 暂停 → exit
 2. prev_grid_col/row = 当前格子；再用 get_grid_position_from_world 更新 grid_col/row
 3. 延迟初始化（mod_type 有了就跑 _OBJECT_CREATE）
-4. 跑子弹 .bin 的 _OBJECT_STEP
-5. 实例没了（你在 VM 里销毁了自己）→ exit
-6. 自动销毁：destroy_timer == 0 → 立即销毁；&gt; 0 每帧 −1，到 0 销毁
-7. 位移：x += vx; y += vy
-8. 出界销毁：x &gt; 2200 / y &gt; 1200 / x &lt; 0 / y &lt; 0
+4. 判断这一帧进不进 VM（mod_step_enter_condition）
+5. 跑子弹 .bin 的 _OBJECT_STEP（被上面条件挡住时不执行）
+6. 实例没了（你在 VM 里销毁了自己）→ exit
+7. 自动销毁：destroy_timer == 0 → 立即销毁；&gt; 0 每帧 −1，到 0 销毁
+8. 位移：x += vx; y += vy
+9. 出界销毁：x &gt; 2200 / y &gt; 1200 / x &lt; 0 / y &lt; 0
 </code></pre>
+<h3>进 VM 的时机（<code>mod_step_enter_condition</code>）</h3>
+<table>
+<thead>
+<tr>
+<th>值</th>
+<th>什么时候进</th>
+<th>配合字段</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>&quot;&quot;</code>（默认，写错也按这个兜底）</td>
+<td><strong>每帧进</strong></td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>&quot;mod&quot;</code></td>
+<td><code>battle_time % 间隔 == 0</code>（全场共享）</td>
+<td><code>mod_step_enter_var</code> = 间隔帧数</td>
+</tr>
+<tr>
+<td><code>&quot;wait&quot;</code></td>
+<td><code>mod_step_enter_var</code> 每帧自减，减到 0 进（进之前保持 0，需自己再设）</td>
+<td><code>mod_step_enter_var</code> = 剩余帧数</td>
+</tr>
+<tr>
+<td><code>&quot;cell&quot;</code></td>
+<td><strong>跨格</strong>那一帧进（<code>grid_col</code> 或 <code>grid_row</code> 相对上一帧变了）</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>&quot;cell_row&quot;</code></td>
+<td><strong>只跨行</strong>那一帧进（<code>grid_row</code> 变了）；直线弹用不上，抛物弹有用</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>&quot;attack&quot;</code></td>
+<td><strong>场上还有敌人才进</strong>（<code>instance_number(obj_enemy_parent) &gt; 0</code>）</td>
+<td><code>mod_has_enemy</code>（只读）</td>
+</tr>
+</tbody></table>
+<ul>
+<li><strong>子弹最常用 <code>&quot;cell&quot;</code></strong>：只有跨格那一帧进 VM，正好对上&quot;路径碰撞&quot;的需求</li>
+<li>⚠️ <code>&quot;cell&quot;</code> 触发的是<strong>进格后的第一帧</strong> —— 格子坐标是在 <code>x += vx</code> <strong>之前</strong>算的，比实际越界晚一帧；
+一帧跨多格也只触发一次</li>
+<li><code>&quot;attack&quot;</code> 是<strong>全局判定</strong>（只看场上还有没有敌人），不像卡片那样按区域/类型索敌 —— 子弹数量多，这样便宜</li>
+</ul>
+<h3>鼠标三个块</h3>
+<p><code>_OBJECT_MOUSE_ENTER</code> / <code>_OBJECT_MOUSE_LEAVE</code> / <code>_OBJECT_CLICK</code> 子弹也有，是按实例判定的
+（鼠标要压在子弹的贴图上）。⚠️ 子弹飞得快、通常又没设 <code>sprite_index</code>，<strong>实际很少用得上</strong>。</p>
 <p>两个由此而来的要点：</p>
 <ul>
 <li><strong>位移在第 7 步</strong>，也就是<strong>在你的 <code>_OBJECT_STEP</code> 之后</strong>。所以 VM 里读到的 <code>x</code> / <code>y</code> 是<strong>本帧移动前</strong>的位置；

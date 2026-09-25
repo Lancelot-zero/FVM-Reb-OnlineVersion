@@ -23,7 +23,10 @@ plant_id = variable_global_exists("_mod_pending_card_id") ? global._mod_pending_
 //                                再 VM_InstArrayAdd(self,"mod_enemy_types", "air") 多次
 //                            ⚠️ 它只管"放不放卡进 VM"，不管子弹打谁（那看子弹的 target_type）
 //   mod_step_enter_condition "" 每帧 | "mod" 每 N 帧 | "norm" 命中窗口表 |
-//                            "norm_attack" 有敌人且命中窗口表 | "wait" 减到 0
+//                            "norm_attack" 有敌人且命中窗口表 | "wait" 减到 0 |
+//                            "hp_change" 血量相对上一帧变了才进（掉血、回血都算）|
+//                            "hp_change_mod" 同 "hp_change"，但触发一次后要等
+//                            mod_step_enter_var 帧才能再触发（冷却期内的伤害吞掉）
 //   mod_step_enter_var       "mod" = 间隔帧数；"wait" = 剩余帧数
 //   mod_step_enter_arr       开火窗口表 = 数组；负数 = 从一轮末尾倒数（-35 → 一轮长度-35）
 //                            写：VM_InstArrayClear(self,"mod_step_enter_arr")
@@ -39,6 +42,8 @@ plant_id = variable_global_exists("_mod_pending_card_id") ? global._mod_pending_
 //   mod_tick_enemy      有敌人才 +1，没敌人清 0
 //   mod_has_enemy       1 = 索敌区域里有敌人
 //   mod_step_enter_index 这一帧命中的窗口下标（0 起）；不是窗口 = -1
+//   mod_hp_last         上一帧血量（"hp_change" / "hp_change_mod" 用；出生时 = 当前血量）
+//   mod_tick_cool       "hp_change_mod" 的冷却剩余帧数（每帧 -1，0 = 可以触发）
 // 判定实现见 Step_0.gml
 // ══════════════════════════════════════════════════════════════════════════
 
@@ -54,10 +59,12 @@ mod_step_enemy_area = []  // 数组 [上,下,左,右]；空 = [1,1,0,99]
 mod_enemy_types     = []  // 数组，元素是类型名；空 = 任意类型
 
 // 什么时候进 VM
-mod_step_enter_condition = ""   // "" / "mod" / "norm" / "norm_attack" / "wait"
-mod_step_enter_var       = 0    // "mod" = 间隔帧数；"wait" = 还要等几帧
+mod_step_enter_condition = ""   // "" / "mod" / "norm" / "norm_attack" / "wait" / "hp_change" / "hp_change_mod"
+mod_step_enter_var       = 0    // "mod" = 间隔帧数；"wait" = 还要等几帧；"hp_change_mod" = 冷却帧数
 mod_step_enter_arr       = []   // 数组，开火窗口表（负数 = 从一轮末尾倒数）
 mod_step_enter_index     = -1   // 【只读】命中的窗口下标；不是窗口 = -1
+mod_hp_last              = 0    // 【obj 内部】上一帧血量，"hp_change" / "hp_change_mod" 拿它比
+mod_tick_cool            = 0    // 【obj 内部】"hp_change_mod" 的冷却剩余帧数
 
 // ── 批量改属性：两套，每套 = 三个数组（id / 属性 / 值）+ 一个开关 ──
 //   开关开着时，每帧遍历 id 数组，把第 i 个 id 的 mod_set_prop[i] 属性设成 mod_set_val[i]
@@ -74,6 +81,10 @@ mod_set2_val  = []
 
 // 默认值全部写完，再跑父对象初始化（读卡数据、算攻防；plant_id 无效时它会抛错）
 event_user(0)
+
+// 血量基线 = 出生血量：这样 "hp_change" 只在真的掉血/回血时才第一次进，不会被初值 0 骗进一次
+mod_hp_last   = hp
+mod_tick_cool = 0
 
 // 创建时加入该卡的实例容器，并执行该卡虚拟机里的创建块
 if (plant_id != "" && variable_global_exists("mod_card_vms") && ds_map_exists(global.mod_card_vms, plant_id)) {

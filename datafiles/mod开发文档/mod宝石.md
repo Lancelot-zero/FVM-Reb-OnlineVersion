@@ -64,10 +64,11 @@ mod/gems/my_gem.json / .bin / .txt / tex/
 ### 什么时候跑
 
 - **`_OBJECT_CREATE`**：宝石对象被放置逻辑创建时立刻执行
-- **`_OBJECT_STEP`**：每帧（暂停时整块不跑）
+- **`_OBJECT_STEP`**：每帧（暂停时整块不跑），**且会被 `mod_step_enter_condition` 挡住**（默认 `""` 才是每帧进）
 - **`_OBJECT_DRAW`**：写了就跑 VM 的绘制块（**不再自动画 sprite**）；没写则由核心画：
   半透明冷却遮罩 + 剩余秒数、悬停说明框、等级星星
 - **`_OBJECT_DESTROY`**：宝石对象**不支持**（写了不会执行）
+- **`_OBJECT_MOUSE_ENTER` / `_OBJECT_MOUSE_LEAVE` / `_OBJECT_CLICK`**：鼠标移入 / 移出 / 左键点在宝石图标上（按实例判定，鼠标要压在宝石贴图上）
 
 ### 每帧顺序（`obj_gem_mod/Step_0.gml`）
 
@@ -75,11 +76,24 @@ mod/gems/my_gem.json / .bin / .txt / tex/
 1. 暂停 → 整个 exit
 2. cooldown_timer 每帧自减 1（到 0 停）
 3. 动画自动播放（timer/flash_speed 驱动 image_index，state 选待机/攻击区间）
-4. 跑宝石 .bin 的 _OBJECT_STEP
+4. 判断这一帧进不进 VM（mod_step_enter_condition）
+5. 跑宝石 .bin 的 _OBJECT_STEP（被上面条件挡住时不执行）
 ```
 
 > 动画和武器一样是**核心自动推**的：`image_speed` 固定 0，别去改；待机/攻击不会自动切，`state` 自己改。
 > 想自己控制就在 `_OBJECT_STEP` 里直接写 `image_index`（VM 在核心动画之后跑，当帧生效）。
+
+### 进 VM 的时机（`mod_step_enter_condition`）
+
+| 值 | 什么时候进 | 配合字段 |
+|---|---|---|
+| `""`（默认，写错也按这个兜底） | **每帧进** | — |
+| `"mod"` | `battle_time % 间隔 == 0`（全场共享） | `mod_step_enter_var` = 间隔帧数 |
+| `"wait"` | `mod_step_enter_var` 每帧自减，减到 0 进（进之前保持 0，需自己再设） | `mod_step_enter_var` = 剩余帧数 |
+| `"cool"` | **冷却结束才进**（`cooldown_timer <= 0`） | — |
+
+> 宝石**没有** `hp`、图标也不移动（钉在 `390, 213 + 序号*80`），所以卡片/敌人那套
+> `hp_change` / `cell` / 索敌条件这里都没有。`"cool"` 就是给主动宝石用的：冷却中不进 VM，冷却一结束就进。
 
 ### 鼠标事件（核心挂的，插件不用写）
 
@@ -91,6 +105,9 @@ mod/gems/my_gem.json / .bin / .txt / tex/
 
 所以**主动宝石**只要在 `_OBJECT_STEP` 里读 `clicked`；**被动宝石**（`clickable` 不置）点击完全没反应，
 `cooldown_timer` 由插件自己写。
+
+> 想自己接管鼠标，就写 `_OBJECT_MOUSE_ENTER` / `_OBJECT_MOUSE_LEAVE` / `_OBJECT_CLICK` 块 ——
+> 核心那套照常跑（三个块最后都会 `event_inherited()`），不会互相顶掉。
 
 ---
 

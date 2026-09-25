@@ -294,8 +294,10 @@ if (global._VM_prev_subwave != current_subwave||global._VM_prev_wave != current_
 		}
 	}
     if (buffer_exists(global._VM_SUBWAVE_END)&&current_subwave!=0) VM_Execute(global.__vm, global._VM_SUBWAVE_END, "_VM_SUBWAVE_END");
+    if (current_subwave != 0) vm_hook_run("_VM_SUBWAVE_END");
 	global._VM_prev_subwave = current_subwave;
     if (buffer_exists(global._VM_SUBWAVE_START)) VM_Execute(global.__vm, global._VM_SUBWAVE_START, "_VM_SUBWAVE_START");
+    vm_hook_run("_VM_SUBWAVE_START");
     
 }
 
@@ -312,8 +314,10 @@ if (global._VM_prev_wave != current_wave) {
 		}
 	}
     if (buffer_exists(global._VM_WAVE_END)&&current_wave!=0) VM_Execute(global.__vm, global._VM_WAVE_END, "_VM_WAVE_END");
+    if (current_wave != 0) vm_hook_run("_VM_WAVE_END");
 	global._VM_prev_wave = current_wave;
     if (buffer_exists(global._VM_WAVE_START)) VM_Execute(global.__vm, global._VM_WAVE_START, "_VM_WAVE_START");
+    vm_hook_run("_VM_WAVE_START");
 }
 
 }
@@ -508,35 +512,45 @@ if global.debug{
 
 
 // 帧 VM 块：每帧执行
+// 两个 VM 各跑各的：地图脚本走原来的 buffer_exists 判断，mod 走 vm_hook_run（自己查块）
 if (buffer_exists(global._VM_FRAME)) {
     VM_Execute(global.__vm, global._VM_FRAME, "_VM_FRAME");
 }
+vm_hook_run("_VM_FRAME");
 // 鼠标/键盘输入 VM 块
 if (buffer_exists(global._VM_MOUSE_LEFT) && mouse_check_button_pressed(mb_left)) {
     VM_Execute(global.__vm, global._VM_MOUSE_LEFT, "_VM_MOUSE_LEFT");
 }
+if (mouse_check_button_pressed(mb_left)) vm_hook_run("_VM_MOUSE_LEFT");
 if (buffer_exists(global._VM_MOUSE_RIGHT) && mouse_check_button_pressed(mb_right)) {
     VM_Execute(global.__vm, global._VM_MOUSE_RIGHT, "_VM_MOUSE_RIGHT");
 }
+if (mouse_check_button_pressed(mb_right)) vm_hook_run("_VM_MOUSE_RIGHT");
 if (buffer_exists(global._VM_KEY_PRESSED) && keyboard_check_pressed(vk_anykey)) {
     global._VM_last_key = keyboard_lastkey;
     VM_Execute(global.__vm, global._VM_KEY_PRESSED, "_VM_KEY_PRESSED");
 }
+if (keyboard_check_pressed(vk_anykey)) vm_hook_run("_VM_KEY_PRESSED");
 if (battle_time mod 5 == 0 && buffer_exists(global._VM_TIMER_5f)) {
     VM_Execute(global.__vm, global._VM_TIMER_5f, "_VM_TIMER_5f");
 }
+if (battle_time mod 5 == 0) vm_hook_run("_VM_TIMER_5f");
 if (battle_time mod 10 == 0 && buffer_exists(global._VM_TIMER_10f)) {
     VM_Execute(global.__vm, global._VM_TIMER_10f, "_VM_TIMER_10f");
 }
+if (battle_time mod 10 == 0) vm_hook_run("_VM_TIMER_10f");
 if (battle_time mod 15 == 0 && buffer_exists(global._VM_TIMER_15f)) {
     VM_Execute(global.__vm, global._VM_TIMER_15f, "_VM_TIMER_15f");
 }
+if (battle_time mod 15 == 0) vm_hook_run("_VM_TIMER_15f");
 if (battle_time mod 30 == 0 && buffer_exists(global._VM_TIMER_30f)) {
     VM_Execute(global.__vm, global._VM_TIMER_30f, "_VM_TIMER_30f");
 }
+if (battle_time mod 30 == 0) vm_hook_run("_VM_TIMER_30f");
 if (battle_time mod 60 == 0 && buffer_exists(global._VM_TIMER_60f)) {
     VM_Execute(global.__vm, global._VM_TIMER_60f, "_VM_TIMER_60f");
 }
+if (battle_time mod 60 == 0) vm_hook_run("_VM_TIMER_60f");
 
 
 var size = global.grid_rows * (global.grid_cols + 2);
@@ -608,12 +622,13 @@ with obj_enemy_parent{
 	
 	if(is_boss==false)continue
 	if(pre_state==state)continue;
+	global._VM_last_boss_state_change_id = id
+	global._VM_last_boss_old_state = pre_state
+	global._VM_last_boss_new_state = state
 	if (buffer_exists(global._VM_BOSS_STATE_CHANGE)) {
-		global._VM_last_boss_state_change_id = id
-		global._VM_last_boss_old_state = pre_state
-		global._VM_last_boss_new_state = state
 		VM_Execute(global.__vm, global._VM_BOSS_STATE_CHANGE, "_VM_BOSS_STATE_CHANGE");
 	}
+	vm_hook_run("_VM_BOSS_STATE_CHANGE");
 	pre_state = state
 }
 

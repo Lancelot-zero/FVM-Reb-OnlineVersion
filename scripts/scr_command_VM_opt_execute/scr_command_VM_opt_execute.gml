@@ -5029,10 +5029,10 @@ function run_VM_DamageEnemyAsh(vm, code, _ip) {
     if (_inst < 0) {
         var _real = ds_map_find_value(global._VM_id_to_real, -_inst);
         if (is_undefined(_real)) {
-        var _result = 0;
-        if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
-        return _ip;
-    }
+	        var _result = 0;
+	        if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+	        return _ip;
+	    }
         _inst = _real;
     }
     {
