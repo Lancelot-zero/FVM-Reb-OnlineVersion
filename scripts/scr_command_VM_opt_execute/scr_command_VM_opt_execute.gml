@@ -147,6 +147,164 @@ global._vm_opt_run_funcs[18 + 142] = run_VM_DamageEnemyAsh;
 global._vm_opt_run_funcs[18 + 143] = run_VM_BulletScreenAdd_Ex;
 global._vm_opt_run_funcs[18 + 144] = run_VM_BulletScreenAdd_Exs;
 
+// ══════════════════════════════════════════════════════════════════════════
+// VM_GetProp 的"内置变量专用版"（函数 id 145~153，见 VM_FID_GETPROPX）
+//
+// 加载期 VM_Decode 认出 VM_GetProp(id, "x") 这种（属性名是字面量常量字符串）时，
+// 把函数 id 换成下面这 9 个之一、argc 从 2 改成 1；handler 直接读实例字段，
+// 省掉 variable_instance_get 的"字符串 → 变量"查找。
+//
+// 排布和别的函数一样：[操作码][argc=1][dst][inst]
+// 槽 → 属性名的对应见 VM_PropIdOf（只覆盖任何实例上都存在的内置变量；
+// 实例变量不能进那张表 —— inst.atk 在没设过时会直接报错，而 VM_GetProp 原本返回
+// undefined，mod 脚本正靠那个 undefined 兜底）
+// ══════════════════════════════════════════════════════════════════════════
+function run_VM_GetPropX(vm, code, _ip) {
+    var opt_number = code[_ip]; _ip += 1;   // ← 必须先吃掉 argc（排布是 [op][argc][dst][arg...]）
+    var _mt = vm.mem_type;
+    var _mv = vm.mem_val;
+    var _dst = code[_ip]; _ip += 1;
+    var _inst = run_vm_read_mem(vm, code[_ip]); _ip += 1;
+    var _result = undefined;
+    if (_inst != 0) {
+        var _real = _inst;
+        if (_inst < 0) _real = ds_map_find_value(global._VM_id_to_real, -_inst);
+        if (!is_undefined(_real) && instance_exists(_real)) _result = _real.x;
+    }
+    if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+    return _ip;
+}
+function run_VM_GetPropY(vm, code, _ip) {
+    var opt_number = code[_ip]; _ip += 1;   // ← 必须先吃掉 argc（排布是 [op][argc][dst][arg...]）
+    var _mt = vm.mem_type;
+    var _mv = vm.mem_val;
+    var _dst = code[_ip]; _ip += 1;
+    var _inst = run_vm_read_mem(vm, code[_ip]); _ip += 1;
+    var _result = undefined;
+    if (_inst != 0) {
+        var _real = _inst;
+        if (_inst < 0) _real = ds_map_find_value(global._VM_id_to_real, -_inst);
+        if (!is_undefined(_real) && instance_exists(_real)) _result = _real.y;
+    }
+    if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+    return _ip;
+}
+function run_VM_GetPropSpriteIndex(vm, code, _ip) {
+    var opt_number = code[_ip]; _ip += 1;   // ← 必须先吃掉 argc（排布是 [op][argc][dst][arg...]）
+    var _mt = vm.mem_type;
+    var _mv = vm.mem_val;
+    var _dst = code[_ip]; _ip += 1;
+    var _inst = run_vm_read_mem(vm, code[_ip]); _ip += 1;
+    var _result = undefined;
+    if (_inst != 0) {
+        var _real = _inst;
+        if (_inst < 0) _real = ds_map_find_value(global._VM_id_to_real, -_inst);
+        if (!is_undefined(_real) && instance_exists(_real)) _result = _real.sprite_index;
+    }
+    if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+    return _ip;
+}
+function run_VM_GetPropImageXscale(vm, code, _ip) {
+    var opt_number = code[_ip]; _ip += 1;   // ← 必须先吃掉 argc（排布是 [op][argc][dst][arg...]）
+    var _mt = vm.mem_type;
+    var _mv = vm.mem_val;
+    var _dst = code[_ip]; _ip += 1;
+    var _inst = run_vm_read_mem(vm, code[_ip]); _ip += 1;
+    var _result = undefined;
+    if (_inst != 0) {
+        var _real = _inst;
+        if (_inst < 0) _real = ds_map_find_value(global._VM_id_to_real, -_inst);
+        if (!is_undefined(_real) && instance_exists(_real)) _result = _real.image_xscale;
+    }
+    if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+    return _ip;
+}
+function run_VM_GetPropImageYscale(vm, code, _ip) {
+    var opt_number = code[_ip]; _ip += 1;   // ← 必须先吃掉 argc（排布是 [op][argc][dst][arg...]）
+    var _mt = vm.mem_type;
+    var _mv = vm.mem_val;
+    var _dst = code[_ip]; _ip += 1;
+    var _inst = run_vm_read_mem(vm, code[_ip]); _ip += 1;
+    var _result = undefined;
+    if (_inst != 0) {
+        var _real = _inst;
+        if (_inst < 0) _real = ds_map_find_value(global._VM_id_to_real, -_inst);
+        if (!is_undefined(_real) && instance_exists(_real)) _result = _real.image_yscale;
+    }
+    if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+    return _ip;
+}
+function run_VM_GetPropDepth(vm, code, _ip) {
+    var opt_number = code[_ip]; _ip += 1;   // ← 必须先吃掉 argc（排布是 [op][argc][dst][arg...]）
+    var _mt = vm.mem_type;
+    var _mv = vm.mem_val;
+    var _dst = code[_ip]; _ip += 1;
+    var _inst = run_vm_read_mem(vm, code[_ip]); _ip += 1;
+    var _result = undefined;
+    if (_inst != 0) {
+        var _real = _inst;
+        if (_inst < 0) _real = ds_map_find_value(global._VM_id_to_real, -_inst);
+        if (!is_undefined(_real) && instance_exists(_real)) _result = _real.depth;
+    }
+    if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+    return _ip;
+}
+function run_VM_GetPropImageAngle(vm, code, _ip) {
+    var opt_number = code[_ip]; _ip += 1;   // ← 必须先吃掉 argc（排布是 [op][argc][dst][arg...]）
+    var _mt = vm.mem_type;
+    var _mv = vm.mem_val;
+    var _dst = code[_ip]; _ip += 1;
+    var _inst = run_vm_read_mem(vm, code[_ip]); _ip += 1;
+    var _result = undefined;
+    if (_inst != 0) {
+        var _real = _inst;
+        if (_inst < 0) _real = ds_map_find_value(global._VM_id_to_real, -_inst);
+        if (!is_undefined(_real) && instance_exists(_real)) _result = _real.image_angle;
+    }
+    if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+    return _ip;
+}
+function run_VM_GetPropImageAlpha(vm, code, _ip) {
+    var opt_number = code[_ip]; _ip += 1;   // ← 必须先吃掉 argc（排布是 [op][argc][dst][arg...]）
+    var _mt = vm.mem_type;
+    var _mv = vm.mem_val;
+    var _dst = code[_ip]; _ip += 1;
+    var _inst = run_vm_read_mem(vm, code[_ip]); _ip += 1;
+    var _result = undefined;
+    if (_inst != 0) {
+        var _real = _inst;
+        if (_inst < 0) _real = ds_map_find_value(global._VM_id_to_real, -_inst);
+        if (!is_undefined(_real) && instance_exists(_real)) _result = _real.image_alpha;
+    }
+    if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+    return _ip;
+}
+function run_VM_GetPropImageIndex(vm, code, _ip) {
+    var opt_number = code[_ip]; _ip += 1;   // ← 必须先吃掉 argc（排布是 [op][argc][dst][arg...]）
+    var _mt = vm.mem_type;
+    var _mv = vm.mem_val;
+    var _dst = code[_ip]; _ip += 1;
+    var _inst = run_vm_read_mem(vm, code[_ip]); _ip += 1;
+    var _result = undefined;
+    if (_inst != 0) {
+        var _real = _inst;
+        if (_inst < 0) _real = ds_map_find_value(global._VM_id_to_real, -_inst);
+        if (!is_undefined(_real) && instance_exists(_real)) _result = _real.image_index;
+    }
+    if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+    return _ip;
+}
+
+global._vm_opt_run_funcs[18 + 145] = run_VM_GetPropX;            // x
+global._vm_opt_run_funcs[18 + 146] = run_VM_GetPropY;            // y
+global._vm_opt_run_funcs[18 + 147] = run_VM_GetPropSpriteIndex;  // sprite_index
+global._vm_opt_run_funcs[18 + 148] = run_VM_GetPropImageXscale;  // image_xscale
+global._vm_opt_run_funcs[18 + 149] = run_VM_GetPropImageYscale;  // image_yscale
+global._vm_opt_run_funcs[18 + 150] = run_VM_GetPropDepth;        // depth
+global._vm_opt_run_funcs[18 + 151] = run_VM_GetPropImageAngle;   // image_angle
+global._vm_opt_run_funcs[18 + 152] = run_VM_GetPropImageAlpha;   // image_alpha
+global._vm_opt_run_funcs[18 + 153] = run_VM_GetPropImageIndex;   // image_index
+
 function run_vm_read_mem(vm, addr) {
     var _type = vm.mem_type[addr];
     if (_type == VM_TYPE_STRING) {

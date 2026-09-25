@@ -121,6 +121,127 @@ struct ByteBuf {
     }
 };
 
+// ============================================================
+// 后处理：相邻指令对折（不新增操作码，只改写操作数 + 删指令）
+//
+//     <产值指令 T, ...>  紧跟  COPY D, T
+//              ↓
+//     <产值指令 D, ...>        （COPY 被删掉）
+//
+// 产值指令 = COPY / 算术(ADD..MOD) / 比较(EQ..LTE) / CALL —— 都是"带 dst"的指令。
+// 复用同一个操作码，只把它的 dst 从临时槽 T 改成 COPY 的目标 D，于是 COPY 变多余。
+//
+// 安全性：编译器约定「临时值不跨语句存活」（见 TempScope 的注释），
+//         所以被折掉的 T 在 COPY 之后不可能再被读。
+// 副作用：块变短会移动后面的跳转目标，所以重建时要整体重映射跳转 + 行号表偏移。
+// ============================================================
+static inline int32_t pe_rd32(const vector<uint8_t>& b, int o) {
+    return (int32_t)((uint32_t)b[o] | ((uint32_t)b[o + 1] << 8) |
+                     ((uint32_t)b[o + 2] << 16) | ((uint32_t)b[o + 3] << 24));
+}
+static inline void pe_wr32(vector<uint8_t>& b, int o, int32_t v) {
+    uint32_t u = (uint32_t)v;
+    b[o]     = (uint8_t)(u & 0xFF);
+    b[o + 1] = (uint8_t)((u >> 8) & 0xFF);
+    b[o + 2] = (uint8_t)((u >> 16) & 0xFF);
+    b[o + 3] = (uint8_t)((u >> 24) & 0xFF);
+}
+
+// 一条指令的字节长度；认不出来返回 -1 → 调用方整体放弃后处理，保证产物不被破坏
+static int pe_ins_len(const vector<uint8_t>& b, int o) {
+    int n = (int)b.size();
+    if (o < 0 || o >= n) return -1;
+    switch (b[o]) {
+        case OP_ASSIGN:                       // dst(u32) type(u8) value(s32 | u16)
+            if (o + 5 >= n) return -1;
+            return 6 + (b[o + 5] == MEM_STRING ? 2 : 4);
+        case OP_COPY: return 9;               // dst(u32) src(u32)
+        case OP_ADD: case OP_SUB: case OP_MUL: case OP_DIV: case OP_MOD:
+        case OP_EQ:  case OP_NEQ: case OP_GT:  case OP_GTE: case OP_LT: case OP_LTE:
+        case OP_IF:   return 13;              // dst|cond(u32) ...(u32) ...(u32)
+        case OP_CALL:                         // fid(u16) argc(u8) dst(u32) addr(s32)*argc
+            if (o + 3 >= n) return -1;
+            return 8 + 4 * (int)b[o + 3];
+        case OP_JMP:  return 5;               // ip(s32)
+        case OP_HALT: return 1;
+        default: return -1;
+    }
+}
+
+// 带 dst 的"产值指令"（dst 的字节偏移：CALL 的前面有 fid+argc，所以不是 1）
+static bool pe_is_producer(uint8_t op) {
+    return (op >= OP_COPY && op <= OP_LTE) || op == OP_CALL;
+}
+static int pe_dst_off(uint8_t op) { return (op == OP_CALL) ? 4 : 1; }
+
+static void peephole_block(vector<uint8_t>& code, vector<pair<int, int>>& lines) {
+    int n = (int)code.size();
+    if (n < 2) return;
+
+    // ① 切指令表
+    vector<int> offs, lens;
+    for (int o = 0; o < n;) {
+        int L = pe_ins_len(code, o);
+        if (L <= 0 || o + L > n) return;
+        offs.push_back(o); lens.push_back(L); o += L;
+    }
+    int m = (int)offs.size();
+    if (m < 2) return;
+
+    // ② 标出可折的对
+    vector<char> drop(m, 0);
+    bool changed = false;
+    for (int i = 0; i + 1 < m; i++) {
+        if (drop[i] || drop[i + 1]) continue;
+        int o1 = offs[i], o2 = offs[i + 1];
+        uint8_t p1 = code[o1], p2 = code[o2];
+
+        // 产值 T,..  +  COPY D,T   →   把产值指令的 dst 改成 D，COPY 变多余
+        if (!pe_is_producer(p1) || p2 != OP_COPY) continue;
+        int32_t dst1 = pe_rd32(code, o1 + pe_dst_off(p1));
+        if (pe_rd32(code, o2 + 5) != dst1) continue;      // COPY 的 src 必须正是它
+        pe_wr32(code, o1 + pe_dst_off(p1), pe_rd32(code, o2 + 1));   // dst 改成 COPY 的目标
+        drop[i + 1] = 1;
+        changed = true;
+    }
+    if (!changed) return;
+
+    // ③ 重建 + 建旧偏移 → 新偏移
+    vector<uint8_t> nc;
+    nc.reserve(n);
+    vector<int> oldv(m), newv(m);
+    for (int i = 0; i < m; i++) {
+        oldv[i] = offs[i];
+        if (drop[i]) { newv[i] = -1; continue; }
+        newv[i] = (int)nc.size();
+        nc.insert(nc.end(), code.begin() + offs[i], code.begin() + offs[i] + lens[i]);
+    }
+    // 被删掉的偏移指向"折进的那条"的起点（万一有跳转落上去也不会跑飞）
+    for (int i = 0; i < m; i++) if (newv[i] < 0) newv[i] = (i > 0) ? newv[i - 1] : 0;
+
+    auto remap = [&](int32_t v) -> int32_t {
+        if (v == n) return (int32_t)nc.size();   // 跳到"块尾"（不是任何指令的起点，单独处理）
+        for (int i = 0; i < m; i++) if (oldv[i] == v) return newv[i];
+        return v;   // 找不到就不动（理论上不会发生）
+    };
+
+    // ④ 平移所有跳转目标（存的是块内绝对字节偏移）
+    for (int o = 0; o < (int)nc.size();) {
+        int L = pe_ins_len(nc, o);
+        if (L <= 0) break;
+        if (nc[o] == OP_IF) {
+            pe_wr32(nc, o + 5, remap(pe_rd32(nc, o + 5)));    // true_ip
+            pe_wr32(nc, o + 9, remap(pe_rd32(nc, o + 9)));    // false_ip
+        } else if (nc[o] == OP_JMP) {
+            pe_wr32(nc, o + 1, remap(pe_rd32(nc, o + 1)));
+        }
+        o += L;
+    }
+
+    code.swap(nc);
+    for (auto& e : lines) e.first = remap(e.first);          // 行号表一起挪
+}
+
 // 语句级临时槽位作用域：语句结束时回收临时槽位（临时值不跨语句存活）
 struct TempScope {
     int& base;
@@ -936,6 +1057,9 @@ private:
         rec_lines_ = want_lines_;
         gen_inline_calls();         // 本块调用的自定义块内联到本块末尾
         rec_lines_ = false;
+
+        // 后处理：把 <产值指令 T,..> + COPY D,T 折成 <产值指令 D,..>（同时挪跳转和行号表偏移）
+        peephole_block(bb.buf, cur_lines_);
 
         int name_str_idx = strings_.add(BLOCK_NAMES[block_name_idx]);
         blocks_.push_back({name_str_idx, bb.buf});

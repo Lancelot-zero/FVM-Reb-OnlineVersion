@@ -29,6 +29,12 @@
 // 0~144 全部注册在案（见 scr_command_VM_opt_execute 末尾的表）。
 // 注意：18 即函数 id 0，整段操作码空间都让给函数，不再保留任何快捷码。
 #macro VM_OP_FUNC_BASE 18
+// ── 加载期专用化：VM_GetProp 的"内置变量版" ──
+// VM_Decode 认出 VM_GetProp(id, "x") 这种（属性名是字面量常量字符串）时，
+// 把函数 id 换成下面这 9 个之一（argc 2→1），handler 直接读 inst.x，
+// 省掉 variable_instance_get 的"字符串→变量"查找。
+// 编号紧接现有的 144 之后，顺序与 VM_RegisterFunction / compiler_defs.h 的 FUNC_DEFS 一致。
+#macro VM_FID_GETPROPX 145
 
 // 内存类型 (u8)
 #macro VM_TYPE_INT    0
@@ -3127,6 +3133,29 @@ function vm_store_result(vm, _mt, _mv, _dst, _result) {
     }
 }
 
+/// @function VM_PropIdOf(_name)
+/// @desc 属性名 → 加载期专用化 id（0 = 不专用化，走原来的 variable_instance_get）。
+///       ⚠️ **只有内置实例变量能进这张表** —— 它们在任何实例上都存在，`inst.x` 不会报错。
+///          实例变量（atk / cd / damage / state …）不能进：`inst.atk` 在没设过时会直接
+///          报错，而 VM_GetProp 原本返回 undefined，mod 脚本正靠那个 undefined 兜底
+///          （每帧块里 VM_IsUndefined 有 57 次），改了会让这些地方全崩。
+///       频次依据：每帧块里内置变量共 148 次（占 GetProp+SetProp 661 次的 22.4%），
+///          其中 x + y 就占 111 次。
+function VM_PropIdOf(_name) {
+    switch (_name) {
+        case "x":            return 1;
+        case "y":            return 2;
+        case "sprite_index": return 3;
+        case "image_xscale": return 4;
+        case "image_yscale": return 5;
+        case "depth":        return 6;
+        case "image_angle":  return 7;
+        case "image_alpha":  return 8;
+        case "image_index":  return 9;
+    }
+    return 0;
+}
+
 /// @function VM_Decode(buf)
 /// @desc 把一块字节码**一次性**解码成"值数组"，供 VM_Execute_code 用下标直接取指。
 ///       原始字节码里每条指令要 3~5 次 buffer_read（原生调用），爱神卡一次 Step 就是 647 次、
@@ -3141,9 +3170,12 @@ function vm_store_result(vm, _mt, _mv, _dst, _result) {
 ///          所以解码时分两趟：先记 字节偏移→数组下标 的映射，最后回填跳转目标。
 ///          （-1 是"不跳"；IF 的两个目标在解码期就换成落空下标，运行期不必再判 -1）
 /// @return 值数组（空块返回空数组）
-function VM_Decode(buf, _poslist = noone) {
+function VM_Decode(buf, _poslist = noone, _vm = noone) {
     var _code = [];
     if (!buffer_exists(buf)) return _code;
+
+    // 加载期专用化要用到 vm 内存（读属性名那个槽），见 case VM_OP_CALL
+    var _vm_ok = (_vm != noone && is_struct(_vm));
 
     var _off2idx = ds_map_create();   // 字节偏移（string）→ 数组下标
     var _fix = [];                    // 待回填：[数组位置, 原始字节偏移, 数组位置, 原始字节偏移, ...]
@@ -3187,10 +3219,36 @@ function VM_Decode(buf, _poslist = noone) {
                 var _fid = buffer_read(buf, buffer_u16);              // 函数 id
                 var _argc = buffer_read(buf, buffer_u8);
                 var _dst = buffer_read(buf, buffer_s32);
+                var _args = array_create(_argc);
+                for (var _i = 0; _i < _argc; _i++) {
+                    _args[_i] = buffer_read(buf, buffer_s32);
+                }
+
+                // ── 加载期专用化：VM_GetProp(id, "内置名") → 专用函数 id（argc 2→1）──
+                //    属性名在字节码里是个槽。**不用另建映射表**：每个 bin 载入/重载都先跑
+                //    _VM_CONST_INIT 把字面量池写进内存，所以解别的块时直接读那个槽就是属性名。
+                //    读到的不是字符串（还没初始化 / 不是字面量）就原样保留，行为一字不变。
+                if (_fid == 14 && _argc == 2 && _vm_ok) {
+                    // ⚠️ real() 不能省：buffer_read(..., buffer_s32) 返回 int64，
+                    //    而 is_real() 对 int64 判 false（见 VM_OP_ASSIGN 那段注释），
+                    //    不包的话下面两个 is_real 全部为假，专用化永远不会生效
+                    var _ps = real(_args[1]);
+                    if (_ps >= 0 && _ps < array_length(_vm.mem_type)
+                        && _vm.mem_type[_ps] == VM_TYPE_STRING) {
+                        var _si = real(_vm.mem_val[_ps]);
+                        if (_si >= 0 && _si < array_length(_vm.strings)) {
+                            var _pid = VM_PropIdOf(_vm.strings[_si]);
+                            if (_pid > 0) {
+                                _fid  = VM_FID_GETPROPX + _pid - 1;
+                                _argc = 1;
+                                _args = [_args[0]];
+                            }
+                        }
+                    }
+                }
+
                 // 所有函数一视同仁：换成"专用操作码" VM_OP_FUNC_BASE + 函数id，
                 // 排布 [操作码][arg_count][dst][addr...]，解释器按表直接派发。
-                // （原来只给 6 个热函数换码，其余走通用 CALL；而且那 6 个码 18~23
-                //   在 opt 解释器里正好是函数 id 0~5，会被派发成 BanCard 之类，故废弃特判）
                 var _has_slot = variable_global_exists("_vm_opt_run_funcs")
                              && _fid >= 0
                              && (VM_OP_FUNC_BASE + _fid) < array_length(global._vm_opt_run_funcs);
@@ -3205,7 +3263,7 @@ function VM_Decode(buf, _poslist = noone) {
                     array_push(_code, _dst);
                 }
                 for (var _i = 0; _i < _argc; _i++) {
-                    array_push(_code, buffer_read(buf, buffer_s32));
+                    array_push(_code, _args[_i]);
                 }
                 break;
             }
@@ -3376,7 +3434,7 @@ function VM_LineOf(vm, name, ip, _is_byte = false) {
     if (!variable_struct_exists(vm, "code_pos")) vm[$ "code_pos"] = ds_map_create();
     if (!ds_map_exists(vm.code_pos, name)) {
         var _pl = ds_list_create();
-        VM_Decode(vm.blocks[? name], _pl);
+        VM_Decode(vm.blocks[? name], _pl, vm);
         vm.code_pos[? name] = _pl;
     }
     var _pos = vm.code_pos[? name];   // [指令的数组下标, 字节偏移, 下标, 偏移, …]
@@ -3867,7 +3925,7 @@ function VM_Execute(vm, buf, name) {
         // 解码结果为空（解码失败/空块）就继续走下面的原版字节码路径，等于一行开关就能回退
         if (!variable_struct_exists(vm, "codes")) vm[$ "codes"] = ds_map_create();
         if (!ds_map_exists(vm.codes, name)) {
-            vm.codes[? name] = VM_Decode(buf);
+            vm.codes[? name] = VM_Decode(buf, noone, vm);
         }
         var _cached_code = vm.codes[? name];
         if (is_array(_cached_code) && array_length(_cached_code) > 0) {
