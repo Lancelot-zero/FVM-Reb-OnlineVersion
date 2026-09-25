@@ -1,3 +1,17 @@
+/*if (speed_up && !global.is_paused && global.network.mode != "client") {
+	draw_skip = !draw_skip;
+	draw_enable_drawevent(!draw_skip);
+} else {
+	draw_skip = false;
+	draw_enable_drawevent(true);
+}*/
+/*
+if((!speed_up ||battle_time%2==0)||global.is_paused){
+	draw_enable_drawevent(true);
+}else{
+	draw_enable_drawevent(false);
+}*/
+
 if(global.wait_sprite_load && global.network.mode != "client"){
 	global.is_paused=true;
 }
@@ -29,8 +43,14 @@ battle_time ++
 var _cols   = global.grid_cols;
 var _rows   = global.grid_rows;
 var _ncells = _cols * _rows;
-if (!variable_global_exists("cell_flag")     || array_length(global.cell_flag)     != _ncells) global.cell_flag     = array_create(_ncells, 0);
-if (!variable_global_exists("obstacle_flag") || array_length(global.obstacle_flag) != _ncells) global.obstacle_flag = array_create(_ncells, 0);
+if (!variable_global_exists("cell_flag") || array_length(global.cell_flag) != _ncells) global.cell_flag = array_create(_ncells, 0);
+if (!variable_global_exists("cell_terrain_flag") || array_length(global.cell_terrain_flag) != _ncells) global.cell_terrain_flag = array_create(_ncells, 0);
+
+// 障碍 / 黏液 / 岩浆 / 海水：四个地面环境位合并到 cell_terrain_flag
+var _BIT_OBSTACLE  = 1 << 0;
+var _BIT_MUCUS     = 1 << 1;
+var _BIT_LAVA      = 1 << 2;
+var _BIT_SEAWATER  = 1 << 3;
 
 // 卡片加成位
 if (variable_global_exists("grid_plants")) {
@@ -51,18 +71,49 @@ if (variable_global_exists("grid_plants")) {
 	}
 }
 
+// 每帧先清空环境位，再按实例写入
+for (var _cfi = 0; _cfi < _ncells; _cfi++) global.cell_terrain_flag[_cfi] = 0;
+
 // 障碍物：格子号按自己的 x/y 反算，不读实例的 row/col —— 那套字段不是每条创建路径都写全
 // （obj_event_manager 造障碍物时只写 row、col 一直是 0）。反算两边都准：障碍物放在格子中心，
 // y 再 -35，中心到格子边还有半个格子（58 像素），仍在同一格内
-for (var _oi = 0; _oi < _ncells; _oi++) global.obstacle_flag[_oi] = 0;
 var _nobs = instance_number(obj_obstacle);
 for (var _oj = 0; _oj < _nobs; _oj++) {
 	var _ob  = instance_find(obj_obstacle, _oj);
 	var _occ = floor((_ob.x - global.grid_offset_x) / global.grid_cell_size_x);
 	var _orr = floor((_ob.y - global.grid_offset_y) / global.grid_cell_size_y);
 	if (_orr >= 0 && _orr < _rows && _occ >= 0 && _occ < _cols) {
-		global.obstacle_flag[_orr * _cols + _occ] = 1;
+          global.cell_terrain_flag[_orr * _cols + _occ] = global.cell_terrain_flag[_orr * _cols + _occ] | _BIT_OBSTACLE;
 	}
+}
+
+
+// 黏液 / 岩浆 / 海水：按实例 row/col 合并到 cell_terrain_flag 的对应 bit
+var _nmucus = instance_number(obj_mucus);
+for (var _mi = 0; _mi < _nmucus; _mi++) {
+  var _mu = instance_find(obj_mucus, _mi);
+  if (_mu.row >= 0 && _mu.row < _rows && _mu.col >= 0 && _mu.col < _cols) {
+          var _mui = _mu.row * _cols + _mu.col;
+          global.cell_terrain_flag[_mui] = global.cell_terrain_flag[_mui] | _BIT_MUCUS;
+  }
+}
+
+var _nlava = instance_number(obj_lava);
+for (var _li = 0; _li < _nlava; _li++) {
+  var _lv = instance_find(obj_lava, _li);
+  if (_lv.row >= 0 && _lv.row < _rows && _lv.col >= 0 && _lv.col < _cols) {
+          var _lvi = _lv.row * _cols + _lv.col;
+          global.cell_terrain_flag[_lvi] = global.cell_terrain_flag[_lvi] | _BIT_LAVA;
+  }
+}
+
+var _nsea = instance_number(obj_seawater);
+for (var _si = 0; _si < _nsea; _si++) {
+  var _sw = instance_find(obj_seawater, _si);
+  if (_sw.row >= 0 && _sw.row < _rows && _sw.col >= 0 && _sw.col < _cols) {
+          var _swi = _sw.row * _cols + _sw.col;
+          global.cell_terrain_flag[_swi] = global.cell_terrain_flag[_swi] | _BIT_SEAWATER;
+  }
 }
 
 // obj_controller STEP 事件

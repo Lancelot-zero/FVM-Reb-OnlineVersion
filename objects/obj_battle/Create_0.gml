@@ -59,6 +59,7 @@ speed_up = false
 time_limit = -1
 timer_pause = false
 
+
 ds_list_add(chomp_sound_list,snd_chomp1)
 ds_list_add(chomp_sound_list,snd_chomp2)
 ds_list_add(chomp_sound_list,snd_chomp3)

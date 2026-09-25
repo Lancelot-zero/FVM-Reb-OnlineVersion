@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"scr_command_VM_opt_execute",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"scr_command_VM_opt_execute",
+  "parent":{
+    "name":"Shell",
+    "path":"folders/脚本/Shell.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

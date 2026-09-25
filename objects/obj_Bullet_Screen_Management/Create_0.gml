@@ -80,7 +80,7 @@ for (var _i = 0; _i < bullet_max; _i++) {
 }
 count = 0;
 
-// 格子快照不在这边建了：global.cell_flag / global.obstacle_flag 由 obj_battle 的 Step
+// 格子快照不在这边建了：global.cell_flag / global.cell_terrain_flag 由 obj_battle 的 Step
 // 每帧重建（那边一帧写一遍，这边只读），见 obj_battle/Step_0.gml
 
 // ── 子弹合并（默认关闭 = 原逻辑：加不进去就丢）──

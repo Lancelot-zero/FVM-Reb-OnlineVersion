@@ -44,16 +44,30 @@ if not hp_modified{
 
 	hp_modified = true
 }
-with obj_lava{
-	if other.grid_row == row && other.grid_col == col &&
-	(other.target_type == "normal" || other.target_type == "dance" || other.target_type == "air" || other.target_type == "obstacle"){
-		other.move_speed_modify = 2
-		break
-	}
-	else{
-		other.move_speed_modify = 1
-	}
+
+// 地形位：障碍=bit0，黏液=bit1，岩浆=bit2，海水=bit3
+var _tc = global.grid_cols;
+var _tr = global.grid_rows;
+var _has_terrain = variable_global_exists("cell_terrain_flag") && _tc > 0 && _tr > 0
+                  && array_length(global.cell_terrain_flag) == _tc * _tr;
+var _tf = 0;
+if (_has_terrain && grid_row >= 0 && grid_row < _tr && grid_col >= 0 && grid_col < _tc) {
+  _tf = global.cell_terrain_flag[grid_row * _tc + grid_col];
 }
+
+var _slow = false;
+// 岩浆：normal / dance / air / obstacle 减速
+if ((_tf & (1 << 2)) != 0 &&
+    (target_type == "normal" || target_type == "dance" || target_type == "air" || target_type == "obstacle")) {
+  _slow = true;
+}
+// 黏液：normal / dance 减速
+if ((_tf & (1 << 1)) != 0 &&
+    (target_type == "normal" || target_type == "dance")) {
+  _slow = true;
+}
+move_speed_modify = _slow ? 2 : 1;
+
 
 // Boss状态切换到技能时广播给客户端
 if (global.network.mode == "server" && is_boss && state != _state_prev) {
@@ -93,4 +107,3 @@ if (pre_hp>hp&&buffer_exists(global._VM_ENEMY_DAMAGED)) {
     VM_Execute(global.__vm, global._VM_ENEMY_DAMAGED, "_VM_ENEMY_DAMAGED");
 }
 pre_hp = hp;
-
