@@ -24,16 +24,20 @@ if (_has_grid) {
     if (_gcsx <= 0 || _gcsz <= 0) _has_grid = false;
 }
 
-// 快照（cell_flag / obstacle_flag）由 obj_battle 的 Step 每帧写进全局，这里只读：
-//   global.cell_flag[格]     = 这一格所有卡片 bullet_flag 的按位或
-//   global.obstacle_flag[格] = 这一格有没有障碍物
+
+
+
+// 快照（cell_flag / cell_terrain_flag）由 obj_battle 的 Step 每帧写进全局，这里只读：
+//   global.cell_flag[格]         = 这一格所有卡片 bullet_flag 的按位或
+//   global.cell_terrain_flag[格] = 障碍/黏液/岩浆/海水等地面环境的 bit 组合
 // 长度对得上就认为本帧的快照是好的（没建过 / 换图后长度不符 → 判定直接跳过）
 var _cols = _has_grid ? global.grid_cols : 0;
 var _snap_ok = _has_grid && _cols > 0 && _rows > 0 && variable_global_exists("cell_flag")
             && array_length(global.cell_flag) == _cols * _rows;
-var _snap_ok_obstacle = _has_grid && _cols > 0 && _rows > 0 && variable_global_exists("obstacle_flag")
-            && array_length(global.obstacle_flag) == _cols * _rows;
+var _snap_ok_obstacle = _has_grid && _cols > 0 && _rows > 0 && variable_global_exists("cell_terrain_flag")
+            && array_length(global.cell_terrain_flag) == _cols * _rows;
 
+var _BIT_OBSTACLE = 1 << 0;
 var _len = count;
 if (_len <= 0) exit;
 
@@ -156,7 +160,7 @@ while (_i >= 0) {
             var _obc = floor((_b.x - _gox) / _gcsx);
             var _obr = floor((_b.y - _goy) / _gcsz);
             if (_obc >= 0 && _obc < _cols && _obr >= 0 && _obr < _rows
-                && global.obstacle_flag[_obr * _cols + _obc] == 1) {
+                && (global.cell_terrain_flag[_obr * _cols + _obc] & _BIT_OBSTACLE) != 0) {
                 _b.hits = 0;
             }
         }
@@ -344,4 +348,3 @@ if (debug_merge && _stat_frame >= 60) {
     _stat_drop  = drop_n;
     _stat_frame = 0;
 }
-

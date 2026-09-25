@@ -21,14 +21,14 @@
 #macro VM_OP_IF      15   // cond_addr(u32) true_ip(s32) false_ip(s32)
 #macro VM_OP_JMP     16   // ip(s32)
 #macro VM_OP_HALT    17
-// 以下两个不来自编译器，是 VM_Decode 给热函数生成的快捷码：dst(s32) [addr(s32)*]
-#macro VM_OP_CALL_GETPROP 18   // addr(s32) addr(s32)
-#macro VM_OP_CALL_SETPROP 19   // addr(s32) addr(s32) addr(s32)
-// 热函数直通（解码期由 VM_Decode 把 CALL 换掉，参数一律传内存地址，函数内部自己 vm_arg 解析）
-#macro VM_OP_CALL_ISUNDEF    20   // dst(s32) addr(s32)                              — VM_IsUndefined
-#macro VM_OP_CALL_GETCURCARD 21   // dst(s32)                                        — VM_GetCurCard
-#macro VM_OP_CALL_ARRAYGET   22   // dst(s32) addr(s32) addr(s32)                    — VM_ArrayGet
-#macro VM_OP_CALL_CREATEINST 23   // dst(s32) addr(s32) addr(s32) addr(s32)          — VM_CreateInstance
+// ── 函数专用操作码 ──────────────────────────────────────────
+// VM_Decode 在解码期把**每一条** VM_OP_CALL 换成
+//     操作码 = VM_OP_FUNC_BASE + 函数id
+// 排布：[操作码][arg_count(u8)][dst(s32)][addr(s32) * arg_count]
+// 解释器用 global._vm_opt_run_funcs[操作码] 一次派发到 run_VM_xxx，不用再读 func_id。
+// 0~144 全部注册在案（见 scr_command_VM_opt_execute 末尾的表）。
+// 注意：18 即函数 id 0，整段操作码空间都让给函数，不再保留任何快捷码。
+#macro VM_OP_FUNC_BASE 18
 
 // 内存类型 (u8)
 #macro VM_TYPE_INT    0
@@ -893,7 +893,7 @@ function VM_ClearMapObjects(col_addr, row_addr, obj_name_addr) {
     // 收集要删除的对象索引
     var _targets;
     if (obj_name == "all") {
-        _targets = [obj_obstacle, obj_wind_tunnel, obj_lava, obj_barrier, obj_fog, obj_cloud];
+        _targets = [obj_obstacle, obj_wind_tunnel, obj_lava, obj_barrier, obj_fog, obj_cloud, obj_seawater];
     } else {
         if (!string_starts_with(obj_name, "obj_"))
             obj_name = "obj_" + obj_name;
@@ -3139,7 +3139,7 @@ function vm_store_result(vm, _mt, _mv, _dst, _result) {
 ///
 ///       ⚠️ IF / JMP 在字节码里存的是**绝对字节偏移**，数组版必须换成**数组下标**，
 ///          所以解码时分两趟：先记 字节偏移→数组下标 的映射，最后回填跳转目标。
-///          （-1 是"不跳"，原样保留）
+///          （-1 是"不跳"；IF 的两个目标在解码期就换成落空下标，运行期不必再判 -1）
 /// @return 值数组（空块返回空数组）
 function VM_Decode(buf, _poslist = noone) {
     var _code = [];
@@ -3170,7 +3170,11 @@ function VM_Decode(buf, _poslist = noone) {
                 } else if (_at == VM_TYPE_FLOAT) {
                     array_push(_code, buffer_read(buf, buffer_f32));
                 } else {
-                    array_push(_code, buffer_read(buf, buffer_s32));
+                    // ⚠️ 必须 real() 包一层：buffer_read(..., buffer_s32) 返回的是 int64，
+                    //    而 is_real() 对 int64 判 false（只有 real 才算实数）。
+                    //    不包的话整数常量解出来是 int64，卡里写 60 会让 is_real 判断全废，
+                    //    写成 60.0（走 FLOAT 分支、返回 real）反而正常。
+                    array_push(_code, real(buffer_read(buf, buffer_s32)));
                 }
                 break;
             }
@@ -3183,57 +3187,47 @@ function VM_Decode(buf, _poslist = noone) {
                 var _fid = buffer_read(buf, buffer_u16);              // 函数 id
                 var _argc = buffer_read(buf, buffer_u8);
                 var _dst = buffer_read(buf, buffer_s32);
-                // 热函数在解码期就换成专用操作码，执行期不再走通用 CALL
-                if (_fid == global._VMfn_GetProp && _argc == 2) {
-                    _code[array_length(_code) - 1] = VM_OP_CALL_GETPROP;
+                // 所有函数一视同仁：换成"专用操作码" VM_OP_FUNC_BASE + 函数id，
+                // 排布 [操作码][arg_count][dst][addr...]，解释器按表直接派发。
+                // （原来只给 6 个热函数换码，其余走通用 CALL；而且那 6 个码 18~23
+                //   在 opt 解释器里正好是函数 id 0~5，会被派发成 BanCard 之类，故废弃特判）
+                var _has_slot = variable_global_exists("_vm_opt_run_funcs")
+                             && _fid >= 0
+                             && (VM_OP_FUNC_BASE + _fid) < array_length(global._vm_opt_run_funcs);
+                if (_has_slot) {
+                    _code[array_length(_code) - 1] = VM_OP_FUNC_BASE + _fid;
+                    array_push(_code, _argc);
                     array_push(_code, _dst);
-                    array_push(_code, buffer_read(buf, buffer_s32));
-                    array_push(_code, buffer_read(buf, buffer_s32));
-                } else if (_fid == global._VMfn_SetProp && _argc == 3) {
-                    _code[array_length(_code) - 1] = VM_OP_CALL_SETPROP;
-                    array_push(_code, _dst);
-                    for (var _i = 0; _i < 3; _i++) {
-                        array_push(_code, buffer_read(buf, buffer_s32));
-                    }
-                } else if (_fid == global._VMfn_IsUndefined && _argc == 1) {
-                    _code[array_length(_code) - 1] = VM_OP_CALL_ISUNDEF;
-                    array_push(_code, _dst);
-                    array_push(_code, buffer_read(buf, buffer_s32));
-                } else if (_fid == global._VMfn_GetCurCard && _argc == 0) {
-                    _code[array_length(_code) - 1] = VM_OP_CALL_GETCURCARD;
-                    array_push(_code, _dst);
-                } else if (_fid == global._VMfn_ArrayGet && _argc == 2) {
-                    _code[array_length(_code) - 1] = VM_OP_CALL_ARRAYGET;
-                    array_push(_code, _dst);
-                    for (var _i = 0; _i < 2; _i++) {
-                        array_push(_code, buffer_read(buf, buffer_s32));
-                    }
-                } else if (_fid == global._VMfn_CreateInstance && _argc == 3) {
-                    _code[array_length(_code) - 1] = VM_OP_CALL_CREATEINST;
-                    array_push(_code, _dst);
-                    for (var _i = 0; _i < 3; _i++) {
-                        array_push(_code, buffer_read(buf, buffer_s32));
-                    }
                 } else {
+                    // 表里没有（函数 id 越界）：保留通用 CALL，交给 run_VM_OP_CALL 报"未注册函数ID"
                     array_push(_code, _fid);
                     array_push(_code, _argc);
                     array_push(_code, _dst);
-                    for (var _i = 0; _i < _argc; _i++) {
-                        array_push(_code, buffer_read(buf, buffer_s32));
-                    }
+                }
+                for (var _i = 0; _i < _argc; _i++) {
+                    array_push(_code, buffer_read(buf, buffer_s32));
                 }
                 break;
             }
             case VM_OP_IF: {
                 array_push(_code, buffer_read(buf, buffer_s32));      // cond
+                var _fall = array_length(_code) + 2;                  // 落空 = 三个操作数之后的下标
                 var _raw_t = buffer_read(buf, buffer_s32);
-                array_push(_fix, array_length(_code));                // 记下 true 目标所在下标
-                array_push(_fix, _raw_t);
-                array_push(_code, _raw_t);                            // ⚠️ 必须占位，最后回填成数组下标
+                if (_raw_t == -1) {
+                    array_push(_code, _fall);                         // -1（不跳）→ 写落空下标，运行期不必再判
+                } else {
+                    array_push(_fix, array_length(_code));            // 记下 true 目标所在下标
+                    array_push(_fix, _raw_t);
+                    array_push(_code, _raw_t);                        // ⚠️ 必须占位，最后回填成数组下标
+                }
                 var _raw_f = buffer_read(buf, buffer_s32);
-                array_push(_fix, array_length(_code));                // 记下 false 目标所在下标
-                array_push(_fix, _raw_f);
-                array_push(_code, _raw_f);                            // ⚠️ 同上
+                if (_raw_f == -1) {
+                    array_push(_code, _fall);
+                } else {
+                    array_push(_fix, array_length(_code));            // 记下 false 目标所在下标
+                    array_push(_fix, _raw_f);
+                    array_push(_code, _raw_f);                        // ⚠️ 同上
+                }
                 break;
             }
             case VM_OP_JMP: {
@@ -3256,7 +3250,7 @@ function VM_Decode(buf, _poslist = noone) {
         }
     }
 
-    // 跳转目标：字节偏移 → 数组下标（-1 原样）
+    // 跳转目标：字节偏移 → 数组下标（IF 的 -1 已在上面换成落空下标，这里是普通回填）
     // ⚠️ 必须把"块末尾"(_size) 也登记进去：编译器有大量 `IF.false -> 块末尾` 的跳转
     //    （跳过剩余指令直接结束），映射成 array_length(_code) 正好让 while 退出。
     //    漏了它就会被当成 -1（= 不跳）而继续往下执行，行为就错了。
@@ -3465,7 +3459,7 @@ function mod_error_log(_msg) {
     }
     file_text_close(_w);
 }
-
+/*
 /// @function VM_Execute_code(vm, code, name)
 /// @desc 数组版解释器：逻辑和 VM_Execute 完全一致，只是取指从"buffer_read"换成"_code[_ip]"。
 ///       跳转目标在 VM_Decode 里已经换算成数组下标，所以 IF/JMP 直接 _ip = 目标。
@@ -3794,7 +3788,7 @@ function VM_Execute_code(vm, code, name) {
         return -1;
     }
 }
-
+*/
 /// @function VM_Execute(vm, buf, name)
 function VM_Execute(vm, buf, name) {
     if (!buffer_exists(buf)) return 0;
@@ -3810,7 +3804,8 @@ function VM_Execute(vm, buf, name) {
         }
         var _cached_code = vm.codes[? name];
         if (is_array(_cached_code) && array_length(_cached_code) > 0) {
-            return VM_Execute_code(vm, _cached_code, name);
+			return VM_Execute_code_opt(vm, _cached_code, name)
+			//return VM_Execute_code(vm, _cached_code, name);
         }
         // ══════════════ 以下为原来的字节码解释器，未改动 ══════════════
         buffer_seek(buf, buffer_seek_start, 0);
