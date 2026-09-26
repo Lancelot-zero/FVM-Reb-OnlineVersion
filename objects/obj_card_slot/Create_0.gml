@@ -165,7 +165,10 @@ function try_place_once(){
 					}
 				}
 			}
+            // mod 卡：身份要在创建前写进 pending 全局（和 Step 里那处放置逻辑一样）
+            if (card_obj == obj_card_mod) { global._mod_pending_card_id = card_id; }
             var new_plant = instance_create_depth(logical_world.x + platform_shift_x, logical_world.y + platform_shift_y, 0,card_obj);
+            global._mod_pending_card_id = "";
 			// 计算深度值
 			var depth_value = calculate_plant_depth(logical_col, logical_row, new_plant.plant_type);
 			card_created(new_plant, logical_col, logical_row);

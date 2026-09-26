@@ -261,6 +261,35 @@ function spawn_plant(col, row, plant_obj, props) {
 						main_weapon_inst.grid_col = grid_col
 					}
 					
+					// ── mod 宝石：等级随 _eq 的 mod_gem_levels 传过来；宝石一律建在 HUD 上（和本地那排同坐标） ──
+					//    （本地预测那份在客户端分支里没建，所以这里不用清旧，直接建）
+					var _mg = _eq[$ "mod_gem_levels"] ?? undefined;
+					if (is_struct(_mg)) {
+						var _mg_ids = variable_struct_get_names(_mg);
+						// HUD 槽位：从当前已有的宝石数量往后排，不盖住已经在那儿的
+						var _hud_i = 0;
+						with (all) { if (variable_instance_exists(id, "gem_id")) _hud_i++; }
+						for (var _mi = 0; _mi < array_length(_mg_ids); _mi++) {
+							var _mg_id  = _mg_ids[_mi];
+							var _mg_lv  = _mg[$ _mg_id];
+							var _mg_inf = get_gem_info(_mg_id);
+							if (!is_struct(_mg_inf)) continue;                        // 对面没装这个 mod
+							var _mg_obj = _mg_inf[$ "obj"];
+							if (!is_object(_mg_obj) || _mg_obj == noone) continue;     // passive 宝石：不建实例
+							global._mod_pending_gem_id    = _mg_id;
+							global._mod_pending_gem_level = _mg_lv;
+							var _mg_inst = instance_create_depth(390, 213 + _hud_i * 80, -500, _mg_obj);
+							_hud_i++;
+							global._mod_pending_gem_id    = "";
+							global._mod_pending_gem_level = -1;
+							// 归属：挂在种植它的那个角色上（插件靠 mod_point_parent_player 找主人）
+							_mg_inst.mod_point_parent_player = _plant.id;
+							_mg_inst.mod_point_grid_row      = grid_row;
+							_mg_inst.mod_point_grid_col      = grid_col;
+							_mg_inst.mod_point_gem_level     = _mg_lv;
+						}
+					}
+					
 				}
 					
 			  }

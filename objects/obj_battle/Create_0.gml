@@ -144,6 +144,8 @@ for(var i = 0 ; i < global.grid_rows ; i++){
 		if (global.network.mode!="client"){
 			var cards = plant_list[i][j].plant
 			if array_length(cards) > 0{
+				// 关卡自摆的卡：给客户端的广播里标 _place_sfx=0，别让客户端开局响一串种植音效
+				global._net_map_build = true;
 				for(var k = 0; k < array_length(cards);k++){
 					var card_data = deck_get_card_data(cards[k],0)
 					var card_obj = card_data[? "obj"]
@@ -155,6 +157,7 @@ for(var i = 0 ; i < global.grid_rows ; i++){
 					card_created(new_plant, j, i);
 					new_plant.depth = depth_value;
 				}
+				global._net_map_build = false;
 			}
 		
 			var map_objs = plant_list[i][j].object
