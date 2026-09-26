@@ -201,14 +201,14 @@ mod/cards/snake/tex/xxx.png          ← 贴图跟着【json 所在目录】走�
 
 ```text
 卡片     CREATE / STEP / DRAW / DESTROY / 移入 / 移出 / 点击
-武器     CREATE / STEP / DRAW           / 移入 / 移出 / 点击
+武器     CREATE / STEP / DRAW / DESTROY / 移入 / 移出 / 点击
 子弹     CREATE / STEP / DRAW / DESTROY / 移入 / 移出 / 点击
 特效     CREATE / STEP / DRAW / DESTROY / 移入 / 移出 / 点击
 敌人     CREATE / STEP / DRAW / DESTROY / 移入 / 移出 / 点击
-宝石     CREATE / STEP / DRAW           / 移入 / 移出 / 点击
+宝石     CREATE / STEP / DRAW / DESTROY / 移入 / 移出 / 点击
 ```
 
-- 鼠标三个块 **6 个 mod 对象全都有**；`_OBJECT_DESTROY` 只有武器和宝石没有（写了不会执行）
+- 鼠标三个块与 `_OBJECT_DESTROY` **6 个 mod 对象全都有**（武器 / 宝石的 Destroy 事件是后补的，现在写了会执行）
 - 鼠标三个块是**按实例**判定的 —— 鼠标压在**这个实例的贴图（碰撞掩码）**上才算数，
   所以**没设 `sprite_index` 的实例收不到**（子弹/特效尤其注意）
 - 想判"全场任意位置按了左键"用 `_VM_MOUSE_LEFT` 事件块（地图脚本），不要用 `_OBJECT_CLICK`
@@ -216,6 +216,19 @@ mod/cards/snake/tex/xxx.png          ← 贴图跟着【json 所在目录】走�
 - 写块之前先确认对应对象支持它 —— 写了没人执行的块等于没写
 - 取当前实例：`self = VM_GetCurCard()`（名字叫 Card，实际指"当前对象实例"）
 - 碰撞没有通用块（不存在 `_OBJECT_HIT`），要在 `_OBJECT_STEP` 里自己判
+
+### 全局挂载点（`_VM_*`）
+
+`_VM_*` 是游戏在关键时机广播的**全局挂载点**，和上面那些对象自己的 `_OBJECT_*` 块是两回事。
+mod 插件和地图脚本**都能挂**：事件类（`_VM_BATTLE_START` / `_VM_CARD_CREATED` / `_VM_MOUSE_LEFT` …）、
+`_VM_FRAME`（每帧）、5f / 10f / 15f / 30f / 60f 定时器。
+
+- **只有"场上有它的实例"时才跑**：卡片 / 武器 / 宝石 / 敌人 / 子弹 / 特效一样，该类单位一个实例都没有时挂载点不触发
+  （`_OBJECT_CREATE` 都还没跑的新局、准备界面同理）。热重载换 bin、旧实例销毁都会自动跟上。
+- **卡片类事件本身只认"带进战斗的卡"**：`_VM_CARD_CREATED` / `_VM_CARD_DESTROYED` 不会为关卡自摆的卡触发。
+- **高频点慎用**：`_VM_FRAME` / 5f / 10f / 15f 是全场级别的开销，每帧要做的事一般写在 `_OBJECT_STEP` 里更省
+  （那里有 `mod_step_enter_condition` 闸门，没轮到的实例不进 VM）。
+- 想让某个 mod **不受"有没有实例"这层过滤**（调试用），见 `help.md` 文末「附：`__hookall__`」——**特殊用法，非必要不要用**。
 
 ### 实例字段（内置字段，读写都用 VM_GetProp / VM_SetProp）
 

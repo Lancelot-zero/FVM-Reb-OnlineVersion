@@ -80,7 +80,7 @@
 - **`_OBJECT_STEP`**：每帧（暂停时整块不跑），**且会被 `mod_step_enter_condition` 挡住**（默认 `""` 才是每帧进）
 - **`_OBJECT_DRAW`**：写了就跑 VM 的绘制块（**不再自动画 sprite**）；没写则由核心画：
   半透明冷却遮罩 + 剩余秒数、悬停说明框、等级星星
-- **`_OBJECT_DESTROY`**：宝石对象**不支持**（写了不会执行）
+- **`_OBJECT_DESTROY`**：宝石被销毁时（块内用 `VM_GetCurCard()` 拿自己，`VM_GetLastDestroyedCard()` 也能拿到）
 - **`_OBJECT_MOUSE_ENTER` / `_OBJECT_MOUSE_LEAVE` / `_OBJECT_CLICK`**：鼠标移入 / 移出 / 左键点在宝石图标上（按实例判定，鼠标要压在宝石贴图上）
 
 ### 每帧顺序（核心在什么时候跑你的块）

@@ -208,38 +208,38 @@ _VM_BATTLE_START {
 </tr>
 <tr>
 <td><code>_VM_FRAME</code></td>
-<td>⚠️ 每帧执行，禁止写复杂逻辑（<strong>mod 不支持</strong>：只有地图脚本能用）</td>
+<td>⚠️ 每帧执行，禁止写复杂逻辑（mod 也能挂，但只在该类单位场上有实例时才跑）</td>
 </tr>
 <tr>
 <td><code>_VM_TIMER_5f</code></td>
-<td>每 5 帧（<strong>mod 不支持</strong>）</td>
+<td>每 5 帧（高频，慎用）</td>
 </tr>
 <tr>
 <td><code>_VM_TIMER_10f</code></td>
-<td>每 10 帧（<strong>mod 不支持</strong>）</td>
+<td>每 10 帧（高频，慎用）</td>
 </tr>
 <tr>
 <td><code>_VM_TIMER_15f</code></td>
-<td>每 15 帧（<strong>mod 不支持</strong>）</td>
+<td>每 15 帧（高频，慎用）</td>
 </tr>
 <tr>
 <td><code>_VM_TIMER_30f</code></td>
-<td>每 30 帧（mod 可用）</td>
+<td>每 30 帧</td>
 </tr>
 <tr>
 <td><code>_VM_TIMER_60f</code></td>
-<td>每 60 帧（mod 可用）</td>
+<td>每 60 帧</td>
 </tr>
 </tbody></table>
 <blockquote>
-<p><strong>mod 用挂载点的限制</strong></p>
+<p><strong>mod 用挂载点的说明</strong></p>
 <ol>
-<li><strong>场上要有它的实例才响应</strong> —— 卡片 / 武器 / 宝石 / 敌人 / 子弹 / 特效一视同仁：该类单位一个实例都没有时挂载点不会触发
+<li><strong>挂载点都能挂</strong>：事件类、<code>_VM_FRAME</code>（每帧）、5f / 10f / 15f / 30f / 60f 定时器，mod 插件和地图脚本一样都能用。
+高频点（<code>_VM_FRAME</code> / 5f / 10f / 15f）是全场级别的开销，每帧要做的事一般写 <code>_OBJECT_STEP</code> 更省（那里有 <code>mod_step_enter_condition</code> 闸门）。</li>
+<li><strong>只有在&quot;场上有它的实例&quot;时才跑</strong> —— 卡片 / 武器 / 宝石 / 敌人 / 子弹 / 特效一视同仁：该类单位一个实例都没有时挂载点不触发
 （<code>_OBJECT_CREATE</code> 还没跑过的新局同理）。热重载换 bin、旧实例销毁都会自动跟上。</li>
-<li><strong><code>__hookall__</code> 无条件开启</strong>：bin 的<strong>字符串池里出现字符串 <code>__hookall__</code></strong> 时，这个 bin 的所有挂载点不经过滤、恒开
-（调试 / 工具向：源码里随便写一处 <code>&quot;__hookall__&quot;</code> 字面量即可；热重载按新 bin 重判，去掉就恢复过滤）。</li>
-<li><strong>帧型只支持 <code>_VM_TIMER_30f</code> / <code>_VM_TIMER_60f</code></strong>；<code>_VM_FRAME</code> 与 5f / 10f / 15f 只有地图脚本能用
-（理由：mod 每个实例已有 <code>mod_step_enter_condition</code> 闸门，再挂全局高频钩子等于每帧白进一次 VM）。</li>
+<li><strong>想不受第 2 条过滤</strong>：让字符串 <code>__hookall__</code> 出现在这个 mod 的 <code>.bin</code> 字符串池里，这个 bin 的挂载点就恒开
+（热重载按新 bin 重判；<strong>特殊用法，非必要不要用</strong>，见下方「附：<code>__hookall__</code>」）。</li>
 <li><strong>卡片类事件本身只认&quot;带进战斗的卡&quot;</strong>：<code>_VM_CARD_CREATED</code> / <code>_VM_CARD_DESTROYED</code> 不会为关卡自摆的卡、
 玩家角色触发（判定 = 被种下 / 被销毁的那张卡在出战卡组里）。</li>
 </ol>
@@ -1891,6 +1891,23 @@ _VM_PLATFORM_IDLE_END {
     }
 }
 </code></pre>
+<hr>
+<h2>附：<code>__hookall__</code>（mod 挂载点无条件开启）</h2>
+<blockquote>
+<p>⚠️ <strong>特殊用法：非必要不要用。</strong> 这是排错 / 调试用的开关，会让这个 mod 的挂载点在场上一个实例都没有时也被唤醒；
+正常开发的 mod 不要带这个标记，用完记得删掉。</p>
+</blockquote>
+<p>mod 插件的挂载点默认<strong>只在该类单位场上有实例时触发</strong>（卡片 / 武器 / 宝石 / 敌人 / 子弹 / 特效一样），
+一条 <code>_OBJECT_CREATE</code> 都还没跑的新局（比如准备界面）就不会响应。</p>
+<p>想让它<strong>恒开</strong>，只要让字符串 <code>__hookall__</code> 出现在这个 mod 编译出来的 <strong><code>.bin</code> 的字符串池</strong>里：</p>
+<pre><code class="language-gml">// 在 _OBJECT_CFG 里写一句最省事（顺带能在日志里看到一次，确认确实编进去了）
+VM_ShellPrint(&quot;__hookall__&quot;)
+</code></pre>
+<ul>
+<li>判定时机：<strong>加载 / <code>[reloadmod]</code> 热重载时扫一遍字符串池</strong> —— 带上就恒开，去掉就恢复过滤，不用改别的开关。</li>
+<li>写在<strong>注释里不算</strong>（注释不进字符串池）；必须是源码里的字符串字面量。</li>
+<li>只解除**&quot;有没有实例&quot;这一层过滤**，其它规则照旧：卡片事件照样只认带进战斗的卡。</li>
+</ul>
 <hr>
 <h2>参数校验附录</h2>
 <p>编译器校验以下函数的字符串参数。参数个数/类型/取值校验不通过时<strong>编译直接失败</strong>并报告行号（旧版本仅打印警告、继续产出字节码）。int 实参传入 float 参数时自动提升，不算错误。</p>

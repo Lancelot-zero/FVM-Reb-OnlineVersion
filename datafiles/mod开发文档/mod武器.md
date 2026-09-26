@@ -137,7 +137,7 @@
 - **`_OBJECT_CREATE`**：实例创建时立刻执行（主/超武在种卡的那一刻；副武器在角色创建时）
 - **`_OBJECT_STEP`**：每帧，**但会被 `mod_step_enter_condition` 挡住**（默认 `""` 才是每帧进）
 - **`_OBJECT_DRAW`**：写了就跑 VM 的绘制块（**不再自动 `draw_self()`**），没写就自动画 `sprite_index`
-- **`_OBJECT_DESTROY`**：武器对象**不支持**（写了不会执行）
+- **`_OBJECT_DESTROY`**：武器被销毁时（块内用 `VM_GetCurCard()` 拿自己，`VM_GetLastDestroyedCard()` 也能拿到）
 - **`_OBJECT_MOUSE_ENTER` / `_OBJECT_MOUSE_LEAVE` / `_OBJECT_CLICK`**：鼠标移入 / 移出 / 左键点在武器上（按实例判定，鼠标要压在武器的贴图上）
 
 ### 每帧顺序（核心在什么时候跑你的块）
