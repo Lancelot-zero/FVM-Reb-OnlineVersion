@@ -6094,7 +6094,9 @@ function VM_InitRoomEntry(buf) {
     //   ⚠️ 热重载换掉 blocks 之后要重新挂一次，见 src_mod_card_vm_fill。
     //   ⚠️ 挂载点一律走这套：地图脚本的块在触发处直接执行，mod 单位 VM 由 vm_hook_run 分发，
     //      只要 VM 自己的条件符合（有实例 / 带 __hookall__）就能进，不分挂载点种类。
-    //      （_VM_CONST_INIT 例外：那是每个 VM 自己加载时跑一次的初始化块，不是广播事件。）
+    //      （例外：不是广播事件的那批块 —— _VM_CONST_INIT 与 _OBJECT_CFG 在 bin 加载时直接跑
+    //        （src_mod_card_vm_load / _fill），_OBJECT_CREATE / _STEP / _DRAW / _DESTROY / 鼠标块
+    //        由对象自己的事件驱动。）
     // ══════════════════════════════════════════════════════════════════
     // ⚠️ 只在**第一次**建 VM 时建表，绝不能每次 VM_Create 都 destroy+重建：
     //    VM_Create 是**每个 mod 单位各调一次**的（每张卡/武器/宝石/敌人/子弹/特效一个 VM），
