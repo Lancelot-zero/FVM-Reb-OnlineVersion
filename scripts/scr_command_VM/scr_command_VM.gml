@@ -956,6 +956,39 @@ function VM_ClientWrapId(real_id) {
     return -_vmid;
 }
 
+/// @function vm_inst_write_ok(_inst)
+/// @desc 实例写操作的**统一闸门**（和 VM_SetProp 同一套规则）：
+///       · 本地实例（没有 net_id）→ 允许直接改；
+///       · 联网实例（有 net_id）→ 客户端跳过，等服务器用 MSG_MODIFY_PROP 广播过来；
+///       · 正在重放服务器通知（_VM_sync_exec == false）→ 一律放行。
+/// @return true = 这次写可以在本地执行
+function vm_inst_write_ok(_inst) {
+    if (is_undefined(_inst) || !instance_exists(_inst)) return false;
+    // `_OBJECT_*` 块里的写一律本地直改（两端各跑一遍，跨端靠 mod_sync 每 20 帧纠偏）
+    if (variable_global_exists("_VM_cur_block") && string_pos("_OBJECT", global._VM_cur_block) == 1) return true;
+    if (global.network.mode != "client") return true;
+    if (!global._VM_sync_exec) return true;
+    return !ds_map_exists(global.network.map_instance_id_net_id, _inst);
+}
+
+/// @function vm_inst_broadcast_prop(_inst, _prop, _value)
+/// @desc 服务器侧**统一广播**：该实例有 net_id 时，把 {属性: 值} 用 MSG_MODIFY_PROP 发给所有客户端
+///       （数组也能发，客户端收到后 variable_instance_set 整个数组）。
+function vm_inst_broadcast_prop(_inst, _prop, _value) {
+    if (global.network.mode != "server") return;
+    // `_OBJECT_*` 块里不即时广播：两端各跑一遍就够，跨端由 mod_sync 每 20 帧发变化的字段
+    if (variable_global_exists("_VM_cur_block") && string_pos("_OBJECT", global._VM_cur_block) == 1) return;
+    if (is_undefined(_inst) || !instance_exists(_inst)) return;
+    if (!ds_map_exists(global.network.map_instance_id_net_id, _inst)) return;
+    var _s = {}; _s[$ _prop] = _value;
+    var _json = json_stringify(_s);
+    var _nid = global.network.map_instance_id_net_id[? _inst];
+    var _list = global.network.connected_clients;
+    for (var _i = 0; _i < array_length(_list); _i++) {
+        send_message(_list[_i], MSG_MODIFY_PROP, _nid, _json);
+    }
+}
+
 /// @function VM_GetLastIdlePlatform()
 /// @return 刚结束 idle 的平台实例 ID
 function VM_GetLastIdlePlatform() {
@@ -982,6 +1015,7 @@ function VM_SetPlatformParams(plat_id_addr, axis_addr, distance_addr, idle_addr,
     }
     var _plat = plat_id;
     if (!instance_exists(_plat) || _plat.object_index != obj_platform) return;
+    if (!vm_inst_write_ok(_plat)) return;   // 联网平台：客户端不改，等服务器广播
     // 以当前位置为新起点
     var _is_x = (_plat.move_axis == "x");
     _plat.start_col += (_is_x ? _plat.current_offset : 0);
@@ -992,6 +1026,10 @@ function VM_SetPlatformParams(plat_id_addr, axis_addr, distance_addr, idle_addr,
     _plat.move_distance = distance;
     _plat.boundary_idle_duration = idle;
     _plat.move_direction = _direction;
+    vm_inst_broadcast_prop(_plat, "move_direction", _plat.move_direction);
+    vm_inst_broadcast_prop(_plat, "boundary_idle_duration", _plat.boundary_idle_duration);
+    vm_inst_broadcast_prop(_plat, "move_distance", _plat.move_distance);
+    vm_inst_broadcast_prop(_plat, "move_axis", _plat.move_axis);
 }
 
 /// @function VM_RefreshPlatformSnapshots()
@@ -1846,13 +1884,13 @@ function VM_SetCardSlotProp(name_addr, prop_addr, value_addr) {
 	var prop = vm_read_mem(global.__vm, prop_addr);
 	var value = vm_read_mem(global.__vm, value_addr);
 	if (name == "all" || name == -1) {
-		with (obj_card_slot) variable_instance_set(id, prop, value);
+		with (obj_card_slot) { if (vm_inst_write_ok(id)) { variable_instance_set(id, prop, value); vm_inst_broadcast_prop(id, prop, value); } }
 	} else if (is_real(name)) {
-		with (obj_card_slot) { if (slot_index == name) variable_instance_set(id, prop, value); }
+		with (obj_card_slot) { if (slot_index == name && vm_inst_write_ok(id)) { variable_instance_set(id, prop, value); vm_inst_broadcast_prop(id, prop, value); } }
 	} else {
 		with (obj_card_slot) { 
 			if (card_id == name) 
-				variable_instance_set(id, prop, value);
+				if (vm_inst_write_ok(id)) { variable_instance_set(id, prop, value); vm_inst_broadcast_prop(id, prop, value); }
 		}
 	}
 }
@@ -2426,6 +2464,7 @@ function VM_InstArraySet(inst_addr, name_addr, k_addr, value_addr) {
         _inst = _real;
     }
     if (!instance_exists(_inst)) return -1;
+    if (!vm_inst_write_ok(_inst)) return -1;   // 联网实例：客户端不写，等服务器广播
     if (!variable_instance_exists(_inst, _name)) return -1;
     var _arr = variable_instance_get(_inst, _name);
     if (!is_array(_arr)) return -1;
@@ -2437,6 +2476,7 @@ function VM_InstArraySet(inst_addr, name_addr, k_addr, value_addr) {
     }
     _arr[_k] = _v;
     variable_instance_set(_inst, _name, _arr);
+    vm_inst_broadcast_prop(_inst, _name, _arr);
     return 1;
 }
 
@@ -2459,6 +2499,7 @@ function VM_InstArrayAdd(inst_addr, name_addr, value_addr) {
         _inst = _real;
     }
     if (!instance_exists(_inst)) return -1;
+    if (!vm_inst_write_ok(_inst)) return -1;   // 联网实例：客户端不写，等服务器广播
     if (!variable_instance_exists(_inst, _name)) return -1;
     var _arr = variable_instance_get(_inst, _name);
     if (!is_array(_arr)) return -1;
@@ -2468,6 +2509,7 @@ function VM_InstArrayAdd(inst_addr, name_addr, value_addr) {
     }
     array_push(_arr, _v);
     variable_instance_set(_inst, _name, _arr);
+    vm_inst_broadcast_prop(_inst, _name, _arr);
     return 1;
 }
 
@@ -2492,12 +2534,14 @@ function VM_InstArrayDel(inst_addr, name_addr, k_addr) {
         _inst = _real;
     }
     if (!instance_exists(_inst)) return -1;
+    if (!vm_inst_write_ok(_inst)) return -1;   // 联网实例：客户端不写，等服务器广播
     if (!variable_instance_exists(_inst, _name)) return -1;
     var _arr = variable_instance_get(_inst, _name);
     if (!is_array(_arr)) return -1;
     if (_k < 0 || _k >= array_length(_arr)) return -1;
     array_delete(_arr, _k, 1);
     variable_instance_set(_inst, _name, _arr);
+    vm_inst_broadcast_prop(_inst, _name, _arr);
     return 1;
 }
 
@@ -2516,9 +2560,11 @@ function VM_InstArrayClear(inst_addr, name_addr) {
         _inst = _real;
     }
     if (!instance_exists(_inst)) return -1;
+    if (!vm_inst_write_ok(_inst)) return -1;   // 联网实例：客户端不写，等服务器广播
     if (!variable_instance_exists(_inst, _name)) return -1;
     if (!is_array(variable_instance_get(_inst, _name))) return -1;
     variable_instance_set(_inst, _name, []);
+    vm_inst_broadcast_prop(_inst, _name, []);
     return 1;
 }
 
@@ -2560,6 +2606,14 @@ function VM_CreateInstance(obj_name_addr, x_addr, y_addr) {
     if (_obj < 0) {
         show_debug_message("[VM_CreateInstance] 对象不存在: " + obj_name);
         return -1;
+    }
+    // BOSS 产物（global.boss_spawn_sync_list 里的）：联网同步的对象。
+    // 客户端不建，返回 -_VM_id 占位，等服务器广播回来（服务端照常建，见 instance_create_depth_define 的 add_net_id + 延迟广播）。
+    // 带 !client_able 守卫：网络驱动的那次创建（收包时）不拦，和引擎里那套判定一致。
+    if (global.network.mode == "client" && !global.network.client_able
+        && variable_global_exists("boss_spawn_sync_list")
+        && array_contains(global.boss_spawn_sync_list, _obj)) {
+        return -(++global._VM_create_counter);
     }
     var _depth = -1200;
     if (global._VM_cur_card != noone && instance_exists(global._VM_cur_card)) {
@@ -2654,7 +2708,9 @@ function VM_SetProp(inst_id_addr, prop_addr, value_addr) {
         value = get_load_sprite(value);
     }
     // 客户端：有 net_id 则跳过，服务端会通过 MSG_MODIFY_PROP 同步
+    // （`_OBJECT_*` 块例外：块内本地直改，跨端靠 mod_sync 每 20 帧纠偏）
     if (global.network.mode == "client" && global._VM_sync_exec
+        && !(variable_global_exists("_VM_cur_block") && string_pos("_OBJECT", global._VM_cur_block) == 1)
         && ds_map_exists(global.network.map_instance_id_net_id, inst_id)) return;
 		
 		
@@ -2682,7 +2738,8 @@ function VM_SetProp(inst_id_addr, prop_addr, value_addr) {
 	if(prop=="shape" || prop=="skill"|| prop=="current_level" ){
 		network_apply_plant_level(inst_id,true)   // 原来写的 _plant 在 VM_SetProp 里没有定义，会读未赋值变量报错
 	}
-    if (global.network.mode == "server") {
+    if (global.network.mode == "server"
+        && !(variable_global_exists("_VM_cur_block") && string_pos("_OBJECT", global._VM_cur_block) == 1)) {
         var _nid = ds_map_exists(global.network.map_instance_id_net_id, inst_id) ? global.network.map_instance_id_net_id[? inst_id] : -1;
         if (_nid != -1) {
             var _s = {}; _s[$ prop] = value;
@@ -2757,6 +2814,7 @@ function VM_DamageEnemy(inst_addr, dmg_addr, dmg_type_addr) {
         if (is_undefined(_real)) return 0;
         _inst = _real;
     }
+    if (!vm_inst_write_ok(_inst)) return 0;   // 联网敌人：客户端不结算，等服务器
     return damage_enemy(_inst, vm_arg(dmg_addr), vm_arg(dmg_type_addr));
 }
 
@@ -2770,6 +2828,7 @@ function VM_DamageEnemyAsh(inst_addr, dmg_addr, dmg_type_addr) {
         if (is_undefined(_real)) return 0;
         _inst = _real;
     }
+    if (!vm_inst_write_ok(_inst)) return 0;   // 联网敌人：客户端不结算，等服务器
     return damage_enemy_ash(_inst, vm_arg(dmg_addr), vm_arg(dmg_type_addr));
 }
 
@@ -3937,6 +3996,10 @@ function VM_Execute_code(vm, code, name) {
 /// @function VM_Execute(vm, buf, name)
 function VM_Execute(vm, buf, name) {
     if (!buffer_exists(buf)) return 0;
+    // 记录"当前正在跑的块名"：`_OBJECT_*` 块里的属性写一律本地直改、不走即时同步，
+    // 跨端由声明在 mod_sync 里的字段每 20 帧纠偏（见 mod_sync_props_tick）。
+    var _bak_cur_block = global._VM_cur_block;
+    global._VM_cur_block = name;
     try {
         if (global._VM_debug_mode && (global._VM_debug_block == "" || name == global._VM_debug_block)) return VM_Execute_debug(vm, buf, name);
 
@@ -4191,6 +4254,8 @@ function VM_Execute(vm, buf, name) {
         // 严格模式：再抛一次，让 GameMaker 报出完整调用栈（开发期用；会中断当帧）
         if (variable_global_exists("_VM_strict") && global._VM_strict) throw _err;
         return -1;
+    } finally {
+        global._VM_cur_block = _bak_cur_block;   // 还原"当前块名"（嵌套执行也安全）
     }
 }
 
@@ -5429,6 +5494,7 @@ function VM_RunStep(inst_addr, times_addr) {
         _inst = _real;
     }
     if (!instance_exists(_inst)) return 0;
+    if (!vm_inst_write_ok(_inst)) return 0;   // 联网实例：客户端不额外推进，等服务器
     if (is_undefined(_times) || _times < 1) _times = 1;
     if (_times > 60) _times = 60;
 

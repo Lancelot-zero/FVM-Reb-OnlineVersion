@@ -347,6 +347,16 @@ function parse_network_message(buf, _sock) {
             var _plant = spawn_plant(col, row, obj_name, _props);
             global.network.client_able = false;
 			
+			// 种植音效：服务器确认建出来了才响（host 那边在自己放置时播，不会重复）。
+			// 关卡自摆的卡 meta 里 _place_sfx=0，不响，免得开局响一串。
+			if (variable_struct_exists(_props, "_place_sfx") && _props[$ "_place_sfx"] == 1) {
+				if (global.grid_terrains[row][col].type == "normal") {
+					audio_play_sound(snd_place1, 0, 0);
+				} else if (global.grid_terrains[row][col].type == "water") {
+					audio_play_sound(snd_enter_water, 0, 0);
+				}
+			}
+			
 			network_apply_plant_level(_plant);
             set_net_id(_plant.id, net_id);
 

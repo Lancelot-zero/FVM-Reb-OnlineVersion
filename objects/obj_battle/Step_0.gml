@@ -567,6 +567,8 @@ if (battle_time mod 15 == 0 && buffer_exists(global._VM_TIMER_15f)) {
     VM_Execute(global.__vm, global._VM_TIMER_15f, "_VM_TIMER_15f");
 }
 if (battle_time mod 15 == 0) vm_hook_run("_VM_TIMER_15f");
+// mod 单位实例的声明字段同步：每 20 帧推一次变化量（服务器侧，见 mod_sync_props_tick）
+if (battle_time mod 20 == 0) mod_sync_props_tick();
 if (battle_time mod 30 == 0 && buffer_exists(global._VM_TIMER_30f)) {
     VM_Execute(global.__vm, global._VM_TIMER_30f, "_VM_TIMER_30f");
 }

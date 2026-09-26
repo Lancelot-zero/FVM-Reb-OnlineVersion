@@ -3,6 +3,11 @@
 // 只负责初始化和分发 VM 块，效果逻辑全部在 .bin 里
 gem_id = variable_global_exists("_mod_pending_gem_id") ? global._mod_pending_gem_id : ""
 gem_info = get_gem_info(gem_id)
+// 等级：默认取本机存档；联机远端创建时由广播带来，写在 _mod_pending_gem_level 里（>=0 时优先）
+var _g_lv = (gem_id != "") ? get_gem_level(gem_id) : 0
+if (variable_global_exists("_mod_pending_gem_level") && global._mod_pending_gem_level >= 0) {
+	_g_lv = global._mod_pending_gem_level
+}
 cooldown = 60
 parent_player = noone
 // 发射方信息（给插件宝石脚本定位用；创建宝石的地方会覆盖这几个值）
@@ -19,8 +24,7 @@ cooldown_timer = 0       // 剩余冷却帧：>0 画冷却遮罩+秒数、说明
 gem_level      = 0       // >0 画等级星星，默认取存档等级
 tooltip_text   = ""      // 追加在宝石说明后面的自定义文本
 if (gem_id != "") {
-	var _gl = get_gem_level(gem_id)
-	if (!is_undefined(_gl)) gem_level = _gl
+	gem_level = _g_lv
 }
 image_speed = 0
 // 动画配置（与 obj_card_parent 同款）：.bin 可在 _OBJECT_CREATE 用 VM_SetProp 覆盖
@@ -35,7 +39,7 @@ if (is_struct(gem_info)) {
 	}
 	// 冷却取自宝石数据（原版宝石都是 cooldown 数组，按等级取）
 	if (is_array(gem_info.cooldown)) {
-		var _lv = get_gem_level(gem_id)
+		var _lv = _g_lv
 		cooldown = gem_info.cooldown[min(_lv, array_length(gem_info.cooldown) - 1)]
 	} else if (!is_undefined(gem_info.first_cooldown)) {
 		cooldown = gem_info.first_cooldown

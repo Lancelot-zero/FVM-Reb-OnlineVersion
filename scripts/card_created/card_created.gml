@@ -165,6 +165,8 @@ function card_created(plant_inst, col, row) {
 		}
 		// mod 卡：身份随 meta 一起走（客户端建实例前靠它写 global._mod_pending_card_id）
 		if (plant_inst.object_index == obj_card_mod) { _meta[$ "plant_id"] = plant_inst.plant_id; }
+		// 种植音效标记：关卡建图阶段自摆的卡发 0，客户端收到后不播（玩家自己放的 = 1）
+		_meta[$ "_place_sfx"] = (variable_global_exists("_net_map_build") && global._net_map_build) ? 0 : 1;
 		_meta[$ "_net_card_equipped_attire_id"]  = _equipped_attire;
 		_meta[$ "cycle"] = plant_inst.cycle
 		_meta[$ "hp"] = plant_inst.hp
@@ -290,6 +292,23 @@ function package_character(plant_inst){
 		if get_gem_index("strength_gem")!= -1{ _eq.strength_gem_level = get_gem_level("strength_gem"); }
 		if get_gem_index("transform_gem")!= -1{ _eq.transform_gem_level = get_gem_level("transform_gem"); }
 			
+		// mod 宝石：等级单独放一个字典（宝石id → 等级），接收端照武器那条路自己建实例
+		//   判据 = 在 global.mod_gem_vms 里注册过（passive 那种 obj=noone 的也算，数据要过去）
+		var _mod_gems = {};
+		var _eq_slots = ["main_weapon", "secondary_weapon", "super_weapon"];
+		for (var _si = 0; _si < array_length(_eq_slots); _si++) {
+			if (!variable_struct_exists(global.save_data.equipped_items, _eq_slots[_si])) continue;
+			var _wslot = global.save_data.equipped_items[$ _eq_slots[_si]];
+			if (!is_struct(_wslot) || !variable_struct_exists(_wslot, "gems")) continue;
+			var _glist = _wslot[$ "gems"];
+			for (var _gi = 0; _gi < array_length(_glist); _gi++) {
+				var _gid = _glist[_gi];
+				if (!is_string(_gid) || _gid == "") continue;
+				if (!variable_global_exists("mod_gem_vms") || !ds_map_exists(global.mod_gem_vms, _gid)) continue;
+				_mod_gems[$ _gid] = get_gem_level(_gid);
+			}
+		}
+		_eq.mod_gem_levels = _mod_gems;
 		
 		return { player: _eq };
 	}

@@ -1233,6 +1233,7 @@ function run_VM_SetPlatformParams(vm, code, _ip) {
     }
     var _plat = plat_id;
     if (!instance_exists(_plat) || _plat.object_index != obj_platform) return _ip;
+    if (!vm_inst_write_ok(_plat)) return _ip;   // 联网平台：客户端不改，等服务器广播
     
     var _is_x = (_plat.move_axis == "x");
     _plat.start_col += (_is_x ? _plat.current_offset : 0);
@@ -1243,6 +1244,10 @@ function run_VM_SetPlatformParams(vm, code, _ip) {
     _plat.move_distance = distance;
     _plat.boundary_idle_duration = idle;
     _plat.move_direction = _direction;
+    vm_inst_broadcast_prop(_plat, "move_axis", _plat.move_axis);
+    vm_inst_broadcast_prop(_plat, "move_distance", _plat.move_distance);
+    vm_inst_broadcast_prop(_plat, "boundary_idle_duration", _plat.boundary_idle_duration);
+    vm_inst_broadcast_prop(_plat, "move_direction", _plat.move_direction);
 
     return _ip;
 }
@@ -2700,13 +2705,13 @@ function run_VM_SetCardSlotProp(vm, code, _ip) {
 	var prop = run_vm_read_mem(vm, code[_base+1]);
 	var value = run_vm_read_mem(vm, code[_base+2]);
 	if (name == "all" || name == -1) {
-		with (obj_card_slot) variable_instance_set(id, prop, value);
+		with (obj_card_slot) { if (vm_inst_write_ok(id)) { variable_instance_set(id, prop, value); vm_inst_broadcast_prop(id, prop, value); } }
 	} else if (is_real(name)) {
-		with (obj_card_slot) { if (slot_index == name) variable_instance_set(id, prop, value); }
+		with (obj_card_slot) { if (slot_index == name && vm_inst_write_ok(id)) { variable_instance_set(id, prop, value); vm_inst_broadcast_prop(id, prop, value); } }
 	} else {
 		with (obj_card_slot) { 
 			if (card_id == name) 
-				variable_instance_set(id, prop, value);
+				if (vm_inst_write_ok(id)) { variable_instance_set(id, prop, value); vm_inst_broadcast_prop(id, prop, value); }
 		}
 	}
 
@@ -3834,6 +3839,15 @@ function run_VM_CreateInstance(vm, code, _ip) {
         return _ip;
     }
     }
+    // BOSS 产物（global.boss_spawn_sync_list 里的）：客户端不建，返回 -_VM_id 占位，等服务器广播
+    // （与 VM_CreateInstance 解释器版保持完全一致）
+    if (global.network.mode == "client" && !global.network.client_able
+        && variable_global_exists("boss_spawn_sync_list")
+        && array_contains(global.boss_spawn_sync_list, _obj)) {
+        var _result = -(++global._VM_create_counter);
+        if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+        return _ip;
+    }
     var _depth = -1200;
     if (global._VM_cur_card != noone && instance_exists(global._VM_cur_card)) {
         _depth = global._VM_cur_card.depth - 500;   
@@ -4003,6 +4017,11 @@ function run_VM_RunStep(vm, code, _ip) {
         _inst = _real;
     }
     if (!instance_exists(_inst)) {
+        var _result = 0;
+        if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+        return _ip;
+    }
+    if (!vm_inst_write_ok(_inst)) {
         var _result = 0;
         if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
         return _ip;
@@ -4834,6 +4853,11 @@ function run_VM_InstArraySet(vm, code, _ip) {
         if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
         return _ip;
     }
+    if (!vm_inst_write_ok(_inst)) {
+        var _result = -1;
+        if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+        return _ip;
+    }
     if (!variable_instance_exists(_inst, _name)) {
         var _result = -1;
         if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
@@ -4857,6 +4881,7 @@ function run_VM_InstArraySet(vm, code, _ip) {
     }
     _arr[_k] = _v;
     variable_instance_set(_inst, _name, _arr);
+    vm_inst_broadcast_prop(_inst, _name, _arr);
     {
         var _result = 1;
         if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
@@ -4903,6 +4928,11 @@ function run_VM_InstArrayAdd(vm, code, _ip) {
         if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
         return _ip;
     }
+    if (!vm_inst_write_ok(_inst)) {
+        var _result = -1;
+        if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+        return _ip;
+    }
     if (!variable_instance_exists(_inst, _name)) {
         var _result = -1;
         if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
@@ -4920,6 +4950,7 @@ function run_VM_InstArrayAdd(vm, code, _ip) {
     }
     array_push(_arr, _v);
     variable_instance_set(_inst, _name, _arr);
+    vm_inst_broadcast_prop(_inst, _name, _arr);
     {
         var _result = 1;
         if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
@@ -4980,6 +5011,11 @@ function run_VM_InstArrayDel(vm, code, _ip) {
         if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
         return _ip;
     }
+    if (!vm_inst_write_ok(_inst)) {
+        var _result = -1;
+        if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+        return _ip;
+    }
     if (!variable_instance_exists(_inst, _name)) {
         var _result = -1;
         if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
@@ -4998,6 +5034,7 @@ function run_VM_InstArrayDel(vm, code, _ip) {
     }
     array_delete(_arr, _k, 1);
     variable_instance_set(_inst, _name, _arr);
+    vm_inst_broadcast_prop(_inst, _name, _arr);
     {
         var _result = 1;
         if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
@@ -5040,6 +5077,11 @@ function run_VM_InstArrayClear(vm, code, _ip) {
         if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
         return _ip;
     }
+    if (!vm_inst_write_ok(_inst)) {
+        var _result = -1;
+        if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+        return _ip;
+    }
     if (!variable_instance_exists(_inst, _name)) {
         var _result = -1;
         if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
@@ -5051,6 +5093,7 @@ function run_VM_InstArrayClear(vm, code, _ip) {
         return _ip;
     }
     variable_instance_set(_inst, _name, []);
+    vm_inst_broadcast_prop(_inst, _name, []);
     {
         var _result = 1;
         if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
@@ -5171,6 +5214,11 @@ function run_VM_DamageEnemy(vm, code, _ip) {
         _inst = _real;
     }
     {
+        if (!vm_inst_write_ok(_inst)) {
+            var _result = 0;
+            if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+            return _ip;
+        }
         var _result = damage_enemy(_inst, run_vm_read_mem(vm, code[_base+1]), run_vm_read_mem(vm, code[_base+2]));
         if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
         return _ip;
@@ -5204,6 +5252,11 @@ function run_VM_DamageEnemyAsh(vm, code, _ip) {
         _inst = _real;
     }
     {
+        if (!vm_inst_write_ok(_inst)) {
+            var _result = 0;
+            if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+            return _ip;
+        }
         var _result = damage_enemy_ash(_inst, run_vm_read_mem(vm, code[_base+1]), run_vm_read_mem(vm, code[_base+2]));
         if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
         return _ip;

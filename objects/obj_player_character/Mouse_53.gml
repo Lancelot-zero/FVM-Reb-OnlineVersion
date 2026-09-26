@@ -31,6 +31,8 @@ if not is_placed{
 					if array_get_index(global.banned_gems_online, gem_id) != -1 { continue; }
 					var gem_info = get_gem_info(gem_id)
 					if (is_struct(gem_info) && gem_info.obj != noone){
+						// mod 宝石本地不建：和角色本体一样，这份本地预测不要，等服务器广播回来按角色重建
+						if (gem_info.obj == obj_gem_mod) continue;
 						global._mod_pending_gem_id = gem_id;
 						var _gi = instance_create_depth(390,213+gem_index*80,-500,gem_info.obj);
 						// 给 mod 宝石挂"发射方"的信息：插件宝石脚本靠这几个变量定位（别用 parent_player，会和原版语义打架）
