@@ -201,6 +201,22 @@ VM_SetProp(self, &quot;mod_prestep_dx&quot;, 3)      // 每帧往右 3 像素
 <blockquote>
 <p>特效没有 <code>hp</code>、也没有格子坐标，所以 <code>hp_change</code> / <code>cell</code> / 索敌那几类条件这里都没有。</p>
 </blockquote>
+<h3>还有一条路：盯属性变化（<code>mod_watch</code>）</h3>
+<p>除了上面的条件，还能让&quot;某个属性的值变了&quot;成为进 VM 的理由。在 <code>.bin</code> 里声明一个<strong>命名数组</strong> <code>mod_watch</code>，
+里面写要盯的<strong>属性名</strong>（这个对象自己的任何实例属性都行，比如 <code>hp</code> / <code>atk</code> / <code>x</code> / 你自己 <code>VM_SetProp</code> 加的属性）：</p>
+<pre><code class="language-gml">VM_ArrayClear(&quot;mod_watch&quot;)
+VM_ArrayAdd(&quot;mod_watch&quot;, &quot;hp&quot;)
+VM_ArrayAdd(&quot;mod_watch&quot;, &quot;atk&quot;)
+</code></pre>
+<p>对象每帧会<strong>遍历</strong>这个数组，用<strong>等号</strong>比每个属性的当前值和上一帧的值：</p>
+<ul>
+<li>这一帧进几次 = <strong>变化的属性个数</strong> + <strong>（<code>mod_step_enter_condition</code> 也成立 ? <code>1</code> : <code>0</code>）</strong>；</li>
+<li>每次进去读 <code>p = VM_GetProp(self, &quot;mod_changed_prop&quot;)</code> 就知道<strong>这次是谁</strong>：变化的那几次是<strong>属性名</strong>（按数组顺序一个接一个），最后“条件”那次是 <code>&quot;&quot;</code>；</li>
+<li>同一帧多个属性变化 → <strong>各进一次</strong>（快照会全部更新，下帧不会重复报）；每轮之间会检查实例还在不在（插件把自己销毁了就中断）；</li>
+<li>也能当<strong>对象之间 / 插件之间的信号</strong>用：约定一个属性名（比如自己 <code>VM_SetProp</code> 加的 <code>mod_signal</code>），一边改它，另一边就会因为 <code>mod_watch</code> 变化被触发进入，读 <code>mod_changed_prop</code> 就知道是谁变了 —— 相当于互相传消息；</li>
+<li>⚠️ 声明 / 改列表那一帧只对齐快照、不触发；条件那一路和 watch 那一路<strong>互不影响</strong>（watch 每帧照常比对）。</li>
+<li>⚠️ 声明 / 改列表那一帧只对齐快照、不触发；同一帧多个属性变化只报第一个（快照仍会全部更新，下帧不会重复报）。</li>
+</ul>
 <h3>鼠标三个块</h3>
 <p><code>_OBJECT_MOUSE_ENTER</code> / <code>_OBJECT_MOUSE_LEAVE</code> / <code>_OBJECT_CLICK</code> 特效也有，按实例判定
 （鼠标要压在特效的贴图上）。</p>

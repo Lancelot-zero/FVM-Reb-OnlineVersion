@@ -82,8 +82,10 @@ for (var _i = 0; _i < array_length(global._move_instance_pre_arr); _i++) {
     var _inst = global._move_instance_pre_arr[_i];
     with (_inst) {
         // 判断是否拥有 parent_plant 或 parent_player 变量，且它们的值（对象索引）继承自 obj_card_parent
-        var _hasPlant = variable_instance_exists(id, "parent_plant")  && instance_exists(parent_plant)  && object_is_ancestor(parent_plant.object_index, obj_card_parent);
-        var _hasPlayer = variable_instance_exists(id, "parent_player") && instance_exists(parent_player) && object_is_ancestor(parent_player.object_index, obj_card_parent);
+        // ⚠️ is_real 拦一下：mod 插件可能把 parent_player 写成字符串（""），
+        //    instance_exists 收到字符串会直接报 "incorrect type (string) expecting a Number"
+        var _hasPlant = variable_instance_exists(id, "parent_plant")  && (!is_string(parent_plant) && !is_undefined(parent_plant))  && instance_exists(parent_plant)  && object_is_ancestor(parent_plant.object_index, obj_card_parent);
+        var _hasPlayer = variable_instance_exists(id, "parent_player") && (!is_string(parent_player) && !is_undefined(parent_player)) && instance_exists(parent_player) && object_is_ancestor(parent_player.object_index, obj_card_parent);
         if (_hasPlant || _hasPlayer) {
 			if(!object_is_ancestor(object_index,obj_card_parent)){
 	            var tid = _hasPlant?parent_plant.id:parent_player.id;

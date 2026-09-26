@@ -25,6 +25,10 @@ mod_enemy_inited_id = ""   // 已按哪个 id 初始化过（联机时 id 晚到
 //    本对象的 Step 先跑，读到的还是上一帧末的血量
 // ══════════════════════════════════════════════════════════════════════════
 mod_step_enter_condition = ""   // "" / "mod" / "wait" / "cell" / "hp_change" / "hp_change_mod" / "card" / "card_mod"
+// 盯梢（实现见 Step）：插件用命名数组 mod_watch 声明"要盯的属性名"，任一属性值变了，这一帧也进 _OBJECT_STEP
+mod_changed_prop = ""    // 【只读】这一帧第一个发生变化的盯梢属性名（没变化 = ""）
+mod_watch_last  = []     // 【obj 内部】上一帧 mod_watch 各属性的值（和数组一一对应）
+mod_watch_changed = []  // 【obj 内部】这一帧发生变化的盯梢属性名（每个各进一次 _OBJECT_STEP）
 mod_step_enter_var       = 0    // "mod" = 间隔帧数；"wait" = 还要等几帧；*_mod = 冷却帧数
 mod_tick_cool            = 0    // 【obj 内部】*_mod 模式的冷却剩余帧数
 mod_has_card             = 0    // 【只读】card / card_mod 模式下 1 = 索敌有目标

@@ -60,7 +60,12 @@ if not is_placed{
 			var main_info = get_weapon_info(global.save_data.equipped_items.main_weapon.id)
 			global._mod_pending_weapon_id = global.save_data.equipped_items.main_weapon.id
 			var main_weapon_inst = instance_create_depth(x-10,y-100,depth-1,main_info.obj)
+			global._mod_pending_weapon_id = ""
 			main_weapon_inst.parent_player = id
+			if (variable_global_exists("mod_weapon_vms") && ds_map_exists(global.mod_weapon_vms, global.save_data.equipped_items.main_weapon.id)) {
+				main_weapon_inst.weapon_id = global.save_data.equipped_items.main_weapon.id
+				with (main_weapon_inst) event_perform(ev_step, ev_step_normal)
+			}
 			main_weapon_inst.grid_row = grid_row
 			main_weapon_inst.grid_col = grid_col
 			cycle = main_info.cycle
@@ -77,6 +82,10 @@ if not is_placed{
 					_gem_inst.mod_point_grid_row      = grid_row;
 					_gem_inst.mod_point_grid_col      = grid_col;
 					_gem_inst.mod_point_gem_level     = get_gem_level(gem_id);
+					// mod 宝石：归属写完了再调一次它的步（初始化在它的 Step 顶部）
+					if (variable_global_exists("mod_gem_vms") && ds_map_exists(global.mod_gem_vms, gem_id)) {
+						with (_gem_inst) event_perform(ev_step, ev_step_normal);
+					}
 					gem_index++
 				}
 			}
@@ -102,9 +111,12 @@ if not is_placed{
 			// 只有真的加载了 mod 盾 .bin 才挂，免得到内置盾（cookie/oreo/cut_cake）头上画个图标
 			var _sec_id = global.save_data.equipped_items.secondary_weapon.id
 			if variable_global_exists("mod_weapon_vms") && ds_map_exists(global.mod_weapon_vms, _sec_id){
-				global._mod_pending_weapon_id = _sec_id
+				global._mod_pending_weapon_id = _sec_id		
 				var _mod_shield = instance_create_depth(x-10,y-100,depth-1,obj_weapon_mod)
+				global._mod_pending_weapon_id = ""
 				_mod_shield.parent_player = id
+				_mod_shield.weapon_id = _sec_id
+				with (_mod_shield) event_perform(ev_step, ev_step_normal)
 				_mod_shield.grid_row = grid_row
 				_mod_shield.grid_col = grid_col
 			}
@@ -122,6 +134,10 @@ if not is_placed{
 					_gi.mod_point_grid_row      = grid_row;
 					_gi.mod_point_grid_col      = grid_col;
 					_gi.mod_point_gem_level     = get_gem_level(gem_id);
+					// mod 宝石：归属写完了再调一次它的步（初始化在它的 Step 顶部）
+					if (variable_global_exists("mod_gem_vms") && ds_map_exists(global.mod_gem_vms, gem_id)) {
+						with (_gi) event_perform(ev_step, ev_step_normal);
+		}
 					gem_index++
 				}
 			}
@@ -130,7 +146,12 @@ if not is_placed{
 			var main_info = get_weapon_info(global.save_data.equipped_items.super_weapon.id)
 			global._mod_pending_weapon_id = global.save_data.equipped_items.super_weapon.id
 			var main_weapon_inst = instance_create_depth(x-10,y-100,depth-1,main_info.obj)
+			global._mod_pending_weapon_id = ""
 			main_weapon_inst.parent_player = id
+			if (variable_global_exists("mod_weapon_vms") && ds_map_exists(global.mod_weapon_vms, global.save_data.equipped_items.super_weapon.id)) {
+				main_weapon_inst.weapon_id = global.save_data.equipped_items.super_weapon.id
+				with (main_weapon_inst) event_perform(ev_step, ev_step_normal)
+			}
 			main_weapon_inst.grid_row = grid_row
 			main_weapon_inst.grid_col = grid_col
 			// 超级武器的宝石同理
@@ -147,6 +168,10 @@ if not is_placed{
 					_gi.mod_point_grid_row      = grid_row;
 					_gi.mod_point_grid_col      = grid_col;
 					_gi.mod_point_gem_level     = get_gem_level(gem_id);
+					// mod 宝石：归属写完了再调一次它的步（初始化在它的 Step 顶部）
+					if (variable_global_exists("mod_gem_vms") && ds_map_exists(global.mod_gem_vms, gem_id)) {
+						with (_gi) event_perform(ev_step, ev_step_normal);
+		}
 					gem_index++
 				}
 			}

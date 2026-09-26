@@ -1463,7 +1463,7 @@ VM_ArrayAdd(&quot;mod_sync&quot;, &quot;mod_phase&quot;)
 </tr>
 <tr>
 <td><code>_OBJECT_STEP</code></td>
-<td>对象每帧执行（会被 <code>mod_step_enter_condition</code> 挡住，见各类别文档）</td>
+<td>对象每帧执行（会被 <code>mod_step_enter_condition</code> 挡住）；<strong>属性值变化也会触发进入</strong>：<code>mod_watch</code> 数组 —— 每有一个属性变化各进一次，条件符合再进一次，<code>mod_changed_prop</code> 告诉你这次是谁，见各类别文档</td>
 </tr>
 <tr>
 <td><code>_OBJECT_DRAW</code></td>
@@ -1486,6 +1486,37 @@ VM_ArrayAdd(&quot;mod_sync&quot;, &quot;mod_phase&quot;)
 <td>鼠标左键点击该实例（按实例判定，和全局的 <code>_VM_MOUSE_LEFT</code> 不同）</td>
 </tr>
 </tbody></table>
+<h3>mod 全局变量与&quot;每局初始化表&quot;</h3>
+<p>插件里可以自己定义全局变量：写 <code>VM_SetProp(0, &quot;名字&quot;, 值)</code> 就会自动创建（<code>0</code> = 全局），读用 <code>VM_GetProp(0, &quot;名字&quot;)</code>。</p>
+<p>要让某个全局<strong>每局战斗开始时重置</strong>，就往下面这两个<strong>全局数组</strong>里登记（<code>inst_id = 0</code> 表示&quot;全局数组&quot;）：</p>
+<table>
+<thead>
+<tr>
+<th>数组</th>
+<th>内容</th>
+<th>登记方式</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>mod_init_globals</code></td>
+<td>全局变量<strong>名字</strong>（字符串）</td>
+<td><code>VM_InstArrayAdd(0, &quot;mod_init_globals&quot;, &quot;my_flag&quot;)</code></td>
+</tr>
+<tr>
+<td><code>mod_init_defaults</code></td>
+<td>一一对应的<strong>默认值</strong>（可省；缺省 / 不够长 = <code>0</code>）</td>
+<td><code>VM_InstArrayAdd(0, &quot;mod_init_defaults&quot;, 0)</code></td>
+</tr>
+</tbody></table>
+<p>引擎在<strong>每局战斗开始</strong>（<code>obj_battle</code> 的 Create）会：</p>
+<ol>
+<li>遍历 <code>mod_init_globals</code>，把每个名字对应的全局<strong>重置成对应默认值</strong>（没写默认值就是 <code>0</code>）；</li>
+<li>再把这两个数组<strong>去重</strong>（同名只保留第一次出现的那一组，空名字丢掉）。</li>
+</ol>
+<p>所以插件在 <code>_OBJECT_CFG</code> / <code>_OBJECT_CREATE</code> 里登记一次就行 —— 重复登记不会出问题，每局会被去重。</p>
+<blockquote>
+<p>⚠️ 全局变量<strong>不会跨端同步</strong>，也不会随房间切换自动清 —— 要每局清就登记进这张表。</p>
+</blockquote>
 <h3>屏幕弹幕</h3>
 <p>往全场唯一的弹幕管理器塞子弹（统一迭代与绘制，不占实例）。</p>
 <table>

@@ -20,6 +20,10 @@ image_speed = 0;
 //    所以 hp_change、cell、索敌那几类条件这里都没有
 // ══════════════════════════════════════════════════════════════════════════
 mod_step_enter_condition = ""   // "" / "mod" / "wait"
+// 盯梢（实现见 Step）：插件用命名数组 mod_watch 声明"要盯的属性名"，任一属性值变了，这一帧也进 _OBJECT_STEP
+mod_changed_prop = ""    // 【只读】这一帧第一个发生变化的盯梢属性名（没变化 = ""）
+mod_watch_last  = []     // 【obj 内部】上一帧 mod_watch 各属性的值（和数组一一对应）
+mod_watch_changed = []  // 【obj 内部】这一帧发生变化的盯梢属性名（每个各进一次 _OBJECT_STEP）
 mod_step_enter_var       = 0    // "mod" = 间隔帧数；"wait" = 还要等几帧
 
 // 倒计时 + 每帧透明度变化（基础属性，所有 mod 对象都有）

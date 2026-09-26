@@ -2,6 +2,30 @@ if global.is_paused {
 	exit
 }
 
+// 登记实例 + 跑该宝石 .bin 的 _OBJECT_CREATE（原来在 Create 里，挪到 Step 顶部）
+//   原因：Create 是在 instance_create_depth 里跑的，那时放置逻辑还没写
+//         mod_point_parent_player / grid_row / grid_col / gem_level（建完实例紧接着才写）；
+//         现在建宝石的地方改成「建实例 → 写 mod_point_* → 调一次步」，
+//         所以这一步要在 Step 里做 —— 插件 _OBJECT_CREATE 里才读得到那四个归属字段。
+//   没被手动调用步的（插件自己建的宝石）第一次自然 Step 也会在这里初始化。
+if (!_mod_initialized && gem_id != "" && variable_global_exists("mod_gem_vms") && ds_map_exists(global.mod_gem_vms, gem_id)) {
+	var _vm = global.mod_gem_vms[? gem_id];
+	_mod_initialized = true;
+	mod_inst_add(_vm, id);
+	if (ds_map_exists(_vm.blocks, "_OBJECT_CREATE")) {
+		var _bak_last = global._VM_last_created_card;
+		global._VM_last_created_card = id;
+		var _bak_cur = global._VM_cur_card;
+		global._VM_cur_card = id;
+		var _bak_vm = global.__vm;
+		global.__vm = _vm;
+		VM_Execute(_vm, _vm.blocks[? "_OBJECT_CREATE"], "_OBJECT_CREATE");
+		global.__vm = _bak_vm;
+		global._VM_cur_card = _bak_cur;
+		global._VM_last_created_card = _bak_last;
+	}
+}
+
 // ── 基础属性：倒计时 + 每帧透明度变化（所有 mod 对象通用，实现在 src_mod.gml）──
 mod_base_tick(id);
 
@@ -36,6 +60,38 @@ if (timer < flash_speed - 1) {
 // ══════════════════════════════════════════════════════════════════════
 var _enter = true;
 var _cond  = mod_step_enter_condition;
+// ── 盯梢 mod_watch：声明的属性里哪个值变了，就记进 mod_watch_changed ──
+//    下面每有一个变化就各进一次 _OBJECT_STEP（mod_changed_prop = 那个属性名），条件符合再进一次
+//    名字先当**本实例属性**读；实例上没有、但有同名**全局变量**时，就当全局读
+mod_changed_prop = "";
+array_resize(mod_watch_changed, 0);
+if (gem_id != "" && variable_global_exists("mod_gem_vms") && ds_map_exists(global.mod_gem_vms, gem_id)) {
+	var _wvm = global.mod_gem_vms[? gem_id];
+	if (ds_map_exists(_wvm.arrays, "mod_watch")) {
+		var _wlist = _wvm.arrays[? "mod_watch"];
+		if (is_array(_wlist)) {
+			var _wn = array_length(_wlist);
+			if (array_length(mod_watch_last) != _wn) {
+				// 列表长度变了（刚声明 / 改了）：这一帧只对齐快照，不报变化
+				array_resize(mod_watch_last, _wn);
+				for (var _wi = 0; _wi < _wn; _wi++) {
+					var _wv0 = variable_instance_get(id, _wlist[_wi]);
+					if (is_undefined(_wv0) && variable_global_exists(_wlist[_wi])) _wv0 = variable_global_get(_wlist[_wi]);   // 名字不在实例上 → 当全局读
+					mod_watch_last[_wi] = _wv0;
+				}
+			} else {
+				for (var _wi = 0; _wi < _wn; _wi++) {
+					var _wv = variable_instance_get(id, _wlist[_wi]);
+					if (is_undefined(_wv) && variable_global_exists(_wlist[_wi])) _wv = variable_global_get(_wlist[_wi]);   // 名字不在实例上 → 当全局读
+					if (_wv != mod_watch_last[_wi]) {
+						array_push(mod_watch_changed, _wlist[_wi]);   // 每个变化的属性各进一次 Step
+						mod_watch_last[_wi] = _wv;
+					}
+				}
+			}
+		}
+	}
+}
 var _cdv   = 0;
 
 // ── 区域检测（只有 "enemy_area*" / "card_area*" 会做，其它条件零开销）──
@@ -221,7 +277,12 @@ if (_cond == "mod") {
 }
 
 // 每个实例每帧执行该宝石虚拟机里的步进块（单点调用），逻辑全部在 .bin 里
-if (_enter && gem_id != "" && variable_global_exists("mod_gem_vms") && ds_map_exists(global.mod_gem_vms, gem_id)) {
+// 这一帧进几次：watch 每个变化的属性各 1 次，条件符合再 1 次
+var _run_total = array_length(mod_watch_changed) + (_enter ? 1 : 0);
+for (var _run_k = 0; _run_k < _run_total; _run_k++) {
+	if (!instance_exists(id)) break;
+	mod_changed_prop = (_run_k < array_length(mod_watch_changed)) ? mod_watch_changed[_run_k] : "";
+	if (gem_id != "" && variable_global_exists("mod_gem_vms") && ds_map_exists(global.mod_gem_vms, gem_id)) {
 	var _vm = global.mod_gem_vms[? gem_id];
 	if (ds_map_exists(_vm.blocks, "_OBJECT_STEP")) {
 		var _bak_cur = global._VM_cur_card;
@@ -232,4 +293,5 @@ if (_enter && gem_id != "" && variable_global_exists("mod_gem_vms") && ds_map_ex
 		global.__vm = _bak_vm;
 		global._VM_cur_card = _bak_cur;
 	}
+}
 }

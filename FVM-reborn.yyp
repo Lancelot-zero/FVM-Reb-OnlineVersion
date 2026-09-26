@@ -409,6 +409,7 @@
   "ForcedPrefabProjectReferences":[],
   "IncludedFiles":[
     {"$GMIncludedFile":"","%Name":"_ph_empty.png","CopyToMask":-1,"filePath":"datafiles","name":"_ph_empty.png","resourceType":"GMIncludedFile","resourceVersion":"2.0",},
+    {"$GMIncludedFile":"","%Name":"connection_enable.txt","CopyToMask":-1,"filePath":"datafiles","name":"connection_enable.txt","resourceType":"GMIncludedFile","resourceVersion":"2.0",},
     {"$GMIncludedFile":"","%Name":"LabMapCompiler.exe","CopyToMask":-1,"filePath":"datafiles","name":"LabMapCompiler.exe","resourceType":"GMIncludedFile","resourceVersion":"2.0",},
     {"$GMIncludedFile":"","%Name":"baiguiyexing.bin","CopyToMask":-1,"filePath":"datafiles/laboratory/baiguiyexing fixed","name":"baiguiyexing.bin","resourceType":"GMIncludedFile","resourceVersion":"2.0",},
     {"$GMIncludedFile":"","%Name":"baiguiyexing.json","CopyToMask":-1,"filePath":"datafiles/laboratory/baiguiyexing fixed","name":"baiguiyexing.json","resourceType":"GMIncludedFile","resourceVersion":"2.0",},

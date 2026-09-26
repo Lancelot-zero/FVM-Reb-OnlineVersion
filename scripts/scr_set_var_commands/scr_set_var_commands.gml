@@ -55,6 +55,10 @@ function spawn_character_gems(_slot, _eq, _plant, _row, _col) {
 		_g_inst.mod_point_grid_row      = _row;
 		_g_inst.mod_point_grid_col      = _col;
 		_g_inst.mod_point_gem_level     = _g_lv;
+		// mod 宝石：归属写完了再调一次它的步（初始化在它的 Step 顶部，这样 _OBJECT_CREATE 里读得到 mod_point_*）
+		if (_is_mod_gem) {
+			with (_g_inst) event_perform(ev_step, ev_step_normal);
+		}
 		_idx++;
 	}
 	return;
@@ -250,6 +254,10 @@ function spawn_plant(col, row, plant_obj, props) {
 						var main_weapon_inst = instance_create_depth(_plant.x-10, _plant.y-100, _plant.depth-1, main_info.obj);
 						global._mod_pending_weapon_id = "";
 						main_weapon_inst.parent_player = _plant.id;
+						if (variable_global_exists("mod_weapon_vms") && ds_map_exists(global.mod_weapon_vms, _mw_name_id)) {
+							main_weapon_inst.weapon_id = _mw_name_id;
+							with (main_weapon_inst) event_perform(ev_step, ev_step_normal);
+						}
 
 						main_weapon_inst.grid_row = grid_row;
 						main_weapon_inst.grid_col = grid_col;
@@ -290,10 +298,12 @@ function spawn_plant(col, row, plant_obj, props) {
 						// mod 副武器再挂一个 obj_weapon_mod：它负责跑 mod 盾的 .bin，并把武器贴图显示出来
 						//   （只有真的加载了 mod 盾 .bin 才挂，免得到内置盾头上画个图标）
 						if (variable_global_exists("mod_weapon_vms") && ds_map_exists(global.mod_weapon_vms, _sw_name_id)) {
-							global._mod_pending_weapon_id = _sw_name_id
+							global._mod_pending_weapon_id = _sw_name_id					
 							var _mod_shield = instance_create_depth(_plant.x-10,_plant.y-100,_plant.depth-1,obj_weapon_mod)
 							global._mod_pending_weapon_id = ""
 							_mod_shield.parent_player = _plant.id
+							_mod_shield.weapon_id = _sw_name_id
+							with (_mod_shield) event_perform(ev_step, ev_step_normal)
 							_mod_shield.grid_row = grid_row
 							_mod_shield.grid_col = grid_col
 						}
@@ -350,8 +360,12 @@ function spawn_plant(col, row, plant_obj, props) {
 						} else {
 						global._mod_pending_weapon_id = _sup_name_id;
 						var main_weapon_inst = instance_create_depth(_plant.x-10,_plant.y-100,_plant.depth-1,main_info.obj)
-						global._mod_pending_weapon_id = "";
+						global._mod_pending_weapon_id = ""
 						main_weapon_inst.parent_player = _plant.id
+						if (variable_global_exists("mod_weapon_vms") && ds_map_exists(global.mod_weapon_vms, _sup_name_id)) {
+							main_weapon_inst.weapon_id = _sup_name_id
+							with (main_weapon_inst) event_perform(ev_step, ev_step_normal)
+						}
 						main_weapon_inst.grid_row = grid_row
 						main_weapon_inst.grid_col = grid_col
 						}
