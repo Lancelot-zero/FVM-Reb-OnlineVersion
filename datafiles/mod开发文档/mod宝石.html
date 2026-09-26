@@ -228,7 +228,7 @@ VM 语言与全部函数见 <code>help.md</code>。</p>
 <li><strong><code>_OBJECT_STEP</code></strong>：每帧（暂停时整块不跑），<strong>且会被 <code>mod_step_enter_condition</code> 挡住</strong>（默认 <code>&quot;&quot;</code> 才是每帧进）</li>
 <li><strong><code>_OBJECT_DRAW</code></strong>：写了就跑 VM 的绘制块（<strong>不再自动画 sprite</strong>）；没写则由核心画：
 半透明冷却遮罩 + 剩余秒数、悬停说明框、等级星星</li>
-<li><strong><code>_OBJECT_DESTROY</code></strong>：宝石对象<strong>不支持</strong>（写了不会执行）</li>
+<li><strong><code>_OBJECT_DESTROY</code></strong>：宝石被销毁时（块内用 <code>VM_GetCurCard()</code> 拿自己，<code>VM_GetLastDestroyedCard()</code> 也能拿到）</li>
 <li><strong><code>_OBJECT_MOUSE_ENTER</code> / <code>_OBJECT_MOUSE_LEAVE</code> / <code>_OBJECT_CLICK</code></strong>：鼠标移入 / 移出 / 左键点在宝石图标上（按实例判定，鼠标要压在宝石贴图上）</li>
 </ul>
 <h3>每帧顺序（核心在什么时候跑你的块）</h3>

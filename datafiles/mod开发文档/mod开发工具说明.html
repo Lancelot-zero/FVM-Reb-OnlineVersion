@@ -416,14 +416,14 @@ mod/cards/snake/tex/xxx.png          ← 贴图跟着【json 所在目录】走�
 </tbody></table>
 <p>各对象实际支持：</p>
 <pre><code class="language-text">卡片     CREATE / STEP / DRAW / DESTROY / 移入 / 移出 / 点击
-武器     CREATE / STEP / DRAW           / 移入 / 移出 / 点击
+武器     CREATE / STEP / DRAW / DESTROY / 移入 / 移出 / 点击
 子弹     CREATE / STEP / DRAW / DESTROY / 移入 / 移出 / 点击
 特效     CREATE / STEP / DRAW / DESTROY / 移入 / 移出 / 点击
 敌人     CREATE / STEP / DRAW / DESTROY / 移入 / 移出 / 点击
-宝石     CREATE / STEP / DRAW           / 移入 / 移出 / 点击
+宝石     CREATE / STEP / DRAW / DESTROY / 移入 / 移出 / 点击
 </code></pre>
 <ul>
-<li>鼠标三个块 <strong>6 个 mod 对象全都有</strong>；<code>_OBJECT_DESTROY</code> 只有武器和宝石没有（写了不会执行）</li>
+<li>鼠标三个块与 <code>_OBJECT_DESTROY</code> <strong>6 个 mod 对象全都有</strong>（武器 / 宝石的 Destroy 事件是后补的，现在写了会执行）</li>
 <li>鼠标三个块是<strong>按实例</strong>判定的 —— 鼠标压在<strong>这个实例的贴图（碰撞掩码）<strong>上才算数，
 所以</strong>没设 <code>sprite_index</code> 的实例收不到</strong>（子弹/特效尤其注意）</li>
 <li>想判&quot;全场任意位置按了左键&quot;用 <code>_VM_MOUSE_LEFT</code> 事件块（地图脚本），不要用 <code>_OBJECT_CLICK</code></li>
@@ -431,6 +431,18 @@ mod/cards/snake/tex/xxx.png          ← 贴图跟着【json 所在目录】走�
 <li>写块之前先确认对应对象支持它 —— 写了没人执行的块等于没写</li>
 <li>取当前实例：<code>self = VM_GetCurCard()</code>（名字叫 Card，实际指&quot;当前对象实例&quot;）</li>
 <li>碰撞没有通用块（不存在 <code>_OBJECT_HIT</code>），要在 <code>_OBJECT_STEP</code> 里自己判</li>
+</ul>
+<h3>全局挂载点（<code>_VM_*</code>）</h3>
+<p><code>_VM_*</code> 是游戏在关键时机广播的<strong>全局挂载点</strong>，和上面那些对象自己的 <code>_OBJECT_*</code> 块是两回事。
+mod 插件和地图脚本<strong>都能挂</strong>：事件类（<code>_VM_BATTLE_START</code> / <code>_VM_CARD_CREATED</code> / <code>_VM_MOUSE_LEFT</code> …）、
+<code>_VM_FRAME</code>（每帧）、5f / 10f / 15f / 30f / 60f 定时器。</p>
+<ul>
+<li><strong>只有&quot;场上有它的实例&quot;时才跑</strong>：卡片 / 武器 / 宝石 / 敌人 / 子弹 / 特效一样，该类单位一个实例都没有时挂载点不触发
+（<code>_OBJECT_CREATE</code> 都还没跑的新局、准备界面同理）。热重载换 bin、旧实例销毁都会自动跟上。</li>
+<li><strong>卡片类事件本身只认&quot;带进战斗的卡&quot;</strong>：<code>_VM_CARD_CREATED</code> / <code>_VM_CARD_DESTROYED</code> 不会为关卡自摆的卡触发。</li>
+<li><strong>高频点慎用</strong>：<code>_VM_FRAME</code> / 5f / 10f / 15f 是全场级别的开销，每帧要做的事一般写在 <code>_OBJECT_STEP</code> 里更省
+（那里有 <code>mod_step_enter_condition</code> 闸门，没轮到的实例不进 VM）。</li>
+<li>想让某个 mod <strong>不受&quot;有没有实例&quot;这层过滤</strong>（调试用），见 <code>help.md</code> 文末「附：<code>__hookall__</code>」——<strong>特殊用法，非必要不要用</strong>。</li>
 </ul>
 <h3>实例字段（内置字段，读写都用 VM_GetProp / VM_SetProp）</h3>
 <pre><code class="language-gml">x = VM_GetProp(self, &quot;x&quot;)          // 读

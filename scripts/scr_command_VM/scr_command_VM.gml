@@ -3558,25 +3558,10 @@ function vm_hook_run(_name) {
     global.__vm = _bak;
 }
 
-/// @function vm_hook_mod_blocked(_name)
-/// @desc mod 单位**不支持**的挂载点：全局每帧块 _VM_FRAME，以及 5f / 10f / 15f 三个高频定时器。
-///       mod 每个实例已经有 mod_step_enter_condition 闸门，再挂全局高频钩子等于每帧白进一次 VM，
-///       所以只保留 30f / 60f 两个低频定时器。
-///       地图脚本（关卡 bin）不受影响：它走 vm_hook_register 直接挂，不经过这里。
-function vm_hook_mod_blocked(_name) {
-	switch (_name) {
-		case "_VM_FRAME":
-		case "_VM_TIMER_5f":
-		case "_VM_TIMER_10f":
-		case "_VM_TIMER_15f":
-			return true;
-	}
-	return false;
-}
-
 /// @function vm_hook_register_all(_vm)
 /// @desc 按 _vm 当前的 blocks 重新挂载：先摘掉它在所有挂载点上的旧注册，
-///       再把 blocks 里的**每个块名**都登记一遍（不设白名单，但跳过 vm_hook_mod_blocked 里禁掉的）。
+///       再把 blocks 里的**每个块名**都登记一遍（不设白名单：`_VM_FRAME` 与
+///       5f / 10f / 15f / 30f / 60f 定时器 mod 也能挂，是否触发交给 vm_hook_run 的实例过滤）。
 ///       ⚠️ 热重载换掉 blocks 之后必须再调一次，否则新加/删掉的块不会生效。
 function vm_hook_register_all(_vm) {
     // ⚠️ 按需建表（同 vm_hook_register）：正常开局的注册跑在 VM_Create 之前，
@@ -3588,7 +3573,6 @@ function vm_hook_register_all(_vm) {
     if (!ds_exists(_vm.blocks, ds_type_map)) return;
     var _bnames = ds_map_keys_to_array(_vm.blocks);
     for (var _i = 0; _i < array_length(_bnames); _i++) {
-        if (vm_hook_mod_blocked(_bnames[_i])) continue;
         vm_hook_register(_bnames[_i], _vm);
     }
 }
