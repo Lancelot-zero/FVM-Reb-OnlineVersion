@@ -118,8 +118,8 @@ _VM_BATTLE_START {
 | `_VM_WAVE_END` | 当前波结束，用 `VM_GetWave()` 拿波数 |
 | `_VM_SUBWAVE_START` | 新子波开始，用 `VM_GetSubwave()` 拿子波数 |
 | `_VM_SUBWAVE_END` | 子波结束，用 `VM_GetSubwave()` 拿子波数 |
-| `_VM_CARD_CREATED` | 卡片被种下，用 `VM_GetLastCreatedCard()` 拿实例 |
-| `_VM_CARD_DESTROYED` | 卡片被销毁，用 `VM_GetLastDestroyedCard()` 拿实例，用 `VM_GetKilledProp("属性名")` 读销毁瞬间属性快照 |
+| `_VM_CARD_CREATED` | 卡片被种下，用 `VM_GetLastCreatedCard()` 拿实例（**只对带进战斗的卡触发**，见下方说明） |
+| `_VM_CARD_DESTROYED` | 卡片被销毁，用 `VM_GetLastDestroyedCard()` 拿实例，用 `VM_GetKilledProp("属性名")` 读销毁瞬间属性快照（同样只认带进战斗的卡） |
 | `_VM_CARD_DAMAGED` | 卡片受伤 |
 | `_VM_CARD_PREVIEW_PICKED` | 卡片被选取到手槽，用 `VM_GetPreviewCard()` 拿 card_id |
 | `_VM_ENEMY_SPAWNED` | 敌人出现，用 `VM_GetLastCreatedEnemy()` 拿实例 |
@@ -132,12 +132,22 @@ _VM_BATTLE_START {
 | `_VM_MOUSE_RIGHT` | 鼠标右键按下（单帧） |
 | `_VM_KEY_PRESSED` | 键盘按键按下（单帧），用 `VM_GetKeyPressed()` 判断 |
 | `_VM_BUTTON_CLICKED` | 按钮被点击，用 `VM_GetLastClickedButton()` 拿实例 |
-| `_VM_FRAME` | ⚠️ 每帧执行，禁止写复杂逻辑 |
-| `_VM_TIMER_5f` | 每 5 帧 |
-| `_VM_TIMER_10f` | 每 10 帧 |
-| `_VM_TIMER_15f` | 每 15 帧 |
-| `_VM_TIMER_30f` | 每 30 帧 |
-| `_VM_TIMER_60f` | 每 60 帧 |
+| `_VM_FRAME` | ⚠️ 每帧执行，禁止写复杂逻辑（**mod 不支持**：只有地图脚本能用） |
+| `_VM_TIMER_5f` | 每 5 帧（**mod 不支持**） |
+| `_VM_TIMER_10f` | 每 10 帧（**mod 不支持**） |
+| `_VM_TIMER_15f` | 每 15 帧（**mod 不支持**） |
+| `_VM_TIMER_30f` | 每 30 帧（mod 可用） |
+| `_VM_TIMER_60f` | 每 60 帧（mod 可用） |
+
+> **mod 用挂载点的限制**
+> 1. **场上要有它的实例才响应** —— 卡片 / 武器 / 宝石 / 敌人 / 子弹 / 特效一视同仁：该类单位一个实例都没有时挂载点不会触发
+>    （`_OBJECT_CREATE` 还没跑过的新局同理）。热重载换 bin、旧实例销毁都会自动跟上。
+> 2. **`__hookall__` 无条件开启**：bin 的**字符串池里出现字符串 `__hookall__`** 时，这个 bin 的所有挂载点不经过滤、恒开
+>    （调试 / 工具向：源码里随便写一处 `"__hookall__"` 字面量即可；热重载按新 bin 重判，去掉就恢复过滤）。
+> 3. **帧型只支持 `_VM_TIMER_30f` / `_VM_TIMER_60f`**；`_VM_FRAME` 与 5f / 10f / 15f 只有地图脚本能用
+>    （理由：mod 每个实例已有 `mod_step_enter_condition` 闸门，再挂全局高频钩子等于每帧白进一次 VM）。
+> 4. **卡片类事件本身只认"带进战斗的卡"**：`_VM_CARD_CREATED` / `_VM_CARD_DESTROYED` 不会为关卡自摆的卡、
+>    玩家角色触发（判定 = 被种下 / 被销毁的那张卡在出战卡组里）。
 
 ---
 

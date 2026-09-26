@@ -152,11 +152,11 @@ _VM_BATTLE_START {
 </tr>
 <tr>
 <td><code>_VM_CARD_CREATED</code></td>
-<td>卡片被种下，用 <code>VM_GetLastCreatedCard()</code> 拿实例</td>
+<td>卡片被种下，用 <code>VM_GetLastCreatedCard()</code> 拿实例（<strong>只对带进战斗的卡触发</strong>，见下方说明）</td>
 </tr>
 <tr>
 <td><code>_VM_CARD_DESTROYED</code></td>
-<td>卡片被销毁，用 <code>VM_GetLastDestroyedCard()</code> 拿实例，用 <code>VM_GetKilledProp(&quot;属性名&quot;)</code> 读销毁瞬间属性快照</td>
+<td>卡片被销毁，用 <code>VM_GetLastDestroyedCard()</code> 拿实例，用 <code>VM_GetKilledProp(&quot;属性名&quot;)</code> 读销毁瞬间属性快照（同样只认带进战斗的卡）</td>
 </tr>
 <tr>
 <td><code>_VM_CARD_DAMAGED</code></td>
@@ -208,29 +208,42 @@ _VM_BATTLE_START {
 </tr>
 <tr>
 <td><code>_VM_FRAME</code></td>
-<td>⚠️ 每帧执行，禁止写复杂逻辑</td>
+<td>⚠️ 每帧执行，禁止写复杂逻辑（<strong>mod 不支持</strong>：只有地图脚本能用）</td>
 </tr>
 <tr>
 <td><code>_VM_TIMER_5f</code></td>
-<td>每 5 帧</td>
+<td>每 5 帧（<strong>mod 不支持</strong>）</td>
 </tr>
 <tr>
 <td><code>_VM_TIMER_10f</code></td>
-<td>每 10 帧</td>
+<td>每 10 帧（<strong>mod 不支持</strong>）</td>
 </tr>
 <tr>
 <td><code>_VM_TIMER_15f</code></td>
-<td>每 15 帧</td>
+<td>每 15 帧（<strong>mod 不支持</strong>）</td>
 </tr>
 <tr>
 <td><code>_VM_TIMER_30f</code></td>
-<td>每 30 帧</td>
+<td>每 30 帧（mod 可用）</td>
 </tr>
 <tr>
 <td><code>_VM_TIMER_60f</code></td>
-<td>每 60 帧</td>
+<td>每 60 帧（mod 可用）</td>
 </tr>
 </tbody></table>
+<blockquote>
+<p><strong>mod 用挂载点的限制</strong></p>
+<ol>
+<li><strong>场上要有它的实例才响应</strong> —— 卡片 / 武器 / 宝石 / 敌人 / 子弹 / 特效一视同仁：该类单位一个实例都没有时挂载点不会触发
+（<code>_OBJECT_CREATE</code> 还没跑过的新局同理）。热重载换 bin、旧实例销毁都会自动跟上。</li>
+<li><strong><code>__hookall__</code> 无条件开启</strong>：bin 的<strong>字符串池里出现字符串 <code>__hookall__</code></strong> 时，这个 bin 的所有挂载点不经过滤、恒开
+（调试 / 工具向：源码里随便写一处 <code>&quot;__hookall__&quot;</code> 字面量即可；热重载按新 bin 重判，去掉就恢复过滤）。</li>
+<li><strong>帧型只支持 <code>_VM_TIMER_30f</code> / <code>_VM_TIMER_60f</code></strong>；<code>_VM_FRAME</code> 与 5f / 10f / 15f 只有地图脚本能用
+（理由：mod 每个实例已有 <code>mod_step_enter_condition</code> 闸门，再挂全局高频钩子等于每帧白进一次 VM）。</li>
+<li><strong>卡片类事件本身只认&quot;带进战斗的卡&quot;</strong>：<code>_VM_CARD_CREATED</code> / <code>_VM_CARD_DESTROYED</code> 不会为关卡自摆的卡、
+玩家角色触发（判定 = 被种下 / 被销毁的那张卡在出战卡组里）。</li>
+</ol>
+</blockquote>
 <hr>
 <h2>常用命令</h2>
 <blockquote>

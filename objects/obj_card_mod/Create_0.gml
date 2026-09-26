@@ -105,7 +105,7 @@ if (plant_id != "" && variable_global_exists("mod_card_vms") && ds_map_exists(gl
 		// 底座类型来自卡 JSON，供范围收集按类型筛选
 		if (variable_struct_exists(_cd, "plant_type")) plant_type = _cd[$ "plant_type"];
 	}
-	ds_list_add(_vm.instances, id);
+	mod_inst_add(_vm, id);
 	if (ds_map_exists(_vm.blocks, "_OBJECT_CREATE")) {
 		var _bak_last = global._VM_last_created_card;
 		global._VM_last_created_card = id;      // 块内 VM_GetLastCreatedCard() 取到本实例

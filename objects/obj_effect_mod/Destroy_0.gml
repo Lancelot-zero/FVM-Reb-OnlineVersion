@@ -13,6 +13,5 @@ if (_mod_initialized) {
     global._VM_last_destroyed_card = _bak_last;
   }
 
-  var _idx = ds_list_find_index(_mod_vm.instances, id);
-  if (_idx != -1) ds_list_delete(_mod_vm.instances, _idx);
+  mod_inst_del(_mod_vm, id);
 }

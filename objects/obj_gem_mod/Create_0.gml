@@ -75,7 +75,7 @@ mod_alpha_add = 0    // 每帧加到 image_alpha 上的量（负数 = 渐隐）�
 // 创建时加入该宝石的实例容器，并执行该宝石虚拟机里的创建块
 if (gem_id != "" && variable_global_exists("mod_gem_vms") && ds_map_exists(global.mod_gem_vms, gem_id)) {
 	var _vm = global.mod_gem_vms[? gem_id];
-	ds_list_add(_vm.instances, id);
+	mod_inst_add(_vm, id);
 	if (ds_map_exists(_vm.blocks, "_OBJECT_CREATE")) {
 		var _bak_last = global._VM_last_created_card;
 		global._VM_last_created_card = id;

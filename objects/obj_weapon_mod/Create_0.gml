@@ -64,7 +64,7 @@ mod_alpha_add = 0    // 每帧加到 image_alpha 上的量（负数 = 渐隐）�
 // 创建时加入该武器的实例容器，并执行该武器虚拟机里的创建块
 if (weapon_id != "" && variable_global_exists("mod_weapon_vms") && ds_map_exists(global.mod_weapon_vms, weapon_id)) {
 	var _vm = global.mod_weapon_vms[? weapon_id];
-	ds_list_add(_vm.instances, id);
+	mod_inst_add(_vm, id);
 	if (ds_map_exists(_vm.blocks, "_OBJECT_CREATE")) {
 		var _bak_last = global._VM_last_created_card;
 		global._VM_last_created_card = id;

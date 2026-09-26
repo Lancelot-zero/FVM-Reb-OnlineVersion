@@ -70,7 +70,7 @@ function mod_enemy_init() {
 	// 创建时加入该敌人的实例容器，并执行该敌人虚拟机里的创建块
 	if (enemy_id != "" && variable_global_exists("mod_enemy_vms") && ds_map_exists(global.mod_enemy_vms, enemy_id)) {
 		var _vm = global.mod_enemy_vms[? enemy_id];
-		ds_list_add(_vm.instances, id);
+		mod_inst_add(_vm, id);
 		if (ds_map_exists(_vm.blocks, "_OBJECT_CREATE")) {
 			var _bak_last = global._VM_last_created_card;
 			global._VM_last_created_card = id;      // 块内 VM_GetLastCreatedCard() 取到本实例
