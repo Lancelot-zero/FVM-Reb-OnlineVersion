@@ -112,7 +112,7 @@ _VM_BATTLE_START {
 
 | 块 | 触发时机 |
 |---|---|
-| `_VM_ROOM_READY_ENTRY` | 进入准备室（设规则） |
+| `_VM_ROOM_READY_ENTRY` | 进入准备室（设规则）。触发时场上一般还没有 mod 实例，mod 想收到这个事件要带 `__hookall__` |
 | `_VM_BATTLE_START` | 战斗开始（造地图） |
 | `_VM_WAVE_START` | 新一波开始，用 `VM_GetWave()` 拿波数 |
 | `_VM_WAVE_END` | 当前波结束，用 `VM_GetWave()` 拿波数 |
