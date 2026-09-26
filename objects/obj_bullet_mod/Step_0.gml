@@ -212,6 +212,25 @@ if (bullet_parabola == 1) {
   }
 }
 
+// ══════════════════════════════════════════════════════════════════════
+// 路径数组：插件用 VM 命名数组 dx_arr / dy_arr 描述"每帧位移"（见 Create_0.gml）
+//   x/y 各加上第 (bullet_path_i mod 长度) 项，然后计数器 +1；两串长度不一致时**按短的算**。
+//   放在 vx/vy 和抛物线**之后** → 是叠加，不会覆盖别的移动（不用路径就留空数组，行为不变）。
+// ══════════════════════════════════════════════════════════════════════
+if (_mod_initialized && variable_struct_exists(_mod_vm, "arrays")) {
+  var _dxa = ds_map_exists(_mod_vm.arrays, "dx_arr") ? _mod_vm.arrays[? "dx_arr"] : undefined;
+  var _dya = ds_map_exists(_mod_vm.arrays, "dy_arr") ? _mod_vm.arrays[? "dy_arr"] : undefined;
+  if (is_array(_dxa) && is_array(_dya)) {
+    var _plen = min(array_length(_dxa), array_length(_dya));
+    if (_plen > 0) {
+      var _pk = bullet_path_i mod _plen;
+      x += _dxa[_pk];
+      y += _dya[_pk];
+      bullet_path_i += 1;
+    }
+  }
+}
+
 if x > 2200 or y > 1200 or x < 0 or y < 0 {
     instance_destroy();
 }

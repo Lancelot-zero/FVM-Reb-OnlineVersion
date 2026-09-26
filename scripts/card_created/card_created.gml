@@ -314,6 +314,28 @@ function package_character(plant_inst){
 		}
 		_eq.mod_gem_levels = _mod_gems;
 		
+		// 每把武器上装备的宝石（按槽位分组的 id 数组 + 各自等级）：接收端照单机 Mouse_53 逐个建实例
+		var _gem_ids    = {};
+		var _gem_levels = {};
+		for (var _gs = 0; _gs < array_length(_eq_slots); _gs++) {
+			var _ids = [];
+			if (variable_struct_exists(global.save_data.equipped_items, _eq_slots[_gs])) {
+				var _ws = global.save_data.equipped_items[$ _eq_slots[_gs]];
+				if (is_struct(_ws) && variable_struct_exists(_ws, "gems")) {
+					var _gl = _ws[$ "gems"];
+					for (var _gj = 0; _gj < array_length(_gl); _gj++) {
+						var _gid2 = _gl[_gj];
+						if (!is_string(_gid2) || _gid2 == "") continue;
+						array_push(_ids, _gid2);
+						_gem_levels[$ _gid2] = get_gem_level(_gid2);
+					}
+				}
+			}
+			_gem_ids[$ _eq_slots[_gs]] = _ids;
+		}
+		_eq.gem_ids    = _gem_ids;
+		_eq.gem_levels = _gem_levels;
+		
 		return { player: _eq };
 	}
 	return {}

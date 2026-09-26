@@ -486,6 +486,10 @@ VM_SetProp(self, &quot;x&quot;, x + 40)      // 写（浮点直接写，如 1.8�
 <td><code>global.mod_net_player_id</code>（全局）</td>
 <td><strong>本机</strong>在房间里的 id：房主 <code>0</code>、客机从 <code>1</code> 起；单机 / 未连接 / 已断开是 <code>0</code>。中继在<strong>人数变化时会重发</strong>，所以它总是最新的</td>
 </tr>
+<tr>
+<td><code>global.net_player_number</code>（全局）</td>
+<td><strong>房间里的人数</strong>（房主 + 客机，至少 <code>1</code>）：单机 / 未连接 / 已断开是 <code>1</code>。中继在人数变化时和 <code>mod_net_player_id</code> 一起下发；读法 <code>VM_GetProp(0, &quot;net_player_number&quot;)</code>（<code>0</code> = 读全局）</td>
+</tr>
 </tbody></table>
 <p><strong>位置 / 尺寸</strong></p>
 <table>

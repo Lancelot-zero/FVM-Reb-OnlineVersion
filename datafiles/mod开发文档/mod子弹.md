@@ -137,6 +137,48 @@ _OBJECT_CREATE {
 - 飞完（到目标点）就停下：`bullet_parabola` 置 `0`、`vx/vy` 清零、坐标钉在目标点，
   之后交给碰撞结算 / `destroy_timer` / 脚本自己处理
 
+### 路径数组字段（**引擎自己飞**）
+
+想让子弹沿固定轨迹跑（∞ 形、波浪、回旋…）又不想每帧进 VM：在 `.bin` 里建两个
+**VM 命名数组** `dx_arr` / `dy_arr`（每项 = 一帧的位移），核心每帧自己加上去：
+
+| 字段 | 默认 | 作用 |
+|---|---|---|
+| `dx_arr` / `dy_arr` | 空 | 两个**命名数组**（不是实例变量）：第 i 帧 `x += dx_arr[i mod 长度]`、`y += dy_arr[同一个下标]`。**两串不一样长按短的算**；没建 / 空 = 这条子弹不走路径 |
+| `bullet_path_i` | `0` | 【只读】路径计数器：已经走到第几项（想按进度做动画 / 销毁就读它） |
+
+- 数组是**命名数组**（`VM_ArrayClear` + `VM_ArrayADD`），进房间会重置 → 在 `_OBJECT_CREATE` 里建一次
+  （照惯例先判 `VM_ArraySize("dx_arr") < 2`）
+- **执行顺序**：在 `vx/vy` 和抛物线**之后**叠加 —— 和它们是**相加**关系，不会顶掉别的移动
+- 一整圈"出去 + 回来"（净位移为 0）→ 可以**无限绕**；只想绕一趟就配 `destroy_timer`
+- 飞行**完全不进 VM** → 闸门可以放心用 `"attack_collision"`（撞上才进），这是子弹最省的一档
+- 出场渐显**别写在 Step 里**（Step 可能不进）：用引擎的 `mod_alpha_add` + `mod_countdown`
+
+```gml
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+    // 路径：出去 4 帧 + 回来 4 帧（净位移 0 → 可以无限绕）
+    if (VM_ArraySize("dx_arr") < 2) {
+        VM_ArrayClear("dx_arr")
+        VM_ArrayClear("dy_arr")
+        VM_ArrayADD("dx_arr", 6)  ;  VM_ArrayADD("dy_arr", 0)
+        VM_ArrayADD("dx_arr", 6)  ;  VM_ArrayADD("dy_arr", 4)
+        VM_ArrayADD("dx_arr", 6)  ;  VM_ArrayADD("dy_arr", 0)
+        VM_ArrayADD("dx_arr", 6)  ;  VM_ArrayADD("dy_arr", 0 - 4)
+        VM_ArrayADD("dx_arr", 0 - 6)  ;  VM_ArrayADD("dy_arr", 0 - 4)
+        VM_ArrayADD("dx_arr", 0 - 6)  ;  VM_ArrayADD("dy_arr", 0)
+        VM_ArrayADD("dx_arr", 0 - 6)  ;  VM_ArrayADD("dy_arr", 4)
+        VM_ArrayADD("dx_arr", 0 - 6)  ;  VM_ArrayADD("dy_arr", 0)
+    }
+
+    VM_SetProp(self, "destroy_timer", -1)                              // 一直绕
+    VM_SetProp(self, "mod_step_enter_condition", "attack_collision")   // 只有撞上才进 VM
+    VM_SetProp(self, "image_alpha", 0)
+    VM_SetProp(self, "mod_alpha_add", 0.125)                           // 出场渐显 8 帧（引擎做）
+    VM_SetProp(self, "mod_countdown", 8)
+}
+```
+
 ---
 
 ## 三、STEP 的时机与执行顺序
@@ -164,7 +206,9 @@ _OBJECT_CREATE {
 6. 实例没了（你在 VM 里销毁了自己）→ exit
 7. 自动销毁：destroy_timer == 0 → 立即销毁；> 0 每帧 −1，到 0 销毁
 8. 位移：x += vx; y += vy
-9. 出界销毁：x > 2200 / y > 1200 / x < 0 / y < 0
+9. 抛物线（bullet_parabola = 1）→ 覆盖成弧线坐标
+10. 路径数组叠加：x += dx_arr[bullet_path_i % 长度]; y += dy_arr[同下标]; bullet_path_i += 1
+11. 出界销毁：x > 2200 / y > 1200 / x < 0 / y < 0
 ```
 
 ### 进 VM 的时机（`mod_step_enter_condition`）
@@ -184,7 +228,8 @@ _OBJECT_CREATE {
 
 - **子弹最常用 `"cell"`**：只有跨格那一帧进 VM，正好对上"路径碰撞"的需求
 - ⚠️ **子弹是场上数量最多的东西，最忌每帧进 VM**（不设条件就是每帧）：九成情况 `"cell"` 就够；
-  真的需要"每帧都动"的（抛物线、自转），才留空让自己每帧进 —— 而且那种弹优先考虑屏幕弹幕 `VM_BulletScreenAdd_Exs`（见 `help.md` 与 [mod开发工具说明.md](mod开发工具说明.md) 的「性能铁律」）
+  要"每帧都在动"的（固定轨迹、波浪、自转）优先用**路径数组** `dx_arr` / `dy_arr`（引擎每帧做，不进 VM），
+  真的只能靠 VM 每帧算的才留空每帧进 —— 而且那种弹优先考虑屏幕弹幕 `VM_BulletScreenAdd_Exs`（见 `help.md` 与 [mod开发工具说明.md](mod开发工具说明.md) 的「性能铁律」）
 - ⚠️ `"cell"` 触发的是**进格后的第一帧** —— 格子坐标是在 `x += vx` **之前**算的，比实际越界晚一帧；
   一帧跨多格也只触发一次
 - `"attack_collision"` 是"**撞上才进**"：碰撞事件把这一帧撞到的敌人**都攒进 `mod_collision_enemies`**（数组），
@@ -219,6 +264,7 @@ _OBJECT_CREATE {
 | 直线飞 + 命中扣血 | `bullet_damage` / `bullet_damage_type` / `bullet_hits`（引擎在碰撞事件里自动结算） |
 | 命中减速 / 冻结 / 眩晕 | `bullet_slow` + `bullet_slow_frame` / `bullet_freeze_chance` + `bullet_freeze_frame` / `bullet_stun_chance` + `bullet_stun_frame` |
 | 抛物线（追实例或坐标） | `bullet_parabola` + `bullet_target`（或 `bullet_target_x/y`）+ `bullet_parabola_time` / `bullet_parabola_h` |
+| 固定轨迹（∞ / 波浪 / 回旋） | 命名数组 `dx_arr` / `dy_arr`（每项 = 一帧位移，引擎每帧加）+ `destroy_timer` 控制绕多久 —— **不进 VM** |
 | 撞上才做额外事 | STEP 条件用 `"attack_collision"` —— 全程只在**命中那几帧**进 VM |
 | 到目标行 / 列才做 | `"cell_target_row"` / `"cell_target_col"` |
 | 只要命中特效 / 音效 | 同上：`"attack_collision"` 进一次就够，不用每帧跑 |

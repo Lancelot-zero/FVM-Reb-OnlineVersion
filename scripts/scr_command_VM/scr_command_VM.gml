@@ -3998,7 +3998,7 @@ function VM_Execute(vm, buf, name) {
     if (!buffer_exists(buf)) return 0;
     // 记录"当前正在跑的块名"：`_OBJECT_*` 块里的属性写一律本地直改、不走即时同步，
     // 跨端由声明在 mod_sync 里的字段每 20 帧纠偏（见 mod_sync_props_tick）。
-    var _bak_cur_block = global._VM_cur_block;
+    var _bak_cur_block = variable_global_exists("_VM_cur_block") ? global._VM_cur_block : "";
     global._VM_cur_block = name;
     try {
         if (global._VM_debug_mode && (global._VM_debug_block == "" || name == global._VM_debug_block)) return VM_Execute_debug(vm, buf, name);

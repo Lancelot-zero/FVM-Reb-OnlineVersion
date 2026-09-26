@@ -1,5 +1,65 @@
 
 
+/// @function spawn_character_gems(_slot, _eq, _plant, _row, _col)
+/// @desc 建某个武器槽位上装备的宝石实例：和单机 obj_player_character/Mouse_53 的写法一致 ——
+///       在线禁用的跳过，passive 宝石（obj = noone）不建，其余都建实例（213 + 序号*80, 深度 -500）
+///       mod 宝石额外写 global._mod_pending_gem_id / _mod_pending_gem_level（obj_gem_mod 靠它认自己）
+///       并给实例写 mod_point_* 归属字段
+///       列位置：主人是本机玩家 → x = 390 起，y = 213 + 行号*80；一列满 8 个就往左开新列（x -80）
+///               别人 → x = -100, y = -100（场外固定点）
+///       序号：只数 HUD 那几列已有的宝石（x > 0），场外的（-100）不算
+/// @param _slot "main_weapon" / "secondary_weapon" / "super_weapon"
+/// @param _eq 角色装备结构（props.player），里面有 gem_ids / gem_levels
+/// @param _plant 角色实例
+/// @return 无
+function spawn_character_gems(_slot, _eq, _plant, _row, _col) {
+	if (!is_struct(_eq) || !instance_exists(_plant)) return;
+	var _slots = _eq[$ "gem_ids"] ?? undefined;
+	if (!is_struct(_slots)) return;
+	var _list = _slots[$ _slot] ?? undefined;
+	if (!is_array(_list)) return;
+	var _levels = _eq[$ "gem_levels"] ?? undefined;
+	// 归属：宝石主人 == 本机玩家（net_player_id 一致）→ 建在 HUD 上按顺序排；
+	//       不是本机的 → 建在场外（看得见，但不占自己那一排 HUD）
+	var _owner = variable_instance_exists(_plant, "net_player_id") ? _plant.net_player_id : global.mod_net_player_id;
+	var _mine  = (_owner == global.mod_net_player_id);
+	// 位置：自己的 → 从 (390, 213) 往下排，一列满 _rows_per_col 个就往左再开一列
+	//       别人的 → 固定 (-100, -100)
+	var _rows_per_col = 8;                 // 每列最多摆几个：改这里
+	var _col_step     = 80;                // 新的一列往左挪多少：改这里
+	var _idx = 0;                          // 序号：数 HUD 那几列已有的宝石（x > 0；别人的在场外 x = -100，数不进来）
+	if (_mine) {
+		with (all) { if (variable_instance_exists(id, "gem_id") && x > 0) _idx++; }
+	}
+	for (var _i = 0; _i < array_length(_list); _i++) {
+		var _gid = _list[_i];
+		if (array_get_index(global.banned_gems_online, _gid) != -1) continue;   // 在线禁用的宝石不建
+		var _ginf = get_gem_info(_gid);
+		if (!is_struct(_ginf)) continue;                                        // 本机没注册：跳过
+		var _gobj = _ginf[$ "obj"] ?? noone;
+		if (_gobj == noone) continue;                                           // passive 宝石：不建实例
+		var _g_lv = is_struct(_levels) ? (_levels[$ _gid] ?? get_gem_level(_gid)) : get_gem_level(_gid);
+		var _is_mod_gem = variable_global_exists("mod_gem_vms") && ds_map_exists(global.mod_gem_vms, _gid);
+		if (_is_mod_gem) {
+			global._mod_pending_gem_id    = _gid;
+			global._mod_pending_gem_level = _g_lv;
+		}
+		var _gx = _mine ? (390 - (_idx div _rows_per_col) * _col_step) : -100;
+		var _gy = _mine ? (213 + (_idx mod _rows_per_col) * 80)      : -100;
+		var _g_inst = instance_create_depth(_gx, _gy, -500, _gobj);
+		if (_is_mod_gem) {
+			global._mod_pending_gem_id    = "";
+			global._mod_pending_gem_level = -1;
+		}
+		_g_inst.mod_point_parent_player = _plant.id;
+		_g_inst.mod_point_grid_row      = _row;
+		_g_inst.mod_point_grid_col      = _col;
+		_g_inst.mod_point_gem_level     = _g_lv;
+		_idx++;
+	}
+	return;
+}
+
 function spawn_plant(col, row, plant_obj, props) {
     // 边界检查
     if (col < 0 || col >= global.grid_cols + 64 || row < 0 || row >= global.grid_rows + 64) {
@@ -183,10 +243,12 @@ function spawn_plant(col, row, plant_obj, props) {
 					var _mw_name_id = _eq[$ "main_weapon_id"] ?? "";
 					if (_mw_name_id != "") {
 						var main_info = get_weapon_info(_mw_name_id) 
-						if (!is_struct(main_info) || !variable_struct_exists(main_info, "obj") || main_info.obj == noone) {
-							mod_equip_illegal_notice("武器", _mw_name_id);   // 本机没注册的 mod 武器：跳过 + 提示
+						if (!is_struct(main_info)) {
+							mod_equip_illegal_notice("武器", _mw_name_id);   // 本机没注册这个 mod 武器：跳过 + 提示
 						} else {
-						var main_weapon_inst = global._mod_pending_weapon_id = _mw_name_id; instance_create_depth(_plant.x-10, _plant.y-100, _plant.depth-1, main_info.obj);
+						global._mod_pending_weapon_id = _mw_name_id;
+						var main_weapon_inst = instance_create_depth(_plant.x-10, _plant.y-100, _plant.depth-1, main_info.obj);
+						global._mod_pending_weapon_id = "";
 						main_weapon_inst.parent_player = _plant.id;
 
 						main_weapon_inst.grid_row = grid_row;
@@ -224,6 +286,17 @@ function spawn_plant(col, row, plant_obj, props) {
 						
 						_plant.hp += _eq[$ "health_gem_increase"]
 						_plant.max_hp += _eq[$ "health_gem_increase"]
+						
+						// mod 副武器再挂一个 obj_weapon_mod：它负责跑 mod 盾的 .bin，并把武器贴图显示出来
+						//   （只有真的加载了 mod 盾 .bin 才挂，免得到内置盾头上画个图标）
+						if (variable_global_exists("mod_weapon_vms") && ds_map_exists(global.mod_weapon_vms, _sw_name_id)) {
+							global._mod_pending_weapon_id = _sw_name_id
+							var _mod_shield = instance_create_depth(_plant.x-10,_plant.y-100,_plant.depth-1,obj_weapon_mod)
+							global._mod_pending_weapon_id = ""
+							_mod_shield.parent_player = _plant.id
+							_mod_shield.grid_row = grid_row
+							_mod_shield.grid_col = grid_col
+						}
 						
 						var gem_level = _eq[$ "produce_gem_level"] ?? -1;
 						if (gem_level >= 0) {
@@ -272,44 +345,23 @@ function spawn_plant(col, row, plant_obj, props) {
 					var _sup_name_id = _eq[$ "super_weapon_id"] ?? "";
 					if (_sup_name_id != "") {
 						var main_info = get_weapon_info(_sup_name_id);
-						if (!is_struct(main_info) || !variable_struct_exists(main_info, "obj") || main_info.obj == noone) {
-							mod_equip_illegal_notice("超武", _sup_name_id);   // 本机没注册的 mod 超武：跳过 + 提示
+						if (!is_struct(main_info)) {
+							mod_equip_illegal_notice("超武", _sup_name_id);   // 本机没注册这个 mod 超武：跳过 + 提示
 						} else {
-						var main_weapon_inst = global._mod_pending_weapon_id = _sup_name_id; instance_create_depth(_plant.x-10,_plant.y-100,_plant.depth-1,main_info.obj)
+						global._mod_pending_weapon_id = _sup_name_id;
+						var main_weapon_inst = instance_create_depth(_plant.x-10,_plant.y-100,_plant.depth-1,main_info.obj)
+						global._mod_pending_weapon_id = "";
 						main_weapon_inst.parent_player = _plant.id
 						main_weapon_inst.grid_row = grid_row
 						main_weapon_inst.grid_col = grid_col
 						}
 					}
 					
-					// ── mod 宝石：等级随 _eq 的 mod_gem_levels 传过来；宝石一律建在 HUD 上（和本地那排同坐标） ──
-					//    （本地预测那份在客户端分支里没建，所以这里不用清旧，直接建）
-					var _mg = _eq[$ "mod_gem_levels"] ?? undefined;
-					if (is_struct(_mg)) {
-						var _mg_ids = variable_struct_get_names(_mg);
-						// HUD 槽位：从当前已有的宝石数量往后排，不盖住已经在那儿的
-						var _hud_i = 0;
-						with (all) { if (variable_instance_exists(id, "gem_id")) _hud_i++; }
-						for (var _mi = 0; _mi < array_length(_mg_ids); _mi++) {
-							var _mg_id  = _mg_ids[_mi];
-							var _mg_lv  = _mg[$ _mg_id];
-							var _mg_inf = get_gem_info(_mg_id);
-							if (!is_struct(_mg_inf)) { mod_equip_illegal_notice("宝石", _mg_id); continue; }   // 本机没注册的 mod 宝石：跳过 + 提示
-							var _mg_obj = _mg_inf[$ "obj"];
-							if (!is_object(_mg_obj) || _mg_obj == noone) continue;     // passive 宝石：不建实例
-							global._mod_pending_gem_id    = _mg_id;
-							global._mod_pending_gem_level = _mg_lv;
-							var _mg_inst = instance_create_depth(390, 213 + _hud_i * 80, -500, _mg_obj);
-							_hud_i++;
-							global._mod_pending_gem_id    = "";
-							global._mod_pending_gem_level = -1;
-							// 归属：挂在种植它的那个角色上（插件靠 mod_point_parent_player 找主人）
-							_mg_inst.mod_point_parent_player = _plant.id;
-							_mg_inst.mod_point_grid_row      = grid_row;
-							_mg_inst.mod_point_grid_col      = grid_col;
-							_mg_inst.mod_point_gem_level     = _mg_lv;
-						}
-					}
+					// ── 宝石实例：和单机 Mouse_53 一致，按 主 → 副 → 超 三个槽位逐个建（内置 + mod 都建） ──
+					//    序号由函数自己数（自己的排 HUD 那一列，别人的排场外那一列，计数器分开）
+					spawn_character_gems("main_weapon",      _eq, _plant, grid_row, grid_col);
+					spawn_character_gems("secondary_weapon", _eq, _plant, grid_row, grid_col);
+					spawn_character_gems("super_weapon",     _eq, _plant, grid_row, grid_col);
 					
 				}
 					

@@ -64,8 +64,29 @@ _OBJECT_CREATE {
     // 固定位置，不跟随玩家
     VM_SetProp(self, "parent_player", "")
     VM_SetProp(self, "x", 500)
-    VM_SetProp(self, "lock_y", 540)
-    VM_SetProp(self, "y", 540)
+
+    // 纵向位置：房间里只有 1 个人（net_player_number == 1）时走最中间，和以前一样；
+    // 人多时按自己的 net_player_id 以中间为基准上下摊开（间距 100），免得各玩家的超武叠在一起。
+    //   net_player_number / mod_net_player_id 由中继在人数变化时随房间 id 一起下发；
+    //   VM_GetProp(0, "名字") 读的就是全局变量。
+    num = VM_GetProp(0, "net_player_number")
+    if (num < 1) {
+        num = 1
+    }
+    pid = VM_GetProp(0, "mod_net_player_id")
+    base_y = 540
+    if (num > 1) {
+        base_y = 540 + (pid - (num - 1) / 2) * 100
+    }
+    VM_SetProp(self, "base_y", base_y)
+    VM_SetProp(self, "lock_y", base_y)
+    VM_SetProp(self, "y", base_y)
+
+    // 入口闸门：入场阶段用 "wait"（倒计时卡在 1 → 每帧都进，入场特效照常播）；
+    // 变身结束（见 _OBJECT_STEP）再换成 "norm_attack" —— 之后没敌人一步都不进，
+    // 有敌人时窗口表为空 = 每帧进，开火节奏和以前完全一样。
+    VM_SetProp(self, "mod_step_enter_condition", "wait")
+    VM_SetProp(self, "mod_step_enter_var", 1)
     VM_SetProp(self, "depth", -500)
     VM_SetProp(self, "image_xscale", 1.8)
     VM_SetProp(self, "image_yscale", 1.8)
@@ -111,14 +132,17 @@ _OBJECT_STEP {
 
     // 第一阶段：入场特效播完（16 帧 x 2）后切成镰刀本体
     if (phase == 0) {
+        // wait 闸门进完一次要把倒计时卡回正数，否则此后每帧都算"进"（这里就是要每帧进）
+        VM_SetProp(self, "mod_step_enter_var", 1)
+
         anim = VM_GetProp(self, "anim") + 1
         VM_SetProp(self, "anim", anim)
 
         if (anim >= 32) {
             VM_SetProp(self, "sprite_index", "spr_hades_scythe_2")
 
-            // 本体出现后整体下移 100
-            VM_SetProp(self, "lock_y", 640)
+            // 本体出现后整体下移 100（基准位置见 _OBJECT_CREATE 的 base_y）
+            VM_SetProp(self, "lock_y", VM_GetProp(self, "base_y") + 100)
 
             // 本体动画：待机 20 帧 + 攻击 16 帧，每 5 帧走一格
             VM_SetProp(self, "idle_anim", 20)
@@ -126,6 +150,8 @@ _OBJECT_STEP {
             VM_SetProp(self, "flash_speed", 5)
 
             VM_SetProp(self, "phase", 1)
+            // 变身结束 → 闸门换成"有敌人才进"：没敌人时 _OBJECT_STEP 一步都不进
+            VM_SetProp(self, "mod_step_enter_condition", "norm_attack")
         }
     } else {
         // 每帧读数值，读不到时用原版基准值兜底，避免静默失效

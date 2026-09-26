@@ -161,15 +161,16 @@ class Relay:
             await asyncio.gather(*tasks, return_exceptions=True)
 
     async def _sync_player_ids(self, room: Room):
-        """给房间里每个成员各发一遍"你在房间里的 id"（人数变化时调用）"""
+        """给房间里每个成员各发一遍"你在房间里的 id" + 当前房间人数（人数变化时调用）"""
         items = []
         if room.host:
             items.append((room.host, 0))
         for cid, cw in room.clients.items():
             items.append((cw, cid))
+        cnt = room.member_count()
         for w, cid in items:
             self.write_pkt(w, MSG_PUB_INFO,
-                           f"\\setglobal {{\"mod_net_player_id\":{cid}}}".encode() + NUL)
+                           f"\\setglobal {{\"mod_net_player_id\":{cid},\"net_player_number\":{cnt}}}".encode() + NUL)
         tasks = [self.flush(w) for w, _ in items]
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
