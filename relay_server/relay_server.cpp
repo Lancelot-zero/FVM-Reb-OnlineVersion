@@ -201,6 +201,8 @@ void append_out(Conn& c, const void* data, size_t len);
 void send_pkt(Conn& c, int32_t msg_id, const void* payload = nullptr, int payload_len = 0);
 void send_str(Conn& c, int32_t msg_id, const std::string& text);
 void sync_room_info(Room& room);
+void broadcast_pub(Room& room, const std::string& text);
+void sync_player_ids(Room& room);
 
 // ================================================================
 //  读/写工具 — 包格式: [u32 body_len][i32 msg_id][payload]
@@ -305,6 +307,8 @@ void detach_from_room(Conn& c) {
                 send_str(hit->second, MSG_CHAT, "[系统] " + c.name + " 离开");
         }
         printf("[%s] %s 离开 (剩余 %d 人)\n", r.id.c_str(), c.name.c_str(), r.member_count());
+        broadcast_pub(r, "\\left " + c.name);   // 人数变化 → 广播提示（客户端显示"XX 离开了房间"）
+        sync_player_ids(r);                     // 人数变化 → 剩下的人各自再收一遍自己的 id
         sync_room_info(r);
     }
     c.room = nullptr;
@@ -349,6 +353,7 @@ std::string pick_name(Room& room, const std::string& preferred = "") {
 // ================================================================
 std::string build_room_info(Room& room) {
     std::string members = "{";
+    std::string ids = "{";
     if (room.host != INVALID_SOCKET) {
         auto it = room.nicks.find(room.host);
         std::string name = (it != room.nicks.end()) ? it->second : "???";
@@ -356,6 +361,7 @@ std::string build_room_info(Room& room) {
         auto mit = room.msgs.find(name);
         std::string msg = (mit != room.msgs.end()) ? mit->second : "";
         members += "\"" + name + "\":\"" + msg + "\"";
+        ids += "\"" + name + "\":0";                      // 房主的房间内 id = 0
     }
     for (auto& kv : room.clients) {
         auto it = room.nicks.find(kv.second);
@@ -365,21 +371,45 @@ std::string build_room_info(Room& room) {
         auto mit = room.msgs.find(name);
         if (mit != room.msgs.end()) members += mit->second;
         members += "\"";
+        ids += (ids.size() > 1 ? "," : "") + std::string("\"") + name + "\":" + std::to_string(kv.first);
     }
     members += "}";
-    std::string json = "{\"room\":\"" + room.id + "\",\"members\":" + members + "}";
+    ids += "}";
+    // ids：名字 → 房间内 id（房主 0，客机从 1 起）；客户端只认 room/members，多出来的字段会被忽略
+    std::string json = "{\"room\":\"" + room.id + "\",\"members\":" + members + ",\"ids\":" + ids + "}";
     return "\\roominfo " + json;
 }
 
-void sync_room_info(Room& room) {
-    std::string info = build_room_info(room);
+// 房间公告：给房主 + 所有客户端发一条 MSG_PUB_INFO 文本（\join / \left / \setglobal ...）
+void broadcast_pub(Room& room, const std::string& text) {
     std::vector<SOCKET> socks;
     if (room.host != INVALID_SOCKET) socks.push_back(room.host);
     for (auto& kv : room.clients) socks.push_back(kv.second);
     for (SOCKET s : socks) {
         auto it = conns.find(s);
-        if (it != conns.end()) send_str(it->second, MSG_PUB_INFO, info);
+        if (it != conns.end()) send_str(it->second, MSG_PUB_INFO, text);
     }
+}
+
+// 给房间里**每个成员**各发一遍"你在房间里的 id"（人数变化时调用 → 各端更新 global.mod_net_player_id）
+void sync_player_ids(Room& room) {
+    if (room.host != INVALID_SOCKET) {
+        auto it = conns.find(room.host);
+        if (it != conns.end())
+            send_str(it->second, MSG_PUB_INFO, "\\setglobal {\"mod_net_player_id\":0}");
+    }
+    for (auto& kv : room.clients) {
+        auto it = conns.find(kv.second);
+        if (it != conns.end())
+            send_str(it->second, MSG_PUB_INFO,
+                     "\\setglobal {\"mod_net_player_id\":" + std::to_string(kv.first) + "}");
+    }
+}
+
+// 把最新成员表（含 ids）发给房主 + 所有客户端
+void sync_room_info(Room& room) {
+    std::string info = build_room_info(room);
+    broadcast_pub(room, info);
 }
 
 // /listroom 的返回文本（首包查询与房内命令共用，保证一致）
@@ -701,6 +731,10 @@ bool handle_handshake(Conn& c, const std::vector<uint8_t>& body) {
 
     // 告诉客户端身份
     send_str(c, MSG_PUB_INFO, (c.role == 0) ? "\\modserver" : "\\modclient");
+    // 人数变化 → 给房间里每个人都发一遍自己的房间内 id（本人也在这轮里拿到）
+    sync_player_ids(room);
+    // 人数变化 → 广播一条提示（客户端显示"XX 加入了房间"）
+    broadcast_pub(room, "\\join " + c.name);
 
     if (c.role == 0) {
         send_str(c, MSG_CHAT,

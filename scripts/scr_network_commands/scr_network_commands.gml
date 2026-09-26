@@ -100,6 +100,7 @@ function closeserver() {
     global.network.server_socket = -1;
     global.network.connected_clients = [];
     global.network.server_ip = "";
+    global.mod_net_player_id = 0;   // 关闭服务器 → 清掉"我在房间里的 id"
 
     return "[网络] 服务器已关闭";
 }
@@ -192,6 +193,7 @@ function disconnect() {
     global.network.target_ip = "";
     global.network.target_port = 27085;
     global.network.is_connected = false;
+    global.mod_net_player_id = 0;   // 断开连接 → 清掉"我在房间里的 id"
 	
 	if (global.gui_stack.get_top() ==  room_battle)
 		global.gui_stack.pop(); 

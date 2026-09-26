@@ -5155,6 +5155,17 @@ function VM_HandleNotify(json) {
             global._VM_notify_call = _old_flag;
             break;
         }
+        case "notice":
+        {
+            // 服务器下发的提示/公告（例：客户端要种一张服务器没装的 mod 卡 → 取消并提示所有人）
+            var _txt = _data[$ "text"];
+            if (is_undefined(_txt)) _txt = _data[$ "msg"];
+            if (!is_undefined(_txt)) {
+                var _dur = _data[$ "dur"];
+                show_notice(string(_txt), is_undefined(_dur) ? 120 : _dur);
+            }
+            break;
+        }
         default:
             show_debug_message("[VM_HandleNotify] unknown hook: " + _hook);
             break;

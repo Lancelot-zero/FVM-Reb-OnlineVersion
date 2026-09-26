@@ -43,7 +43,15 @@ function spawn_plant(col, row, plant_obj, props) {
 	if(variable_struct_exists(props,"shape"))global._net_before_plant_shape = props[$ "shape"];
 	if(variable_struct_exists(props,"current_level"))global._net_before_plant_current_level = props[$ "current_level"];
 	if(variable_struct_exists(props,"skill"))global._net_before_plant_skill = props[$ "skill"];
-	if(variable_struct_exists(props,"_net_card_equipped_attire_id"))global._net_card_equipped_attire_id = props[$ "_net_card_equipped_attire_id"]
+	if(variable_struct_exists(props,"_net_card_equipped_attire_id")){
+		var _net_at = props[$ "_net_card_equipped_attire_id"];
+		// 非法时装（本机没注册这个 id）→ 退化为默认初始时装（-1 = 不套时装，用本体外观）
+		if (_net_at != noone && _net_at != -1 && _net_at != "" && !is_struct(get_attire_info(_net_at))) {
+			show_debug_message("[attire] 网络传来的时装未注册，退化为默认: " + string(_net_at));
+			_net_at = -1;
+		}
+		global._net_card_equipped_attire_id = _net_at;
+	}
 	// mod 卡身份：只有联机流程才走这里，props 里带着 plant_id 才写全局
 	// 单机逻辑不进来，本地调用方（VM_SpawnPlant / 控制台 spawn）自己设的 id 不会被覆盖
 	var _has_pending_bak = variable_global_exists("_mod_pending_card_id");
@@ -175,6 +183,9 @@ function spawn_plant(col, row, plant_obj, props) {
 					var _mw_name_id = _eq[$ "main_weapon_id"] ?? "";
 					if (_mw_name_id != "") {
 						var main_info = get_weapon_info(_mw_name_id) 
+						if (!is_struct(main_info) || !variable_struct_exists(main_info, "obj") || main_info.obj == noone) {
+							mod_equip_illegal_notice("武器", _mw_name_id);   // 本机没注册的 mod 武器：跳过 + 提示
+						} else {
 						var main_weapon_inst = global._mod_pending_weapon_id = _mw_name_id; instance_create_depth(_plant.x-10, _plant.y-100, _plant.depth-1, main_info.obj);
 						main_weapon_inst.parent_player = _plant.id;
 
@@ -194,10 +205,15 @@ function spawn_plant(col, row, plant_obj, props) {
 						          main_weapon_inst.cycle = _wi.cycle_impact[gem_level];
 						     }
 						}
+						}
 					}
 		
 					var _sw_name_id = _eq[$ "secondary_weapon_id"] ?? "";
 					if (_sw_name_id != "") {
+						var _sw_chk = get_weapon_info(_sw_name_id);
+						if (!is_struct(_sw_chk)) {
+							mod_equip_illegal_notice("副武器", _sw_name_id);   // 本机没注册的 mod 副武器：跳过 + 提示
+						} else {
 						var s_inst = instance_create_depth(_plant.x,_plant.y,_plant.depth,obj_player_shield)
 						s_inst.parent_player = _plant.id
 						s_inst.grid_row = grid_row
@@ -250,15 +266,20 @@ function spawn_plant(col, row, plant_obj, props) {
 							if gem_level > 10 gem_level = 10;
 							s_inst.atk_ratio = gem_info.atk_ratio[gem_level];
 						}
+						}
 					}
 		
 					var _sup_name_id = _eq[$ "super_weapon_id"] ?? "";
 					if (_sup_name_id != "") {
 						var main_info = get_weapon_info(_sup_name_id);
+						if (!is_struct(main_info) || !variable_struct_exists(main_info, "obj") || main_info.obj == noone) {
+							mod_equip_illegal_notice("超武", _sup_name_id);   // 本机没注册的 mod 超武：跳过 + 提示
+						} else {
 						var main_weapon_inst = global._mod_pending_weapon_id = _sup_name_id; instance_create_depth(_plant.x-10,_plant.y-100,_plant.depth-1,main_info.obj)
 						main_weapon_inst.parent_player = _plant.id
 						main_weapon_inst.grid_row = grid_row
 						main_weapon_inst.grid_col = grid_col
+						}
 					}
 					
 					// ── mod 宝石：等级随 _eq 的 mod_gem_levels 传过来；宝石一律建在 HUD 上（和本地那排同坐标） ──
@@ -273,7 +294,7 @@ function spawn_plant(col, row, plant_obj, props) {
 							var _mg_id  = _mg_ids[_mi];
 							var _mg_lv  = _mg[$ _mg_id];
 							var _mg_inf = get_gem_info(_mg_id);
-							if (!is_struct(_mg_inf)) continue;                        // 对面没装这个 mod
+							if (!is_struct(_mg_inf)) { mod_equip_illegal_notice("宝石", _mg_id); continue; }   // 本机没注册的 mod 宝石：跳过 + 提示
 							var _mg_obj = _mg_inf[$ "obj"];
 							if (!is_object(_mg_obj) || _mg_obj == noone) continue;     // passive 宝石：不建实例
 							global._mod_pending_gem_id    = _mg_id;

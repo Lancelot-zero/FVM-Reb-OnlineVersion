@@ -2110,6 +2110,21 @@ function mod_card_vm_deck_refresh() {
 	}
 }
 
+/// @function mod_equip_illegal_notice(_kind, _id)
+/// @desc 服务器收到了本机没注册的 mod 装备（武器 / 宝石）：跳过它，并广播一条提示给所有人。
+///       客户端侧只记 debug、不重复广播（服务器已经发过一次）。
+function mod_equip_illegal_notice(_kind, _id) {
+	show_debug_message("[mod 装备] 未注册，已忽略：" + _kind + " " + _id);
+	if (global.network.mode != "server") return;
+	var _txt = "服务器没有这个 mod " + _kind + "，已忽略：" + _id;
+	show_notice(_txt, 150);                                          // 房主自己也提示
+	var _wn = json_stringify({hook: "notice", text: _txt, dur: 150});
+	var _cl = global.network.connected_clients;                      // 广播给所有人
+	for (var _i = 0; _i < array_length(_cl); _i++) {
+		send_message(_cl[_i], MSG_VM_NOTIFY, _wn);
+	}
+}
+
 /// @function mod_sync_props_tick()
 /// @desc 服务器每 20 帧调一次（battle_time mod 20 == 0）：把各 mod 单位实例上
 ///       **声明要同步的字段**里"发生变化的"推给客户端。

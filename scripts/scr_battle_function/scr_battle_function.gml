@@ -183,6 +183,22 @@ function parse_network_message(buf, _sock) {
 				_props[$ "sprite_index"] =get_load_sprite( _sprite_name);
 			}
 			
+			// ── mod 卡校验：客户端要种的这张 mod 卡，服务器没装 → 取消这次种植 ──
+			//    （plant_id 只有 mod 卡会带；对象名是共用的 obj_card_mod，所以必须靠 plant_id 判）
+			var _req_pid = variable_struct_exists(_props, "plant_id") ? _props[$ "plant_id"] : "";
+			if (is_string(_req_pid) && _req_pid != ""
+				&& (!variable_global_exists("mod_card_vms") || !ds_map_exists(global.mod_card_vms, _req_pid))) {
+				var _warn = "服务器没有这张 mod 卡，已取消种植：" + _req_pid;
+				show_notice(_warn, 150);                                   // 房主自己也提示
+				var _wn = json_stringify({hook: "notice", text: _warn, dur: 150});
+				var _wcl = global.network.connected_clients;               // 广播给所有人
+				for (var _wc = 0; _wc < array_length(_wcl); _wc++) {
+					send_message(_wcl[_wc], MSG_VM_NOTIFY, _wn);
+				}
+				show_debug_message("[解析] MSG_UNIT_REQUEST: 拒绝未注册的 mod 卡 " + _req_pid);
+				break;
+			}
+			
 			var obj_index = asset_get_index(object_name);
 			if (obj_index==-1)obj_index = obj_xiao_long_bao;
 
@@ -344,6 +360,11 @@ function parse_network_message(buf, _sock) {
 
             global.network.client_able = true;
 			var obj_name =  asset_get_index(object_name);
+			// 非法卡片（本机没这个对象）→ 用土司面包兜底，别拿 -1 去建实例
+			if (obj_name == -1) {
+				show_debug_message("[解析] MSG_SPAWN_UNIT: 未注册对象 " + object_name + " → 用 obj_toast_bread 兜底");
+				obj_name = obj_toast_bread;
+			}
             var _plant = spawn_plant(col, row, obj_name, _props);
             global.network.client_able = false;
 			
@@ -1140,7 +1161,13 @@ function parse_network_message(buf, _sock) {
 			show_debug_message("[解析] 收到 MSG_PUB_INFO: " + chat_text);
 
 	
-			switch (chat_text) {
+			// 首词当命令、其余当参数：这样带参数的指令（\setglobal 变量 值）也能写成 case
+			var _cmd = chat_text;
+			var _arg = "";
+			var _csp = string_pos(" ", chat_text);
+			if (_csp > 0) { _cmd = string_copy(chat_text, 1, _csp - 1); _arg = string_delete(chat_text, 1, _csp); }
+
+			switch (_cmd) {
 				case "\\modserver":
 				    global.network.mode = "server";
 				    global.network.connected_clients = [global.network.server_socket];
@@ -1155,6 +1182,49 @@ function parse_network_message(buf, _sock) {
 				case "\\kicked":
 				    shell_print("[系统] 你被房主踢出了房间");
 				    sh_disconnect();
+				    break;
+				case "\\join":
+				    // 有人加入房间（\join [名字]）→ 屏幕公告
+				    show_notice(_arg != "" ? (_arg + " 加入了房间") : "有人加入了房间", 150);
+				    break;
+				case "\\left":
+				    // 有人离开房间（\left [名字]）→ 屏幕公告
+				    show_notice(_arg != "" ? (_arg + " 离开了房间") : "有人离开了房间", 150);
+				    break;
+				case "\\setglobal":
+				    // 批量改全局变量 —— \setglobal {"name":"x","hp":100,"on":true}
+				    // 参数是 JSON 字典，逐项赋值，**类型跟着 JSON 走**（数字=real、true/false=bool、数组/结构原样）
+				    if (_arg != "") {
+				        var _gobj = undefined;
+				        try { _gobj = json_parse(_arg); } catch (_ge) { _gobj = undefined; }
+				        if (is_struct(_gobj)) {
+				            var _gkeys = variable_struct_get_names(_gobj);
+				            for (var _gk = 0; _gk < array_length(_gkeys); _gk++) {
+				                variable_global_set(_gkeys[_gk], _gobj[$ _gkeys[_gk]]);
+				            }
+				            show_debug_message("[解析] MSG_PUB_INFO setglobal: " + string(array_length(_gkeys)) + " 项 ← " + _arg);
+				        } else {
+				            show_debug_message("[解析] MSG_PUB_INFO setglobal 参数不是合法 JSON 字典: " + _arg);
+				        }
+				    }
+				    break;
+				case "\\setnet":
+				    // 改 global.network 的字段 —— \setnet 字段名 值（值可带空格；类型跟着原值走）
+				    if (_arg != "") {
+				        var _nsp = string_pos(" ", _arg);
+				        var _fname = (_nsp > 0) ? string_copy(_arg, 1, _nsp - 1) : _arg;
+				        var _fval  = (_nsp > 0) ? string_delete(_arg, 1, _nsp) : "";
+				        if (!variable_struct_exists(global.network, _fname)) {
+				            show_debug_message("[解析] MSG_PUB_INFO setnet 未知字段: " + _fname);
+				        } else {
+				            var _cur = global.network[$ _fname];
+				            var _newval = _fval;
+				            if (is_real(_cur))      _newval = real(_fval);                       // 数值字段
+				            else if (is_bool(_cur)) _newval = (_fval == "1" || _fval == "true"); // 开关字段
+				            global.network[$ _fname] = _newval;
+				            show_debug_message("[解析] MSG_PUB_INFO setnet: " + _fname + " = " + string(_newval));
+				        }
+				    }
 				    break;
 				default:
 					if (string_starts_with(chat_text, "\\roominfo ")) {

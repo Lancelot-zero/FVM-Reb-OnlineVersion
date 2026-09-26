@@ -58,6 +58,7 @@ global.connection_forced = file_exists(working_directory + "connection_enable.tx
 global._mod_pending_card_id = ""   // 创建 mod 卡实例前传入的卡 id
 global._VM_cur_block = ""          // 当前正在执行的块名（VM_Execute 维护）：`_OBJECT_*` 块内不同步
 global._mod_pending_gem_level = -1  // 创建 mod 宝石实例前传入的等级（-1 = 用本机存档等级；联机远端创建时用广播带来的）
+global.mod_net_player_id = 0       // 联机：自己在房间里的 id（0 = 未分配 / 已断开；断开连接时重置为 0）
 global._VM_cur_card = noone        // mod 卡 VM 块执行时的"当前实例"上下文
 global.laboretory_room = false
 global.game_version = "2.4.1"

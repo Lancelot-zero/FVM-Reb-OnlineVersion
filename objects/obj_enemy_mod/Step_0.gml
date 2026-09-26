@@ -10,7 +10,11 @@ prev_grid_col = grid_col;
 prev_grid_row = grid_row;
 
 // enemy_id 晚到（联机：服务器建完后补发 MSG_MODIFY_PROP）：补跑一次初始化
-if (enemy_id != "" && mod_enemy_inited_id != enemy_id) mod_enemy_init();
+if (enemy_id != "" && mod_enemy_inited_id != enemy_id) {
+	mod_enemy_init();
+	// 非法 mod 敌人已被换成普通老鼠（本实例已销毁）→ 本帧 Step 到此为止，别再跑父类
+	if (!instance_exists(id)) exit;
+}
 
 // 父类处理移动/攻击/死亡等基础行为（同时刷新 target_plant / grid_col / grid_row）
 event_inherited();
