@@ -6092,8 +6092,9 @@ function VM_InitRoomEntry(buf) {
     //   ⚠️ 注册不设白名单：块名第一次出现时 vm_hook_register 自动建数组。
     //      新增挂载点只需在触发处写 vm_hook_run("_VM_新名字")，不用回来登记。
     //   ⚠️ 热重载换掉 blocks 之后要重新挂一次，见 src_mod_card_vm_fill。
-    //   ⚠️ 地图专属的 _VM_ROOM_READY_ENTRY / _VM_CONST_INIT 不走这套，
-    //      它们在 bin 加载当场直接执行。
+    //   ⚠️ 挂载点一律走这套：地图脚本的块在触发处直接执行，mod 单位 VM 由 vm_hook_run 分发，
+    //      只要 VM 自己的条件符合（有实例 / 带 __hookall__）就能进，不分挂载点种类。
+    //      （_VM_CONST_INIT 例外：那是每个 VM 自己加载时跑一次的初始化块，不是广播事件。）
     // ══════════════════════════════════════════════════════════════════
     // ⚠️ 只在**第一次**建 VM 时建表，绝不能每次 VM_Create 都 destroy+重建：
     //    VM_Create 是**每个 mod 单位各调一次**的（每张卡/武器/宝石/敌人/子弹/特效一个 VM），
@@ -6324,4 +6325,8 @@ function VM_InitRoomEntry(buf) {
         }
         vm_hook_register(_block_name, global.__vm);
     }
+
+    // _VM_ROOM_READY_ENTRY 的 mod 侧：地图 bin 的块在上面当场执行掉了，
+    // mod 单位 VM 走注册表 —— 条件符合的（场上有实例 / 带 __hookall__）就进，没有别的门槛。
+    vm_hook_run("_VM_ROOM_READY_ENTRY");
 }
