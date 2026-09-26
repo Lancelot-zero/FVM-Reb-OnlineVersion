@@ -843,8 +843,8 @@ function src_mod_card_vm_load(_buf = undefined, _dir = "", _id = "") {
 	_vm[$ "blocks"] = ds_map_create();   // 二进制逻辑字典：块名 → 字节码 buffer
 	_vm[$ "instances"] = ds_list_create();  // 该卡所有实例的容器：创建时加入、消耗时移除
 	_vm[$ "inst_count"] = 0;   // 活实例个数：mod_inst_add/del 维护，mod_inst_count 读
-	_vm[$ "is_mod_vm"] = true;   // 标记 mod 单位 VM：挂载点触发时按「活实例 / 出战卡组」过滤
-	_vm[$ "mod_id"] = _id;       // 自己的 mod id：卡片 mod 用它判断「我这张卡有没有被选进出战卡组」
+	_vm[$ "is_mod_vm"] = true;   // 标记 mod 单位 VM：挂载点触发时按「活实例 / 卡片 deck_active / __hookall__」过滤
+	_vm[$ "mod_id"] = _id;       // 自己的 mod id（卡片 mod 用它比出战卡组的 card_id，见 mod_card_vm_deck_check）
 	if (_dir != "") { _vm[$ "mod_dir"] = _dir; }
 	// 侧挂行号表路径（编译器多写的 <同名>.lines）：报错定位用，平时不读
 	if (_dir != "" && _id != "") { _vm[$ "src_lines"] = _dir + _id + ".lines"; }
@@ -1136,6 +1136,7 @@ function src_mod_init(_dir = "") {
 			global.mod_card_vms[? _id] = src_mod_card_vm_load(_bin_buf, _d, _id);
 			global.mod_card_vms[? _id][$ "card_data"] = _json;   // 保留原始 JSON，创建实例时取 plant_type/feature_type
 			global.mod_card_vms[? _id][$ "mod_dir"] = _d;   // 贴图跟着 json 走：从它所在目录找 tex/
+			mod_card_vm_deck_check(global.mod_card_vms[? _id]);   // 战斗中途加载：这张卡在卡组里就直接有效
 			if (buffer_exists(_bin_buf)) {
 				show_debug_message("src_mod: 加载卡片虚拟机 " + _id + "（块数 " + string(ds_map_size(global.mod_card_vms[? _id].blocks)) + "）");
 			}
@@ -1190,6 +1191,7 @@ function src_mod_reload() {
 			}
 			_vm[$ "card_data"] = _json;
 			_vm[$ "mod_dir"] = _d;
+			mod_card_vm_deck_check(_vm);   // 热重载后按当前卡组重判 deck_active
 			if (buffer_exists(_bin_buf)) {
 				show_debug_message("src_mod: 重载卡片虚拟机 " + _id + "（块数 " + string(ds_map_size(_vm[$ "blocks"])) + "）");
 			}
@@ -2069,4 +2071,41 @@ function mod_inst_del(_vm, _inst, _with_list = true) {
 function mod_inst_count(_vm) {
 	if (is_undefined(_vm) || !variable_struct_exists(_vm, "inst_count")) return 0;
 	return _vm.inst_count;
+}
+
+/// @function mod_card_vm_deck_check(_vm)
+/// @desc 卡片 mod **专属属性** deck_active：这张卡在出战卡组 global.selected_deck 里 → 它的 VM
+///       「直接有效」——挂载点不要求场上有实例（和 __hookall__ 一样放行），因为"带了这张卡"本身
+///       就说明玩家会用它。不在卡组里就把标记摘掉。
+///       判定用 VM 自己的 mod_id 比卡组条目的 card_id（卡片注册时用的就是同一个 id）。
+function mod_card_vm_deck_check(_vm) {
+	if (is_undefined(_vm) || !is_struct(_vm)) return;
+	if (!variable_struct_exists(_vm, "mod_id")) return;   // 只有卡片 mod 的 VM 有 mod_id
+	var _in = false;
+	if (variable_global_exists("selected_deck") && ds_exists(global.selected_deck, ds_type_list)) {
+		var _n = ds_list_size(global.selected_deck);
+		for (var _i = 0; _i < _n; _i++) {
+			var _e = global.selected_deck[| _i];
+			if (_e == undefined || _e == noone) continue;
+			if (!ds_map_exists(_e, "card_id")) continue;
+			if (_e[? "card_id"] == _vm.mod_id) { _in = true; break; }
+		}
+	}
+	if (_in) {
+		_vm[$ "deck_active"] = true;
+	} else if (variable_struct_exists(_vm, "deck_active")) {
+		variable_struct_remove(_vm, "deck_active");
+	}
+}
+
+/// @function mod_card_vm_deck_refresh()
+/// @desc 按当前出战卡组刷新**所有**卡片 mod 的 deck_active。
+///       调的地方：进准备室（VM_InitRoomEntry）、战斗开始（obj_event_manager）——
+///       这两处保证标记与"这次战斗选的卡组"一致；mod 加载 / 热重载时单张补判。
+function mod_card_vm_deck_refresh() {
+	if (!variable_global_exists("mod_card_vms") || !ds_exists(global.mod_card_vms, ds_type_map)) return;
+	var _ids = ds_map_keys_to_array(global.mod_card_vms);
+	for (var _i = 0; _i < array_length(_ids); _i++) {
+		mod_card_vm_deck_check(global.mod_card_vms[? _ids[_i]]);
+	}
 }

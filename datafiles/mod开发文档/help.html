@@ -236,10 +236,14 @@ _VM_BATTLE_START {
 <ol>
 <li><strong>挂载点都能挂</strong>：事件类、<code>_VM_FRAME</code>（每帧）、5f / 10f / 15f / 30f / 60f 定时器，mod 插件和地图脚本一样都能用。
 高频点（<code>_VM_FRAME</code> / 5f / 10f / 15f）是全场级别的开销，每帧要做的事一般写 <code>_OBJECT_STEP</code> 更省（那里有 <code>mod_step_enter_condition</code> 闸门）。</li>
-<li><strong>只有在&quot;场上有它的实例&quot;时才跑</strong> —— 卡片 / 武器 / 宝石 / 敌人 / 子弹 / 特效一视同仁：该类单位一个实例都没有时挂载点不触发
+<li><strong>触发条件看 VM 自己</strong>，满足任意一条就叫醒它：<ul>
+<li><strong>场上有它的实例</strong> —— 卡片 / 武器 / 宝石 / 敌人 / 子弹 / 特效一视同仁：该类单位一个实例都没有时不触发
 （<code>_OBJECT_CREATE</code> 还没跑过的新局同理）。热重载换 bin、旧实例销毁都会自动跟上。</li>
-<li><strong>想不受第 2 条过滤</strong>：让字符串 <code>__hookall__</code> 出现在这个 mod 的 <code>.bin</code> 字符串池里，这个 bin 的挂载点就恒开
-（热重载按新 bin 重判；<strong>特殊用法，非必要不要用</strong>，见下方「附：<code>__hookall__</code>」）。</li>
+<li><strong>卡片 mod 专属属性 <code>deck_active</code></strong>：这张卡在<strong>战斗开始时的出战卡组</strong>里 → 它的 VM「直接有效」，
+不用等种下（卡还在手槽 / 传送带上也照样收事件）。刷新点：进准备室、战斗开始、mod 加载 / 热重载。</li>
+<li><strong>带 <code>__hookall__</code> 的 bin</strong>：恒开（<strong>特殊用法，非必要不要用</strong>，见下方「附：<code>__hookall__</code>」）。</li>
+</ul>
+</li>
 <li><strong>卡片类事件不区分是谁的卡</strong> —— 关卡自摆的卡、玩家角色、木板这些创建 / 销毁时也会广播；
 想只处理自己这几张卡，在块里用 <code>VM_GetLastCreatedCard()</code> / <code>VM_GetLastDestroyedCard()</code> + <code>plant_id</code> 自己筛。</li>
 </ol>
