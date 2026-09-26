@@ -3479,27 +3479,6 @@ function VM_LineOf(vm, name, ip, _is_byte = false) {
 }
 
 
-/// @function vm_card_hook_allowed(_inst)
-/// @desc 卡挂载点（_VM_CARD_CREATED / _VM_CARD_DESTROYED）要不要触发：**只认玩家带进战斗的卡**。
-///       判据 = 该实例的 plant_id 出现在出战卡组 global.selected_deck 里（纯 GML 查表，不进 VM）。
-///       这样关卡自摆的卡、玩家角色（player）等"不是玩家选的卡"就不会再叫醒 mod 的挂载点。
-///       ⚠️ 不带 plant_id 的实例（炮台 / 地图物件）一律不触发。
-function vm_card_hook_allowed(_inst) {
-    if (!instance_exists(_inst)) return false;
-    if (!variable_instance_exists(_inst, "plant_id")) return false;
-    var _pid = _inst.plant_id;
-    if (!is_string(_pid) || _pid == "") return false;
-    if (!variable_global_exists("selected_deck") || !ds_exists(global.selected_deck, ds_type_list)) return false;
-    var _n = ds_list_size(global.selected_deck);
-    for (var _i = 0; _i < _n; _i++) {
-        var _e = global.selected_deck[| _i];
-        if (_e == undefined || _e == noone) continue;
-        if (!ds_map_exists(_e, "card_id")) continue;
-        if (_e[? "card_id"] == _pid) return true;
-    }
-    return false;
-}
-
 /// @function vm_hook_register(_name, _vm)
 /// @desc 把一个 VM 挂到某个挂载点上。地图 bin 与每个 mod 的 VM 加载后各挂一次。
 ///       ⚠️ **不检查**该 VM 此时有没有这个块 —— 热重载会换掉 vm.blocks，

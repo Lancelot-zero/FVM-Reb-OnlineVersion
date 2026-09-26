@@ -225,7 +225,8 @@ mod 插件和地图脚本**都能挂**：事件类（`_VM_BATTLE_START` / `_VM_C
 
 - **只有"场上有它的实例"时才跑**：卡片 / 武器 / 宝石 / 敌人 / 子弹 / 特效一样，该类单位一个实例都没有时挂载点不触发
   （`_OBJECT_CREATE` 都还没跑的新局、准备界面同理）。热重载换 bin、旧实例销毁都会自动跟上。
-- **卡片类事件本身只认"带进战斗的卡"**：`_VM_CARD_CREATED` / `_VM_CARD_DESTROYED` 不会为关卡自摆的卡触发。
+- **卡片类事件不区分是谁的卡**：`_VM_CARD_CREATED` / `_VM_CARD_DESTROYED` 对关卡自摆的卡、玩家角色也照样广播，
+  想只处理自己的卡就在块里用 `VM_GetLastCreatedCard()` / `VM_GetLastDestroyedCard()` + `plant_id` 自己筛。
 - **高频点慎用**：`_VM_FRAME` / 5f / 10f / 15f 是全场级别的开销，每帧要做的事一般写在 `_OBJECT_STEP` 里更省
   （那里有 `mod_step_enter_condition` 闸门，没轮到的实例不进 VM）。
 - 想让某个 mod **不受"有没有实例"这层过滤**（调试用），见 `help.md` 文末「附：`__hookall__`」——**特殊用法，非必要不要用**。

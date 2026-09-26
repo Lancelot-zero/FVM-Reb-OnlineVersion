@@ -118,8 +118,8 @@ _VM_BATTLE_START {
 | `_VM_WAVE_END` | 当前波结束，用 `VM_GetWave()` 拿波数 |
 | `_VM_SUBWAVE_START` | 新子波开始，用 `VM_GetSubwave()` 拿子波数 |
 | `_VM_SUBWAVE_END` | 子波结束，用 `VM_GetSubwave()` 拿子波数 |
-| `_VM_CARD_CREATED` | 卡片被种下，用 `VM_GetLastCreatedCard()` 拿实例（**只对带进战斗的卡触发**，见下方说明） |
-| `_VM_CARD_DESTROYED` | 卡片被销毁，用 `VM_GetLastDestroyedCard()` 拿实例，用 `VM_GetKilledProp("属性名")` 读销毁瞬间属性快照（同样只认带进战斗的卡） |
+| `_VM_CARD_CREATED` | 卡片被种下 / 被创建，用 `VM_GetLastCreatedCard()` 拿实例（**关卡自摆的卡、玩家角色也会触发**，要只看自己的卡就自己判 `plant_id`） |
+| `_VM_CARD_DESTROYED` | 卡片被销毁，用 `VM_GetLastDestroyedCard()` 拿实例，用 `VM_GetKilledProp("属性名")` 读销毁瞬间属性快照（同样不区分是谁的卡） |
 | `_VM_CARD_DAMAGED` | 卡片受伤 |
 | `_VM_CARD_PREVIEW_PICKED` | 卡片被选取到手槽，用 `VM_GetPreviewCard()` 拿 card_id |
 | `_VM_ENEMY_SPAWNED` | 敌人出现，用 `VM_GetLastCreatedEnemy()` 拿实例 |
@@ -146,8 +146,8 @@ _VM_BATTLE_START {
 >    （`_OBJECT_CREATE` 还没跑过的新局同理）。热重载换 bin、旧实例销毁都会自动跟上。
 > 3. **想不受第 2 条过滤**：让字符串 `__hookall__` 出现在这个 mod 的 `.bin` 字符串池里，这个 bin 的挂载点就恒开
 >    （热重载按新 bin 重判；**特殊用法，非必要不要用**，见下方「附：`__hookall__`」）。
-> 4. **卡片类事件本身只认"带进战斗的卡"**：`_VM_CARD_CREATED` / `_VM_CARD_DESTROYED` 不会为关卡自摆的卡、
->    玩家角色触发（判定 = 被种下 / 被销毁的那张卡在出战卡组里）。
+> 4. **卡片类事件不区分是谁的卡** —— 关卡自摆的卡、玩家角色、木板这些创建 / 销毁时也会广播；
+>    想只处理自己这几张卡，在块里用 `VM_GetLastCreatedCard()` / `VM_GetLastDestroyedCard()` + `plant_id` 自己筛。
 
 ---
 
@@ -742,7 +742,7 @@ VM_ShellPrint("__hookall__")
 
 - 判定时机：**加载 / `[reloadmod]` 热重载时扫一遍字符串池** —— 带上就恒开，去掉就恢复过滤，不用改别的开关。
 - 写在**注释里不算**（注释不进字符串池）；必须是源码里的字符串字面量。
-- 只解除**"有没有实例"这一层过滤**，其它规则照旧：卡片事件照样只认带进战斗的卡。
+- 只解除**"有没有实例"这一层过滤**，其它规则照旧（卡片事件本来就对所有卡广播，不看卡组）。
 
 ---
 
