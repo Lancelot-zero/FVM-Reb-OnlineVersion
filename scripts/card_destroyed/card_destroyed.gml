@@ -4,8 +4,8 @@
 function card_destroyed(plant_inst) {
     global._VM_last_destroyed_card = plant_inst.id;
     // 帧内去重：显式调用 + Destroy 事件会各入队一次，避免 hook 一帧触发两次
-    // 只对「玩家带进战斗的卡」触发（和 _VM_CARD_CREATED 同一判据，见 vm_card_hook_allowed）
-    if (!ds_map_exists(global._VM_dead_snaps, plant_inst.id) && vm_card_hook_allowed(plant_inst)) VM_QueueHook(global._VM_CARD_DESTROYED, "card_del", plant_inst.id);
+    // 卡组判定已去掉：谁被销毁都广播（要只看自己的卡就在块里用 plant_id 自己筛）
+    if (!ds_map_exists(global._VM_dead_snaps, plant_inst.id)) VM_QueueHook(global._VM_CARD_DESTROYED, "card_del", plant_inst.id);
 
     var col = plant_inst.grid_col;
     var row = plant_inst.grid_row;

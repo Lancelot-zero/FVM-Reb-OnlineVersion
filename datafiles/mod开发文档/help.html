@@ -152,11 +152,11 @@ _VM_BATTLE_START {
 </tr>
 <tr>
 <td><code>_VM_CARD_CREATED</code></td>
-<td>卡片被种下，用 <code>VM_GetLastCreatedCard()</code> 拿实例（<strong>只对带进战斗的卡触发</strong>，见下方说明）</td>
+<td>卡片被种下 / 被创建，用 <code>VM_GetLastCreatedCard()</code> 拿实例（<strong>关卡自摆的卡、玩家角色也会触发</strong>，要只看自己的卡就自己判 <code>plant_id</code>）</td>
 </tr>
 <tr>
 <td><code>_VM_CARD_DESTROYED</code></td>
-<td>卡片被销毁，用 <code>VM_GetLastDestroyedCard()</code> 拿实例，用 <code>VM_GetKilledProp(&quot;属性名&quot;)</code> 读销毁瞬间属性快照（同样只认带进战斗的卡）</td>
+<td>卡片被销毁，用 <code>VM_GetLastDestroyedCard()</code> 拿实例，用 <code>VM_GetKilledProp(&quot;属性名&quot;)</code> 读销毁瞬间属性快照（同样不区分是谁的卡）</td>
 </tr>
 <tr>
 <td><code>_VM_CARD_DAMAGED</code></td>
@@ -240,8 +240,8 @@ _VM_BATTLE_START {
 （<code>_OBJECT_CREATE</code> 还没跑过的新局同理）。热重载换 bin、旧实例销毁都会自动跟上。</li>
 <li><strong>想不受第 2 条过滤</strong>：让字符串 <code>__hookall__</code> 出现在这个 mod 的 <code>.bin</code> 字符串池里，这个 bin 的挂载点就恒开
 （热重载按新 bin 重判；<strong>特殊用法，非必要不要用</strong>，见下方「附：<code>__hookall__</code>」）。</li>
-<li><strong>卡片类事件本身只认&quot;带进战斗的卡&quot;</strong>：<code>_VM_CARD_CREATED</code> / <code>_VM_CARD_DESTROYED</code> 不会为关卡自摆的卡、
-玩家角色触发（判定 = 被种下 / 被销毁的那张卡在出战卡组里）。</li>
+<li><strong>卡片类事件不区分是谁的卡</strong> —— 关卡自摆的卡、玩家角色、木板这些创建 / 销毁时也会广播；
+想只处理自己这几张卡，在块里用 <code>VM_GetLastCreatedCard()</code> / <code>VM_GetLastDestroyedCard()</code> + <code>plant_id</code> 自己筛。</li>
 </ol>
 </blockquote>
 <hr>
@@ -1906,7 +1906,7 @@ VM_ShellPrint(&quot;__hookall__&quot;)
 <ul>
 <li>判定时机：<strong>加载 / <code>[reloadmod]</code> 热重载时扫一遍字符串池</strong> —— 带上就恒开，去掉就恢复过滤，不用改别的开关。</li>
 <li>写在<strong>注释里不算</strong>（注释不进字符串池）；必须是源码里的字符串字面量。</li>
-<li>只解除**&quot;有没有实例&quot;这一层过滤**，其它规则照旧：卡片事件照样只认带进战斗的卡。</li>
+<li>只解除**&quot;有没有实例&quot;这一层过滤**，其它规则照旧（卡片事件本来就对所有卡广播，不看卡组）。</li>
 </ul>
 <hr>
 <h2>参数校验附录</h2>
