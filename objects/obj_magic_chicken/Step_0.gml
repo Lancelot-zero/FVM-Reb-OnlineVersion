@@ -16,6 +16,7 @@ if attack_timer == 15 * current_flash_speed - 1&& global.network.mode != "client
 	if card_save_data != false{
 		var prev_card_info = get_plant_data_with_skill(target_card,card_save_data.shape,card_save_data.level,card_save_data.skill)
 		var card_slot_data = deck_get_card_data(target_card,card_save_data.shape)
+		if (card_slot_data == noone || card_slot_data == undefined) { exit; }   // 目标卡不在本机卡组：跳过，别拿 -4 建实例
 		
 		var found_plat = noone;
 		var platform_shift_x = 0;

@@ -23,17 +23,28 @@ function card_created(plant_inst, col, row) {
 			if _target == ""{
 				_meta = {target_card:""}
 			}else{
+				// 目标卡的数据先安全取一遍：本机存档里没有 / 卡池里没有 → 按"没有目标"发过去，别建探针卡
+				var _tgt_info    = get_card_info(_target)
+				var _tgt_ok      = is_struct(_tgt_info)
+				var _tgt_shape   = _tgt_ok ? _tgt_info[$ "shape"] : 0
+				var _tgt_deck     = deck_get_card_data(_target, _tgt_shape)
+				var _tgt_deck_ok = (_tgt_deck != noone && _tgt_deck != undefined)
+				if (!_tgt_ok || !_tgt_deck_ok) {
+					_meta = {target_card:""}
+				} else {
 				var target_card_info ={
-					skill:get_card_info(_target)[$ "skill"],
-					shape:get_card_info(_target)[$ "shape"],
-					level:get_card_info(_target)[$ "level"],
-					plant_type: deck_get_card_data(_target, get_card_info(_target)[$ "shape"])[? "plant_type"]
+					skill: _tgt_info[$ "skill"],
+					shape: _tgt_shape,
+					level: _tgt_info[$ "level"],
+					plant_type: _tgt_deck[? "plant_type"]
 				}
 				bak = global.network.client_able;
 				global.network.client_able = true
 				var card_save_data = get_card_info_simple(_target)
-				var card_slot_data = deck_get_card_data(_target,card_save_data.shape)
+				var card_slot_data = _tgt_deck
+				if (card_slot_data[? "obj"] == obj_card_mod) { global._mod_pending_card_id = _target; }   // 探针卡也要认身份
 				var new_card = instance_create_depth(0, 0, 0, card_slot_data[? "obj"])
+				global._mod_pending_card_id = "";
 				target_card_info[$ "sprite_index"] = ds_map_exists(global._pid_reverse, new_card.sprite_index) ? global._pid_reverse[? new_card.sprite_index] : sprite_get_name(new_card.sprite_index);
 				target_card_info[$ "_net_card_equipped_attire_id"] = card_equipped_attire_id(new_card.plant_id)
 				target_card_info[$ "cycle"] = new_card.cycle
@@ -66,6 +77,7 @@ function card_created(plant_inst, col, row) {
 				instance_destroy(new_card);
 				global.network.client_able =bak;
 				_meta = {target_card:_target,target_card_info:target_card_info};
+				}
 			}
 		}else{
 		

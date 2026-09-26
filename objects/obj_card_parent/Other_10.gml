@@ -4,7 +4,7 @@
 // 使用注册数据初始化属性
 var plant_data = get_plant_data(plant_id);
 current_level = 0
-if (plant_data != undefined) {
+if (plant_data != undefined && plant_data != noone) {
     name = plant_data[? "name"];
     description = plant_data[? "description"];
 	
@@ -38,7 +38,7 @@ if (plant_data != undefined) {
 	
     // 应用基础属性
     var upgrade_data = get_plant_data_with_skill(plant_id, shape,current_level,skill);
-    if (upgrade_data != undefined) {
+    if (upgrade_data != undefined && upgrade_data != noone) {
         hp = upgrade_data[? "hp"];
 		max_hp = hp
         cost = upgrade_data[? "cost"];
@@ -84,9 +84,16 @@ if card_shape_data != false{
 	card_shape = card_shape_data.shape
 }
 var card_data = deck_get_card_data(plant_id,card_shape)
-plant_type = card_data[? "plant_type"]
-feature_type = card_data[? "feature_type"]
-target_card = card_data[? "target_card"]
+// 卡组表查不到（联机重建的卡 / mod 卡没进 player_deck / shapes 为空）→ 退回注册表拿，
+// 免得把 noone 当 ds_map 用（客机种卡时报 "invalid reference to (ds_map) -4" 就是这里）
+if (card_data == noone || card_data == undefined) {
+	card_data = get_plant_data(plant_id)
+}
+if (card_data != noone && card_data != undefined) {
+	if (ds_map_exists(card_data, "plant_type"))   plant_type   = card_data[? "plant_type"]
+	if (ds_map_exists(card_data, "feature_type")) feature_type = card_data[? "feature_type"]
+	if (ds_map_exists(card_data, "target_card"))  target_card  = card_data[? "target_card"]
+}
 
 //检查食谱
 var cookbook_list = global.save_data.equipped_cookbook

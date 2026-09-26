@@ -511,12 +511,32 @@ _VM_BATTLE_START {
 |---|---|
 | `_OBJECT_CFG` | 配置块：加载贴图等，`.bin` 载入时执行一次 |
 | `_OBJECT_CREATE` | 对象创建时执行一次 |
-| `_OBJECT_STEP` | 对象每帧执行（会被 `mod_step_enter_condition` 挡住，见各类别文档） |
+| `_OBJECT_STEP` | 对象每帧执行（会被 `mod_step_enter_condition` 挡住）；**属性值变化也会触发进入**：`mod_watch` 数组 —— 每有一个属性变化各进一次，条件符合再进一次，`mod_changed_prop` 告诉你这次是谁，见各类别文档 |
 | `_OBJECT_DRAW` | 对象绘制时执行（只有这里能画东西） |
 | `_OBJECT_DESTROY` | 对象销毁时执行 |
 | `_OBJECT_MOUSE_ENTER` | 鼠标移入该实例 |
 | `_OBJECT_MOUSE_LEAVE` | 鼠标移出该实例 |
 | `_OBJECT_CLICK` | 鼠标左键点击该实例（按实例判定，和全局的 `_VM_MOUSE_LEFT` 不同） |
+
+### mod 全局变量与"每局初始化表"
+
+插件里可以自己定义全局变量：写 `VM_SetProp(0, "名字", 值)` 就会自动创建（`0` = 全局），读用 `VM_GetProp(0, "名字")`。
+
+要让某个全局**每局战斗开始时重置**，就往下面这两个**全局数组**里登记（`inst_id = 0` 表示"全局数组"）：
+
+| 数组 | 内容 | 登记方式 |
+|---|---|---|
+| `mod_init_globals` | 全局变量**名字**（字符串） | `VM_InstArrayAdd(0, "mod_init_globals", "my_flag")` |
+| `mod_init_defaults` | 一一对应的**默认值**（可省；缺省 / 不够长 = `0`） | `VM_InstArrayAdd(0, "mod_init_defaults", 0)` |
+
+引擎在**每局战斗开始**（`obj_battle` 的 Create）会：
+
+1. 遍历 `mod_init_globals`，把每个名字对应的全局**重置成对应默认值**（没写默认值就是 `0`）；
+2. 再把这两个数组**去重**（同名只保留第一次出现的那一组，空名字丢掉）。
+
+所以插件在 `_OBJECT_CFG` / `_OBJECT_CREATE` 里登记一次就行 —— 重复登记不会出问题，每局会被去重。
+
+> ⚠️ 全局变量**不会跨端同步**，也不会随房间切换自动清 —— 要每局清就登记进这张表。
 
 ### 屏幕弹幕
 

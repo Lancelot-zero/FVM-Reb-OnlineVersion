@@ -63,6 +63,10 @@ mod_enemy_types     = []  // 数组，元素是类型名；空 = 任意类型
 
 // 什么时候进 VM
 mod_step_enter_condition = ""   // "" / "mod" / "norm" / "norm_attack" / "wait" / "hp_change" / "hp_change_mod"
+// 盯梢（实现见 Step）：插件用命名数组 mod_watch 声明"要盯的属性名"，任一属性值变了，这一帧也进 _OBJECT_STEP
+mod_changed_prop = ""    // 【只读】这一帧第一个发生变化的盯梢属性名（没变化 = ""）
+mod_watch_last  = []     // 【obj 内部】上一帧 mod_watch 各属性的值（和数组一一对应）
+mod_watch_changed = []  // 【obj 内部】这一帧发生变化的盯梢属性名（每个各进一次 _OBJECT_STEP）
 mod_step_enter_var       = 0    // "mod" = 间隔帧数；"wait" = 还要等几帧；"hp_change_mod" = 冷却帧数
 mod_step_enter_arr       = []   // 数组，开火窗口表（负数 = 从一轮末尾倒数）
 mod_step_enter_index     = -1   // 【只读】命中的窗口下标；不是窗口 = -1

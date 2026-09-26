@@ -1,5 +1,7 @@
 // 通用 mod 武器对象：src_mod 注册的所有武器共用此对象
-// 武器 id 由放置逻辑在创建前写入 global._mod_pending_weapon_id
+// 武器 id 怎么给：
+//   放置逻辑现在是「建实例 → 赋值 parent_player → 加属性名 weapon_id → 调一次它的步」；
+//   老写法（创建前先把 id 写进 global._mod_pending_weapon_id）也还认。
 // 只负责初始化和分发 VM 块，攻击逻辑全部在 .bin 里
 weapon_id = variable_global_exists("_mod_pending_weapon_id") ? global._mod_pending_weapon_id : ""
 weapon_info = get_weapon_info(weapon_id)
@@ -53,6 +55,10 @@ mod_step_enemy_area = []  // 数组 [上,下,左,右]；空 = [1,1,0,99]
 mod_enemy_types     = []  // 数组，元素是类型名；空 = 任意类型
 
 mod_step_enter_condition = ""   // "" / "mod" / "norm" / "norm_attack" / "wait"
+// 盯梢（实现见 Step）：插件用命名数组 mod_watch 声明"要盯的属性名"，任一属性值变了，这一帧也进 _OBJECT_STEP
+mod_changed_prop = ""    // 【只读】这一帧第一个发生变化的盯梢属性名（没变化 = ""）
+mod_watch_last  = []     // 【obj 内部】上一帧 mod_watch 各属性的值（和数组一一对应）
+mod_watch_changed = []  // 【obj 内部】这一帧发生变化的盯梢属性名（每个各进一次 _OBJECT_STEP）
 mod_step_enter_var       = 0    // "mod" = 间隔帧数；"wait" = 还要等几帧
 mod_step_enter_arr       = []   // 数组，开火窗口表（负数 = 从一轮末尾倒数）
 mod_step_enter_index     = -1   // 【只读】命中的窗口下标；不是窗口 = -1
@@ -61,20 +67,8 @@ mod_step_enter_index     = -1   // 【只读】命中的窗口下标；不是窗
 mod_countdown = 0    // 倒计时（帧）：> 0 时每帧 -1
 mod_alpha_add = 0    // 每帧加到 image_alpha 上的量（负数 = 渐隐）；只在倒计时 > 0 时加
 
-// 创建时加入该武器的实例容器，并执行该武器虚拟机里的创建块
-if (weapon_id != "" && variable_global_exists("mod_weapon_vms") && ds_map_exists(global.mod_weapon_vms, weapon_id)) {
-	var _vm = global.mod_weapon_vms[? weapon_id];
-	mod_inst_add(_vm, id);
-	if (ds_map_exists(_vm.blocks, "_OBJECT_CREATE")) {
-		var _bak_last = global._VM_last_created_card;
-		global._VM_last_created_card = id;
-		var _bak_cur = global._VM_cur_card;
-		global._VM_cur_card = id;
-		var _bak_vm = global.__vm;
-		global.__vm = _vm;
-		VM_Execute(_vm, _vm.blocks[? "_OBJECT_CREATE"], "_OBJECT_CREATE");
-		global.__vm = _bak_vm;
-		global._VM_cur_card = _bak_cur;
-		global._VM_last_created_card = _bak_last;
-	}
-}
+// 登记实例 + 跑 .bin 的 _OBJECT_CREATE **不在这里做**，挪到了 Step_0 顶部：
+//   Create 在 instance_create_depth 里跑，那时放置逻辑还没执行 xxx.parent_player = 角色，
+//   现在跑的话插件 _OBJECT_CREATE 里清 parent_player / 摆位置会被随后那行赋值盖掉。
+//   （数值 / 贴图上面已按 weapon_info 设好，不受影响。）
+_mod_initialized = false

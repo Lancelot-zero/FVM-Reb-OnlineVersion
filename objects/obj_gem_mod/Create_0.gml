@@ -59,6 +59,10 @@ if (is_struct(gem_info)) {
 //    所以卡片/敌人那套 hp_change、cell、索敌条件这里都没有
 // ══════════════════════════════════════════════════════════════════════════
 mod_step_enter_condition = ""   // "" / "mod" / "wait" / "cool" / "enemy_area" / "enemy_area_mod" / "card_area" / "card_area_mod"
+// 盯梢（实现见 Step）：插件用命名数组 mod_watch 声明"要盯的属性名"，任一属性值变了，这一帧也进 _OBJECT_STEP
+mod_changed_prop = ""    // 【只读】这一帧第一个发生变化的盯梢属性名（没变化 = ""）
+mod_watch_last  = []     // 【obj 内部】上一帧 mod_watch 各属性的值（和数组一一对应）
+mod_watch_changed = []  // 【obj 内部】这一帧发生变化的盯梢属性名（每个各进一次 _OBJECT_STEP）
 mod_step_enter_var       = 0    // "mod" = 间隔帧数；"wait" = 还要等几帧；"*_area_mod" = 冷却帧数
 
 // ── 区域检测（"enemy_area*" / "card_area*" 用；锚点跟着放置它的角色走）──
@@ -76,20 +80,7 @@ mod_tick_cool       = 0    // 【obj 内部】"*_area_mod" 的冷却剩余帧数
 mod_countdown = 0    // 倒计时（帧）：> 0 时每帧 -1
 mod_alpha_add = 0    // 每帧加到 image_alpha 上的量（负数 = 渐隐）；只在倒计时 > 0 时加
 
-// 创建时加入该宝石的实例容器，并执行该宝石虚拟机里的创建块
-if (gem_id != "" && variable_global_exists("mod_gem_vms") && ds_map_exists(global.mod_gem_vms, gem_id)) {
-	var _vm = global.mod_gem_vms[? gem_id];
-	mod_inst_add(_vm, id);
-	if (ds_map_exists(_vm.blocks, "_OBJECT_CREATE")) {
-		var _bak_last = global._VM_last_created_card;
-		global._VM_last_created_card = id;
-		var _bak_cur = global._VM_cur_card;
-		global._VM_cur_card = id;
-		var _bak_vm = global.__vm;
-		global.__vm = _vm;
-		VM_Execute(_vm, _vm.blocks[? "_OBJECT_CREATE"], "_OBJECT_CREATE");
-		global.__vm = _bak_vm;
-		global._VM_cur_card = _bak_cur;
-		global._VM_last_created_card = _bak_last;
-	}
-}
+// 登记实例 + 跑 .bin 的 _OBJECT_CREATE **不在这里做**，挪到了 Step_0 顶部：
+//   Create 在 instance_create_depth 里跑，那时放置逻辑还没写 mod_point_parent_player / grid_row /
+//   grid_col / gem_level（都是建完实例紧接着才写的），现在跑的话插件 _OBJECT_CREATE 里读不到它们。
+_mod_initialized = false

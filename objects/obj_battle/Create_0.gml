@@ -28,6 +28,35 @@ global.current_seed = noone;
 global._VM_battle_start_done = false;
 // 波次自动推进开关：1=自动（默认）；0=关闭，由插件脚本用 VM_SetWave 完全控制波次
 global._VM_wave_auto = true;
+// mod 全局：背后灵数量（每局战斗开始都重置为 0）
+global.mod_spirit_count = 0
+//   读写：GML 侧 global.mod_spirit_count；插件侧 VM_GetProp(0, "mod_spirit_count") /
+//         VM_SetProp(0, "mod_spirit_count", 值)
+// mod 全局"每局初始化表"（插件登记，见文档 help.md 的「mod 全局变量与初始化表」）：
+//   mod_init_globals ：全局变量名数组（插件：VM_InstArrayAdd(0, "mod_init_globals", "名字")）
+//   mod_init_defaults：一一对应的默认值（可省；缺省 / 不够长 = 0）
+//   每局开始：先按名字把对应全局重置成默认值，再把两个数组去重（同名只留第一次那组、丢掉空名字）
+if (!variable_global_exists("mod_init_globals"))  variable_global_set("mod_init_globals", []);
+if (!variable_global_exists("mod_init_defaults")) variable_global_set("mod_init_defaults", []);
+var _gi_names = variable_global_get("mod_init_globals");
+var _gi_defs  = variable_global_get("mod_init_defaults");
+if (!is_array(_gi_names)) _gi_names = [];
+if (!is_array(_gi_defs))  _gi_defs  = [];
+var _gi_dn = array_length(_gi_defs);
+var _gi_uniq_names = [];
+var _gi_uniq_defs  = [];
+for (var _i = 0; _i < array_length(_gi_names); _i++) {
+    var _gn = _gi_names[_i];
+    if (!is_string(_gn) || _gn == "") continue;
+    var _gv = (_i < _gi_dn) ? _gi_defs[_i] : 0;
+    if (is_undefined(_gv)) _gv = 0;
+    variable_global_set(_gn, _gv);                    // ① 重置成默认值
+    if (array_get_index(_gi_uniq_names, _gn) != -1) continue;   // ② 去重：同名只留第一次
+    array_push(_gi_uniq_names, _gn);
+    array_push(_gi_uniq_defs, _gv);
+}
+variable_global_set("mod_init_globals", _gi_uniq_names);
+variable_global_set("mod_init_defaults", _gi_uniq_defs);
 // VM_id 初始化：每次战斗开始前重置，保证两端占位 id 从同一值起跑
 global._VM_conveyor_belt_arr = []
 global._VM_create_counter = 100000;

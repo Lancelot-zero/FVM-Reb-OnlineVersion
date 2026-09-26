@@ -128,13 +128,35 @@
 > **没有**的只有 `mod_set_*` 批量改属性、以及 `hp_change` / `hp_change_mod`（武器不挨打，没有 `hp`）。
 > 另有武器专属的两个偏移字段 `mod_prestep_dx` / `mod_prestep_dy`。
 
+### 还有一条路：盯属性变化（`mod_watch`）
+
+除了上面的条件，还能让"某个属性的值变了"成为进 VM 的理由。在 `.bin` 里声明一个**命名数组** `mod_watch`，
+里面写要盯的**属性名**（这个对象自己的任何实例属性都行，比如 `hp` / `atk` / `x` / 你自己 `VM_SetProp` 加的属性）：
+
+```gml
+VM_ArrayClear("mod_watch")
+VM_ArrayAdd("mod_watch", "hp")
+VM_ArrayAdd("mod_watch", "atk")
+```
+
+对象每帧会**遍历**这个数组，用**等号**比每个属性的当前值和上一帧的值：
+
+- 这一帧进几次 = **变化的属性个数** + **（`mod_step_enter_condition` 也成立 ? `1` : `0`）**；
+- 每次进去读 `p = VM_GetProp(self, "mod_changed_prop")` 就知道**这次是谁**：变化的那几次是**属性名**（按数组顺序一个接一个），最后“条件”那次是 `""`；
+- 同一帧多个属性变化 → **各进一次**（快照会全部更新，下帧不会重复报）；每轮之间会检查实例还在不在（插件把自己销毁了就中断）；
+- 也能当**对象之间 / 插件之间的信号**用：约定一个属性名（比如自己 `VM_SetProp` 加的 `mod_signal`），一边改它，另一边就会因为 `mod_watch` 变化被触发进入，读 `mod_changed_prop` 就知道是谁变了 —— 相当于互相传消息；
+- ⚠️ 声明 / 改列表那一帧只对齐快照、不触发；条件那一路和 watch 那一路**互不影响**（watch 每帧照常比对）。
+- ⚠️ 声明 / 改列表那一帧只对齐快照、不触发；同一帧多个属性变化只报第一个（快照仍会全部更新，下帧不会重复报）。
+
 ---
 
 ## 四、STEP 的时机与执行顺序
 
 ### 什么时候跑
 
-- **`_OBJECT_CREATE`**：实例创建时立刻执行（主/超武在种卡的那一刻；副武器在角色创建时）
+- **`_OBJECT_CREATE`**：实例建好、放置逻辑把 `parent_player` / `weapon_id` 写完之后立刻执行
+  （放置逻辑会为这把 mod 武器**调一次它的步**；插件自己建的武器则在第一次 Step 里补跑）。
+  也就是说：**`_OBJECT_CREATE` 里读得到 `parent_player`**，清它 / 写 `x`/`y`/`depth` 也是有效的。
 - **`_OBJECT_STEP`**：每帧，**但会被 `mod_step_enter_condition` 挡住**（默认 `""` 才是每帧进）
 - **`_OBJECT_DRAW`**：写了就跑 VM 的绘制块（**不再自动 `draw_self()`**），没写就自动画 `sprite_index`
 - **`_OBJECT_DESTROY`**：武器被销毁时（块内用 `VM_GetCurCard()` 拿自己，`VM_GetLastDestroyedCard()` 也能拿到）
@@ -144,7 +166,7 @@
 
 ```text
 1. 暂停 → 整个 exit
-2. 跟随玩家（parent_player 存在时）：
+2. 跟随玩家（parent_player 存在时）：        ← parent_player 由放置逻辑设；你的 _OBJECT_CREATE 在它之后才跑，见下
       depth  = parent_player.depth - 1
       x      = parent_player.x - 10
       y      = parent_player.y - 100
@@ -167,19 +189,33 @@
 两个由此而来的"特别用法"：
 
 - **位置每帧被核心钉在玩家头上**（`x = 玩家.x - 10`、`y = 玩家.y - 100`）。
-  想要别的站位/钉在固定位置，就在自己的 `_OBJECT_STEP` 里**每帧覆盖**（放在自己逻辑的开头）：
+  想要别的站位就有两条路：
 
-```gml
-// 例子：冥王战镰——固定在 x=500，高度用自己的 lock_y，深度压到最上层
-VM_SetProp(self, "x", 500)
-VM_SetProp(self, "y", VM_GetProp(self, "lock_y"))
-VM_SetProp(self, "depth", -500)
-```
+  **① 只是小偏移（还跟着玩家）**：用 `mod_prestep_dx` / `mod_prestep_dy`（第 9 步的固定偏移，不用每帧覆盖）：
 
-```gml
-// 例子：主宰之盾——核心把 y 钉在 玩家.y-100，盾牌想再往下挪 100，就每帧补回来
-VM_SetProp(self, "y", VM_GetProp(self, "y") + 100)
-```
+  ```gml
+  // 例子：主宰之盾——核心把 y 钉在 玩家.y-100，盾牌想再往下挪 100
+  VM_SetProp(self, "mod_prestep_dy", 100)
+  ```
+
+  **② 固定位置、完全不跟玩家（超武这类）**：**在 `_OBJECT_CREATE` 里清掉 `parent_player`**，
+  再写一次位置就固定住了（之后核心不再按玩家摆它）：
+
+  ```gml
+  // 例子：冥王战镰——固定在 x=500，高度用自己的 lock_y，深度压到最上层
+  VM_SetProp(self, "parent_player", 0 - 4)   // noone：清掉后核心不再按玩家摆位置/深度
+  VM_SetProp(self, "x", 500)
+  VM_SetProp(self, "y", VM_GetProp(self, "lock_y"))
+  VM_SetProp(self, "depth", -500)            // 第 2 步曾把 depth 改成 parent.depth-1
+  ```
+
+  > ✅ 写 `_OBJECT_CREATE` 就行：放置逻辑是「建实例 → 写 `parent_player` → 写 `weapon_id` →
+  > **调一次它的步**」，所以 `_OBJECT_CREATE` 跑的时候 `parent_player` 已经是角色了，
+  > 这里清掉不会再被谁覆盖（放完就没人再动它）。
+  > ⚠️ 清空**只能写 `noone`（LabLang 里 `0 - 4`）**：写字符串 `""` 会让引擎里
+  > `instance_exists(parent_player)` 直接报 `incorrect type (string) expecting a Number`。
+  > ⚠️ 位置一旦不再每帧被核心重置，就**只在需要时写**（换形态等改完位置要补写一次）；
+  > 别指望"Step 里每帧覆盖 x/y"兜底 —— 入口闸门（`norm_attack` 之类）一挡，Step 就不进了。
 
 - **`timer` 是核心动画的**（每帧自增、到 `flash_speed` 清零），当自己的计时器会被打乱 —— 用别的属性。
 

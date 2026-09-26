@@ -61,26 +61,33 @@ _OBJECT_CFG {
 _OBJECT_CREATE {
     self = VM_GetCurCard()
 
-    // 固定位置，不跟随玩家
-    VM_SetProp(self, "parent_player", "")
+    // 固定位置，不跟随玩家。
+    //   ⚠️ 别往 parent_player 写字符串（""）：引擎里有地方会拿它去 instance_exists()，
+    //      传字符串会直接报 "incorrect type (string) expecting a Number"
+    //      （obj_battle 的 Step_2 第 86 行就是一处）。清空一律用 noone（0 - 4）。
+    //   ⚠️ 而且这里清也**不管用**：Create 是在 instance_create_depth 里跑的，
+    //      放置逻辑紧接着还会执行 xxx.parent_player = 角色，把这一句冲掉 →
+    //      真正管用的是 _OBJECT_STEP 开头那次清空（见那里）。
+    VM_SetProp(self, "parent_player", 0 - 4)
     VM_SetProp(self, "x", 500)
 
-    // 纵向位置：房间里只有 1 个人（net_player_number == 1）时走最中间，和以前一样；
-    // 人多时按自己的 net_player_id 以中间为基准上下摊开（间距 100），免得各玩家的超武叠在一起。
-    //   net_player_number / mod_net_player_id 由中继在人数变化时随房间 id 一起下发；
-    //   VM_GetProp(0, "名字") 读的就是全局变量。
-    num = VM_GetProp(0, "net_player_number")
-    if (num < 1) {
-        num = 1
+    // 纵向位置：按"我是第几个背后灵"上下交替排（1=中间、2=上40、3=下40、4=上80、5=下80 …）
+    //   序号在出生时定下（读当时的 mod_spirit_count），之后别人来/走都不挪窝。
+    n = VM_GetProp(0, "mod_spirit_count") + 1
+    VM_SetProp(0, "mod_spirit_count", n)              // 把自己算进去（销毁时 -1，见 _OBJECT_DESTROY）
+    if (n <= 1) {
+        off = 0
+    } elif (n - VM_Floor(n / 2) * 2 == 0) {
+        off = 0 - (n / 2) * 40                        // 偶数个：在上方
+    } else {
+        off = ((n - 1) / 2) * 40                      // 奇数个（≥3）：在下方
     }
-    pid = VM_GetProp(0, "mod_net_player_id")
-    base_y = 540
-    if (num > 1) {
-        base_y = 540 + (pid - (num - 1) / 2) * 100
-    }
+    base_y = 540 + off
     VM_SetProp(self, "base_y", base_y)
-    VM_SetProp(self, "lock_y", base_y)
-    VM_SetProp(self, "y", base_y)
+    // 纵向 = base_y（背后灵那份） + phase_dy（0=入场 / 100=本体）
+    VM_SetProp(self, "phase_dy", 0)
+    VM_SetProp(self, "lock_y", base_y + VM_GetProp(self, "phase_dy"))
+    VM_SetProp(self, "y", VM_GetProp(self, "lock_y"))
 
     // 入口闸门：入场阶段用 "wait"（倒计时卡在 1 → 每帧都进，入场特效照常播）；
     // 变身结束（见 _OBJECT_STEP）再换成 "norm_attack" —— 之后没敌人一步都不进，
@@ -123,10 +130,13 @@ _OBJECT_CREATE {
 _OBJECT_STEP {
     self = VM_GetCurCard()
 
-    // 每帧锁定位置（lock_y 在本体出现时变为 640，即整体下移 100）
+    // 位置：**在这里清 parent_player**（Create 里清会被放置逻辑随后的赋值覆盖）。
+    //   清成 noone(-4) 之后，obj 的"跟随玩家"段不再跑 → 没人再摆它的 x/y/depth，
+    //   这里写一次就固定住了；就算之后闸门挡住不进 Step，它也不会跑回角色头顶。
+    VM_SetProp(self, "parent_player", 0 - 4)
     VM_SetProp(self, "x", 500)
-    VM_SetProp(self, "y", VM_GetProp(self, "lock_y"))
     VM_SetProp(self, "depth", -500)
+    VM_SetProp(self, "y", VM_GetProp(self, "lock_y"))
 
     phase = VM_GetProp(self, "phase")
 
@@ -142,7 +152,9 @@ _OBJECT_STEP {
             VM_SetProp(self, "sprite_index", "spr_hades_scythe_2")
 
             // 本体出现后整体下移 100（基准位置见 _OBJECT_CREATE 的 base_y）
-            VM_SetProp(self, "lock_y", VM_GetProp(self, "base_y") + 100)
+            VM_SetProp(self, "phase_dy", 100)
+            VM_SetProp(self, "lock_y", VM_GetProp(self, "base_y") + VM_GetProp(self, "phase_dy"))
+            VM_SetProp(self, "y", VM_GetProp(self, "lock_y"))   // 位置之后可能不再每帧写了，这里补一次
 
             // 本体动画：待机 20 帧 + 攻击 16 帧，每 5 帧走一格
             VM_SetProp(self, "idle_anim", 20)
@@ -228,4 +240,13 @@ _OBJECT_STEP {
             }
         }
     }
+}
+
+_OBJECT_DESTROY {
+    // 背后灵少了一个：全局数量 -1（不会低于 0；自己出生时 +1 过）
+    n = VM_GetProp(0, "mod_spirit_count") - 1
+    if (n < 0) {
+        n = 0
+    }
+    VM_SetProp(0, "mod_spirit_count", n)
 }

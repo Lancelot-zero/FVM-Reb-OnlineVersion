@@ -40,6 +40,38 @@ if (!_mod_initialized && mod_type != "" && variable_global_exists("mod_effect_vm
 // ══════════════════════════════════════════════════════════════════════
 var _enter = true;
 var _cond  = mod_step_enter_condition;
+// ── 盯梢 mod_watch：声明的属性里哪个值变了，就记进 mod_watch_changed ──
+//    下面每有一个变化就各进一次 _OBJECT_STEP（mod_changed_prop = 那个属性名），条件符合再进一次
+//    名字先当**本实例属性**读；实例上没有、但有同名**全局变量**时，就当全局读
+mod_changed_prop = "";
+array_resize(mod_watch_changed, 0);
+if (_mod_initialized && variable_struct_exists(_mod_vm, "arrays")) {
+	var _wvm = _mod_vm;
+	if (ds_map_exists(_wvm.arrays, "mod_watch")) {
+		var _wlist = _wvm.arrays[? "mod_watch"];
+		if (is_array(_wlist)) {
+			var _wn = array_length(_wlist);
+			if (array_length(mod_watch_last) != _wn) {
+				// 列表长度变了（刚声明 / 改了）：这一帧只对齐快照，不报变化
+				array_resize(mod_watch_last, _wn);
+				for (var _wi = 0; _wi < _wn; _wi++) {
+					var _wv0 = variable_instance_get(id, _wlist[_wi]);
+					if (is_undefined(_wv0) && variable_global_exists(_wlist[_wi])) _wv0 = variable_global_get(_wlist[_wi]);   // 名字不在实例上 → 当全局读
+					mod_watch_last[_wi] = _wv0;
+				}
+			} else {
+				for (var _wi = 0; _wi < _wn; _wi++) {
+					var _wv = variable_instance_get(id, _wlist[_wi]);
+					if (is_undefined(_wv) && variable_global_exists(_wlist[_wi])) _wv = variable_global_get(_wlist[_wi]);   // 名字不在实例上 → 当全局读
+					if (_wv != mod_watch_last[_wi]) {
+						array_push(mod_watch_changed, _wlist[_wi]);   // 每个变化的属性各进一次 Step
+						mod_watch_last[_wi] = _wv;
+					}
+				}
+			}
+		}
+	}
+}
 
 if (_cond == "mod") {
 	if (is_real(mod_step_enter_var) && mod_step_enter_var > 0 && instance_exists(obj_battle)) {
@@ -56,7 +88,12 @@ if (_cond == "mod") {
 }
 
 // 执行特效自己的 _OBJECT_STEP
-if (_enter && _mod_initialized && ds_map_exists(_mod_vm.blocks, "_OBJECT_STEP")) {
+// 这一帧进几次：watch 每个变化的属性各 1 次，条件符合再 1 次
+var _run_total = array_length(mod_watch_changed) + (_enter ? 1 : 0);
+for (var _run_k = 0; _run_k < _run_total; _run_k++) {
+	if (!instance_exists(id)) break;
+	mod_changed_prop = (_run_k < array_length(mod_watch_changed)) ? mod_watch_changed[_run_k] : "";
+	if (_mod_initialized && ds_map_exists(_mod_vm.blocks, "_OBJECT_STEP")) {
   var _bak_cur = global._VM_cur_card;
   global._VM_cur_card = id;
   var _bak_vm = global.__vm;
@@ -64,6 +101,7 @@ if (_enter && _mod_initialized && ds_map_exists(_mod_vm.blocks, "_OBJECT_STEP"))
   VM_Execute(_mod_vm, _mod_vm.blocks[? "_OBJECT_STEP"], "_OBJECT_STEP");
   global.__vm = _bak_vm;
   global._VM_cur_card = _bak_cur;
+}
 }
 
 if (!instance_exists(id)) exit;
