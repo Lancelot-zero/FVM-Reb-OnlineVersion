@@ -125,7 +125,7 @@ prev_grid_row = grid_row;
 if (mod_type != "" && variable_global_exists("mod_bullet_vms") && ds_map_exists(global.mod_bullet_vms, mod_type)) {
   _mod_vm = global.mod_bullet_vms[? mod_type];
   _mod_initialized = true;
-  //ds_list_add(_mod_vm.instances, id);
+  // 子弹不进 instances 列表（量大且没人按类型枚举），只维护 VM 的活实例计数：见 Draw_0.gml 的 mod_inst_add(_mod_vm, id, false)
 
   if (ds_map_exists(_mod_vm.blocks, "_OBJECT_CREATE")) {
     var _bak_last = global._VM_last_created_card;

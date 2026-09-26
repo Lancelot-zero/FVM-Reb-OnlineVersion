@@ -842,6 +842,9 @@ function src_mod_card_vm_load(_buf = undefined, _dir = "", _id = "") {
 	_vm.func_ret_types = global.__vm.func_ret_types;
 	_vm[$ "blocks"] = ds_map_create();   // 二进制逻辑字典：块名 → 字节码 buffer
 	_vm[$ "instances"] = ds_list_create();  // 该卡所有实例的容器：创建时加入、消耗时移除
+	_vm[$ "inst_count"] = 0;   // 活实例个数：mod_inst_add/del 维护，mod_inst_count 读
+	_vm[$ "is_mod_vm"] = true;   // 标记 mod 单位 VM：挂载点触发时按「活实例 / 出战卡组」过滤
+	_vm[$ "mod_id"] = _id;       // 自己的 mod id：卡片 mod 用它判断「我这张卡有没有被选进出战卡组」
 	if (_dir != "") { _vm[$ "mod_dir"] = _dir; }
 	// 侧挂行号表路径（编译器多写的 <同名>.lines）：报错定位用，平时不读
 	if (_dir != "" && _id != "") { _vm[$ "src_lines"] = _dir + _id + ".lines"; }
@@ -867,6 +870,8 @@ function src_mod_card_vm_load(_buf = undefined, _dir = "", _id = "") {
 		var _str = _vm.strings[_i];
 		if (!ds_map_exists(_vm.str_map, _str)) _vm.str_map[? _str] = _i;
 	}
+	// 字符串池里出现 __hookall__ → 这个 bin 的挂载点无条件开启（不依赖场上有实例）
+	if (ds_map_exists(_vm.str_map, "__hookall__")) _vm[$ "hook_all"] = true;
 
 	// 侧挂行号表 <同名>.lines（编译器多写的）：直接读进来，报错时把"字节偏移"翻成源码行号。
 	// 表很小（一张卡几 KB）；没有这个文件就什么都不做，报错只显示"块名+位置"。
@@ -1029,6 +1034,9 @@ function src_mod_card_vm_fill(_vm, _buf, _dir = "") {
 		var _str = _vm.strings[_i];
 		if (!ds_map_exists(_vm.str_map, _str)) _vm.str_map[? _str] = _i;
 	}
+	// 字符串池里出现 __hookall__ → 挂载点无条件开启（重载按新 bin 重判）
+	if (variable_struct_exists(_vm, "hook_all")) variable_struct_remove(_vm, "hook_all");
+	if (ds_map_exists(_vm.str_map, "__hookall__")) _vm[$ "hook_all"] = true;
 
 	// 读块数据
 	while (buffer_tell(_buf) < _buf_size) {
@@ -2034,4 +2042,31 @@ function mod_base_tick(_inst) {
 		_inst.mod_countdown -= 1;
 		_inst.image_alpha += _inst.mod_alpha_add;
 	}
+}
+
+/// @function mod_inst_add(_vm, _inst, _with_list = true)
+/// @desc 登记一个 mod 单位实例：计数 +1；_with_list = true 时同时进 instances 列表。
+///       子弹量大、又没人需要"按类型枚举子弹"，所以它只计数、不进列表（见 obj_bullet_mod/Draw_0.gml）。
+function mod_inst_add(_vm, _inst, _with_list = true) {
+	if (is_undefined(_vm) || !variable_struct_exists(_vm, "inst_count")) return;
+	_vm.inst_count += 1;
+	if (_with_list && variable_struct_exists(_vm, "instances")) ds_list_add(_vm.instances, _inst);
+}
+
+/// @function mod_inst_del(_vm, _inst, _with_list = true)
+/// @desc 注销一个 mod 单位实例：计数 -1（不会低于 0）；_with_list = true 时同时移出 instances 列表。
+function mod_inst_del(_vm, _inst, _with_list = true) {
+	if (is_undefined(_vm) || !variable_struct_exists(_vm, "inst_count")) return;
+	if (_vm.inst_count > 0) _vm.inst_count -= 1;
+	if (_with_list && variable_struct_exists(_vm, "instances")) {
+		var _idx = ds_list_find_index(_vm.instances, _inst);
+		if (_idx != -1) ds_list_delete(_vm.instances, _idx);
+	}
+}
+
+/// @function mod_inst_count(_vm)
+/// @desc 该 mod 当前活实例个数（子弹也算）。0 = 场上没有这个 mod 的单位。
+function mod_inst_count(_vm) {
+	if (is_undefined(_vm) || !variable_struct_exists(_vm, "inst_count")) return 0;
+	return _vm.inst_count;
 }

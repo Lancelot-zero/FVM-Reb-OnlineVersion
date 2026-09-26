@@ -217,9 +217,9 @@ function card_created(plant_inst, col, row) {
 
 	// VM Hook: 卡片创建
 	global._VM_last_created_card = plant_inst.id;
-	// 不再判 buffer_exists(global._VM_CARD_CREATED)：只有 mod 单位定义这个块时全局 buffer 是空的，
-	// 排队与否交给 VM_QueueHook 自己判断（挂载点上有 VM 注册就入队）
-	VM_QueueHook(global._VM_CARD_CREATED, "card", plant_inst.id);
+	// 只对「玩家带进战斗的卡」触发挂载点：关卡自摆卡 / 玩家角色都不是玩家选的卡，不再叫醒 mod
+	// （判定是纯 GML 查卡组，不进 VM；详见 vm_card_hook_allowed）
+	if (vm_card_hook_allowed(plant_inst)) VM_QueueHook(global._VM_CARD_CREATED, "card", plant_inst.id);
 
 	// 维护最近种植的5个卡片种类（1 为最新）
 	var _card_type = variable_instance_exists(plant_inst, "plant_id") ? plant_inst.plant_id : "";

@@ -2,7 +2,7 @@
 if (!_mod_initialized && mod_type != "" && variable_global_exists("mod_effect_vms") && ds_map_exists(global.mod_effect_vms, mod_type)) {
   _mod_vm = global.mod_effect_vms[? mod_type];
   _mod_initialized = true;
-  ds_list_add(_mod_vm.instances, id);
+  mod_inst_add(_mod_vm, id);
 
   if (ds_map_exists(_mod_vm.blocks, "_OBJECT_CREATE")) {
     var _bak_last = global._VM_last_created_card;

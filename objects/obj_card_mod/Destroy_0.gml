@@ -14,6 +14,5 @@ if (plant_id != "" && variable_global_exists("mod_card_vms") && ds_map_exists(gl
 		global._VM_cur_card = _bak_cur;
 		global._VM_last_destroyed_card = _bak_last;
 	}
-	var _idx = ds_list_find_index(_vm.instances, id);
-	if (_idx != -1) { ds_list_delete(_vm.instances, _idx); }
+	mod_inst_del(_vm, id);
 }
