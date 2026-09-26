@@ -58,7 +58,7 @@ _OBJECT_STEP {
     wi  = VM_GetProp(self, "mod_step_enter_index")
     atk = VM_GetProp(self, "atk")
     bx  = VM_GetProp(self, "x")
-    by  = VM_GetProp(self, "y") - 50
+    by  = VM_GetProp(self, "y") - 40
 
     if (wi == 0) {
         // 0 号窗口 = 超级弹窗口：每轮 +1，攒够 4 次放一发（前后各一）

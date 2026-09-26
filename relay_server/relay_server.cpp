@@ -391,18 +391,22 @@ void broadcast_pub(Room& room, const std::string& text) {
     }
 }
 
-// 给房间里**每个成员**各发一遍"你在房间里的 id"（人数变化时调用 → 各端更新 global.mod_net_player_id）
+// 给房间里**每个成员**各发一遍"你在房间里的 id" + 当前房间人数（人数变化时调用）
+//   → 各端更新 global.mod_net_player_id / global.net_player_number
 void sync_player_ids(Room& room) {
+    const int cnt = room.member_count();
     if (room.host != INVALID_SOCKET) {
         auto it = conns.find(room.host);
         if (it != conns.end())
-            send_str(it->second, MSG_PUB_INFO, "\\setglobal {\"mod_net_player_id\":0}");
+            send_str(it->second, MSG_PUB_INFO,
+                     "\\setglobal {\"mod_net_player_id\":0,\"net_player_number\":" + std::to_string(cnt) + "}");
     }
     for (auto& kv : room.clients) {
         auto it = conns.find(kv.second);
         if (it != conns.end())
             send_str(it->second, MSG_PUB_INFO,
-                     "\\setglobal {\"mod_net_player_id\":" + std::to_string(kv.first) + "}");
+                     "\\setglobal {\"mod_net_player_id\":" + std::to_string(kv.first) +
+                     ",\"net_player_number\":" + std::to_string(cnt) + "}");
     }
 }
 

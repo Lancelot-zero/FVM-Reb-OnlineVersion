@@ -491,6 +491,7 @@ _VM_BATTLE_START {
 |---|---|
 | `net_player_id`（卡片实例字段） | 这张卡**是谁种的**：房主 `0`、客机从 `1` 起；单机 / 关卡自摆的卡是 `0`。注意它在 `_OBJECT_CREATE` 里还是默认值 0，**`_OBJECT_STEP` 起才是正确值** |
 | `global.mod_net_player_id`（全局） | **本机**在房间里的 id：房主 `0`、客机从 `1` 起；单机 / 未连接 / 断开连接时是 `0`（中继在人数变化时会重发一遍，各端随时保持最新） |
+| `global.net_player_number`（全局） | **房间里的人数**（房主 + 客机，至少 `1`）：单机 / 未连接 / 断开连接时是 `1`。中继在人数变化时和 `mod_net_player_id` 一起下发，读法：`VM_GetProp(0, "net_player_number")`（`0` = 读全局） |
 | `global.room_name` / `global.room_members` | 房间名 / 成员表（名字 → 最近一条消息），由中继下发的 `\roominfo` 刷新 |
 
 | 函数 | 参数 / 返回 | 说明 |

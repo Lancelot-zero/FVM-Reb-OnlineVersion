@@ -274,6 +274,59 @@ VM_SetProp(b, &quot;mod_type&quot;, &quot;my_bullet&quot;)     // 靠下一帧�
 <li>飞完（到目标点）就停下：<code>bullet_parabola</code> 置 <code>0</code>、<code>vx/vy</code> 清零、坐标钉在目标点，
 之后交给碰撞结算 / <code>destroy_timer</code> / 脚本自己处理</li>
 </ul>
+<h3>路径数组字段（<strong>引擎自己飞</strong>）</h3>
+<p>想让子弹沿固定轨迹跑（∞ 形、波浪、回旋…）又不想每帧进 VM：在 <code>.bin</code> 里建两个
+<strong>VM 命名数组</strong> <code>dx_arr</code> / <code>dy_arr</code>（每项 = 一帧的位移），核心每帧自己加上去：</p>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>默认</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>dx_arr</code> / <code>dy_arr</code></td>
+<td>空</td>
+<td>两个<strong>命名数组</strong>（不是实例变量）：第 i 帧 <code>x += dx_arr[i mod 长度]</code>、<code>y += dy_arr[同一个下标]</code>。<strong>两串不一样长按短的算</strong>；没建 / 空 = 这条子弹不走路径</td>
+</tr>
+<tr>
+<td><code>bullet_path_i</code></td>
+<td><code>0</code></td>
+<td>【只读】路径计数器：已经走到第几项（想按进度做动画 / 销毁就读它）</td>
+</tr>
+</tbody></table>
+<ul>
+<li>数组是<strong>命名数组</strong>（<code>VM_ArrayClear</code> + <code>VM_ArrayADD</code>），进房间会重置 → 在 <code>_OBJECT_CREATE</code> 里建一次
+（照惯例先判 <code>VM_ArraySize(&quot;dx_arr&quot;) &lt; 2</code>）</li>
+<li><strong>执行顺序</strong>：在 <code>vx/vy</code> 和抛物线<strong>之后</strong>叠加 —— 和它们是<strong>相加</strong>关系，不会顶掉别的移动</li>
+<li>一整圈&quot;出去 + 回来&quot;（净位移为 0）→ 可以<strong>无限绕</strong>；只想绕一趟就配 <code>destroy_timer</code></li>
+<li>飞行<strong>完全不进 VM</strong> → 闸门可以放心用 <code>&quot;attack_collision&quot;</code>（撞上才进），这是子弹最省的一档</li>
+<li>出场渐显<strong>别写在 Step 里</strong>（Step 可能不进）：用引擎的 <code>mod_alpha_add</code> + <code>mod_countdown</code></li>
+</ul>
+<pre><code class="language-gml">_OBJECT_CREATE {
+    self = VM_GetCurCard()
+    // 路径：出去 4 帧 + 回来 4 帧（净位移 0 → 可以无限绕）
+    if (VM_ArraySize(&quot;dx_arr&quot;) &lt; 2) {
+        VM_ArrayClear(&quot;dx_arr&quot;)
+        VM_ArrayClear(&quot;dy_arr&quot;)
+        VM_ArrayADD(&quot;dx_arr&quot;, 6)  ;  VM_ArrayADD(&quot;dy_arr&quot;, 0)
+        VM_ArrayADD(&quot;dx_arr&quot;, 6)  ;  VM_ArrayADD(&quot;dy_arr&quot;, 4)
+        VM_ArrayADD(&quot;dx_arr&quot;, 6)  ;  VM_ArrayADD(&quot;dy_arr&quot;, 0)
+        VM_ArrayADD(&quot;dx_arr&quot;, 6)  ;  VM_ArrayADD(&quot;dy_arr&quot;, 0 - 4)
+        VM_ArrayADD(&quot;dx_arr&quot;, 0 - 6)  ;  VM_ArrayADD(&quot;dy_arr&quot;, 0 - 4)
+        VM_ArrayADD(&quot;dx_arr&quot;, 0 - 6)  ;  VM_ArrayADD(&quot;dy_arr&quot;, 0)
+        VM_ArrayADD(&quot;dx_arr&quot;, 0 - 6)  ;  VM_ArrayADD(&quot;dy_arr&quot;, 4)
+        VM_ArrayADD(&quot;dx_arr&quot;, 0 - 6)  ;  VM_ArrayADD(&quot;dy_arr&quot;, 0)
+    }
+
+    VM_SetProp(self, &quot;destroy_timer&quot;, -1)                              // 一直绕
+    VM_SetProp(self, &quot;mod_step_enter_condition&quot;, &quot;attack_collision&quot;)   // 只有撞上才进 VM
+    VM_SetProp(self, &quot;image_alpha&quot;, 0)
+    VM_SetProp(self, &quot;mod_alpha_add&quot;, 0.125)                           // 出场渐显 8 帧（引擎做）
+    VM_SetProp(self, &quot;mod_countdown&quot;, 8)
+}
+</code></pre>
 <hr>
 <h2>三、STEP 的时机与执行顺序</h2>
 <h3>创建当帧 vs 下一帧（重要）</h3>
@@ -310,7 +363,9 @@ VM_SetProp(b, &quot;mod_type&quot;, &quot;my_bullet&quot;)     // 靠下一帧�
 6. 实例没了（你在 VM 里销毁了自己）→ exit
 7. 自动销毁：destroy_timer == 0 → 立即销毁；&gt; 0 每帧 −1，到 0 销毁
 8. 位移：x += vx; y += vy
-9. 出界销毁：x &gt; 2200 / y &gt; 1200 / x &lt; 0 / y &lt; 0
+9. 抛物线（bullet_parabola = 1）→ 覆盖成弧线坐标
+10. 路径数组叠加：x += dx_arr[bullet_path_i % 长度]; y += dy_arr[同下标]; bullet_path_i += 1
+11. 出界销毁：x &gt; 2200 / y &gt; 1200 / x &lt; 0 / y &lt; 0
 </code></pre>
 <h3>进 VM 的时机（<code>mod_step_enter_condition</code>）</h3>
 <table>
@@ -376,7 +431,8 @@ VM_SetProp(b, &quot;mod_type&quot;, &quot;my_bullet&quot;)     // 靠下一帧�
 <li><p><strong>子弹最常用 <code>&quot;cell&quot;</code></strong>：只有跨格那一帧进 VM，正好对上&quot;路径碰撞&quot;的需求</p>
 </li>
 <li><p>⚠️ <strong>子弹是场上数量最多的东西，最忌每帧进 VM</strong>（不设条件就是每帧）：九成情况 <code>&quot;cell&quot;</code> 就够；
-真的需要&quot;每帧都动&quot;的（抛物线、自转），才留空让自己每帧进 —— 而且那种弹优先考虑屏幕弹幕 <code>VM_BulletScreenAdd_Exs</code>（见 <code>help.md</code> 与 <a href="mod%E5%BC%80%E5%8F%91%E5%B7%A5%E5%85%B7%E8%AF%B4%E6%98%8E.html">mod开发工具说明.md</a> 的「性能铁律」）</p>
+要&quot;每帧都在动&quot;的（固定轨迹、波浪、自转）优先用<strong>路径数组</strong> <code>dx_arr</code> / <code>dy_arr</code>（引擎每帧做，不进 VM），
+真的只能靠 VM 每帧算的才留空每帧进 —— 而且那种弹优先考虑屏幕弹幕 <code>VM_BulletScreenAdd_Exs</code>（见 <code>help.md</code> 与 <a href="mod%E5%BC%80%E5%8F%91%E5%B7%A5%E5%85%B7%E8%AF%B4%E6%98%8E.html">mod开发工具说明.md</a> 的「性能铁律」）</p>
 </li>
 <li><p>⚠️ <code>&quot;cell&quot;</code> 触发的是<strong>进格后的第一帧</strong> —— 格子坐标是在 <code>x += vx</code> <strong>之前</strong>算的，比实际越界晚一帧；
 一帧跨多格也只触发一次</p>
@@ -427,6 +483,10 @@ Step 里只进<strong>一次</strong> VM —— 一帧撞 3 个也只进一次�
 <tr>
 <td>抛物线（追实例或坐标）</td>
 <td><code>bullet_parabola</code> + <code>bullet_target</code>（或 <code>bullet_target_x/y</code>）+ <code>bullet_parabola_time</code> / <code>bullet_parabola_h</code></td>
+</tr>
+<tr>
+<td>固定轨迹（∞ / 波浪 / 回旋）</td>
+<td>命名数组 <code>dx_arr</code> / <code>dy_arr</code>（每项 = 一帧位移，引擎每帧加）+ <code>destroy_timer</code> 控制绕多久 —— <strong>不进 VM</strong></td>
 </tr>
 <tr>
 <td>撞上才做额外事</td>

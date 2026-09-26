@@ -1397,6 +1397,10 @@ VM_ArrayAdd(&quot;mod_sync&quot;, &quot;mod_phase&quot;)
 <td><strong>本机</strong>在房间里的 id：房主 <code>0</code>、客机从 <code>1</code> 起；单机 / 未连接 / 断开连接时是 <code>0</code>（中继在人数变化时会重发一遍，各端随时保持最新）</td>
 </tr>
 <tr>
+<td><code>global.net_player_number</code>（全局）</td>
+<td><strong>房间里的人数</strong>（房主 + 客机，至少 <code>1</code>）：单机 / 未连接 / 断开连接时是 <code>1</code>。中继在人数变化时和 <code>mod_net_player_id</code> 一起下发，读法：<code>VM_GetProp(0, &quot;net_player_number&quot;)</code>（<code>0</code> = 读全局）</td>
+</tr>
+<tr>
 <td><code>global.room_name</code> / <code>global.room_members</code></td>
 <td>房间名 / 成员表（名字 → 最近一条消息），由中继下发的 <code>\roominfo</code> 刷新</td>
 </tr>

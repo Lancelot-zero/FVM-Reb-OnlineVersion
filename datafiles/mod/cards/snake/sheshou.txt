@@ -17,26 +17,6 @@ _OBJECT_CFG {
     }
 }
 
-_OBJECT_CREATE {
-    self = VM_GetCurCard()
-
-    VM_SetProp(self, "sprite_index", "spr_sheshou_2")
-    VM_SetProp(self, "idle_anim", 15)
-    VM_SetProp(self, "attack_anim", 13)
-    VM_SetProp(self, "flash_speed", 5)
-    VM_SetProp(self, "plant_type", "normal")
-    VM_SetProp(self, "state", 0)
-    VM_SetProp(self, "attack_timer", 0)
-
-    // 一轮 108 帧里只有 3 帧真有事做：第 1 帧收招、第 83/93 帧各一轮齐射。
-    // 用 "norm" + 窗口表，其余 105 帧不进 VM；原来每帧都跑的「本行±1 右侧全扫描」降到每轮 3 次。
-    VM_InstArrayClear(self, "mod_step_enter_arr")
-    VM_InstArrayAdd(self, "mod_step_enter_arr", 1)
-    VM_InstArrayAdd(self, "mod_step_enter_arr", 0 - 5 * 5)
-    VM_InstArrayAdd(self, "mod_step_enter_arr", 0 - 3 * 5)
-    VM_SetProp(self, "mod_step_enter_condition", "norm")
-}
-
 _OBJECT_STEP {
     self = VM_GetCurCard()
 
