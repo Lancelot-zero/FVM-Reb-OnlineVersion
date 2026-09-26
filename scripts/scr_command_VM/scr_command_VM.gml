@@ -3527,8 +3527,10 @@ function vm_hook_run(_name) {
         if (is_undefined(_vm)) continue;
         if (!variable_struct_exists(_vm, "blocks")) continue;
         if (!ds_map_exists(_vm.blocks, _name)) continue;   // 这个 VM 没有这个块 → 跳过
-        // mod 单位 VM：场上没有它的实例就不叫醒；bin 字符串池里写了 __hookall__ 的恒开
-        if (variable_struct_exists(_vm, "is_mod_vm") && !variable_struct_exists(_vm, "hook_all")) {
+        // mod 单位 VM：条件符合就叫醒 —— 场上有它的实例 / 带 __hookall__ /
+        // 卡片 mod 专属 deck_active（这张卡在出战卡组里）
+        if (variable_struct_exists(_vm, "is_mod_vm") && !variable_struct_exists(_vm, "hook_all")
+            && !variable_struct_exists(_vm, "deck_active")) {
             if (mod_inst_count(_vm) <= 0) continue;
         }
         global.__vm = _vm;
@@ -6329,6 +6331,7 @@ function VM_InitRoomEntry(buf) {
     }
 
     // _VM_ROOM_READY_ENTRY 的 mod 侧：地图 bin 的块在上面当场执行掉了，
-    // mod 单位 VM 走注册表 —— 条件符合的（场上有实例 / 带 __hookall__）就进，没有别的门槛。
+    // mod 单位 VM 走注册表 —— 条件符合的（场上有实例 / 带 __hookall__ / 卡片在卡组里）就进。
+    mod_card_vm_deck_refresh();   // 卡片 mod：按当前卡组重判 deck_active（战斗中改卡组由战斗开始时再刷一次）
     vm_hook_run("_VM_ROOM_READY_ENTRY");
 }

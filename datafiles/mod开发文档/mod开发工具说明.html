@@ -437,13 +437,18 @@ mod/cards/snake/tex/xxx.png          ← 贴图跟着【json 所在目录】走�
 mod 插件和地图脚本<strong>都能挂</strong>：事件类（<code>_VM_BATTLE_START</code> / <code>_VM_CARD_CREATED</code> / <code>_VM_MOUSE_LEFT</code> …）、
 <code>_VM_FRAME</code>（每帧）、5f / 10f / 15f / 30f / 60f 定时器。</p>
 <ul>
-<li><strong>只有&quot;场上有它的实例&quot;时才跑</strong>：卡片 / 武器 / 宝石 / 敌人 / 子弹 / 特效一样，该类单位一个实例都没有时挂载点不触发
+<li><strong>触发条件看 VM 自己</strong>（满足任意一条就进，没有别的门槛）：<ul>
+<li><strong>场上有它的实例</strong>：卡片 / 武器 / 宝石 / 敌人 / 子弹 / 特效一样，该类单位一个实例都没有时挂载点不触发
 （<code>_OBJECT_CREATE</code> 都还没跑的新局、准备界面同理）。热重载换 bin、旧实例销毁都会自动跟上。</li>
+<li><strong>卡片 mod 专属属性 <code>deck_active</code></strong>：这张卡在<strong>战斗开始时的出战卡组</strong>里 → 它的 VM <strong>直接有效</strong>，不用等种下
+（卡还在手槽 / 传送带上也照样收事件）。刷新点：进准备室、战斗开始、mod 加载 / 热重载。</li>
+<li><strong>带 <code>__hookall__</code> 的 bin</strong>：恒开 —— 调试用，见 <code>help.md</code> 文末「附：<code>__hookall__</code>」，<strong>非必要不要用</strong>。</li>
+</ul>
+</li>
 <li><strong>卡片类事件不区分是谁的卡</strong>：<code>_VM_CARD_CREATED</code> / <code>_VM_CARD_DESTROYED</code> 对关卡自摆的卡、玩家角色也照样广播，
 想只处理自己的卡就在块里用 <code>VM_GetLastCreatedCard()</code> / <code>VM_GetLastDestroyedCard()</code> + <code>plant_id</code> 自己筛。</li>
 <li><strong>高频点慎用</strong>：<code>_VM_FRAME</code> / 5f / 10f / 15f 是全场级别的开销，每帧要做的事一般写在 <code>_OBJECT_STEP</code> 里更省
 （那里有 <code>mod_step_enter_condition</code> 闸门，没轮到的实例不进 VM）。</li>
-<li>想让某个 mod <strong>不受&quot;有没有实例&quot;这层过滤</strong>（调试用），见 <code>help.md</code> 文末「附：<code>__hookall__</code>」——<strong>特殊用法，非必要不要用</strong>。</li>
 </ul>
 <h3>实例字段（内置字段，读写都用 VM_GetProp / VM_SetProp）</h3>
 <pre><code class="language-gml">x = VM_GetProp(self, &quot;x&quot;)          // 读

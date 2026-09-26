@@ -7,6 +7,8 @@ if (!global._VM_battle_start_done) {
 	global._VM_battle_start_done = true;
 	global._VM_prev_wave         = -1;
     global._VM_prev_subwave      = -1;
+	// 卡片 mod 专属属性：战斗开始的选择卡组里有这张卡 → 它的 VM 直接有效（挂载点不要求有实例）
+	mod_card_vm_deck_refresh();
 	if (buffer_exists(global._VM_BATTLE_START)) {
 		VM_Execute(global.__vm, global._VM_BATTLE_START, "_VM_BATTLE_START");
 	}
