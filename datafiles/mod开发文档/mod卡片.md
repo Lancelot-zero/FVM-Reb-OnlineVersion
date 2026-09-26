@@ -128,6 +128,7 @@ mod/cards/snake/tex/xxx.png     ← tex 跟着 json 那一层放，不是放回 
 | 字段 | 说明 |
 |---|---|
 | `plant_id` | 卡 id（= 文件名） |
+| `net_player_id` | **联机：这张卡是谁种的**（房间内 id：房主 0、客机从 1 起；`0` 也可能是单机 / 关卡自摆的卡）。单机永远是 0。见 `help.md` 的「联机与房间 id」 |
 | `name` / `description` / `cost` / `cooldown` | 卡名 / 说明 / 阳光 / 冷却 |
 | `hp` / `max_hp` | 当前 / 最大血量（`hp <= 0` 会被核心销毁） |
 | `atk` / `range` | 攻击力 / 攻击范围（格） |

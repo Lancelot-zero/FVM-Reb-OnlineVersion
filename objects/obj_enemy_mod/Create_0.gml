@@ -47,6 +47,22 @@ prev_grid_row = floor((y - global.grid_offset_y) / global.grid_cell_size_y)
 ///       所以独立成函数：Create 时 id 已就位就直接跑，晚到的由 Step 补跑一次。
 function mod_enemy_init() {
 	if (enemy_id == "" || mod_enemy_inited_id == enemy_id) return;
+
+	// 非法 mod 敌人（本机没注册这个 enemy_id）→ 换成一个普通小老鼠（铁锅鼠）：
+	//   继承同一个 net_id，后续 hp / 位置同步仍然作用在这只替身上；本实例随后销毁（Step 里会 exit）
+	var _known = (variable_global_exists("enemy_map") && ds_map_exists(global.enemy_map, enemy_id))
+	          || (variable_global_exists("mod_enemy_vms") && ds_map_exists(global.mod_enemy_vms, enemy_id));
+	if (!_known) {
+		show_debug_message("[mod 敌人] 未注册的 enemy_id，换成普通老鼠: " + string(enemy_id));
+		var _nid = ds_map_exists(global.network.map_instance_id_net_id, id) ? global.network.map_instance_id_net_id[? id] : -1;
+		var _rep = instance_create_depth(x, y, depth, obj_iron_pan_mouse);
+		if (_nid != -1) set_net_id(_rep.id, _nid);
+		_rep.grid_row = grid_row;
+		_rep.grid_col = grid_col;
+		instance_destroy(id);
+		return;
+	}
+
 	mod_enemy_inited_id = enemy_id;
 
 	// 原版敌人是每个对象在 Create 里写死自己的数值，mod 敌人统一从注册表套用

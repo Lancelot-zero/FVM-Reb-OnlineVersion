@@ -13,6 +13,8 @@ function card_created(plant_inst, col, row) {
 		var _meta = package_character(plant_inst);
 		// mod 卡：身份随 meta 一起走（服务器/其他客户端建实例前靠它写 global._mod_pending_card_id）
 		if (plant_inst.object_index == obj_card_mod) { _meta[$ "plant_id"] = plant_inst.plant_id; }
+		// 归属：这张卡是谁种的（本机的 mod_net_player_id，0 = 未分配 / 单机）
+		_meta[$ "net_player_id"] = variable_global_exists("mod_net_player_id") ? global.mod_net_player_id : 0;
 		var _sid = plant_inst.sprite_index;
 		var _sprite_name = ds_map_exists(global._pid_reverse, _sid) ? global._pid_reverse[? _sid] : sprite_get_name(_sid);
 
@@ -167,6 +169,8 @@ function card_created(plant_inst, col, row) {
 		if (plant_inst.object_index == obj_card_mod) { _meta[$ "plant_id"] = plant_inst.plant_id; }
 		// 种植音效标记：关卡建图阶段自摆的卡发 0，客户端收到后不播（玩家自己放的 = 1）
 		_meta[$ "_place_sfx"] = (variable_global_exists("_net_map_build") && global._net_map_build) ? 0 : 1;
+		// 归属：这张卡是谁种的 —— 原样转发给其它客户端（关卡自摆的卡没有这个字段 → 默认 0）
+		_meta[$ "net_player_id"] = variable_instance_exists(plant_inst, "net_player_id") ? plant_inst.net_player_id : 0;
 		_meta[$ "_net_card_equipped_attire_id"]  = _equipped_attire;
 		_meta[$ "cycle"] = plant_inst.cycle
 		_meta[$ "hp"] = plant_inst.hp

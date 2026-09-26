@@ -1,6 +1,7 @@
 // obj_plant_parent 的 Create 事件
 // ========== 基础属性 ==========
 name = "未命名植物"
+net_player_id = 0   // 联机：这张卡是谁种的（0 = 关卡自摆 / 单机 / 未分配）
 cost = 0
 description = ""
 cooldown = 0

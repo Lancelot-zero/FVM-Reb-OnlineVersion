@@ -133,16 +133,46 @@ class Relay:
     #  1. 管理客户端
     # ================================================================
     def _build_room_info(self, room: Room) -> bytes:
-        """构建 \\roominfo JSON: {room, members: {名称: 最新消息}}，房主排最前"""
+        """构建 \\roominfo JSON: {room, members: {名称: 最新消息}, ids: {名称: 房间内id}}，房主排最前"""
         members = {}
+        ids = {}
         if room.host:
             host_name = room.nicks.get(id(room.host), "???")
             members[host_name[:20]] = room.msgs.get(host_name, "")
-        for cw in room.clients.values():
+            ids[host_name[:20]] = 0                      # 房主的房间内 id = 0
+        for cid, cw in room.clients.items():
             name = room.nicks.get(id(cw), "???")
             members[name[:20]] = room.msgs.get(name, "")
-        info = {"room": room.id, "members": members}
+            ids[name[:20]] = cid
+        info = {"room": room.id, "members": members, "ids": ids}
         return f"\\roominfo {json.dumps(info, ensure_ascii=False)}".encode() + NUL
+
+    async def _broadcast_pub(self, room: Room, text: str):
+        """给房主 + 所有客户端发一条 MSG_PUB_INFO 文本（\\join / \\left / \\setglobal ...）"""
+        payload = text.encode() + NUL
+        targets = []
+        if room.host:
+            targets.append(room.host)
+        targets.extend(room.clients.values())
+        for w in targets:
+            self.write_pkt(w, MSG_PUB_INFO, payload)
+        tasks = [self.flush(w) for w in targets]
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+    async def _sync_player_ids(self, room: Room):
+        """给房间里每个成员各发一遍"你在房间里的 id"（人数变化时调用）"""
+        items = []
+        if room.host:
+            items.append((room.host, 0))
+        for cid, cw in room.clients.items():
+            items.append((cw, cid))
+        for w, cid in items:
+            self.write_pkt(w, MSG_PUB_INFO,
+                           f"\\setglobal {{\"mod_net_player_id\":{cid}}}".encode() + NUL)
+        tasks = [self.flush(w) for w, _ in items]
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
 
     async def _sync_room_info(self, room: Room):
         """名单变化时广播给房间所有人"""
@@ -207,6 +237,9 @@ class Relay:
                 self.write_str(room.host, MSG_CHAT, f"[系统] {name} 离开")
                 asyncio.ensure_future(self.flush(room.host))
             print(f"[{room.id}] {name} 离开 (剩余 {room.member_count} 人)")
+            # 人数变化 → 广播提示（客户端显示"XX 离开了房间"）+ 剩下的人各自再收一遍自己的 id + 成员表刷新
+            asyncio.ensure_future(self._broadcast_pub(room, f"\\left {name}"))
+            asyncio.ensure_future(self._sync_player_ids(room))
             asyncio.ensure_future(self._sync_room_info(room))
 
         self._close(writer)
@@ -556,6 +589,10 @@ class Relay:
         role_str = "\\modserver" if role == 0 else "\\modclient"
         self.write_pkt(writer, MSG_PUB_INFO, role_str.encode() + NUL)
         await self.flush(writer)
+        # 人数变化 → 给房间里每个人都发一遍自己的房间内 id（本人也在这轮里拿到）
+        await self._sync_player_ids(room)
+        # 人数变化 → 广播一条提示（客户端显示"XX 加入了房间"）
+        await self._broadcast_pub(room, f"\\join {name}")
 
         if role == 0:
             self.write_str(writer, MSG_CHAT,

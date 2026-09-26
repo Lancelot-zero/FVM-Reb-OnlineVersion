@@ -450,10 +450,43 @@ mod 插件和地图脚本<strong>都能挂</strong>：事件类（<code>_VM_BATT
 <li><strong>高频点慎用</strong>：<code>_VM_FRAME</code> / 5f / 10f / 15f 是全场级别的开销，每帧要做的事一般写在 <code>_OBJECT_STEP</code> 里更省
 （那里有 <code>mod_step_enter_condition</code> 闸门，没轮到的实例不进 VM）。</li>
 </ul>
+<h3>联机时属性怎么写（<code>mod_sync</code>）</h3>
+<ul>
+<li><strong><code>_OBJECT_*</code> 块里的读写一律本地执行</strong>（两端各跑一遍，不发网络消息）—— Step 里高频写属性不会把网络打爆。</li>
+<li><strong>要跨端一致的字段，把字段名声明进 VM 级命名数组 <code>mod_sync</code></strong>（一般写在 <code>_OBJECT_CFG</code> 里）：</li>
+</ul>
+<pre><code class="language-gml">VM_ArrayClear(&quot;mod_sync&quot;)
+VM_ArrayAdd(&quot;mod_sync&quot;, &quot;atk&quot;)          // 字段名 = 实例上的属性名
+VM_ArrayAdd(&quot;mod_sync&quot;, &quot;mod_phase&quot;)
+</code></pre>
+<ul>
+<li>服务器<strong>每 20 帧</strong>遍历卡片 / 武器 / 宝石 / 敌人的实例，把 <code>mod_sync</code> 里<strong>发生过变化</strong>的字段打包成
+一条 <code>MSG_MODIFY_PROP</code> 推给客户端（子弹 / 特效不参与）。客户端收到后直接覆盖对应字段。</li>
+<li><strong>挂载点块（<code>_VM_*</code>）里的写仍按联网规则走</strong>：本地实例（没有 net_id）直接改；有 net_id 的实例
+客户端跳过、服务器即时广播。</li>
+<li>没进 <code>mod_sync</code>、两端又算岔了的字段会一直岔着 —— 要么保证它的输入两端一致，要么写进 <code>mod_sync</code>。</li>
+</ul>
 <h3>实例字段（内置字段，读写都用 VM_GetProp / VM_SetProp）</h3>
 <pre><code class="language-gml">x = VM_GetProp(self, &quot;x&quot;)          // 读
 VM_SetProp(self, &quot;x&quot;, x + 40)      // 写（浮点直接写，如 1.8）
 </code></pre>
+<p><strong>联机字段</strong></p>
+<table>
+<thead>
+<tr>
+<th>字段 / 全局</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>net_player_id</code>（卡片实例字段）</td>
+<td>这张卡<strong>是谁种的</strong>：房主 <code>0</code>、客机从 <code>1</code> 起；单机 / 关卡自摆的卡是 <code>0</code>。<code>_OBJECT_CREATE</code> 里读到的是默认值 <code>0</code>，<strong><code>_OBJECT_STEP</code> 起才是正确值</strong></td>
+</tr>
+<tr>
+<td><code>global.mod_net_player_id</code>（全局）</td>
+<td><strong>本机</strong>在房间里的 id：房主 <code>0</code>、客机从 <code>1</code> 起；单机 / 未连接 / 已断开是 <code>0</code>。中继在<strong>人数变化时会重发</strong>，所以它总是最新的</td>
+</tr>
+</tbody></table>
 <p><strong>位置 / 尺寸</strong></p>
 <table>
 <thead>

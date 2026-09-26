@@ -247,6 +247,20 @@ _VM_BATTLE_START {
 <li><strong>卡片类事件不区分是谁的卡</strong> —— 关卡自摆的卡、玩家角色、木板这些创建 / 销毁时也会广播；
 想只处理自己这几张卡，在块里用 <code>VM_GetLastCreatedCard()</code> / <code>VM_GetLastDestroyedCard()</code> + <code>plant_id</code> 自己筛。</li>
 </ol>
+<p><strong>联机时属性怎么写（<code>mod_sync</code>）</strong></p>
+<ol>
+<li><strong><code>_OBJECT_*</code> 块里的读写一律本地执行、不发消息</strong> —— 两端各跑一遍，跨端不即时同步。
+这样 Step 里高频写属性不会把网络打爆。</li>
+<li><strong>要跨端一致的字段，把名字声明进 VM 级命名数组 <code>mod_sync</code></strong>（写在 <code>_OBJECT_CFG</code> 里最省事）：<pre><code class="language-gml">VM_ArrayClear(&quot;mod_sync&quot;)
+VM_ArrayAdd(&quot;mod_sync&quot;, &quot;atk&quot;)          // 字段名 = 实例上的属性名
+VM_ArrayAdd(&quot;mod_sync&quot;, &quot;mod_phase&quot;)
+</code></pre>
+</li>
+<li>服务器<strong>每 20 帧</strong>遍历一次卡片 / 武器 / 宝石 / 敌人的实例，把 <code>mod_sync</code> 里<strong>发生变化</strong>的字段
+打包成一条消息推给客户端（子弹 / 特效不参与）。</li>
+<li><strong>挂载点块（<code>_VM_*</code>）里的写仍然走联网规则</strong>：本地实例直接改；有 net_id 的实例客户端跳过、服务器即时广播。</li>
+<li>没进 <code>mod_sync</code>、两端又算岔了的字段，就会一直岔着 —— 这类字段要么保证输入两端一致，要么写进 <code>mod_sync</code>。</li>
+</ol>
 </blockquote>
 <hr>
 <h2>常用命令</h2>
@@ -1366,6 +1380,27 @@ _VM_BATTLE_START {
 </blockquote>
 <h3>mod 对象与实例</h3>
 <p>写 mod 卡 / 武器 / 宝石 / 子弹 / 敌人插件时才用：按名字创建实例、销毁、判断存活、加速推进。</p>
+<p><strong>联机与房间 id</strong>（<code>VM_GetProp(self, &quot;...&quot;)</code> 读）</p>
+<table>
+<thead>
+<tr>
+<th>字段 / 全局</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>net_player_id</code>（卡片实例字段）</td>
+<td>这张卡<strong>是谁种的</strong>：房主 <code>0</code>、客机从 <code>1</code> 起；单机 / 关卡自摆的卡是 <code>0</code>。注意它在 <code>_OBJECT_CREATE</code> 里还是默认值 0，<strong><code>_OBJECT_STEP</code> 起才是正确值</strong></td>
+</tr>
+<tr>
+<td><code>global.mod_net_player_id</code>（全局）</td>
+<td><strong>本机</strong>在房间里的 id：房主 <code>0</code>、客机从 <code>1</code> 起；单机 / 未连接 / 断开连接时是 <code>0</code>（中继在人数变化时会重发一遍，各端随时保持最新）</td>
+</tr>
+<tr>
+<td><code>global.room_name</code> / <code>global.room_members</code></td>
+<td>房间名 / 成员表（名字 → 最近一条消息），由中继下发的 <code>\roominfo</code> 刷新</td>
+</tr>
+</tbody></table>
 <table>
 <thead>
 <tr>
