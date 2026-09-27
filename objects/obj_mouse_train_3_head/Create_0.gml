@@ -53,6 +53,8 @@ if obj_battle.boss_count > 0{
 	hpbar_inst.y -= 40
 }
 
+// ↓ 带参数的局部函数转换器不支持，已按调用点原地展开（见 Step_0.gml）
+/*
 ///@desc 按方向创建新的车厢
 function create_train_body(amount,dir){
 	if(global.network.mode=="client")return;
@@ -160,6 +162,7 @@ function remove_train_body(index){
 		array_delete(train_body_list,index,1)
 	}
 }
+*/
 
 ///@desc 移除所有车厢
 function clear_train_body(){

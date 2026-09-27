@@ -6396,15 +6396,16 @@ function VM_InitRoomEntry(buf) {
                 break;
         }
 
-        // 块统一进 vm.blocks（挂载点执行时和 mod VM 走同一套取块逻辑）。
-        // 注册不设白名单：任何块名都登记，以后新增挂载点只需要在触发处写
-        // vm_hook_run("_VM_新名字")，不必回来改清单。
-        // 没被 vm_hook_run 调用的块（_OBJECT_STEP 之类）挂在表里也无害，只是不会被执行。
+        // 块统一进 vm.blocks（和 mod VM 用同一张块表；地图 VM 复用 global.__vm，不另建 VM）。
+        // ⚠️ 地图 VM **不注册挂载点**：每个触发处都是"地图直接 VM_Execute(global._VM_XXX)
+        //    + vm_hook_run(...) 跑 mod"两条路（obj_battle / obj_event_manager / VM_FlushHooks …），
+        //    地图 VM 一旦进了 _VM_hooks，vm_hook_run 会把同一条块再跑一遍 ——
+        //    表现就是 _VM_BATTLE_START 把地图摆两遍、_VM_FRAME 每帧跑两次。
+        //    走 vm_hook_register 的只有 mod 单位 VM（src_mod.gml 的 vm_hook_register_all）。
         if (variable_struct_exists(global.__vm, "blocks")
             && !ds_map_exists(global.__vm.blocks, _block_name)) {
             global.__vm.blocks[? _block_name] = _bc_buf;
         }
-        vm_hook_register(_block_name, global.__vm);
     }
 
     // _VM_ROOM_READY_ENTRY 的 mod 侧：地图 bin 的块在上面当场执行掉了，

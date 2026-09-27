@@ -125,6 +125,40 @@ export function customBlockCompletions(context) {
   return { from: word.from, options };
 }
 
+// collectMacros 扫描文档收集 #define 宏，返回 名字 → {params, funcLike, line}
+// （与后端 linter.go 一致：括号紧跟宏名 = 函数宏，否则是对象宏）
+function collectMacros(doc) {
+  const defs = new Map();
+  for (let i = 1; i <= doc.lines; i++) {
+    const m = doc.line(i).text.match(/^\s*#define\s+([A-Za-z_]\w*)(\(([^)]*)\))?/);
+    if (m && !defs.has(m[1])) {
+      defs.set(m[1], { params: (m[3] || "").trim(), funcLike: m[2] !== undefined, line: i });
+    }
+  }
+  return defs;
+}
+
+// macroCompletions 宏补全（按文档内已定义的 #define 名字，前缀过滤）
+export function macroCompletions(context) {
+  const word = context.matchBefore(/[A-Za-z_]\w*/);
+  if (!word || word.from === word.to) return null;
+  const defs = collectMacros(context.state.doc);
+  const options = [];
+  for (const [name, info] of defs) {
+    if (!name.startsWith(word.text) || name === word.text) continue;
+    const kind = info.funcLike ? "函数宏" : "对象宏";
+    options.push({
+      label: name,
+      type: "function",
+      detail: kind + "（第 " + info.line + " 行定义）" + (info.funcLike ? "：" + info.params : ""),
+      apply: info.funcLike ? name + "(" + info.params + ")" : name,
+      boost: 3,
+    });
+  }
+  if (!options.length) return null;
+  return { from: word.from, options };
+}
+
 // collectVars 扫描文档收集已定义的变量（赋值语句左值），返回 变量名 → 定义行号
 function collectVars(doc) {
   const vars = new Map();
@@ -248,14 +282,23 @@ export function makeLabLanguage(meta = {}) {
       apply: snippet(CUSTOM_BLOCK_PREFIX + "${1} {\n\t${}\n}"),
       boost: 4,
     },
+    // 宏：敲 #de 就能补出 #define 骨架（# 后面补 define）
+    {
+      label: "define",
+      displayLabel: "#define …（宏）",
+      type: "keyword",
+      detail: "定义宏：函数宏 #define 名字(参数) 宏体（写成 名字(...) 调用）；对象宏 #define 名字 宏体（裸写名字就展开）",
+      apply: snippet('define ${1:名字}(${2}) VM_CallFunc("${3:函数名}", ${4})'),
+      boost: 4,
+    },
   ];
 
   const lang = StreamLanguage.define({
     name: "labmap",
     token(stream) {
       if (stream.eatSpace()) return null;
-      // 行注释
-      if (stream.match("//")) {
+      // 行注释（// 和 # 等价）
+      if (stream.match("//") || stream.match("#")) {
         stream.skipToEnd();
         return "comment";
       }
@@ -290,6 +333,7 @@ export function makeLabLanguage(meta = {}) {
         completeFromList([...blockCompletions, ...funcCompletions, ...kwCompletions, ...customSnippets]),
         variableCompletions,
         customBlockCompletions,
+        macroCompletions,
       ]),
     },
   });
@@ -326,7 +370,7 @@ export const labLanguage = makeLabLanguage();
 // 代码折叠
 // ============================================================
 
-// stripLineComment 去掉行内 // 注释（字符串里的 // 不算），供折叠扫描用
+// stripLineComment 去掉行内 // 或 # 注释（字符串里的不算），供折叠扫描用
 function stripLineComment(line) {
   let inStr = false;
   for (let i = 0; i < line.length; i++) {
@@ -337,13 +381,20 @@ function stripLineComment(line) {
     }
     if (inStr) continue;
     if (c === "/" && line[i + 1] === "/") return line.slice(0, i);
+    if (c === "#") return line.slice(0, i);
   }
   return line;
 }
 
+// isCommentLine 该行（去缩进后）是不是注释行
+function isCommentLine(text) {
+  const t = text.trimStart();
+  return t.startsWith("//") || t.startsWith("#");
+}
+
 // labFoldFn 计算某一行的可折叠范围：
 //   · `... {` 花括号块 —— 折到闭合 } 所在行行首（} 留着，折叠后显示成 `{ ⋯ }`）
-//   · 连续 // 注释段 —— 折到注释段最后一行行尾
+//   · 连续 // / # 注释段 —— 折到注释段最后一行行尾
 // 返回 {from, to} 或 null；只需 state.doc，便于单测
 export function labFoldFn(state, lineStart, lineEnd) {
   const doc = state.doc;
@@ -351,11 +402,11 @@ export function labFoldFn(state, lineStart, lineEnd) {
   const raw = doc.sliceString(lineStart, lineEnd);
   const code = stripLineComment(raw).trim();
 
-  // 连续 // 注释段
-  if (code === "" && raw.trimStart().startsWith("//")) {
+  // 连续 // / # 注释段
+  if (code === "" && isCommentLine(raw)) {
     let last = line.number;
     for (let n = line.number + 1; n <= doc.lines; n++) {
-      if (!doc.line(n).text.trimStart().startsWith("//")) break;
+      if (!isCommentLine(doc.line(n).text)) break;
       last = n;
     }
     return last > line.number ? { from: lineEnd, to: doc.line(last).to } : null;

@@ -13,7 +13,6 @@ image_alpha = 1
 state = "appear"
 special_ash = true
 mouse_id = "mouse_train_3"
-target_type = "normal"frame_count = 0
-
+target_type = "normal"
 
 frame_count=0;
