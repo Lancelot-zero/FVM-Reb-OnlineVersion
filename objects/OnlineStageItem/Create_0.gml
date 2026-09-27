@@ -171,11 +171,27 @@ function clear_mouse_status() {
     self.state.action_hover = false
 }
 
+function is_mouse_in_clip_rect(_mx, _my) {
+    if (!variable_instance_exists(self, "clip_left")) {
+        return true
+    }
+    return point_in_rectangle(
+        _mx, _my,
+        variable_instance_get(self, "clip_left"),
+        variable_instance_get(self, "clip_top"),
+        variable_instance_get(self, "clip_right"),
+        variable_instance_get(self, "clip_bottom")
+    )
+}
+
 function update_mouse() {
     var _s = self.state
     var _mx = device_mouse_x_to_gui(0)
     var _my = device_mouse_y_to_gui(0)
     var _in_bound = point_in_rectangle(_mx, _my, _s.left, _s.top, _s.left + _s.width, _s.top + _s.height)
+    if (_in_bound) {
+        _in_bound = is_mouse_in_clip_rect(_mx, _my)
+    }
     var _ar = action_rect()
     _s.action_hover = point_in_rectangle(_mx, _my, _ar.x1, _ar.y1, _ar.x2, _ar.y2)
     var _mouse_press = mouse_check_button(mb_left)
@@ -201,7 +217,6 @@ function update_mouse() {
         }
     }
 
-    // 松开后无论是否命中都解除武装，确保按下与释放都在同一 item 内
     if (_mouse_up) _s.click_armed = false
 }
 

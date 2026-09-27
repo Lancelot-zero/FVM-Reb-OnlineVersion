@@ -223,6 +223,11 @@ function layout_items() {
         }
         method(inst, _set_position)(_x, _y)
         variable_instance_set(inst, "visible", _in_view)
+        // 把视口裁剪后的可见范围告知子项，供鼠标命中判定使用
+        variable_instance_set(inst, "clip_left", max(_x, _vleft))
+        variable_instance_set(inst, "clip_top", max(_y, _vtop))
+        variable_instance_set(inst, "clip_right", min(_cell_right, _vright))
+        variable_instance_set(inst, "clip_bottom", min(_cell_bottom, _vbottom))
     }
 }
 

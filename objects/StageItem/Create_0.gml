@@ -91,12 +91,29 @@ function clear_mouse_status() {
     self.state.click_armed = false
 }
 
+/// @description 鼠标是否位于外部（GridList）给出的裁剪范围内；无裁剪信息时默认通过
+function is_mouse_in_clip_rect(_mx, _my) {
+    if (!variable_instance_exists(self, "clip_left")) {
+        return true
+    }
+    return point_in_rectangle(
+        _mx, _my,
+        variable_instance_get(self, "clip_left"),
+        variable_instance_get(self, "clip_top"),
+        variable_instance_get(self, "clip_right"),
+        variable_instance_get(self, "clip_bottom")
+    )
+}
+
 function update_mouse() {
     var _s = self.state
     var _mx = device_mouse_x_to_gui(0)
     var _my = device_mouse_y_to_gui(0)
     
     var _in_bound = point_in_rectangle(_mx, _my, _s.left, _s.top, _s.left + _s.width, _s.top + _s.height)
+    if (_in_bound) {
+        _in_bound = is_mouse_in_clip_rect(_mx, _my)
+    }
     
     var _old_status = _s.mouse_status
     var _mouse_press = mouse_check_button(mb_left)
