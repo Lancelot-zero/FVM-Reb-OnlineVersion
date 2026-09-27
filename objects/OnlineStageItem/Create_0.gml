@@ -16,6 +16,7 @@ self.state = {
     /// @type {function ():Bool}
     should_correspond: function() { return true },
     mouse_status: MouseStatus.NONE,
+    click_armed: false,
     map_sprite_left: 16,
     map_sprite_top: 65,
     map_sprite_scale: 1,
@@ -166,6 +167,7 @@ function clear_mouse_status() {
     if (self.state.mouse_status != MouseStatus.NONE) {
         self.state.mouse_status = MouseStatus.NONE
     }
+    self.state.click_armed = false
     self.state.action_hover = false
 }
 
@@ -176,21 +178,31 @@ function update_mouse() {
     var _in_bound = point_in_rectangle(_mx, _my, _s.left, _s.top, _s.left + _s.width, _s.top + _s.height)
     var _ar = action_rect()
     _s.action_hover = point_in_rectangle(_mx, _my, _ar.x1, _ar.y1, _ar.x2, _ar.y2)
-    var _old = _s.mouse_status
+    var _mouse_press = mouse_check_button(mb_left)
+    var _mouse_down = mouse_check_button_pressed(mb_left)
+    var _mouse_up = mouse_check_button_released(mb_left)
+
     if (!_in_bound) {
         _s.mouse_status = MouseStatus.NONE
-    } else if (mouse_check_button(mb_left)) {
+    } else if (_mouse_press) {
         _s.mouse_status = MouseStatus.PRESS
-    } else if (_old == MouseStatus.PRESS) {
-        _s.mouse_status = MouseStatus.RELEASE
-        if (_s.action_hover) {
-            if (!is_undefined(_s.on_action)) _s.on_action(_s.item)
-        } else if (!is_undefined(_s.on_click)) {
-            _s.on_click(_s.item)
-        }
+        // 只在本 item 内按下时才武装点击
+        if (_mouse_down) _s.click_armed = true
     } else {
-        _s.mouse_status = MouseStatus.HOVER
+        if (_mouse_up && _s.click_armed) {
+            _s.mouse_status = MouseStatus.RELEASE
+            if (_s.action_hover) {
+                if (!is_undefined(_s.on_action)) _s.on_action(_s.item)
+            } else if (!is_undefined(_s.on_click)) {
+                _s.on_click(_s.item)
+            }
+        } else {
+            _s.mouse_status = MouseStatus.HOVER
+        }
     }
+
+    // 松开后无论是否命中都解除武装，确保按下与释放都在同一 item 内
+    if (_mouse_up) _s.click_armed = false
 }
 
 function on_create() {
@@ -200,7 +212,10 @@ function on_create() {
 
 function on_step() {
     if (!self.state.initialized) exit
-    if (!visible) exit
+    if (!visible) {
+        clear_mouse_status()
+        exit
+    }
     if (!self.state.should_correspond() || is_search_box_blocking()) {
         clear_mouse_status()
         exit
