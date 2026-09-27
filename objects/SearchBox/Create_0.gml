@@ -67,9 +67,8 @@ function focus() {
     }
     self.state.focused = true
     keyboard_string = self.state.text
-    if (variable_global_exists("ime_block") && native_enable_ime != undefined) {
-        native_enable_ime(window_handle())
-    }
+    // IME 的放开/恢复不在这里做：obj_file_manager 集中看所有输入框的焦点状态统一处理，
+    // 本处再调一次会与它抢同一个窗口状态。
 }
 
 function blur() {
@@ -77,9 +76,7 @@ function blur() {
         return
     }
     self.state.focused = false
-    if (variable_global_exists("ime_block") && global.ime_block && native_disable_ime != undefined) {
-        native_disable_ime(window_handle())
-    }
+    // 同上：交给 obj_file_manager 统一处理。
 }
 
 function contains_point(_mx, _my) {

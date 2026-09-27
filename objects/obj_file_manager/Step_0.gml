@@ -23,9 +23,14 @@ if (!variable_instance_exists(id, "ime_was_typing")) {
 // v7.3：屏蔽按「游戏内输入框是否获得焦点」动态开关——获焦则放开（能打中文），否则屏蔽。
 // 判定集中在这里：Mouse_53 是全局鼠标事件，多输入框时各实例执行顺序不确定，
 // 若把 native_enable/disable 散在各实例里会互相覆盖（点 B 框被离开 A 框的分支关掉）。
+// 游戏里的输入框有两套：obj_text_input（关卡编辑器）与 SearchBox（实验室 / 在线地图搜索框）。
+// 只认前者时，搜索框获焦会被算成「没人在打字」，下面每 60 帧的心跳随即把 IME 屏蔽回去。
 var _ime_typing_count = 0;
 with (obj_text_input) {
     if (active) _ime_typing_count += 1;
+}
+with (SearchBox) {
+    if (state.focused) _ime_typing_count += 1;
 }
 var _ime_typing = (_ime_typing_count > 0);
 
