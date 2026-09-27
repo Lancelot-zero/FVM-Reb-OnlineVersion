@@ -149,6 +149,9 @@ function create_widgets() {
               .set_should_correspond(method({gui_state: self.state}, function() {
                   return gui_state.current_stage_id == "" && (is_undefined(gui_state.online_gui) || !instance_exists(gui_state.online_gui))
               }))
+			  .set_show_scrollbar(true)
+			  .set_scrollbar_offset_x(48)
+
     self.state.grid_list = _grid_list
 
     /// @type {Asset.GMObject.SearchBox}
