@@ -849,3 +849,131 @@ _DEFINE_BLOCK_q {
 		t.Errorf("块内定义自定义块没报错: %+v", diags)
 	}
 }
+
+// TestHashComment # 也是注释（编译器的 tokenizer 与预处理器都认）
+func TestHashComment(t *testing.T) {
+	code := `# 整行注释，里面的 foo() 不该报未知函数
+#defineXyz 这不是宏定义（# 后面不是 define），也是注释
+
+_VM_BATTLE_START {
+    VM_SetFlame(1) # 行尾注释
+    VM_ShellPrint("# 字符串里的井号不是注释")
+}
+`
+	for _, d := range lintScript(code) {
+		if d.Severity == "error" {
+			t.Errorf("# 注释脚本报错: 行%d [%s] %s", d.Line, d.Severity, d.Message)
+		}
+	}
+}
+
+// TestMacros 宏 #define：定义 / 调用 / 实参个数 / 各种非法写法
+func TestMacros(t *testing.T) {
+	// 合法：先调用后定义、宏调宏、空参数表、表达式里调用、字符串里不展开
+	ok := `#define add(a,b) VM_CallFunc("add", a, b)
+#define add10(v) add(v, 10)
+#define noop()   VM_SetFlame(0)
+
+_VM_BATTLE_START {
+    r = add(1, 2)
+    VM_SetFlame(add10(r))
+    noop()
+    VM_ShellPrint("add(1, 2) 在字符串里不展开")
+    add = 5
+}
+`
+	for _, d := range lintScript(ok) {
+		if d.Severity == "error" {
+			t.Errorf("宏合法脚本报错: 行%d [%s] %s", d.Line, d.Severity, d.Message)
+		}
+	}
+
+	// 没定义的函数还是照报未知函数（宏不影响）
+	if diags := lintScript("_VM_BATTLE_START {\n    nope(1)\n}\n"); !hasDiag(diags, 2, "error", "未知函数 nope") {
+		t.Errorf("未知函数没报错: %+v", diags)
+	}
+
+	// 实参个数对不上（编译器展开时也报这个）
+	arity := `#define add(a,b) VM_CallFunc("add", a, b)
+_VM_BATTLE_START {
+    r = add(1)
+}
+`
+	if diags := lintScript(arity); !hasDiag(diags, 3, "error", "宏 add 要 2 个实参，这里给了 1 个") {
+		t.Errorf("宏实参个数没报错: %+v", diags)
+	}
+
+	// 非法定义
+	bad := []struct {
+		name string
+		code string
+		line int
+		msg  string
+	}{
+		{"没名字", "#define\n_VM_BATTLE_START {\n}\n", 1, "宏没有名字"},
+		{"中文名", "#define 名字 1\n", 1, "宏没有名字"},
+		{"VM_ 开头", "#define VM_foo() VM_SetFlame(1)\n", 1, "宏名不能以 VM_ 开头"},
+		{"重复定义", "#define f(a) a\n#define f(b) b\n", 2, "宏重复定义"},
+		{"函数宏没内容", "#define f()\n", 1, "宏 f 没有内容"},
+		{"对象宏没内容", "#define f\n", 1, "宏 f 没有内容"},
+		{"参数名重复", "#define f(a,a) a\n", 1, "参数名重复"},
+		{"参数表写坏", "#define f(a\n", 1, "参数表写坏了"},
+	}
+	for _, c := range bad {
+		if diags := lintScript(c.code); !hasDiag(diags, c.line, "error", c.msg) {
+			t.Errorf("%s 没报错: %+v", c.name, diags)
+		}
+	}
+}
+
+// TestObjectMacros 对象宏 #define AAAA 1（不带括号，和 C 一样裸名字就展开）
+func TestObjectMacros(t *testing.T) {
+	// 合法：对象宏当真值/表达式用、宏调宏、字符串里不展开
+	ok := `#define BASE 100
+#define LIMIT (BASE * 2)
+
+_VM_BATTLE_START {
+    VM_SetFlame(BASE)
+    VM_SetFlame(LIMIT)
+    x = BASE + LIMIT
+    VM_ShellPrint("BASE 在字符串里不展开", x)
+}
+`
+	for _, d := range lintScript(ok) {
+		if d.Severity == "error" {
+			t.Errorf("对象宏合法脚本报错: 行%d [%s] %s", d.Line, d.Severity, d.Message)
+		}
+	}
+
+	// 对象宏不能带括号调用（编译器会展开成 `100(...)`）
+	called := `#define BASE 100
+_VM_BATTLE_START {
+    VM_SetFlame(BASE(1))
+}
+`
+	if diags := lintScript(called); !hasDiag(diags, 3, "error", "宏 BASE 是对象宏") {
+		t.Errorf("对象宏带括号调用没报错: %+v", diags)
+	}
+
+	// 对象宏不能当变量名（裸写就被展开）
+	assigned := `#define BASE 100
+_VM_BATTLE_START {
+    BASE = 1
+}
+`
+	if diags := lintScript(assigned); !hasDiag(diags, 3, "error", "BASE 是对象宏") {
+		t.Errorf("对象宏当变量名没报错: %+v", diags)
+	}
+
+	// 函数宏当变量名照旧合法（展开要求紧跟括号）
+	funcVar := `#define add(a,b) VM_CallFunc("add", a, b)
+_VM_BATTLE_START {
+    add = 5
+}
+`
+	for _, d := range lintScript(funcVar) {
+		if d.Severity == "error" {
+			t.Errorf("函数宏当变量名不该报错: 行%d %s", d.Line, d.Message)
+		}
+	}
+}

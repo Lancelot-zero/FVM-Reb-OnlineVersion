@@ -806,6 +806,7 @@ type linter struct {
 	pendingChain bool // 最近闭合的是 if/elif 块，可接 elif/else
 	loopDepth    int  // while 嵌套层级（break/continue 必须 > 0）
 	customDefs   map[string]int
+	macros       map[string]*macroDef
 }
 
 func (l *linter) errorf(line int, format string, args ...any) {
@@ -816,10 +817,130 @@ func (l *linter) warnf(line int, format string, args ...any) {
 	l.diags = append(l.diags, Diagnostic{Line: line, Severity: "warning", Message: fmt.Sprintf(format, args...)})
 }
 
+// ---- 宏（#define）----
+// 规则与 LabMapCompiler 的 pp_* 完全一致：
+//   #define 名字(参数表) 宏体   · 函数宏（括号必须紧跟宏名）：名字(...) 展开成宏体
+//   #define 名字 宏体          · 对象宏：裸写名字就展开成宏体
+// 展开只发生在代码区（字符串 / // 注释 / # 注释里不动），宏可以调宏，
+// 宏名不许以 VM_ 开头、不许重复定义。这里做静态检查：
+// 收集宏名与参数个数，调用处不再报"未知函数"，实参个数对不上直接报错。
+
+// macroDef 一个 #define 宏定义
+type macroDef struct {
+	name     string
+	params   []string
+	line     int
+	funcLike bool // true = 函数宏（带参数表）；false = 对象宏
+}
+
+func isIdentChar(c byte) bool {
+	return c == '_' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9'
+}
+
+func identIndex(list []string, s string) int {
+	for i, v := range list {
+		if v == s {
+			return i
+		}
+	}
+	return -1
+}
+
+// collectMacros 先扫一遍全文记下 #define 宏（允许先调用后定义），坏定义就地报错
+func collectMacros(lines []string) (map[string]*macroDef, []Diagnostic) {
+	macs := map[string]*macroDef{}
+	diags := []Diagnostic{}
+	fail := func(lineno int, msg string) {
+		diags = append(diags, Diagnostic{Line: lineno, Severity: "error", Message: msg})
+	}
+	for i, line := range lines {
+		lineno := i + 1
+		t := strings.TrimSpace(line)
+		if !strings.HasPrefix(t, "#define") {
+			continue
+		}
+		if len(t) > len("#define") && isIdentChar(t[len("#define")]) {
+			continue // #defineXxx：不是宏定义，# 那行本来就是注释
+		}
+		p := len("#define")
+		for p < len(t) && (t[p] == ' ' || t[p] == '\t') {
+			p++
+		}
+		ns := p
+		for p < len(t) && isIdentChar(t[p]) {
+			p++
+		}
+		name := t[ns:p]
+		if name == "" {
+			fail(lineno, "宏没有名字（#define 后面要写名字）")
+			continue
+		}
+		if strings.HasPrefix(name, "VM_") {
+			fail(lineno, "宏名不能以 VM_ 开头（那是内置函数名）："+name)
+			continue
+		}
+		if _, dup := macs[name]; dup {
+			fail(lineno, "宏重复定义："+name)
+			continue
+		}
+		m := &macroDef{name: name, line: lineno}
+		if p < len(t) && t[p] == '(' {
+			// 函数宏：括号必须紧跟宏名（和 C 一样，中间有空格就是对象宏）
+			m.funcLike = true
+			p++ // 吃掉 (
+			var params []string
+			bad := false
+			for {
+				for p < len(t) && (t[p] == ' ' || t[p] == '\t') {
+					p++
+				}
+				if p < len(t) && t[p] == ')' {
+					p++
+					break
+				}
+				ps := p
+				for p < len(t) && isIdentChar(t[p]) {
+					p++
+				}
+				pn := t[ps:p]
+				if pn == "" {
+					fail(lineno, "宏 "+name+" 的参数表写坏了")
+					bad = true
+					break
+				}
+				if identIndex(params, pn) >= 0 {
+					fail(lineno, "宏 "+name+" 的参数名重复："+pn)
+					bad = true
+					break
+				}
+				params = append(params, pn)
+				for p < len(t) && (t[p] == ' ' || t[p] == '\t') {
+					p++
+				}
+				if p < len(t) && t[p] == ',' {
+					p++
+				}
+			}
+			if bad {
+				continue
+			}
+			m.params = params
+		}
+		body := strings.TrimSpace(t[p:])
+		if body == "" {
+			fail(lineno, "宏 "+name+" 没有内容")
+			continue
+		}
+		macs[name] = m
+	}
+	return macs, diags
+}
+
 // lintScript 对整段脚本做语法检查
 func lintScript(code string) []Diagnostic {
 	lines := splitLines(code)
-	l := &linter{diags: []Diagnostic{}, customDefs: collectCustomDefs(lines)}
+	macs, diags := collectMacros(lines)
+	l := &linter{diags: diags, customDefs: collectCustomDefs(lines), macros: macs}
 	for i, line := range lines {
 		l.checkLine(i+1, line)
 	}
@@ -891,6 +1012,11 @@ func (l *linter) checkLine(lineno int, line string) {
 		}
 		if c == '/' && i+1 < len(line) && line[i+1] == '/' {
 			// 注释开始，行剩余部分忽略
+			l.checkSegment(lineno, line[start:i])
+			return
+		}
+		if c == '#' {
+			// # 也是注释（与编译器一致：#define 由预处理器先摘掉，其余整行忽略）
 			l.checkSegment(lineno, line[start:i])
 			return
 		}
@@ -1029,6 +1155,10 @@ func (l *linter) parseStmt(lineno int, s string) string {
 			}
 			if reservedWords[name] {
 				l.errorf(lineno, "%s 是保留字，不能用作变量名", name)
+			}
+			if m, isMacro := l.macros[name]; isMacro && !m.funcLike {
+				l.errorf(lineno, "%s 是对象宏（第 %d 行定义），裸写名字就会被展开，不能当变量名",
+					name, m.line)
 			}
 			rhs := strings.TrimSpace(t[1:])
 			if i := findBraceInExpr(rhs); i >= 0 {
@@ -1319,6 +1449,25 @@ func (l *linter) inCustomBlock() bool {
 	return false
 }
 
+// checkMacroCall 宏调用：函数宏要核对实参个数，对象宏不能带括号调用
+func (l *linter) checkMacroCall(lineno int, m *macroDef, argsStr string) {
+	if !m.funcLike {
+		l.errorf(lineno, "宏 %s 是对象宏（第 %d 行定义），裸写名字就行，不能写成 %s(...)",
+			m.name, m.line, m.name)
+		return
+	}
+	args := splitArgs(argsStr)
+	n := len(args)
+	if argsStr == "" {
+		n = 0
+	}
+	l.checkExprCalls(lineno, argsStr)
+	if n != len(m.params) {
+		l.errorf(lineno, "宏 %s 要 %d 个实参，这里给了 %d 个（第 %d 行定义）",
+			m.name, len(m.params), n, m.line)
+	}
+}
+
 // checkCall 校验函数名、参数个数、字符串枚举、放置要求
 func (l *linter) checkCall(lineno int, name, argsStr string) {
 	ev := l.enclosingEvent()
@@ -1328,6 +1477,10 @@ func (l *linter) checkCall(lineno int, name, argsStr string) {
 	}
 	spec, ok := funcTable[name]
 	if !ok {
+		if m, isMacro := l.macros[name]; isMacro {
+			l.checkMacroCall(lineno, m, argsStr)
+			return
+		}
 		l.errorf(lineno, "未知函数 %s（见帮助→函数表）", name)
 		return
 	}

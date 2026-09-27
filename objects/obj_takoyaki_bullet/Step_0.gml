@@ -37,7 +37,7 @@ if (global._takoyaki_scan_frame != obj_battle.battle_time) {
 		}
 	}
 }
-
+/*
 // 卡片右一格内寻找敌人（取血最高），查本列+右列网格数组
 var _find_right_cell = function(_range) {
 	return noone
@@ -61,7 +61,7 @@ var _find_right_cell = function(_range) {
 		}
 	}
 	return _found;
-}
+}*/
 
 // 子弹追踪逻辑
 if (instance_exists(target_enemy) && target_enemy.hp > 0  && can_hit(target_type,target_enemy.target_type)) {
@@ -89,7 +89,7 @@ if (instance_exists(target_enemy) && target_enemy.hp > 0  && can_hit(target_type
 	//show_debug_message(dir)
 
 	// 检查是否需要重新选择目标（有更高优先级的目标出现）
-	var new_target = _find_right_cell(150);
+	var new_target =noone;// _find_right_cell(150);
 
 	// 如果找到更高优先级的目标，切换目标
 	if (new_target != noone) {

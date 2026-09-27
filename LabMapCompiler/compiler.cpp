@@ -1729,9 +1729,237 @@ static string derive_output(const string& input) {
 }
 
 static bool g_lines = true;   // true = 把行号表作为 __LINES__ 伪块打进 bin（--no-lines 关闭）
+static bool g_ppdump = false; // --ppdump：只跑宏预处理，把结果写文件（验"没宏时逐字节不变"用）
 
-static int compile_one(const string& src_path, const string& out_path) {    ifstream in(src_path);
-    if (!in) {
+// ============================================================
+// 宏预编译（读入之后、解析之前）
+//   #define add(a,b)  VM_CallFunc("add", a, b)      · 函数宏：add(1, 2)
+//   #define AAAA       1                            · 对象宏：裸写 AAAA 就等于 1
+//
+//   规则：
+//     · 一行一个 #define，宏名只能是 ASCII 字母/数字/下划线
+//     · 参数表**必须紧跟宏名**、必须有括号（可以是空的：#define foo() ...）→ 函数宏
+//       名字后面不是 ( → 对象宏（#define AAAA 1），宏体是名字后面剩下的整段；
+//       所以 `#define LIMIT (BASE * 2)` 是对象宏（空格隔开，和 C 一样）
+//     · 函数宏只在"宏名后面紧跟 ( "的地方展开 → 跟变量名不冲突
+//       对象宏裸名字就展开（跟 C 一样），所以别拿它当变量名
+//     · 参数按**文本**替换（不求值）；实参里的逗号按括号配对切，字符串里的逗号不算
+//     · 展开只发生在代码区：字符串里不展开，// 和 # 注释里不展开（# 本来就是注释）
+//     · 展开结果会再扫一遍（宏可以调宏），最多 64 轮
+//     · #define 那行替换成空行、展开不插换行 → **报错行号还是源文件那一行**
+//     · 宏名不许以 VM_ 开头（别盖内置函数），不许重复定义
+// ============================================================
+struct MacroDef { string name; vector<string> params; string body; int line; bool func_like = true; };
+
+static bool pp_ident_start(char c) { return isalpha((unsigned char)c) || c == '_'; }
+static bool pp_ident_char (char c) { return isalnum((unsigned char)c) || c == '_'; }
+
+static string pp_trim(const string& s) {
+    size_t a = 0, b = s.size();
+    while (a < b && (s[a] == ' ' || s[a] == '\t' || s[a] == '\r')) a++;
+    while (b > a && (s[b - 1] == ' ' || s[b - 1] == '\t' || s[b - 1] == '\r')) b--;
+    return s.substr(a, b - a);
+}
+
+// 从引号开始跳过一段字符串（含转义），返回结束后的位置
+static size_t pp_skip_string(const string& s, size_t i) {
+    i++;
+    while (i < s.size()) {
+        if (s[i] == '\\' && i + 1 < s.size()) { i += 2; continue; }
+        if (s[i] == '"') return i + 1;
+        i++;
+    }
+    return i;
+}
+
+// 从 '(' 开始取实参文本；成功返回 true 并写结束位置
+static bool pp_take_args(const string& s, size_t open, vector<string>* args, size_t* endpos) {
+    int depth = 0;
+    string cur;
+    for (size_t i = open; i < s.size(); i++) {
+        char c = s[i];
+        if (c == '"') { size_t j = pp_skip_string(s, i); cur += s.substr(i, j - i); i = j - 1; continue; }
+        if (c == '(') { depth++; if (depth == 1) continue; }
+        else if (c == ')') { depth--; if (depth == 0) { args->push_back(pp_trim(cur)); *endpos = i + 1; return true; } }
+        else if (c == ',' && depth == 1) { args->push_back(pp_trim(cur)); cur.clear(); continue; }
+        cur += c;
+    }
+    return false;
+}
+
+// 把宏体里的参数名换成实参文本（字符串里不动）
+static string pp_subst(const MacroDef& m, const vector<string>& args) {
+    string out;
+    size_t i = 0;
+    while (i < m.body.size()) {
+        char c = m.body[i];
+        if (c == '"') { size_t j = pp_skip_string(m.body, i); out += m.body.substr(i, j - i); i = j; continue; }
+        if (pp_ident_start(c)) {
+            size_t j = i;
+            while (j < m.body.size() && pp_ident_char(m.body[j])) j++;
+            string w = m.body.substr(i, j - i);
+            int k = -1;
+            for (size_t t = 0; t < m.params.size(); t++) if (m.params[t] == w) { k = (int)t; break; }
+            out += (k >= 0) ? args[(size_t)k] : w;
+            i = j;
+            continue;
+        }
+        out += c;
+        i++;
+    }
+    return out;
+}
+
+// 第一遍：收集 #define，把那行换成空行（行号不变）
+static bool pp_collect(const string& src, vector<MacroDef>* macs, string* body, string* err, int* errline) {
+    body->clear();
+    size_t i = 0;
+    int line = 1;
+    while (i <= src.size()) {
+        size_t e = src.find('\n', i);
+        if (e == string::npos) e = src.size();
+        string ln = src.substr(i, e - i);
+        string t = pp_trim(ln);
+        if (t.compare(0, 7, "#define") == 0 && (t.size() == 7 || !pp_ident_char(t[7]))) {
+            size_t p = 7;
+            while (p < t.size() && (t[p] == ' ' || t[p] == '\t')) p++;
+            size_t ns = p;
+            while (p < t.size() && pp_ident_char(t[p])) p++;
+            string name = t.substr(ns, p - ns);
+            if (name.empty())          { *err = "宏没有名字（#define 后面要写名字）"; *errline = line; return false; }
+            if (name.compare(0, 3, "VM_") == 0) { *err = "宏名不能以 VM_ 开头（那是内置函数名）：" + name; *errline = line; return false; }
+            for (size_t k = 0; k < macs->size(); k++)
+                if ((*macs)[k].name == name) { *err = "宏重复定义：" + name; *errline = line; return false; }
+            MacroDef m; m.name = name; m.line = line;
+            if (p >= t.size() || t[p] != '(') {
+                // 名字后面没有 ( → 对象宏（#define AAAA 1）：裸名字替换成宏体
+                m.func_like = false;
+                m.body = pp_trim(t.substr(p));
+            } else {
+                m.func_like = true;
+                p++;                                        // 吃掉 (
+                while (true) {
+                    while (p < t.size() && (t[p] == ' ' || t[p] == '\t')) p++;
+                    if (p < t.size() && t[p] == ')') { p++; break; }
+                    size_t ps = p;
+                    while (p < t.size() && pp_ident_char(t[p])) p++;
+                    string pn = t.substr(ps, p - ps);
+                    if (pn.empty()) { *err = "宏 " + name + " 的参数表写坏了"; *errline = line; return false; }
+                    for (size_t k = 0; k < m.params.size(); k++)
+                        if (m.params[k] == pn) { *err = "宏 " + name + " 的参数名重复：" + pn; *errline = line; return false; }
+                    m.params.push_back(pn);
+                    while (p < t.size() && (t[p] == ' ' || t[p] == '\t')) p++;
+                    if (p < t.size() && t[p] == ',') { p++; continue; }
+                }
+                m.body = pp_trim(t.substr(p));
+            }
+            if (m.body.empty()) { *err = "宏 " + name + " 没有内容"; *errline = line; return false; }
+            macs->push_back(m);
+            *body += "\n";                              // 原样占一行，行号不变
+        } else {
+            *body += ln;
+            if (e < src.size()) *body += "\n";
+        }
+        if (e >= src.size()) break;
+        i = e + 1;
+        line++;
+    }
+    return true;
+}
+
+// 第二遍：展开（扫一轮；改了再扫，最多 64 轮）
+static bool pp_expand_pass(const string& src, const vector<MacroDef>& macs, string* out, bool* changed,
+                           const MacroDef** where, string* err, int* errline) {
+    out->clear();
+    *changed = false;
+    int line = 1;
+    size_t i = 0;
+    while (i < src.size()) {
+        char c = src[i];
+        if (c == '\n') { *out += c; i++; line++; continue; }
+        if (c == '"') { size_t j = pp_skip_string(src, i); out->append(src, i, j - i); i = j; continue; }
+        if (c == '/') {                                  // // 注释：整行照抄
+            if (i + 1 < src.size() && src[i + 1] == '/') {
+                size_t e = src.find('\n', i);
+                if (e == string::npos) e = src.size();
+                out->append(src, i, e - i);
+                i = e;
+                continue;
+            }
+            *out += c; i++; continue;
+        }
+        if (c == '#') {                                  // # 也是注释：整行照抄
+            size_t e = src.find('\n', i);
+            if (e == string::npos) e = src.size();
+            out->append(src, i, e - i);
+            i = e;
+            continue;
+        }
+        if (pp_ident_start(c)) {
+            size_t j = i;
+            while (j < src.size() && pp_ident_char(src[j])) j++;
+            string w = src.substr(i, j - i);
+            const MacroDef* m = nullptr;
+            for (size_t k = 0; k < macs.size(); k++) if (macs[k].name == w) { m = &macs[k]; break; }
+            if (m) {
+                if (!m->func_like) {                     // 对象宏：裸名字就替换
+                    *out += m->body;
+                    *changed = true;
+                    if (where) *where = m;
+                    i = j;
+                    continue;
+                }
+                size_t p = j;
+                while (p < src.size() && (src[p] == ' ' || src[p] == '\t')) p++;
+                if (p < src.size() && src[p] == '(') {
+                    vector<string> args;
+                    size_t endp = 0;
+                    if (!pp_take_args(src, p, &args, &endp)) {
+                        *err = "宏 " + m->name + " 的实参括号没配对"; *errline = line; return false;
+                    }
+                    if (args.size() == 1 && args[0].empty() && m->params.empty()) args.clear();
+                    if (args.size() != m->params.size()) {
+                        *err = "宏 " + m->name + " 要 " + to_string(m->params.size()) +
+                               " 个实参，这里给了 " + to_string(args.size()) + " 个";
+                        *errline = line;
+                        return false;
+                    }
+                    *out += pp_subst(*m, args);
+                    *changed = true;
+                    if (where) *where = m;
+                    i = endp;
+                    continue;
+                }
+            }
+            *out += w;
+            i = j;
+            continue;
+        }
+        *out += c;
+        i++;
+    }
+    return true;
+}
+
+static bool pp_preprocess(const string& src, string* out, string* err, int* errline) {
+    vector<MacroDef> macs;
+    string stage1;
+    if (!pp_collect(src, &macs, &stage1, err, errline)) return false;
+    if (macs.empty()) { *out = stage1; return true; }
+    string cur = stage1;
+    for (int round = 0; round < 64; round++) {
+        string nxt;
+        bool changed = false;
+        if (!pp_expand_pass(cur, macs, &nxt, &changed, nullptr, err, errline)) return false;
+        cur.swap(nxt);
+        if (!changed) { *out = cur; return true; }
+    }
+    *err = "宏展开太深（超过 64 轮，可能自己调自己）";
+    *errline = 0;
+    return false;
+}
+
+static int compile_one(const string& src_path, const string& out_path) {    ifstream in(src_path);    if (!in) {
         cerr << "Error: cannot read " << src_path << endl;
         return 1;
     }
@@ -1739,6 +1967,15 @@ static int compile_one(const string& src_path, const string& out_path) {    ifst
     ss << in.rdbuf();
     string src = ss.str();
     in.close();
+    {   // 宏预编译：读入之后、解析之前（#define 展开）
+        string ppsrc, pperr;
+        int ppline = 0;
+        if (!pp_preprocess(src, &ppsrc, &pperr, &ppline)) {
+            cerr << "Compile error (" << src_path << "): Line " << ppline << ": " << pperr << endl;
+            return 1;
+        }
+        src.swap(ppsrc);
+    }
     Compiler compiler(src);
     compiler.set_lines(g_lines);
     string err;
@@ -1767,11 +2004,28 @@ int main(int argc, char* argv[]) {
     for (int i = 1; i < argc; i++) {
         string a = argv[i];
         if (a == "--no-lines") { g_lines = false; continue; }
+        if (a == "--ppdump") { g_ppdump = true; continue; }
         if (a == "--lines")    { g_lines = true;  continue; }
         if (a.rfind("--", 0) == 0) continue;   // 其它未知开关忽略
         _pos.push_back(a);
     }
     // ---- 无参数：遍历当前目录下所有 .txt ----
+    if (g_ppdump) {
+        // 开发用：只跑宏预处理，把结果写到文件（<输入> <输出>）—— 用来验"没宏时逐字节不变"
+        if (_pos.size() < 2) { cerr << "usage: LabMapCompiler --ppdump <in.txt> <out.txt>" << endl; return 1; }
+        ifstream pin(_pos[0], ios::binary);
+        if (!pin) { cerr << "Error: cannot read " << _pos[0] << endl; return 1; }
+        stringstream pss; pss << pin.rdbuf(); pin.close();
+        string pout, perr; int pline = 0;
+        if (!pp_preprocess(pss.str(), &pout, &perr, &pline)) {
+            cerr << "Compile error (" << _pos[0] << "): Line " << pline << ": " << perr << endl;
+            return 1;
+        }
+        ofstream fout(_pos[1], ios::binary);
+        fout.write(pout.data(), (streamsize)pout.size());
+        cout << "ppdump -> " << _pos[1] << " (" << pout.size() << " bytes)" << endl;
+        return 0;
+    }
     if (_pos.empty()) {
         int total = 0, ok = 0;
         _finddata_t fd;

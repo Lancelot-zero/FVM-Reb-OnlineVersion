@@ -232,7 +232,64 @@ switch state{
 				if !instance_exists(spike_right_2){
 					spike_pos_list[6][8] = 0
 				}
-				var clear_list = connectOnesToTwos(spike_pos_list)
+				var _c_grid = spike_pos_list
+				var clear_list = []
+				if (is_array(_c_grid)) && (array_length(_c_grid) > 0){
+					var _c_rows = array_length(_c_grid)
+					var _c_cols = array_length(_c_grid[0])
+					var _c_result = array_deep_copy(_c_grid)
+					var _c_ones = []
+					for (var _c_i = 0; _c_i < _c_rows; _c_i++) {
+						for (var _c_j = 0; _c_j < _c_cols; _c_j++) {
+							if (_c_grid[_c_i][_c_j] == 1) {
+								array_push(_c_ones,[_c_i, _c_j])
+							}
+						}
+					}
+					var _c_n = array_length(_c_ones)
+					if (_c_n >= 2) {
+						for (var _c_i = 0; _c_i < _c_n; _c_i++) {
+							for (var _c_j = _c_i + 1; _c_j < _c_n; _c_j++) {
+								var _c_y1 = _c_ones[_c_i][0]
+								var _c_x1 = _c_ones[_c_i][1]
+								var _c_y2 = _c_ones[_c_j][0]
+								var _c_x2 = _c_ones[_c_j][1]
+								// bresenham(_c_x1,_c_y1,_c_x2,_c_y2) 展开
+								var _b_points = []
+								var _b_dx = abs(_c_x2 - _c_x1)
+								var _b_dy = abs(_c_y2 - _c_y1)
+								var _b_sx = _c_x1 < _c_x2 ? 1 : -1
+								var _b_sy = _c_y1 < _c_y2 ? 1 : -1
+								var _b_err = _b_dx - _b_dy
+								var _b_xx = _c_x1
+								var _b_yy = _c_y1
+								while (true) {
+									array_push(_b_points,[_b_xx, _b_yy])
+									if (_b_xx == _c_x2) && (_b_yy == _c_y2) {
+										break
+									}
+									var _b_e2 = 2 * _b_err
+									if (_b_e2 > -_b_dy) {
+										_b_err -= _b_dy
+										_b_xx += _b_sx
+									}
+									if (_b_e2 < _b_dx) {
+										_b_err += _b_dx
+										_b_yy += _b_sy
+									}
+								}
+								for (var _b_k = 0; _b_k < array_length(_b_points); _b_k++) {
+									var _b_px = _b_points[_b_k][0]
+									var _b_py = _b_points[_b_k][1]
+									if (_b_py >= 0) && (_b_py < _c_rows) && (_b_px >= 0) && (_b_px < _c_cols) && (_c_grid[_b_py][_b_px] == 0) {
+										_c_result[_b_py][_b_px] = 2
+									}
+								}
+							}
+						}
+					}
+					clear_list = _c_result
+				}
 				for(var i = 0;i<7;i++){
 					for(var j = 0 ; j < 9 ; j++){
 						if clear_list[i][j] != 0{
@@ -299,7 +356,64 @@ switch state{
 				if !instance_exists(spike_right_2){
 					spike_pos_list[6][4] = 0
 				}
-				var clear_list = connectOnesToTwos(spike_pos_list)
+				var _c_grid = spike_pos_list
+				var clear_list = []
+				if (is_array(_c_grid)) && (array_length(_c_grid) > 0){
+					var _c_rows = array_length(_c_grid)
+					var _c_cols = array_length(_c_grid[0])
+					var _c_result = array_deep_copy(_c_grid)
+					var _c_ones = []
+					for (var _c_i = 0; _c_i < _c_rows; _c_i++) {
+						for (var _c_j = 0; _c_j < _c_cols; _c_j++) {
+							if (_c_grid[_c_i][_c_j] == 1) {
+								array_push(_c_ones,[_c_i, _c_j])
+							}
+						}
+					}
+					var _c_n = array_length(_c_ones)
+					if (_c_n >= 2) {
+						for (var _c_i = 0; _c_i < _c_n; _c_i++) {
+							for (var _c_j = _c_i + 1; _c_j < _c_n; _c_j++) {
+								var _c_y1 = _c_ones[_c_i][0]
+								var _c_x1 = _c_ones[_c_i][1]
+								var _c_y2 = _c_ones[_c_j][0]
+								var _c_x2 = _c_ones[_c_j][1]
+								// bresenham(_c_x1,_c_y1,_c_x2,_c_y2) 展开
+								var _b_points = []
+								var _b_dx = abs(_c_x2 - _c_x1)
+								var _b_dy = abs(_c_y2 - _c_y1)
+								var _b_sx = _c_x1 < _c_x2 ? 1 : -1
+								var _b_sy = _c_y1 < _c_y2 ? 1 : -1
+								var _b_err = _b_dx - _b_dy
+								var _b_xx = _c_x1
+								var _b_yy = _c_y1
+								while (true) {
+									array_push(_b_points,[_b_xx, _b_yy])
+									if (_b_xx == _c_x2) && (_b_yy == _c_y2) {
+										break
+									}
+									var _b_e2 = 2 * _b_err
+									if (_b_e2 > -_b_dy) {
+										_b_err -= _b_dy
+										_b_xx += _b_sx
+									}
+									if (_b_e2 < _b_dx) {
+										_b_err += _b_dx
+										_b_yy += _b_sy
+									}
+								}
+								for (var _b_k = 0; _b_k < array_length(_b_points); _b_k++) {
+									var _b_px = _b_points[_b_k][0]
+									var _b_py = _b_points[_b_k][1]
+									if (_b_py >= 0) && (_b_py < _c_rows) && (_b_px >= 0) && (_b_px < _c_cols) && (_c_grid[_b_py][_b_px] == 0) {
+										_c_result[_b_py][_b_px] = 2
+									}
+								}
+							}
+						}
+					}
+					clear_list = _c_result
+				}
 				for(var i = 0;i<7;i++){
 					for(var j = 0 ; j < 9 ; j++){
 						if clear_list[i][j] != 0{

@@ -1,0 +1,7 @@
+# 只入库源码：转换产物 / 编译产物都不跟踪
+bin/
+obj/
+*.exe
+*.obj
+convert.log
+_slot.bin

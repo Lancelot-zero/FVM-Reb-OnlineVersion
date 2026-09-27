@@ -125,10 +125,72 @@ switch state{
 		if skill_choose == 0{
 			if timer mod 45 == 44 && jump_times < 4{
 				if !is_reversed{
-					create_train_body_order(1,0,move_time-45*(jump_times+1))
+					var _tb_amount = 1
+					var _tb_dir = 0
+					var _tb_mt = move_time-45*(jump_times+1)
+					for(var _tb_i = 0 ; _tb_i < _tb_amount ; _tb_i++){
+						if _tb_dir == 0{
+							var _tb_inst = instance_create_depth(x+210*(array_length(train_body_list)+1),y,depth,obj_mouse_train_2_body)
+							_tb_inst.train_head = id
+							_tb_inst.state = BOSS_STATE.APPEAR
+							_tb_inst.skill_choose = skill_choose
+							_tb_inst.skill_change_style = skill_change_style
+							_tb_inst.move_time = _tb_mt
+							_tb_inst.maxhp = maxhp
+							_tb_inst.hp = _tb_inst.maxhp
+							_tb_inst.hp_modified = true
+							_tb_inst.train_dir = _tb_dir
+							array_push(train_body_list,_tb_inst)
+						}
+						else{
+							var _tb_inst = instance_create_depth(x-210*(array_length(train_body_list)+1),y,depth,obj_mouse_train_2_body)
+							_tb_inst.train_head = id
+							_tb_inst.state = BOSS_STATE.APPEAR
+							_tb_inst.skill_choose = skill_choose
+							_tb_inst.skill_change_style = skill_change_style
+							_tb_inst.move_time = _tb_mt
+							_tb_inst.maxhp = maxhp
+							_tb_inst.hp = _tb_inst.maxhp
+							_tb_inst.hp_modified = true
+							_tb_inst.train_dir = _tb_dir
+							array_push(train_body_list,_tb_inst)
+						}
+					}
 				}
 				else{
-					create_train_body_pos(1,1,x-210*(jump_times+1),y,move_time-45*(jump_times+1))
+					var _tb_amount = 1
+					var _tb_dir = 1
+					var _tb_bx = x-210*(jump_times+1)
+					var _tb_by = y
+					var _tb_mt = move_time-45*(jump_times+1)
+					for(var _tb_i = 0 ; _tb_i < _tb_amount ; _tb_i++){
+						if _tb_dir == 0{
+							var _tb_inst = instance_create_depth(_tb_bx,_tb_by,depth,obj_mouse_train_2_body)
+							_tb_inst.train_head = id
+							_tb_inst.state = BOSS_STATE.APPEAR
+							_tb_inst.skill_choose = skill_choose
+							_tb_inst.skill_change_style = skill_change_style
+							_tb_inst.move_time = _tb_mt
+							_tb_inst.maxhp = maxhp
+							_tb_inst.hp = _tb_inst.maxhp
+							_tb_inst.hp_modified = true
+							_tb_inst.train_dir = _tb_dir
+							array_push(train_body_list,_tb_inst)
+						}
+						else{
+							var _tb_inst = instance_create_depth(_tb_bx,_tb_by,depth,obj_mouse_train_2_body)
+							_tb_inst.train_head = id
+							_tb_inst.state = BOSS_STATE.APPEAR
+							_tb_inst.skill_choose = skill_choose
+							_tb_inst.skill_change_style = skill_change_style
+							_tb_inst.move_time = _tb_mt
+							_tb_inst.maxhp = maxhp
+							_tb_inst.hp = _tb_inst.maxhp
+							_tb_inst.hp_modified = true
+							_tb_inst.train_dir = _tb_dir
+							array_push(train_body_list,_tb_inst)
+						}
+					}
 				}
 				jump_times++
 			}
@@ -136,20 +198,144 @@ switch state{
 		else if skill_choose == 1{
 			if timer mod 45 == 44 && jump_times < 4{
 				if skill_2_times == 0{
-					create_train_body_order(1,0,move_time-45*(jump_times+1))
+					var _tb_amount = 1
+					var _tb_dir = 0
+					var _tb_mt = move_time-45*(jump_times+1)
+					for(var _tb_i = 0 ; _tb_i < _tb_amount ; _tb_i++){
+						if _tb_dir == 0{
+							var _tb_inst = instance_create_depth(x+210*(array_length(train_body_list)+1),y,depth,obj_mouse_train_2_body)
+							_tb_inst.train_head = id
+							_tb_inst.state = BOSS_STATE.APPEAR
+							_tb_inst.skill_choose = skill_choose
+							_tb_inst.skill_change_style = skill_change_style
+							_tb_inst.move_time = _tb_mt
+							_tb_inst.maxhp = maxhp
+							_tb_inst.hp = _tb_inst.maxhp
+							_tb_inst.hp_modified = true
+							_tb_inst.train_dir = _tb_dir
+							array_push(train_body_list,_tb_inst)
+						}
+						else{
+							var _tb_inst = instance_create_depth(x-210*(array_length(train_body_list)+1),y,depth,obj_mouse_train_2_body)
+							_tb_inst.train_head = id
+							_tb_inst.state = BOSS_STATE.APPEAR
+							_tb_inst.skill_choose = skill_choose
+							_tb_inst.skill_change_style = skill_change_style
+							_tb_inst.move_time = _tb_mt
+							_tb_inst.maxhp = maxhp
+							_tb_inst.hp = _tb_inst.maxhp
+							_tb_inst.hp_modified = true
+							_tb_inst.train_dir = _tb_dir
+							array_push(train_body_list,_tb_inst)
+						}
+					}
 				}
 				else if skill_2_times == 1{
-					create_train_body_pos(1,1,x-210*(jump_times+1),y,move_time-45*(jump_times+1))
+					var _tb_amount = 1
+					var _tb_dir = 1
+					var _tb_bx = x-210*(jump_times+1)
+					var _tb_by = y
+					var _tb_mt = move_time-45*(jump_times+1)
+					for(var _tb_i = 0 ; _tb_i < _tb_amount ; _tb_i++){
+						if _tb_dir == 0{
+							var _tb_inst = instance_create_depth(_tb_bx,_tb_by,depth,obj_mouse_train_2_body)
+							_tb_inst.train_head = id
+							_tb_inst.state = BOSS_STATE.APPEAR
+							_tb_inst.skill_choose = skill_choose
+							_tb_inst.skill_change_style = skill_change_style
+							_tb_inst.move_time = _tb_mt
+							_tb_inst.maxhp = maxhp
+							_tb_inst.hp = _tb_inst.maxhp
+							_tb_inst.hp_modified = true
+							_tb_inst.train_dir = _tb_dir
+							array_push(train_body_list,_tb_inst)
+						}
+						else{
+							var _tb_inst = instance_create_depth(_tb_bx,_tb_by,depth,obj_mouse_train_2_body)
+							_tb_inst.train_head = id
+							_tb_inst.state = BOSS_STATE.APPEAR
+							_tb_inst.skill_choose = skill_choose
+							_tb_inst.skill_change_style = skill_change_style
+							_tb_inst.move_time = _tb_mt
+							_tb_inst.maxhp = maxhp
+							_tb_inst.hp = _tb_inst.maxhp
+							_tb_inst.hp_modified = true
+							_tb_inst.train_dir = _tb_dir
+							array_push(train_body_list,_tb_inst)
+						}
+					}
 				}
 				else{
-					create_train_body_pos(1,0,x+210*(jump_times+1),y,move_time-45*(jump_times+1))
+					var _tb_amount = 1
+					var _tb_dir = 0
+					var _tb_bx = x+210*(jump_times+1)
+					var _tb_by = y
+					var _tb_mt = move_time-45*(jump_times+1)
+					for(var _tb_i = 0 ; _tb_i < _tb_amount ; _tb_i++){
+						if _tb_dir == 0{
+							var _tb_inst = instance_create_depth(_tb_bx,_tb_by,depth,obj_mouse_train_2_body)
+							_tb_inst.train_head = id
+							_tb_inst.state = BOSS_STATE.APPEAR
+							_tb_inst.skill_choose = skill_choose
+							_tb_inst.skill_change_style = skill_change_style
+							_tb_inst.move_time = _tb_mt
+							_tb_inst.maxhp = maxhp
+							_tb_inst.hp = _tb_inst.maxhp
+							_tb_inst.hp_modified = true
+							_tb_inst.train_dir = _tb_dir
+							array_push(train_body_list,_tb_inst)
+						}
+						else{
+							var _tb_inst = instance_create_depth(_tb_bx,_tb_by,depth,obj_mouse_train_2_body)
+							_tb_inst.train_head = id
+							_tb_inst.state = BOSS_STATE.APPEAR
+							_tb_inst.skill_choose = skill_choose
+							_tb_inst.skill_change_style = skill_change_style
+							_tb_inst.move_time = _tb_mt
+							_tb_inst.maxhp = maxhp
+							_tb_inst.hp = _tb_inst.maxhp
+							_tb_inst.hp_modified = true
+							_tb_inst.train_dir = _tb_dir
+							array_push(train_body_list,_tb_inst)
+						}
+					}
 				}
 				jump_times++
 			}
 		}
 		else if skill_choose == 2{
 			if timer mod 45 == 44 && jump_times < 3{
-				create_train_body_order(1,0,move_time-45*(jump_times+1))
+				var _tb_amount = 1
+				var _tb_dir = 0
+				var _tb_mt = move_time-45*(jump_times+1)
+				for(var _tb_i = 0 ; _tb_i < _tb_amount ; _tb_i++){
+					if _tb_dir == 0{
+						var _tb_inst = instance_create_depth(x+210*(array_length(train_body_list)+1),y,depth,obj_mouse_train_2_body)
+						_tb_inst.train_head = id
+						_tb_inst.state = BOSS_STATE.APPEAR
+						_tb_inst.skill_choose = skill_choose
+						_tb_inst.skill_change_style = skill_change_style
+						_tb_inst.move_time = _tb_mt
+						_tb_inst.maxhp = maxhp
+						_tb_inst.hp = _tb_inst.maxhp
+						_tb_inst.hp_modified = true
+						_tb_inst.train_dir = _tb_dir
+						array_push(train_body_list,_tb_inst)
+					}
+					else{
+						var _tb_inst = instance_create_depth(x-210*(array_length(train_body_list)+1),y,depth,obj_mouse_train_2_body)
+						_tb_inst.train_head = id
+						_tb_inst.state = BOSS_STATE.APPEAR
+						_tb_inst.skill_choose = skill_choose
+						_tb_inst.skill_change_style = skill_change_style
+						_tb_inst.move_time = _tb_mt
+						_tb_inst.maxhp = maxhp
+						_tb_inst.hp = _tb_inst.maxhp
+						_tb_inst.hp_modified = true
+						_tb_inst.train_dir = _tb_dir
+						array_push(train_body_list,_tb_inst)
+					}
+				}
 				if jump_times == 1 && global.network.mode != "client"{
 					train_body_list[1].skill_3_style = true
 				}

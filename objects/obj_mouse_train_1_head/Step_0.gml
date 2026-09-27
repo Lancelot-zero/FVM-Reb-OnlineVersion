@@ -38,17 +38,57 @@ if !appear{
 		else{
 			y -= (global.grid_cell_size_y * 2 - 15)
 		}
-		create_train_body(4,0)
+		if global.network.mode != "client"{
+			for(var _tb_i = 0 ; _tb_i < 4 ; _tb_i++){
+				var _tb_inst = instance_create_depth(x,y+228*(_tb_i+1),depth,obj_mouse_train_1_body)
+				_tb_inst.train_head = id
+				_tb_inst.state = BOSS_STATE.APPEAR
+				_tb_inst.skill_choose = skill_choose
+				_tb_inst.skill_change_style = skill_change_style
+				_tb_inst.move_time = move_time
+				_tb_inst.maxhp = maxhp
+				_tb_inst.hp = _tb_inst.maxhp
+				_tb_inst.hp_modified = true
+				array_push(train_body_list,_tb_inst)
+			}
+		}
 	}
 	else if skill_choose == 1{
 		if skill_change_style == 0{
 			y += (global.grid_cell_size_y * 0.5 + 15)
-			create_train_body(4,1)
+			if global.network.mode != "client"{
+				for(var _tb_i = 0 ; _tb_i < 4 ; _tb_i++){
+					var _tb_inst = instance_create_depth(x,y-228*(_tb_i+1),depth,obj_mouse_train_1_body)
+					_tb_inst.train_head = id
+					_tb_inst.state = BOSS_STATE.APPEAR
+					_tb_inst.image_angle = 180
+					_tb_inst.skill_choose = skill_choose
+					_tb_inst.skill_change_style = skill_change_style
+					_tb_inst.move_time = move_time
+					_tb_inst.maxhp = maxhp
+					_tb_inst.hp = _tb_inst.maxhp
+					_tb_inst.hp_modified = true
+					array_push(train_body_list,_tb_inst)
+				}
+			}
 		}
 		else{
 			move_time = 250 +round(2*global.grid_cell_size_y/4)
 			y -= (global.grid_cell_size_y - 15)
-			create_train_body(4,0)
+			if global.network.mode != "client"{
+				for(var _tb_i = 0 ; _tb_i < 4 ; _tb_i++){
+					var _tb_inst = instance_create_depth(x,y+228*(_tb_i+1),depth,obj_mouse_train_1_body)
+					_tb_inst.train_head = id
+					_tb_inst.state = BOSS_STATE.APPEAR
+					_tb_inst.skill_choose = skill_choose
+					_tb_inst.skill_change_style = skill_change_style
+					_tb_inst.move_time = move_time
+					_tb_inst.maxhp = maxhp
+					_tb_inst.hp = _tb_inst.maxhp
+					_tb_inst.hp_modified = true
+					array_push(train_body_list,_tb_inst)
+				}
+			}
 		}
 		
 	}
@@ -122,7 +162,21 @@ switch state{
 				for(var i = 0 ; i < array_length(train_body_list) ; i++){
 					train_body_list[i].wait_time += 250
 				}
-				create_train_body(4,1)
+				if global.network.mode != "client"{
+					for(var _tb_i = 0 ; _tb_i < 4 ; _tb_i++){
+						var _tb_inst = instance_create_depth(x,y-228*(_tb_i+1),depth,obj_mouse_train_1_body)
+						_tb_inst.train_head = id
+						_tb_inst.state = BOSS_STATE.APPEAR
+						_tb_inst.image_angle = 180
+						_tb_inst.skill_choose = skill_choose
+						_tb_inst.skill_change_style = skill_change_style
+						_tb_inst.move_time = move_time
+						_tb_inst.maxhp = maxhp
+						_tb_inst.hp = _tb_inst.maxhp
+						_tb_inst.hp_modified = true
+						array_push(train_body_list,_tb_inst)
+					}
+				}
 				for(var i = 4 ; i < array_length(train_body_list) ; i++){
 					train_body_list[i].is_reversed = true
 				}
@@ -279,17 +333,57 @@ switch state{
 				else{
 					y -= (global.grid_cell_size_y * 2 - 15)
 				}
-				create_train_body(4,0)
+				if global.network.mode != "client"{
+					for(var _tb_i = 0 ; _tb_i < 4 ; _tb_i++){
+						var _tb_inst = instance_create_depth(x,y+228*(_tb_i+1),depth,obj_mouse_train_1_body)
+						_tb_inst.train_head = id
+						_tb_inst.state = BOSS_STATE.APPEAR
+						_tb_inst.skill_choose = skill_choose
+						_tb_inst.skill_change_style = skill_change_style
+						_tb_inst.move_time = move_time
+						_tb_inst.maxhp = maxhp
+						_tb_inst.hp = _tb_inst.maxhp
+						_tb_inst.hp_modified = true
+						array_push(train_body_list,_tb_inst)
+					}
+				}
 			}
 			else if skill_choose == 1{
 				if skill_change_style == 0{
 					y += (global.grid_cell_size_y * 0.5 + 15)
-					create_train_body(4,1)
+					if global.network.mode != "client"{
+						for(var _tb_i = 0 ; _tb_i < 4 ; _tb_i++){
+							var _tb_inst = instance_create_depth(x,y-228*(_tb_i+1),depth,obj_mouse_train_1_body)
+							_tb_inst.train_head = id
+							_tb_inst.state = BOSS_STATE.APPEAR
+							_tb_inst.image_angle = 180
+							_tb_inst.skill_choose = skill_choose
+							_tb_inst.skill_change_style = skill_change_style
+							_tb_inst.move_time = move_time
+							_tb_inst.maxhp = maxhp
+							_tb_inst.hp = _tb_inst.maxhp
+							_tb_inst.hp_modified = true
+							array_push(train_body_list,_tb_inst)
+						}
+					}
 				}
 				else{
 					move_time = 250 +round(2*global.grid_cell_size_y/4)
 					y -= (global.grid_cell_size_y - 15)
-					create_train_body(4,0)
+					if global.network.mode != "client"{
+						for(var _tb_i = 0 ; _tb_i < 4 ; _tb_i++){
+							var _tb_inst = instance_create_depth(x,y+228*(_tb_i+1),depth,obj_mouse_train_1_body)
+							_tb_inst.train_head = id
+							_tb_inst.state = BOSS_STATE.APPEAR
+							_tb_inst.skill_choose = skill_choose
+							_tb_inst.skill_change_style = skill_change_style
+							_tb_inst.move_time = move_time
+							_tb_inst.maxhp = maxhp
+							_tb_inst.hp = _tb_inst.maxhp
+							_tb_inst.hp_modified = true
+							array_push(train_body_list,_tb_inst)
+						}
+					}
 				}
 		
 			}
