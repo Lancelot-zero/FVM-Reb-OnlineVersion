@@ -2613,7 +2613,8 @@ function VM_CreateInstance(obj_name_addr, x_addr, y_addr) {
     if (global.network.mode == "client" && !global.network.client_able
         && variable_global_exists("boss_spawn_sync_list")
         && array_contains(global.boss_spawn_sync_list, _obj)) {
-        return -(++global._VM_create_counter);
+        global._VM_create_counter += 1;
+        return -(global._VM_create_counter);
     }
     var _depth = -1200;
     if (global._VM_cur_card != noone && instance_exists(global._VM_cur_card)) {

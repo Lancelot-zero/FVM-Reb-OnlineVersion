@@ -2791,8 +2791,15 @@ function run_VM_AliasSprite(vm, code, _ip) {
 	var _new = run_vm_read_mem(vm, code[_base+0]);
 	var _exist = run_vm_read_mem(vm, code[_base+1]);
 	if (!ds_map_exists(global._VM_sprite_temp_cache, _exist)) return _ip;
+	
+	ds_map_add(global._VM_sprite_temp_cache, _new, get_load_sprite(_exist));
+/*
+	var _new = vm_read_mem(global.__vm, new_name_addr);
+	var _exist = vm_read_mem(global.__vm, exist_name_addr);
+	if (!ds_map_exists(global._VM_sprite_temp_cache, _exist)) return;
 	ds_map_add(global._VM_sprite_temp_cache, _new, _exist);
-
+	*/
+	
     return _ip;
 }
 

@@ -31,9 +31,9 @@ if ((keyboard_check_pressed(vk_space) || (mouse_check_button_pressed(mb_left) &&
 						global.map_id = "delicious_island"
 						global.map_name = "美味岛"
 					}
-					global.gui_stack.pop()
+					gui_stack_pop(global.gui_stack)
 					if (obj_game_over.sprite_index != spr_lose) {
-						global.gui_stack.pop()
+						gui_stack_pop(global.gui_stack)
 					}
 					global.menu_screen = true
 					obj_world_map_button.world_map = 0

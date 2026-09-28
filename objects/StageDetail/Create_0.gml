@@ -91,6 +91,7 @@ function on_create_room() {
     if (file_exists(_bin_path)) {
         _bin_buf = buffer_load(_bin_path);
         VM_InitRoomEntry(_bin_buf);
+		buffer_delete(_bin_buf);
     } else {
         VM_InitRoomEntry(undefined);
     }

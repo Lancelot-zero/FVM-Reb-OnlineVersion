@@ -56,7 +56,7 @@ variable_global_set("sh_help", function(args) {
 				if ((i - hiddenCount) % 2 == 0) {
 					var paddingWidth = (width/2) - (anchorMargin + string_width(functionName));
 					var spaceCount = paddingWidth/string_width(" ");
-					repeat (spaceCount) {
+					for (var _i = 0; _i < floor(spaceCount); _i++) {
 						terminator += " ";
 					}
 				} else {
@@ -91,7 +91,7 @@ variable_global_set("sh_clear", function(args) {
 		array_push(output, ">" + consoleString);
 		draw_set_font(consoleFont);
 		var _newLinesCount = floor(visibleHeight / string_height(prompt));
-		repeat(_newLinesCount) {
+		for (var _i = 0; _i < floor(_newLinesCount); _i++) {
 			array_push(output, "\n");
 		}
 		return "";
