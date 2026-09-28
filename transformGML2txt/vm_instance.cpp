@@ -16,6 +16,12 @@
 
 std::vector<Instance> g_instances;
 
+// 活着的实例：id（只增不减） → 槽位（可复用）
+std::unordered_map<int, int> g_inst_alive;
+static int g_next_id = 0;                 // 下一个实例 id（只增不减）
+// 正在跑 Destroy 事件的实例（重入保护：Destroy 里再销毁自己 → 直接返回，不然无限递归）
+static std::unordered_set<int> g_inst_dying;                 // 下一个实例 id（只增不减）
+
 // ── 全局字符串池 ──
 //   文本 → 全局下标，intern 去重；Value.t == MEM_STRING 的 v 就是这里的下标。
 //   装载 bin / callbin 时靠 remap_block_strings 把字节码里内联的局部下标换成全局下标。
@@ -164,55 +170,130 @@ void inst_init(Instance& in) {
     inst_f(in, F_image_blend)  = Value{MEM_INT, 16777215};
 }
 
+
+
+// ── InstBox：数组 / map 双模式（见 vm.h 的说明）──
+void InstBox::to_map() {
+    for (size_t i = 0; i < arr.size(); i++) {
+        std::unordered_map<int, int>::iterator it = g_inst_alive.find(arr[i]);
+        mp[arr[i]] = (it == g_inst_alive.end()) ? -1 : it->second;   // 槽位从全局表拿
+    }
+    arr.clear();
+    use_map = true;
+    cur = mp.begin();
+    cur_rank = 0;
+}
+
+void InstBox::add(int id, int slot) {
+    if (!use_map) {
+        arr.push_back(id);                       // id 单调 → 天然升序
+        if ((int)arr.size() > 16) to_map();       // 跨过 16 → 转 map（不回）
+        return;
+    }
+    int pos = (int)std::distance(mp.begin(), mp.lower_bound(id));
+    mp[id] = slot;
+    if (pos <= cur_rank) cur_rank++;              // 插在游标前面 → 排名 +1（游标节点没变）
+}
+
+void InstBox::erase(int id) {
+    if (!use_map) {
+        for (size_t i = 0; i < arr.size(); i++)
+            if (arr[i] == id) { arr.erase(arr.begin() + i); return; }   // 位移保序
+        return;
+    }
+    std::map<int, int>::iterator it = mp.find(id);
+    if (it == mp.end()) return;
+    int pos = (int)std::distance(mp.begin(), it);
+    if (pos == cur_rank) {                        // 删的就是游标那个
+        int n = (int)mp.size();
+        if (cur_rank + 1 < n) { std::map<int, int>::iterator nx = it; ++nx; mp.erase(it); cur = nx; }
+        else if (cur_rank > 0) { std::map<int, int>::iterator pv = it; --pv; mp.erase(it); cur = pv; cur_rank--; }
+        else { mp.erase(it); cur = mp.end(); cur_rank = 0; }
+        return;
+    }
+    if (pos < cur_rank) cur_rank--;               // 删的在游标前面 → 排名 -1（游标不动）
+    mp.erase(it);
+}
+
+int InstBox::at(int k) {
+    if (k < 0) return -1;
+    if (!use_map) return (k < (int)arr.size()) ? arr[(size_t)k] : -1;
+    int n = (int)mp.size();
+    if (k >= n) return -1;
+    if (cur_rank < 0 || cur_rank >= n) { cur = mp.begin(); cur_rank = 0; }   // 游标失位（防御）
+    int d_cur = k - cur_rank, d_beg = k, d_end = n - 1 - k;
+    int ad = (d_cur < 0) ? -d_cur : d_cur;
+    if (ad <= d_beg && ad <= d_end) {             // 游标最近 → 加加减减
+        if (d_cur > 0) { for (int i = 0; i < d_cur; i++) { ++cur; ++cur_rank; } }
+        else           { for (int i = 0; i < -d_cur; i++) { --cur; --cur_rank; } }
+    } else if (d_beg <= d_end) {                  // 从头走
+        cur = mp.begin(); cur_rank = 0;
+        for (int i = 0; i < k; i++) { ++cur; ++cur_rank; }
+    } else {                                      // 从尾走
+        cur = mp.end(); --cur; cur_rank = n - 1;
+        for (int i = n - 1; i > k; i--) { --cur; --cur_rank; }
+    }
+    return cur->first;
+}
+
+void InstBox::ids(std::vector<int>& out) const {
+    out.clear();
+    if (!use_map) { out = arr; return; }
+    for (std::map<int, int>::const_iterator it = mp.begin(); it != mp.end(); ++it) out.push_back(it->first);
+}
+
 int inst_new(Vm* vm, const std::string& obj) {
-    int id;
+    int slot;
     if (!g_inst_free.empty()) {
-        id = g_inst_free.front();                 // 复用回收的下标
+        slot = g_inst_free.front();               // 复用回收的**槽位**
         g_inst_free.pop_front();
-        Instance& in = g_instances[(size_t)id];
+        Instance& in = g_instances[(size_t)slot];
         in.vars.clear();                          // 上一任的变量不许留给新实例
         in.obj   = obj;
-        in.alive = true;
         in.vm    = vm;
         inst_init(in);                            // 内置字段回默认值
     } else {
         if (g_instances.empty()) g_instances.push_back(Instance());   // 0 号留位：全局/当前实例的哨兵
         Instance in;
         in.obj   = obj;
-        in.alive = true;
         in.vm    = vm;
         inst_init(in);
         g_instances.push_back(in);
-        id = (int)g_instances.size() - 1;
+        slot = (int)g_instances.size() - 1;
     }
-    if (vm) vm->instances.push_back(id);
+    int id = ++g_next_id;                         // **id 只增不减**，和槽位无关
+    g_instances[(size_t)slot].id = id;
+    g_inst_alive[id] = slot;                      // 登记：id → 槽位
+    if (vm) vm->box.add(id, slot);                // owner 名下的容器（数组/map 自动）
     return id;
 }
 
 Instance* inst_get(int id) {
-    if (id <= 0 || id >= (int)g_instances.size()) return NULL;
-    return g_instances[(size_t)id].alive ? &g_instances[(size_t)id] : NULL;
+    std::unordered_map<int, int>::iterator it = g_inst_alive.find(id);
+    if (it == g_inst_alive.end()) return NULL;    // 没有 / 已死
+    int slot = it->second;
+    if (slot <= 0 || slot >= (int)g_instances.size()) return NULL;
+    return &g_instances[(size_t)slot];            // map 里有 = 活着（alive 标志已删）
 }
 
 void inst_kill(int id) {
-    if (id <= 0 || id >= (int)g_instances.size()) return;
-    Instance& in = g_instances[(size_t)id];
-    if (!in.alive) return;                        // 已经死了，别重复回收
-    in.alive = false;
-    if (in.vm) {                                  // 从 owner 名下摘掉
-        std::vector<int>& v = in.vm->instances;
-        for (size_t i = 0; i < v.size(); i++)
-            if (v[i] == id) { v[i] = v.back(); v.erase(v.end() - 1); break; }   // 和末尾交换再砍尾，不做整段挪动
-    }
+    std::unordered_map<int, int>::iterator it = g_inst_alive.find(id);
+    if (it == g_inst_alive.end()) return;         // 已经死了，别重复回收
+    int slot = it->second;
+    g_inst_alive.erase(it);                       // 从"活着的"里移除
+    if (slot <= 0 || slot >= (int)g_instances.size()) return;
+    Instance& in = g_instances[(size_t)slot];
+    if (in.vm) in.vm->box.erase(id);              // 从 owner 名下摘掉（容器内部负责保序/游标）
     in.vm = NULL;
-    g_inst_free.push_back(id);                    // 下标进复用队列（内容留着，复用时清）
+    g_inst_free.push_back(slot);                  // **槽位**进复用队列（内容留着，复用时清）
 }
 
 // VM 挂掉：把自己名下的实例全收掉
 void Vm::destroy_owned_instances() {
-    std::vector<int> ids(instances);              // inst_kill 会改 instances，先拷一份
+    std::vector<int> ids;
+    box.ids(ids);                                 // inst_kill 会改 box，先拷一份
     for (size_t i = 0; i < ids.size(); i++) inst_kill(ids[i]);
-    instances.clear();
+    box.clear();
 }
 
 // VM 挂掉：把"对象名 → VM"表里指向自己的条目摘掉（不留悬空指针）
@@ -231,21 +312,13 @@ void Vm::unregister_objects() {
 }
 
 int inst_count(const std::string& obj) {
-    int n = 0;
-    for (size_t i = 1; i < g_instances.size(); i++)
-        if (g_instances[i].alive && g_instances[i].obj == obj) n++;
-    return n;
+    Vm* v = vm_of_object(obj);                    // 一个 VM = 一个对象 → 直接问它的容器
+    return v ? v->box.count() : 0;                // O(1)
 }
 
 int inst_at(const std::string& obj, int k) {
-    if (k < 0) return -1;
-    for (size_t i = 1; i < g_instances.size(); i++) {
-        if (g_instances[i].alive && g_instances[i].obj == obj) {
-            if (k == 0) return (int)i;
-            k--;
-        }
-    }
-    return -1;
+    Vm* v = vm_of_object(obj);
+    return v ? v->box.at(k) : -1;                 // 数组 O(1) / map 走游标
 }
 
 Value* inst_var_sid(int id, int sid) {
@@ -403,11 +476,31 @@ void instance_destroy(Vm& vm, const uint8_t* args, int argc, int dst) {
     Instance* in = inst_get(target);
     if (!in) { wr_i(vm, dst, 0); return; }
     std::string obj = in->obj;                        // ⚠ 先把名字拷出来：inst_kill 之后指针还指着，但别依赖它
-    run_block_on(vm, obj, target, str_at(S__OBJECT_DESTROY)); // GML：销毁前跑 Destroy
-    inst_kill(target);
+    inst_destroy(target);                             // 唯一入口：跑 Destroy 事件 + 回收
     wr_i(vm, dst, 0);
 }
 
+
+// ============================================================
+// 销毁一个实例（**唯一入口**）—— 四步，顺序不能换：
+//   1) 跑 _OBJECT_DESTROY 事件      ← 必须最先：事件里的 self 变量是靠 id 查
+//                                     g_inst_alive 拿到的（inst_var_sid → inst_get）
+//   2) 从 g_inst_alive 移除         ← 从此这个 id 查不到（= 不存在了）
+//   3) 释放槽位（回 g_inst_free）    ← 内容留着，等复用时清
+//   4) 从 owner VM 的 instances 摘掉
+//   上面 2~4 都在 inst_kill 里；事件由这里负责跑。
+// ============================================================
+void inst_destroy(int id) {
+    Instance* in = inst_get(id);
+    if (!in) return;                       // 幂等：已经死了，或从来不存在
+    if (g_inst_dying.count(id)) return;    // 正在销毁它自己的 Destroy 事件里 → 不再进来一次
+    g_inst_dying.insert(id);
+    Vm* vm = in->vm;
+    std::string obj = in->obj;             // 先把名字拷出来（kill 之后别依赖指针）
+    if (vm) run_block_on(*vm, obj, id, str_at(S__OBJECT_DESTROY));
+    g_inst_dying.erase(id);                // 事件跑完才允许它被真正回收
+    inst_kill(id);                         // 移除 + 释放槽位 + 摘 owner
+}
 // variable_instance_exists(inst, name)：内置字段恒存在；自定义变量查 vars
 //   注意这里**不看**当前实例——名字是"没有就是没有"，跟读属性返回 undefined 是两回事
 void variable_instance_exists(Vm& vm, const uint8_t* args, int argc, int dst) {

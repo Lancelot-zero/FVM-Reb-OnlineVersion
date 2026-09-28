@@ -70,11 +70,22 @@ function sort_plants_in_grid(col, row) {
     ds_list_destroy(active_plants);
     
     // 按深度值排序（从大到小，即从前面到后面）
-    ds_list_sort(plant_list, function(a, b) {
-        var depth_a = a.depth_value;
-        var depth_b = b.depth_value;
-        return depth_b - depth_a; // 降序排序
-    });
+    // 按 depth_value 降序（原来用 ds_list_sort + 匿名函数比较器）
+    // 翻译器不支持匿名函数 → 改成"数组 + 手写插入排序"，只用已支持的原生函数
+    var _n = ds_list_size(plant_list);
+    var _arr = [];
+    for (var i = 0; i < _n; i++) array_push(_arr, ds_list_find_value(plant_list, i));
+    for (var i = 1; i < array_length(_arr); i++) {
+        var _cur = _arr[i];
+        var _j = i - 1;
+        while (_j >= 0 && _arr[_j].depth_value < _cur.depth_value) {
+            array_set(_arr, _j + 1, _arr[_j]);
+            _j -= 1;
+        }
+        array_set(_arr, _j + 1, _cur);
+    }
+    ds_list_clear(plant_list);
+    for (var i = 0; i < array_length(_arr); i++) ds_list_add(plant_list, _arr[i]);
     
     // 更新实例深度（确保绘制顺序正确）
     for (var i = 0; i < ds_list_size(plant_list); i++) {

@@ -102,7 +102,7 @@ if (instance_exists(target_enemy) && target_enemy.hp > 0  && can_hit(target_type
 
 } else {
 	// 目标不存在或已死亡，寻找新目标
-	var new_target = _find_right_cell(80);
+	var new_target = noone;//_find_right_cell(80);
 
 	// 优先选择右边一格内的敌人，如果没有则选择最左侧敌人
 	if (new_target != noone) {

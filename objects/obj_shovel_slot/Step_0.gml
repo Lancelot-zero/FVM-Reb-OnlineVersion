@@ -104,8 +104,10 @@ if ((is_selected && mouse_check_button_pressed(mb_left)) or (is_selected && glob
     }
     
     // 获取网络同步所需参数
-    var _net_id = (plant_to_remove != noone && ds_map_exists(global.network.map_instance_id_net_id, plant_to_remove))
-        ? global.network.map_instance_id_net_id[? plant_to_remove] : -1;
+    // 原写法是三目：cond ? map[? key] : -1；翻译器不认 ?:，拆成 if/else（语义相同）
+    var _net_id = -1;
+    if (plant_to_remove != noone && ds_map_exists(global.network.map_instance_id_net_id, plant_to_remove))
+        _net_id = global.network.map_instance_id_net_id[? plant_to_remove];
     var _flame_amount = -1;
     if (plant_to_remove != noone && instance_exists(obj_shovel_slot)) {
         // VM 可覆盖返还火苗系数：-1=用原逻辑（obj_shovel_slot.flame_rate），0~1=直接用 VM 系数

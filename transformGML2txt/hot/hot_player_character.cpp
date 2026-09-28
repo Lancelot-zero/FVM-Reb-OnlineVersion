@@ -165,9 +165,8 @@ bool hot_player_step(Vm& vm) {
     // 深度：放置了才有真实深度；有平台实例时不改（平台自己管）
     if (truthy(inst_var_sid(s, S_is_placed))) {
         bool have_platform = false;
-        for (size_t k = 1; k < g_instances.size(); k++) {          // with obj_platform { have_platform = true; break }
-            if (!g_instances[k].alive) continue;
-            if (!inst_is_sid((int)k, S_obj_platform)) continue;
+        for (std::unordered_map<int, int>::iterator it = g_inst_alive.begin(); it != g_inst_alive.end(); ++it) {
+            if (!inst_is_sid(it->first, S_obj_platform)) continue;
             have_platform = true;
             break;
         }
@@ -186,10 +185,9 @@ bool hot_player_step(Vm& vm) {
 
     // 右方有敌人吗（with 里 self 是敌人，other 是本角色）
     bool has_enemy = false;
-    for (size_t k = 1; k < g_instances.size(); k++) {
-        if (!g_instances[k].alive) continue;
-        if (!inst_is_sid((int)k, S_obj_enemy_parent)) continue;
-        int e = (int)k;
+    for (std::unordered_map<int, int>::iterator it = g_inst_alive.begin(); it != g_inst_alive.end(); ++it) {
+        if (!inst_is_sid(it->first, S_obj_enemy_parent)) continue;
+        int e = it->first;
         if (get_num_sid(e, S_grid_row) == get_num_sid(s, S_grid_row)
                 && get_num_sid(e, S_grid_col) >= get_num_sid(s, S_grid_col)
                 && get_num_sid(e, S_grid_col) <= gnumv_sid(S_grid_cols) + 1

@@ -58,7 +58,7 @@ for (var i = 0; i < array_length(buttons); i++) {
 							global.map_name = "美味岛"
 						}
 						global.menu_screen = true
-						global.gui_stack.pop()
+						gui_stack_pop(global.gui_stack)
 					}
                     break;
             }

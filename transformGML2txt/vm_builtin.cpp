@@ -13,6 +13,9 @@
 // ============================================================
 
 #include "vm.h"
+#define NOMINMAX                 // windows.h 的 max/min 宏会撞我们的 void max/min
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
 #include <cmath>
 #include <cstdlib>
 
@@ -22,6 +25,7 @@ namespace {
 
 // 读一个数值参数：float 按位取回，int 直接转；字符串给 0
 //   （GML 会尝试把字符串转成数，我们的翻译器只在明确是数字的地方用算术，不做隐式转换）
+
 double num_at(Vm& vm, const uint8_t* args, int k) {
     int slot = argslot(args, k);
     int t = rd_t(vm, slot), v = rd_i(vm, slot);
@@ -132,6 +136,165 @@ void random(Vm& vm, const uint8_t* args, int argc, int dst) {
     (void)argc;
     double n = num_at(vm, args, 0);
     wr_num(vm, dst, ((double)rand() / (double)RAND_MAX) * n);
+}
+// ── 补的几个 GM 内建（翻译器会用到，之前没登记）──
+
+// chr(n)：码点 → 单字符字符串
+void chr(Vm& vm, const uint8_t* args, int argc, int dst) {
+    (void)argc;
+    int c = (int)num_at(vm, args, 0);
+    std::string t;
+    if (c > 0 && c < 128) t.push_back((char)c);
+    else if (c > 0) {                                   // 非 ASCII：按 UTF-8 编
+        if (c < 0x800) { t.push_back((char)(0xC0 | (c >> 6))); t.push_back((char)(0x80 | (c & 0x3F))); }
+        else { t.push_back((char)(0xE0 | (c >> 12))); t.push_back((char)(0x80 | ((c >> 6) & 0x3F))); t.push_back((char)(0x80 | (c & 0x3F))); }
+    }
+    Value v; v.t = MEM_STRING; v.v = intern_str(t);
+    wr_v(vm, dst, v);
+}
+
+// string_pos(substr, str)：子串位置（**1 起**，找不到 → 0）
+void string_pos(Vm& vm, const uint8_t* args, int argc, int dst) {
+    (void)argc;
+    Value a = rd_v(vm, argslot(args, 0)), b = rd_v(vm, argslot(args, 1));
+    if (a.t != MEM_STRING || b.t != MEM_STRING || !str_ok(a.v) || !str_ok(b.v)) { wr_num(vm, dst, 0); return; }
+    size_t p = str_at(b.v).find(str_at(a.v));
+    wr_num(vm, dst, (p == std::string::npos) ? 0.0 : (double)(p + 1));
+}
+
+// file_exists(name)：按工作目录找（宿主要沙箱的话以后换成宿主回调）
+void file_exists(Vm& vm, const uint8_t* args, int argc, int dst) {
+    (void)argc;
+    Value a = rd_v(vm, argslot(args, 0));
+    if (a.t != MEM_STRING || !str_ok(a.v)) { wr_num(vm, dst, 0); return; }
+    FILE* fp = fopen(str_at(a.v).c_str(), "rb");
+    wr_num(vm, dst, fp ? 1.0 : 0.0);
+    if (fp) fclose(fp);
+}
+
+// camera_get_view_x(view)：还没有相机系统 → 0（只提示一次，别静默）
+void camera_get_view_x(Vm& vm, const uint8_t* args, int argc, int dst) {
+    (void)args; (void)argc;
+    static bool warned = false;
+    if (!warned) { warned = true; printf("[vm] camera_get_view_x: 还没有相机系统，先返回 0\n"); }
+    wr_num(vm, dst, 0);
+}
+
+
+// string_delete(str, pos, count)：从 1 起的 pos 开始删 count 个字符
+void string_delete(Vm& vm, const uint8_t* args, int argc, int dst) {
+    (void)argc;
+    Value a = rd_v(vm, argslot(args, 0));
+    int pos = (int)num_at(vm, args, 1), cnt = (int)num_at(vm, args, 2);
+    if (a.t != MEM_STRING || !str_ok(a.v)) { wr_v(vm, dst, a); return; }
+    std::string t = str_at(a.v);
+    int i = pos - 1;
+    if (i < 0) i = 0;
+    if (i < (int)t.size() && cnt > 0) t.erase((size_t)i, (size_t)cnt);
+    Value o; o.t = MEM_STRING; o.v = intern_str(t);
+    wr_v(vm, dst, o);
+}
+
+// ── file_text_*：真做（宿主以后要沙箱的话换成宿主回调）──
+static FILE* g_ft[32];
+void file_text_open_write(Vm& vm, const uint8_t* args, int argc, int dst) {
+    (void)argc;
+    Value a = rd_v(vm, argslot(args, 0));
+    if (a.t != MEM_STRING || !str_ok(a.v)) { wr_num(vm, dst, -1); return; }
+    int h = -1;
+    for (int i = 0; i < 32; i++) if (!g_ft[i]) { h = i; break; }
+    if (h < 0) { printf("[vm] file_text_open_write: 打开的文件太多（>32）\n"); wr_num(vm, dst, -1); return; }
+    g_ft[h] = fopen(str_at(a.v).c_str(), "wb");
+    if (!g_ft[h]) { printf("[vm] file_text_open_write: 打不开 %s\n", str_at(a.v).c_str()); wr_num(vm, dst, -1); return; }
+    wr_num(vm, dst, (double)h);
+}
+void file_text_write_string(Vm& vm, const uint8_t* args, int argc, int dst) {
+    (void)argc; (void)dst;
+    int h = (int)num_at(vm, args, 0);
+    Value a = rd_v(vm, argslot(args, 1));
+    if (h < 0 || h >= 32 || !g_ft[h]) { printf("[vm] file_text_write_string: 无效句柄 %d\n", h); return; }
+    if (a.t == MEM_STRING && str_ok(a.v)) fwrite(str_at(a.v).data(), 1, str_at(a.v).size(), g_ft[h]);
+}
+void file_text_close(Vm& vm, const uint8_t* args, int argc, int dst) {
+    (void)argc; (void)dst;
+    int h = (int)num_at(vm, args, 0);
+    if (h < 0 || h >= 32 || !g_ft[h]) { printf("[vm] file_text_close: 无效句柄 %d\n", h); return; }
+    fclose(g_ft[h]); g_ft[h] = NULL;
+}
+
+// ── 相机 / 音频：引擎侧能力，还没有 —— 返回 0 并**只提示一次**（不静默）──
+void camera_get_view_y(Vm& vm, const uint8_t* args, int argc, int dst) {
+    (void)args; (void)argc;
+    static bool w = false; if (!w) { w = true; printf("[vm] camera_get_view_y: 还没有相机系统，先返回 0\n"); }
+    wr_num(vm, dst, 0);
+}
+void camera_get_view_width(Vm& vm, const uint8_t* args, int argc, int dst) {
+    (void)args; (void)argc;
+    static bool w = false; if (!w) { w = true; printf("[vm] camera_get_view_width: 还没有相机系统，先返回 0\n"); }
+    wr_num(vm, dst, 0);
+}
+void camera_get_view_height(Vm& vm, const uint8_t* args, int argc, int dst) {
+    (void)args; (void)argc;
+    static bool w = false; if (!w) { w = true; printf("[vm] camera_get_view_height: 还没有相机系统，先返回 0\n"); }
+    wr_num(vm, dst, 0);
+}
+void audio_create_stream(Vm& vm, const uint8_t* args, int argc, int dst) {
+    (void)args; (void)argc;
+    static bool w = false; if (!w) { w = true; printf("[vm] audio_create_stream: 还没有音频系统，先返回 -1\n"); }
+    wr_num(vm, dst, -1);
+}
+
+
+// ── 补的一批 GM 内建（翻译器要）──
+
+// room_exists(room)：VM 里没有房间资源表 → 一律当"存在"（只提示一次）。
+//   ⚠ 语义上是近似：调用方通常用它做保护（不存在就 return），返回 1 会让流程继续走，
+//     接下来 room_goto 也是宿主的事。
+void room_exists(Vm& vm, const uint8_t* args, int argc, int dst) {
+    (void)args; (void)argc;
+    static bool w = false;
+    if (!w) { w = true; printf("[vm] room_exists: 还没有房间资源表，一律当存在\n"); }
+    wr_num(vm, dst, 1);
+}
+
+// directory_exists(name) / directory_create(name)：真做（和 file_exists 一样走文件系统）
+void directory_exists(Vm& vm, const uint8_t* args, int argc, int dst) {
+    (void)argc;
+    Value a = rd_v(vm, argslot(args, 0));
+    if (a.t != MEM_STRING || !str_ok(a.v)) { wr_num(vm, dst, 0); return; }
+    DWORD at = GetFileAttributesA(str_at(a.v).c_str());
+    wr_num(vm, dst, (at != INVALID_FILE_ATTRIBUTES && (at & FILE_ATTRIBUTE_DIRECTORY)) ? 1.0 : 0.0);
+}
+void directory_create(Vm& vm, const uint8_t* args, int argc, int dst) {
+    (void)argc; (void)dst;
+    Value a = rd_v(vm, argslot(args, 0));
+    if (a.t != MEM_STRING || !str_ok(a.v)) return;
+    CreateDirectoryA(str_at(a.v).c_str(), NULL);        // 已存在也算成功（GM 同）
+}
+
+// network_destroy(socket)：没有网络层 → 只提示一次
+void network_destroy(Vm& vm, const uint8_t* args, int argc, int dst) {
+    (void)args; (void)argc; (void)dst;
+    static bool w = false;
+    if (!w) { w = true; printf("[vm] network_destroy: 还没有网络层，忽略\n"); }
+}
+
+// buffer_create(...)：还没有缓冲区系统 → 返回 -1（只提示一次）
+void buffer_create(Vm& vm, const uint8_t* args, int argc, int dst) {
+    (void)args; (void)argc;
+    static bool w = false;
+    if (!w) { w = true; printf("[vm] buffer_create: 还没有缓冲区系统，先返回 -1\n"); }
+    wr_num(vm, dst, -1);
+}
+
+// irandom(n)：0..n 的整数（含两端）—— floor(random(n+1))，和 GM 一致
+void irandom(Vm& vm, const uint8_t* args, int argc, int dst) {
+    (void)argc;
+    double n = num_at(vm, args, 0);
+    if (!(n > 0)) { wr_num(vm, dst, 0); return; }        // n<=0 / nan → 0
+    int v = (int)(((double)rand() / (double)RAND_MAX) * (n + 1.0));
+    if (v > (int)n) v = (int)n;                          // rand()==RAND_MAX 时防越界
+    wr_num(vm, dst, (double)v);
 }
 void random_range(Vm& vm, const uint8_t* args, int argc, int dst) {
     (void)argc;

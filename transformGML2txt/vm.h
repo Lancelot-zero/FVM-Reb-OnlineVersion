@@ -160,7 +160,7 @@ void mod_vm_register(const std::string& mod_id, Vm* vm);
 
 // 函数表条数：要和 kNativeFns / kGameFns 的实际长度一致
 //   （两个 .cpp 里有 static_assert 卡住；加函数只能往表尾加，这里跟着改）
-static const int NATIVE_FN_COUNT = 178;
+static const int NATIVE_FN_COUNT = 341;
 static const int GAME_FN_COUNT   = 150;
 
 // 预置段的固定基址（段边界；下标本身看 names.h 的 S_xxx）
@@ -190,8 +190,11 @@ enum {
 };
 
 struct Instance {
+    // ── id 和槽位是两个东西 ──
+    //   id   ：实例的身份，**只增不减**（永不复用）→ 旧引用不会撞上新实例
+    //   槽位 ：在 g_instances 里的位置，**可复用**（死了进 g_inst_free）
+    int                          id;
     std::string                  obj;    // 对象名，例如 "obj_cloud"
-    bool                         alive;  // 销毁了置 false（下标进复用队列）
     Vm*                          vm;     // 属于哪个 VM（VM 死的时候要把名下的都收掉）
 
     // ── 常用内置变量（19 个）──
@@ -231,10 +234,13 @@ Value* inst_field_sid(Instance& in, int sid);
 //     销毁 → 下标进复用队列（内容先留着，等复用时再清）
 //     新建 → 先看队列里有没有回收的下标，没有再往表尾新增
 extern std::vector<Instance> g_instances;
+// 活着的实例：实例 id（只增不减） → 槽位索引（可复用）
+extern std::unordered_map<int, int> g_inst_alive;
 
 int       inst_new(Vm* vm, const std::string& obj);    // 建一个实例（记在 vm 名下），返回 id
-Instance* inst_get(int id);                            // 按下标取（越界 / 已销毁 → NULL）
-void      inst_kill(int id);                           // 销毁（下标进复用队列，内容留着）
+Instance* inst_get(int id);                            // 按 **实例 id** 取（没有 / 已销毁 → NULL）
+void      inst_kill(int id);                           // 只回收（不跑事件）：移除 + 槽位进复用队列
+void      inst_destroy(int id);                        // 销毁**唯一入口**：跑 Destroy 事件 + inst_kill
 int       inst_count(const std::string& obj);          // 某对象还活着几个
 int       inst_at(const std::string& obj, int k);      // 某对象的第 k 个活实例 id（没有 → -1）
 Value*    inst_var(int id, const std::string& name);   // 取变量（没有 → NULL）
@@ -577,6 +583,25 @@ void min(Vm& vm, const uint8_t* args, int argc, int dst);
 void clamp(Vm& vm, const uint8_t* args, int argc, int dst);
 void lerp(Vm& vm, const uint8_t* args, int argc, int dst);
 void random(Vm& vm, const uint8_t* args, int argc, int dst);
+void irandom(Vm& vm, const uint8_t* args, int argc, int dst);
+void chr(Vm& vm, const uint8_t* args, int argc, int dst);
+void string_pos(Vm& vm, const uint8_t* args, int argc, int dst);
+void file_exists(Vm& vm, const uint8_t* args, int argc, int dst);
+void camera_get_view_x(Vm& vm, const uint8_t* args, int argc, int dst);
+void string_delete(Vm& vm, const uint8_t* args, int argc, int dst);
+void file_text_open_write(Vm& vm, const uint8_t* args, int argc, int dst);
+void file_text_write_string(Vm& vm, const uint8_t* args, int argc, int dst);
+void file_text_close(Vm& vm, const uint8_t* args, int argc, int dst);
+void camera_get_view_y(Vm& vm, const uint8_t* args, int argc, int dst);
+void camera_get_view_width(Vm& vm, const uint8_t* args, int argc, int dst);
+void camera_get_view_height(Vm& vm, const uint8_t* args, int argc, int dst);
+void audio_create_stream(Vm& vm, const uint8_t* args, int argc, int dst);
+void room_exists(Vm& vm, const uint8_t* args, int argc, int dst);
+void directory_exists(Vm& vm, const uint8_t* args, int argc, int dst);
+void directory_create(Vm& vm, const uint8_t* args, int argc, int dst);
+void network_destroy(Vm& vm, const uint8_t* args, int argc, int dst);
+void variable_struct_remove(Vm& vm, const uint8_t* args, int argc, int dst);
+void buffer_create(Vm& vm, const uint8_t* args, int argc, int dst);
 void random_range(Vm& vm, const uint8_t* args, int argc, int dst);
 void irandom_range(Vm& vm, const uint8_t* args, int argc, int dst);
 void sin(Vm& vm, const uint8_t* args, int argc, int dst);
@@ -647,6 +672,42 @@ struct Block {
 // ============================================================
 // 虚拟机
 // ============================================================
+
+// ============================================================
+// 每个 VM 名下的实例容器（数组 / map 双模式，上层只调接口）
+//   count < 16  → 数组：连续内存，取第 k 个 arr[k] O(1)
+//   跨过 16     → 转 map + 游标，**转了不回**（避免在临界值反复转换）
+//   两种模式都保序（id 升序 = 创建顺序）：
+//     · 数组模式删除用**位移**（不用 swap-erase）
+//     · map 模式 key 是 id，天然升序
+//   map 模式：cur = 上次查询命中的节点，cur_rank = 它"第几大"
+//     查询第 k 个：|k-cur_rank| / k / (n-1-k) 三条路选最短走
+//     插入位置 p：p <= cur_rank → cur_rank++（游标指向的节点没变，序号 +1）
+//     删除位置 p：p == cur_rank → 游标挪到下一个（rank 不变），没有下一个就退到前一个（rank--）
+//                 p <  cur_rank → cur_rank--
+//                 p >  cur_rank → 不变
+//   ⚠ std::map 的迭代器只在**自己被删**时失效 → 增删别人时游标一直有效
+// ============================================================
+struct InstBox {
+    bool                         use_map;
+    std::vector<int>             arr;      // 数组模式：id 升序
+    std::map<int, int>           mp;       // map 模式：id → 槽位
+    std::map<int, int>::iterator cur;      // 游标
+    int                          cur_rank; // 游标是第几大
+
+    InstBox() : use_map(false), cur_rank(0) { cur = mp.end(); }
+
+    int  count() const { return use_map ? (int)mp.size() : (int)arr.size(); }
+    int  at(int k);                        // 第 k 个 → id（越界 → -1）
+    void add(int id, int slot);            // 新增（顺带判断要不要转 map）
+    void erase(int id);                    // 删除（顺带调游标 / rank）
+    void ids(std::vector<int>& out) const; // 遍历用：拷一份 id
+    void clear() { arr.clear(); mp.clear(); use_map = false; cur_rank = 0; cur = mp.end(); }
+
+private:
+    void to_map();                         // 数组 → map（带 hint 插入，摊还 O(n)）
+};
+
 class Vm {
 public:
     // 字符串池是**全局**的（g_strings / g_str_map，见文件上面那一段）：
@@ -662,7 +723,7 @@ public:
 
     // 这个 Vm 名下的实例（inst_new 插入、inst_kill 摘掉、析构时按它收尾）
     //   ⚠ 存**实例 id** 不是指针：全局实例表会扩容重分配，销毁的下标还会被复用
-    std::vector<int>             instances;
+    InstBox                      box;      // 这个 VM 名下的实例（数组/map 双模式，见 InstBox）
 
     int                          cur_instance; // 当前实例 id（宿主派发事件前设；0 = 没有/全局）
 
@@ -685,12 +746,11 @@ public:
     //   平台那边的 mod VM 是个结构体，字段就是这几个（src_mod.gml:2052 mod_inst_add /
     //   2060 mod_inst_del / 2071 mod_inst_count）：
     //     mod_id      注册这个 mod 用的 id（enemy_id / card_id / bullet_id…）
-    //     inst_count  这个 mod 现在活着几个单位
-    //   ⚠ "哪些单位"不用另记一份 —— 就是这个 Vm 名下的 `instances`（含子弹）。
+    //     （个数不另存 —— 就是这个 Vm 的 box.count()）
+    //   ⚠ "哪些单位"不用另记一份 —— 就是这个 Vm 名下的 `box`（含子弹）。
     //     GML 那边给子弹开的后门（只计数、不进列表）在我们这儿是多余的：
-    //     instances 由实例生命周期维护，跟 mod 账本没关系。
+    //     box 由实例生命周期维护，跟 mod 账本没关系。
     std::string          mod_id;
-    int                  inst_count;
 
     // 卡 JSON 解析出来的结构体（平台那边是 _vm[$ "card_data"]）。
     //   宿主装卡时填（VM 不知道怎么读 JSON）；没填 = undefined。
@@ -715,7 +775,6 @@ public:
         if (!g_game_fns_patched) { g_game_fns_patched = true; patch_game_fns(); }
         cur_instance = 0;
         collision_other = 0;
-        inst_count   = 0;
         mod_card_data.t = MEM_UNDEFINED;
         mod_card_data.v = 0;
     }
@@ -808,6 +867,17 @@ void impl_VM_FuncExists(Vm& vm, const uint8_t* args, int argc, int dst);
 void impl_VM_FuncDesc(Vm& vm, const uint8_t* args, int argc, int dst);
 void impl_VM_GetProp(Vm& vm, const uint8_t* args, int argc, int dst);   // vm_instance.cpp
 void impl_VM_SetProp(Vm& vm, const uint8_t* args, int argc, int dst);
+void impl_VM_SetTerrain(Vm& vm, const uint8_t* args, int argc, int dst);
+void impl_VM_GetTerrain(Vm& vm, const uint8_t* args, int argc, int dst);
+void impl_VM_ClearPlants(Vm& vm, const uint8_t* args, int argc, int dst);
+void impl_VM_ClearPlantsByType(Vm& vm, const uint8_t* args, int argc, int dst);
+void impl_VM_WakePlants(Vm& vm, const uint8_t* args, int argc, int dst);
+void impl_VM_GetPlantAt(Vm& vm, const uint8_t* args, int argc, int dst);
+void impl_VM_GetPlantCountAt(Vm& vm, const uint8_t* args, int argc, int dst);
+void impl_VM_CellCount(Vm& vm, const uint8_t* args, int argc, int dst);
+void impl_VM_CellItem(Vm& vm, const uint8_t* args, int argc, int dst);
+void impl_VM_CellContains(Vm& vm, const uint8_t* args, int argc, int dst);
+void impl_VM_GetPlantCount(Vm& vm, const uint8_t* args, int argc, int dst);
 
 // ============================================================
 // 槽读写（vm_container.cpp 和以后的内部函数实现都用这套）

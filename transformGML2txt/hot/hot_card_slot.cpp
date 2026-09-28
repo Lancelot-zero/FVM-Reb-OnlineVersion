@@ -146,9 +146,9 @@ static bool cs_place_body(Vm& vm, int s, const Value& cid, const Value& card_dat
         double vis_row = num_of(&m_get_sid(vm, gpv, S_row));
 
         // with (obj_platform)：找鼠标落在哪个平台的可放置范围里
-        for (size_t k = 1; k < g_instances.size(); k++) {
-            if (!g_instances[k].alive || !inst_is_sid((int)k, S_obj_platform)) continue;
-            int p = (int)k;
+        for (std::unordered_map<int, int>::iterator it = g_inst_alive.begin(); it != g_inst_alive.end(); ++it) {
+            if (!inst_is_sid(it->first, S_obj_platform)) continue;
+            int p = it->first;
             bool axis_x = inst_var_sid(p, S_move_axis) && str_is(vm, inst_var_sid(p, S_move_axis), "x");
             double sx = axis_x ? get_num_sid(p, S_visual_x_shift) : 0;
             double sy = axis_x ? 0 : get_num_sid(p, S_visual_y_shift);

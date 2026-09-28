@@ -154,11 +154,9 @@
 
 // ── 其余（hot/ 用到的字符串，以及核心里那几个）── 新名字加这里
 #define REST_NAME_LIST(X) \
-    /* 本地函数块名 */ \
     X(_FUNC_mod_enemy_init) \
     X(_FUNC_select_slot) \
     X(_FUNC_try_place_once) \
-    /* 对象事件块名 */ \
     X(_OBJECT_CLICK) \
     X(_OBJECT_COLLISION_obj_enemy_parent) \
     X(_OBJECT_CREATE) \
@@ -174,7 +172,6 @@
     X(_OBJECT_USER_EVENT_0) \
     X(_OBJECT_USER_EVENT_1) \
     X(_OBJECT_USER_EVENT_2) \
-    /* VM/脚本约定的全局变量名 */ \
     X(_VM_CARD_DAMAGED) \
     X(_VM_CARD_PREVIEW_PICKED) \
     X(_VM_ENEMY_DAMAGED) \
@@ -195,9 +192,7 @@
     X(_VM_last_damaged_player) \
     X(_VM_last_destroyed_card) \
     X(__vm) \
-    /* 吃/收集 */ \
     X(_eat_scratch) \
-    /* mod 挂起态 */ \
     X(_mod_initialized) \
     X(_mod_nomask_spr) \
     X(_mod_pending_bullet_id) \
@@ -205,30 +200,24 @@
     X(_mod_pending_enemy_id) \
     X(_mod_pending_gem_id) \
     X(_mod_pending_weapon_id) \
-    /* 联网 */ \
     X(_net_before_plant_current_level) \
     X(_net_before_plant_shape) \
     X(_net_before_plant_skill) \
     X(_net_card_equipped_attire_id) \
-    /* 统计 */ \
     X(_stat_add) \
     X(_stat_drop) \
     X(_stat_frame) \
     X(_stat_merge) \
     X(_state_prev) \
-    /* add_* 系列 */ \
     X(add_n) \
     X(air) \
     X(all) \
     X(amount) \
     X(amphi) \
-    /* ash_* 系列 */ \
     X(ash_proof) \
     X(atk) \
-    /* atk_* 系列 */ \
     X(atk_cycle) \
     X(attack) \
-    /* 攻击 */ \
     X(attack_anim) \
     X(attack_cell) \
     X(attack_collision) \
@@ -236,25 +225,18 @@
     X(attack_range) \
     X(attack_timer) \
     X(attack_type) \
-    /* awake_* 系列 */ \
     X(awake_anim) \
     X(awake_buff_timer) \
-    /* banding_* 系列 */ \
     X(banding_card_obj) \
     X(banding_sleep_obj) \
     X(banding_star_obj) \
     X(banding_water_obj) \
-    /* banned_* 系列 */ \
     X(banned_gems_online) \
-    /* battle_* 系列 */ \
     X(battle_time) \
-    /* bbox_* 系列 */ \
     X(bbox_left) \
     X(bbox_right) \
     X(bbox_top) \
-    /* block_* 系列 */ \
     X(block_mouse_id_list) \
-    /* bullet_* 系列 */ \
     X(bullet_add_dmg) \
     X(bullet_angle_add) \
     X(bullet_charge_dmg) \
@@ -294,11 +276,9 @@
     X(bullet_target_x) \
     X(bullet_target_y) \
     X(bun) \
-    /* can_* 系列 */ \
     X(can_dropped) \
     X(can_shovel_remove) \
     X(card) \
-    /* card_* 系列 */ \
     X(card_data) \
     X(card_hpbar) \
     X(card_id) \
@@ -308,117 +288,78 @@
     X(card_slot_icon) \
     X(card_spr) \
     X(cell) \
-    /* 格位 */ \
     X(cell_flag) \
     X(cell_row) \
     X(cell_target_col) \
     X(cell_target_row) \
     X(cell_terrain_flag) \
-    /* chomp_* 系列 */ \
     X(chomp_sound_list) \
     X(clevel) \
     X(client) \
-    /* client_* 系列 */ \
     X(client_able) \
     X(coffee) \
     X(col) \
-    /* connected_* 系列 */ \
     X(connected_clients) \
     X(cooldown) \
-    /* 冷却 */ \
     X(cooldown_ignore_list) \
     X(cooldown_timer) \
-    /* cooling_* 系列 */ \
     X(cooling_alpha) \
-    /* 花费 */ \
     X(cost) \
     X(count) \
-    /* count_* 系列 */ \
     X(count_max) \
     X(cshape) \
     X(cskill) \
-    /* current_* 系列 */ \
     X(current_cost) \
     X(current_frozen) \
     X(current_level) \
     X(current_offset) \
     X(cycle) \
     X(damage) \
-    /* damage_* 系列 */ \
     X(damage_amount) \
     X(damage_type) \
     X(dance) \
-    /* death_* 系列 */ \
     X(death_anim) \
     X(debug) \
-    /* debug_* 系列 */ \
     X(debug_merge) \
-    /* depth_* 系列 */ \
     X(depth_group) \
     X(depth_offset) \
     X(depth_value) \
     X(description) \
-    /* deselect_* 系列 */ \
-    X(deselect_shovel) \
-    /* destroy_* 系列 */ \
     X(destroy_timer) \
-    /* device_* 系列 */ \
-    X(device_mouse_x_to_gui) \
-    X(device_mouse_y_to_gui) \
     X(difficulty) \
     X(diver) \
-    /* 绘制 */ \
-    X(draw_text_ext_transformed) \
-    /* drop_* 系列 */ \
     X(drop_n) \
     X(dwarf) \
-    /* dx_* 系列 */ \
     X(dx_arr) \
-    /* dy_* 系列 */ \
     X(dy_arr) \
-    /* eat_* 系列 */ \
     X(eat_order) \
-    /* enemy_* 系列 */ \
     X(enemy_array) \
     X(enemy_array_left) \
     X(enemy_hpbar) \
     X(enemy_id) \
     X(enemy_map) \
-    /* equipped_* 系列 */ \
     X(equipped_cookbook) \
     X(equipped_items) \
     X(feature) \
-    /* feature_* 系列 */ \
     X(feature_type) \
-    /* first_* 系列 */ \
     X(first_produce) \
     X(first_produce_delay) \
     X(flame) \
-    /* flame_* 系列 */ \
     X(flame_produce) \
-    /* flash_* 系列 */ \
     X(flash_color) \
     X(flash_speed) \
     X(flash_value) \
-    /* 字体 */ \
     X(font_number) \
     X(font_pixel) \
     X(font_song) \
     X(font_yuan) \
-    /* frame_* 系列 */ \
     X(frame_count) \
-    /* frozen_* 系列 */ \
     X(frozen_timer) \
-    /* game_* 系列 */ \
     X(game_over) \
     X(gems) \
-    /* get_* 系列 */ \
     X(get_card_info) \
-    X(get_cookbook_data) \
     X(get_plant_data) \
-    /* giant_* 系列 */ \
     X(giant_type) \
-    /* 格子 */ \
     X(grid_cell_size_x) \
     X(grid_cell_size_y) \
     X(grid_col) \
@@ -429,47 +370,35 @@
     X(grid_row) \
     X(grid_rows) \
     X(grid_terrains) \
-    /* has_* 系列 */ \
     X(has_enemy_air) \
     X(has_enemy_dance) \
     X(has_enemy_diver) \
     X(has_enemy_normal) \
     X(has_enemy_obstacle) \
     X(has_enemy_underground) \
-    /* health_* 系列 */ \
     X(health_gem) \
-    /* helmet_* 系列 */ \
     X(helmet_hp) \
     X(helmet_max_hp) \
-    /* hit_* 系列 */ \
     X(hit_effect_2) \
     X(hit_sound) \
-    /* hover_* 系列 */ \
     X(hover_alpha) \
     X(hp) \
-    /* hp_* 系列 */ \
     X(hp_change) \
     X(hp_change_mod) \
     X(hp_increase) \
     X(hp_modified) \
     X(hp_modify) \
-    /* hurt_* 系列 */ \
     X(hurt_rate) \
     X(hurt_time) \
-    /* 冰冻 */ \
     X(ice_cream) \
     X(ice_ok) \
     X(ice_sprite) \
     X(ice_timer) \
     X(id) \
-    /* idle_* 系列 */ \
     X(idle_anim) \
-    /* immune_* 系列 */ \
     X(immune_to_ash) \
-    /* info_* 系列 */ \
     X(info_got) \
     X(invincible) \
-    /* is_* 系列 */ \
     X(is_boss) \
     X(is_frozen) \
     X(is_gold) \
@@ -481,48 +410,32 @@
     X(is_selected) \
     X(is_slowdown) \
     X(is_stun) \
-    /* jump_* 系列 */ \
     X(jump_times) \
-    /* keybind_* 系列 */ \
     X(keybind_map) \
-    /* 键盘 */ \
-    X(keyboard_check_pressed) \
-    X(keyboard_get_string) \
-    /* king_* 系列 */ \
     X(king_bun) \
     X(king_tbun) \
-    /* laboretory_* 系列 */ \
     X(laboretory_room) \
     X(land) \
-    /* left_* 系列 */ \
     X(left_move_flashs) \
     X(length) \
     X(level) \
-    /* level_* 系列 */ \
     X(level_file) \
     X(lilypad) \
-    /* magic_* 系列 */ \
     X(magic_chicken) \
-    /* main_* 系列 */ \
     X(main_weapon) \
-    /* map_* 系列 */ \
     X(map_id) \
     X(map_instance_id_net_id) \
-    /* mask_* 系列 */ \
     X(mask_index) \
-    /* max_* 系列 */ \
     X(max_bullets) \
     X(max_hp) \
     X(maxhp) \
     X(merge1_n) \
     X(merge2_n) \
-    /* merge_* 系列 */ \
     X(merge_enable) \
     X(merge_lv1) \
     X(merge_lv2) \
     X(merge_n) \
     X(mod) \
-    /* mod 系统字段名 */ \
     X(mod_alpha_add) \
     X(mod_changed_prop) \
     X(mod_collision_enemies) \
@@ -564,16 +477,12 @@
     X(mod_watch_last) \
     X(mode) \
     X(modif) \
-    /* modif_* 系列 */ \
     X(modif_calc) \
     X(modif_type) \
-    /* 鼠标 */ \
-    X(mouse_check_button_pressed) \
     X(mouse_id) \
     X(mouse_train_1) \
     X(mouse_x) \
     X(mouse_y) \
-    /* 移动 */ \
     X(move_anim) \
     X(move_axis) \
     X(move_speed) \
@@ -582,17 +491,14 @@
     X(moving) \
     X(multiply) \
     X(name) \
-    /* net_* 系列 */ \
     X(net_player_id) \
     X(network) \
     X(night) \
     X(none) \
     X(norm) \
-    /* norm_* 系列 */ \
     X(norm_attack) \
     X(normal) \
     X(obj) \
-    /* 对象名 */ \
     X(obj_) \
     X(obj_Bullet_Screen_Management) \
     X(obj_Homing_Bullet_Management) \
@@ -625,74 +531,52 @@
     X(obj_xiaolongbao_bullet) \
     X(obstacle) \
     X(offline) \
-    /* origin_* 系列 */ \
     X(origin_cycle) \
-    /* parent_* 系列 */ \
     X(parent_card) \
     X(parent_player) \
     X(parent_slot) \
     X(pierce) \
-    /* place_* 系列 */ \
     X(place_preview) \
-    /* plant_* 系列 */ \
     X(plant_id) \
     X(plant_type) \
-    /* platform_* 系列 */ \
     X(platform_grid_lock) \
     X(player) \
     X(plus) \
-    /* plus_* 系列 */ \
     X(plus_card_map) \
-    /* pre_* 系列 */ \
     X(pre_hp) \
     X(pre_state) \
-    /* prev_* 系列 */ \
     X(prev_grid_col) \
     X(prev_grid_row) \
     X(prev_place_id) \
     X(prev_place_id_shape) \
-    /* preview_* 系列 */ \
     X(preview_alpha) \
     X(preview_sprite) \
-    /* quick_* 系列 */ \
     X(quick_placement) \
-    /* random_* 系列 */ \
     X(random_count) \
     X(random_seed) \
     X(range) \
-    /* replace_* 系列 */ \
     X(replace_placement) \
-    /* 房间 */ \
     X(room_height) \
     X(room_width) \
     X(row) \
-    /* save_* 系列 */ \
     X(save_data) \
-    /* scare_* 系列 */ \
     X(scare_timer) \
-    /* secondary_* 系列 */ \
     X(secondary_weapon) \
-    /* selected_* 系列 */ \
     X(selected_preview) \
     X(selected_slot) \
     X(server) \
-    /* 着色器 */ \
     X(shader_hit) \
     X(shape) \
     X(shield) \
-    /* 护盾 */ \
     X(shield_hp) \
     X(shield_max_hp) \
     X(shield_outer) \
     X(skill) \
-    /* skill_* 系列 */ \
     X(skill_change_style) \
     X(skill_choose) \
     X(skill_move_type) \
     X(skill_timer) \
-    /* slot_* 系列 */ \
     X(slot_index) \
-    /* 音效资源名 */ \
     X(snd_bullet_burnt) \
     X(snd_card_lift) \
     X(snd_enter_water) \
@@ -700,10 +584,8 @@
     X(snd_lose) \
     X(snd_mouse_unfreeze) \
     X(snd_place1) \
-    /* special_* 系列 */ \
     X(special_ash) \
     X(spr) \
-    /* 精灵资源名 */ \
     X(spr_enter_water_effect) \
     X(spr_fire_bullet) \
     X(spr_fire_bullet_effect) \
@@ -718,19 +600,14 @@
     X(spr_star_slot) \
     X(spr_xiaolongbao_bullet) \
     X(sprite) \
-    /* 精灵 */ \
     X(sprite_height) \
     X(sprite_width) \
-    /* start_* 系列 */ \
     X(start_col) \
     X(start_row) \
     X(state) \
-    /* 眩晕 */ \
     X(stun_sprite) \
     X(stun_timer) \
-    /* super_* 系列 */ \
     X(super_weapon) \
-    /* 目标 */ \
     X(target_card) \
     X(target_coord) \
     X(target_plant) \
@@ -739,21 +616,16 @@
     X(tbit) \
     X(tbun) \
     X(timer) \
-    /* tower_* 系列 */ \
     X(tower_cake) \
     X(type) \
-    /* UI 绘制参数 */ \
     X(u_flashColor) \
     X(u_progress) \
     X(underground) \
     X(upgrade) \
-    /* vector_* 系列 */ \
     X(vector_x) \
     X(version) \
-    /* visual_* 系列 */ \
     X(visual_x_shift) \
     X(visual_y_shift) \
-    /* 卡片 VM 字段 */ \
     X(vm_card_spr) \
     X(vm_card_spr_addx) \
     X(vm_card_spr_addy) \
@@ -763,17 +635,12 @@
     X(vy) \
     X(wait) \
     X(water) \
-    /* 水域 */ \
     X(water_effect_timer) \
-    /* weapon_* 系列 */ \
     X(weapon_id) \
     X(width) \
-    /* x_* 系列 */ \
     X(x_move_speed) \
-    /* y_* 系列 */ \
     X(y_move) \
     X(y_move_speed) \
-    /* VM/脚本约定的全局变量名 */ \
     X(_VM_CONST_INIT) \
     X(_CALL_ENTRY) \
     X(array) \
@@ -783,13 +650,10 @@
     X(list) \
     X(null) \
     X(rb) \
-    /* 护盾 */ \
     X(shield_inner) \
     X(undefined) \
     X(unknown) \
-    /* map_* 系列 */ \
     X(map_struct) \
-    /* 其余 mod 对象名 */ \
     X(obj_gem_mod) \
     X(obj_effect_mod) \
     X(_mod_pending_effect_id) \
@@ -816,13 +680,190 @@
     X(enemy_area) \
     X(enemy_area_mod) \
     X(card_area) \
-    X(card_area_mod)
+    X(card_area_mod) \
+    X(_VM_last_created_enemy) \
+    X(_VM_last_killed_enemy) \
+    X(_VM_last_clicked_button) \
+    X(_VM_wave) \
+    X(_VM_shovel_flame_rate)
+
+// ── 占位接口（翻译器要、实现还没写）：先留 id 让转换/加载能过 ──
+//   ⚠ 顺序 = native 段下标，只能往尾部加
+#define PLACEHOLDER_FN_LIST(X) \
+    X(audio_group_set_gain) \
+    X(audio_is_paused) \
+    X(audio_is_playing) \
+    X(buffer_load) \
+    X(clear_deck) \
+    X(deck_slot_count) \
+    X(ds_map_add) \
+    X(get_card_attire_list) \
+    X(get_card_craft_rule) \
+    X(get_material_amount) \
+    X(get_task_data) \
+    X(get_task_state) \
+    X(is_card_unlocked) \
+    X(is_level_completed) \
+    X(is_weapon_unlocked) \
+    X(load_custom_deck) \
+    X(mod_card_vm_deck_refresh) \
+    X(refresh_cookbook_list) \
+    X(refresh_level_button) \
+    X(refresh_task_list) \
+    X(save_file) \
+    X(save_to_custom_deck) \
+    X(shop_list_recharge) \
+    X(sprite_get_width) \
+    X(string_width) \
+    X(surface_free) \
+    X(texture_prefetch) \
+    X(update_notices) \
+    X(view_get_camera) \
+    X(window_get_fullscreen) \
+    X(window_has_focus) \
+    X(window_set_cursor) \
+    X(VM_FlushHooks) \
+    X(add_material_amount) \
+    X(add_task_progress) \
+    X(array_copy) \
+    X(audio_pause_all) \
+    X(audio_resume_sound) \
+    X(audio_sound_gain) \
+    X(buffer_read) \
+    X(camera_set_view_pos) \
+    X(draw_notices) \
+    X(draw_sprite) \
+    X(edit_task_progress) \
+    X(edit_task_state) \
+    X(equip_cookbook) \
+    X(http_request) \
+    X(ini_open) \
+    X(is_gem_unlocked) \
+    X(sprite_get_height) \
+    X(string_height) \
+    X(string_length) \
+    X(surface_exists) \
+    X(upgrade_card_shape) \
+    X(window_set_fullscreen) \
+    X(audio_pause_sound) \
+    X(audio_resume_all) \
+    X(buffer_delete) \
+    X(equip_attire) \
+    X(get_task_progress) \
+    X(ini_write_real) \
+    X(instance_log_enable) \
+    X(is_attire_unlocked) \
+    X(is_task_unlocked) \
+    X(json_parse) \
+    X(mouse_check_button_released) \
+    X(string_copy) \
+    X(surface_create) \
+    X(surface_set_target) \
+    X(unequip_cookbook) \
+    X(upgrade_card) \
+    X(add_net_id) \
+    X(audio_group_get_gain) \
+    X(deck_slot_is_empty) \
+    X(draw_clear_alpha) \
+    X(draw_line) \
+    X(get_gem_max_level) \
+    X(ini_close) \
+    X(refresh_reward_button) \
+    X(remove_task) \
+    X(room_restart) \
+    X(string_replace_all) \
+    X(surface_reset_target) \
+    X(unequip_attire) \
+    X(unlock_card) \
+    X(unlock_task) \
+    X(window_handle) \
+    X(deck_ensure_size) \
+    X(draw_surface) \
+    X(get_gem_craft_rule) \
+    X(get_load_audio) \
+    X(get_material_info) \
+    X(get_plant_shape_data) \
+    X(gpu_set_tex_filter) \
+    X(mouse_check_button) \
+    X(native_enable_ime) \
+    X(ord) \
+    X(sprite_get_name) \
+    X(unlock_weapon) \
+    X(version_greater) \
+    X(audio_exists) \
+    X(deck_slot_max) \
+    X(draw_text_ext) \
+    X(edit_gem_max_level) \
+    X(instance_log_disable) \
+    X(native_disable_ime) \
+    X(show_question) \
+    X(unlock_gem) \
+    X(window_enable_borderless_fullscreen) \
+    X(add_to_deck) \
+    X(edit_gem_level) \
+    X(native_stop_mouse_limit) \
+    X(unlock_attire) \
+    X(url_open) \
+    X(native_start_mouse_limit) \
+    X(remove_from_deck) \
+    X(device_mouse_x_to_gui) \
+    X(get_cookbook_data) \
+    X(keyboard_check_pressed) \
+    X(keyboard_get_string) \
+    X(device_mouse_y_to_gui) \
+    X(draw_text_ext_transformed) \
+    X(mouse_check_button_pressed) \
+    X(select_shovel) \
+    X(variable_global_set) \
+    X(deselect_shovel) \
+    X(reset_task_state) \
+    X(sort_plants_in_grid) \
+    X(get_map_object_data) \
+    X(network_broadcast_shovel_remove) \
+    X(gui_stack_pop) \
+    X(instance_find) \
+    X(sh_disconnect) \
+    X(game_end) \
+    X(game_set_speed) \
+    X(refresh_task_progress) \
+    X(complete_level) \
+    X(gui_stack_to) \
+    X(real) \
+    X(room_goto) \
+    X(mod_sync_props_tick) \
+    X(object_is_ancestor) \
+    X(create_battle_slots) \
+    X(draw_enable_drawevent)
+
+// ── 后补的真实现（不是占位，函数体在 .cpp 里；顺序 = native 段下标，只能往尾部加）──
+#define NATIVE_EXTRA_LIST(X) \
+    X(irandom) \
+    X(chr) \
+    X(string_pos) \
+    X(file_exists) \
+    X(camera_get_view_x) \
+    X(string_delete) \
+    X(file_text_open_write) \
+    X(file_text_write_string) \
+    X(file_text_close) \
+    X(camera_get_view_y) \
+    X(camera_get_view_width) \
+    X(camera_get_view_height) \
+    X(audio_create_stream) \
+    X(room_exists) \
+    X(directory_exists) \
+    X(directory_create) \
+    X(network_destroy) \
+    X(variable_struct_remove) \
+    X(buffer_create)
 
 // ── 全清单：段顺序 = 池顺序 ──
 #define NAME_LIST(X) \
     X(empty) \
     NATIVE_FN_LIST(X) \
     NATIVE_TAIL_LIST(X) \
+    PLACEHOLDER_FN_LIST(X) \
+    NATIVE_EXTRA_LIST(X) \
     GAME_FN_LIST(X) \
     INNER_FIELD_LIST(X) \
     REST_NAME_LIST(X)

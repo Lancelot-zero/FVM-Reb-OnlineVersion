@@ -5,3 +5,6 @@ obj/
 *.obj
 convert.log
 _slot.bin
+
+kernel/**/*.bin
+kernel/**/*.callbin

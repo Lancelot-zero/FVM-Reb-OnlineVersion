@@ -25,7 +25,7 @@ global.network = {
 function makeserver(args) {
 	
     // 如果在 room_ready 界面，先清理再退出（对齐 obj_quit_confirm 逻辑）
-    if (global.gui_stack.get_top() == room_ready) {
+    if (gui_stack_get_top(global.gui_stack) == room_ready) {
         // 通知所有客户端离开
         if (global.network.mode == "server") {
             var _cl = global.network.connected_clients;
@@ -109,7 +109,7 @@ function closeserver() {
 
 function connectserver(args) {
     // 如果在 room_ready 界面，先清理再退出（对齐 obj_quit_confirm 逻辑）
-    if (global.gui_stack.get_top() == room_ready) {
+    if (gui_stack_get_top(global.gui_stack) == room_ready) {
         // 通知所有客户端离开
         if (global.network.mode == "server") {
             var _cl = global.network.connected_clients;
@@ -197,7 +197,7 @@ function disconnect() {
     global.mod_net_player_id = 0;   // 断开连接 → 清掉"我在房间里的 id"
     global.net_player_number = 1;   // 同时清掉房间里的人数
 	
-	if (global.gui_stack.get_top() ==  room_battle)
+	if (gui_stack_get_top(global.gui_stack) ==  room_battle)
 		global.gui_stack.pop(); 
     return "[网络] 已断开连接";
 	
@@ -314,7 +314,7 @@ function sh_connectpubserver(args) {
 		return "mod模式下不能联机"
 	}
     // 如果在 room_ready 界面，先清理再退出（对齐 obj_quit_confirm 逻辑）
-    if (global.gui_stack.get_top() == room_ready) {
+    if (gui_stack_get_top(global.gui_stack) == room_ready) {
         // 通知所有客户端离开
         if (global.network.mode == "server") {
             var _cl = global.network.connected_clients;

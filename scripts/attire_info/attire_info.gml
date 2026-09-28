@@ -49,7 +49,7 @@ function card_equipped_attire_id(card_id){
 ///@param {string}attire_id 时装id
 function unlock_attire(attire_id){
 	//在时装数组中添加对应时装
-	if !is_attire_unlocked(attire_id){
+	if (!is_attire_unlocked(attire_id)){
 		array_push(global.save_data.attires,{"attire_id":attire_id,"state":"unequipped"})
 	}
 }
@@ -60,7 +60,7 @@ function unlock_attire(attire_id){
 ///@return {string}
 function get_attire_state(attire_id){
 	//未解锁则返回-1
-	if !is_attire_unlocked(attire_id){
+	if (!is_attire_unlocked(attire_id)){
 		return -1
 	}
 	//在时装数组中寻找对应时装并返回状态
@@ -78,7 +78,7 @@ function get_attire_state(attire_id){
 ///@param {string}new_state 新状态
 function edit_attire_state(attire_id,new_state){
 	//未解锁则立即退出
-	if !is_attire_unlocked(attire_id){
+	if (!is_attire_unlocked(attire_id)){
 		return
 	}
 	//在时装数组中寻找对应时装并修改状态
@@ -114,7 +114,7 @@ function get_card_attire_list(card_id){
 ///@param {string}attire_id 要装备的时装id
 function equip_attire(attire_id){
 	//如果未解锁则退出
-	if !is_attire_unlocked(attire_id){
+	if (!is_attire_unlocked(attire_id)){
 		return
 	}
 	//获取卡片对应的全部时装
@@ -133,7 +133,7 @@ function equip_attire(attire_id){
 ///@param {string}attire_id 要取消的时装id
 function unequip_attire(attire_id){
 	//如果未解锁则退出
-	if !is_attire_unlocked(attire_id){
+	if (!is_attire_unlocked(attire_id)){
 		return
 	}
 	//将自身设置为未装备

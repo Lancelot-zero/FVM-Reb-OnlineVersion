@@ -503,9 +503,64 @@ static Value cli_num(const std::string& s) {
 }
 static Value cli_undef() { Value v; v.t = MEM_UNDEFINED; v.v = 0; return v; }
 
+
+// ============================================================
+// InstBox 自检：vm --selftest-instbox
+//   覆盖：数组模式顺序/删中间；跨 16 转 map；map 顺序/反向/随机/重复取；
+//         删游标那个 / 删首 / 删尾 / 清空；增删后 at(k) 与 count 一致
+// ============================================================
+static int selftest_instbox() {
+    int fail = 0;
+    {   // ① 数组模式（< 16）
+        Vm v;
+        for (int i = 1; i <= 5; i++) v.box.add(100 + i, i);
+        if (v.box.count() != 5)             { printf("  FAIL 数组 count=%d\n", v.box.count()); fail++; }
+        if (v.box.use_map)                  { printf("  FAIL 5 个不该转 map\n"); fail++; }
+        for (int k = 0; k < 5; k++)
+            if (v.box.at(k) != 101 + k)     { printf("  FAIL 数组 at(%d)=%d\n", k, v.box.at(k)); fail++; }
+        v.box.erase(103);                   // 删中间（应位移保序）
+        if (v.box.count() != 4 || v.box.at(0) != 101 || v.box.at(1) != 102
+            || v.box.at(2) != 104 || v.box.at(3) != 105)
+            { printf("  FAIL 数组删中间后顺序\n"); fail++; }
+    }
+    {   // ② map 模式（跨过 16）
+        Vm v;
+        for (int i = 1; i <= 20; i++) v.box.add(1000 + i, i);
+        if (!v.box.use_map)                 { printf("  FAIL 20 个没转 map\n"); fail++; }
+        if (v.box.count() != 20)            { printf("  FAIL map count=%d\n", v.box.count()); fail++; }
+        for (int k = 0; k < 20; k++)        // 顺序（游标一路 ++）
+            if (v.box.at(k) != 1001 + k)    { printf("  FAIL map 顺序 at(%d)=%d\n", k, v.box.at(k)); fail++; }
+        for (int r = 0; r < 3; r++)         // 反复取同一个 k（游标不动）
+            if (v.box.at(7) != 1008)        { printf("  FAIL map 重复 at(7)=%d\n", v.box.at(7)); fail++; }
+        for (int k = 19; k >= 0; k--)       // 反向（游标一路 --）
+            if (v.box.at(k) != 1001 + k)    { printf("  FAIL map 反向 at(%d)=%d\n", k, v.box.at(k)); fail++; }
+        int ks[6] = { 0, 19, 5, 12, 1, 18 };   // 随机跳（应从最近一端重来）
+        for (int i = 0; i < 6; i++)
+            if (v.box.at(ks[i]) != 1001 + ks[i]) { printf("  FAIL map 跳 at(%d)\n", ks[i]); fail++; }
+        if (v.box.at(5) != 1006)            { printf("  FAIL 删前 at(5)\n"); fail++; }
+        v.box.erase(1006);                  // 删的正是游标那个 → 游标应落到下一个
+        if (v.box.count() != 19)            { printf("  FAIL 删游标 count=%d\n", v.box.count()); fail++; }
+        if (v.box.at(5) != 1007)            { printf("  FAIL 删游标后 at(5)=%d（应 1007）\n", v.box.at(5)); fail++; }
+        v.box.erase(1001); v.box.erase(1020);   // 删首 / 删尾
+        if (v.box.count() != 17)            { printf("  FAIL 删首尾 count=%d\n", v.box.count()); fail++; }
+        if (v.box.at(0) != 1002 || v.box.at(16) != 1019)
+            { printf("  FAIL 删首尾顺序 at(0)=%d at(16)=%d\n", v.box.at(0), v.box.at(16)); fail++; }
+        if (v.box.at(16) != 1019)           { printf("  FAIL 末尾 at(16)\n"); fail++; }
+        v.box.erase(1019);                  // 删的又是游标（末尾）→ 游标应退到前一个
+        if (v.box.count() != 16 || v.box.at(15) != 1018)
+            { printf("  FAIL 删末尾后 at(15)=%d\n", v.box.at(15)); fail++; }
+        v.box.clear();
+        if (v.box.count() != 0 || v.box.use_map) { printf("  FAIL clear\n"); fail++; }
+    }
+    printf("[selftest-instbox] %s%s\n", fail ? "FAIL " : "PASS", fail ? "" : "");
+    if (fail) printf("[selftest-instbox] %d 处不一致\n", fail);
+    return fail ? 1 : 0;
+}
+
 int main(int argc, char** argv) {
     // ── callbin 测试入口：vm --callbin <文件.callbin> <函数名> [实参…] ──
     //   （开发用：装进字典 → 调它 → 打印返回值。实参按整数/浮点/字符串解析）
+    if (argc >= 2 && std::string(argv[1]) == "--selftest-instbox") return selftest_instbox();
     if (argc >= 4 && std::string(argv[1]) == "--callbin") {
         if (!callbin_load(argv[2])) return 1;
         std::string fname = argv[3];

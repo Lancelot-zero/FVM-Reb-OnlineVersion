@@ -492,18 +492,16 @@ bool mod_run_block(Vm* mv, int inst, const char* block, const char* cur_global) 
 }
 
 
-// mod_inst_add / mod_inst_del：只维护计数器
-//   "哪些单位"不用另记一份 —— 就是 mv->instances（实例生命周期在 inst_new/inst_kill 里维护）
+// mod_inst_add / mod_inst_del：**不用自己数** —— 个数就是 mv->box.count()
+//   "哪些单位"不用另记一份 —— 就是 mv->box（实例生命周期在 inst_new/inst_kill 里维护）
 void mod_inst_add_v(Vm* mv, int inst, bool with_list) {
     (void)inst; (void)with_list;
     if (!mv) return;
-    mv->inst_count++;
 }
 
 void mod_inst_del_v(Vm* mv, int inst, bool with_list) {
     (void)inst; (void)with_list;
     if (!mv) return;
-    if (mv->inst_count > 0) mv->inst_count--;
 }
 
 

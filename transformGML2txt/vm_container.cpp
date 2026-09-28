@@ -534,6 +534,339 @@ void ds_map_delete(Vm& vm, const uint8_t* args, int argc, int dst) {
     }
     wr_i(vm, dst, 0);
 }
+// variable_struct_remove(struct, key)：删结构体的一个键（照 ds_map_delete 写）
+void variable_struct_remove(Vm& vm, const uint8_t* args, int argc, int dst) {
+    (void)argc;
+    int m = handle_arg(vm, args, 0, MEM_MAP, S_variable_struct_remove);
+    if (m < 0) { wr_i(vm, dst, 0); return; }
+    std::map<Value, Value, ValueLess>& mp = g_map_pool[m];
+    std::map<Value, Value, ValueLess>::iterator it = mp.find(rd_v(vm, argslot(args, 1)));
+    if (it != mp.end()) {
+        release(it->first);
+        release(it->second);
+        mp.erase(it);
+    }
+    wr_i(vm, dst, 0);
+}
+
+
+// ============================================================
+// 批次 4 第一档：格子/地形（只读）
+//   语义参考 scr_command_VM.gml 里的同名 GML 实现（不照抄，按 VM 的结构写）
+//   arg 约定：和平台一致 —— 实参是 VM 槽地址，值用 rd_v(argslot) 取
+// ============================================================
+static Value v_str(int sid) { Value v; v.t = MEM_STRING; v.v = sid; return v; }
+static bool v_num_of(Vm& vm, const Value& v, double* out) {
+    if (v.t == MEM_INT)   { *out = (double)v.v; return true; }
+    if (v.t == MEM_FLOAT) { float f; memcpy(&f, &v.v, 4); *out = (double)f; return true; }
+    return false;
+}
+static double g_num_arg(Vm& vm, const uint8_t* args, int k) {
+    Value v = rd_v(vm, argslot(args, k));
+    double d = 0; v_num_of(vm, v, &d);
+    return d;
+}
+// 取二维数组 global.grid_terrains[row][col]（元素是 struct）→ 失败返回 false
+static bool terrain_cell(Vm& vm, int row, int col, Value* out) {
+    Value* g = global_var_sid(S_grid_terrains);
+    if (!g || g->t != MEM_ARRAY) return false;
+    int ra = g->v;
+    if (ra < 0 || ra >= (int)g_arr_pool.size()) return false;
+    if (row < 0 || row >= (int)g_arr_pool[ra].size()) return false;
+    Value rv = g_arr_pool[ra][row];
+    if (rv.t != MEM_ARRAY) return false;
+    int ca = rv.v;
+    if (ca < 0 || ca >= (int)g_arr_pool.size()) return false;
+    if (col < 0 || col >= (int)g_arr_pool[ca].size()) return false;
+    *out = g_arr_pool[ca][col];
+    return true;
+}
+
+// VM_GetTerrain(col,row)：越界 → -1；"water"→1、"obstacle"→2、其它→0
+void impl_VM_GetTerrain(Vm& vm, const uint8_t* args, int argc, int dst) {
+    (void)argc;
+    int col = (int)g_num_arg(vm, args, 0), row = (int)g_num_arg(vm, args, 1);
+    double cols = 0, rows = 0;
+    Value* gc = global_var_sid(S_grid_cols); if (gc) v_num_of(vm, *gc, &cols);
+    Value* gr = global_var_sid(S_grid_rows); if (gr) v_num_of(vm, *gr, &rows);
+    if (row < 0 || row >= (int)rows || col < 0 || col >= (int)cols) { wr_i(vm, dst, -1); return; }
+    Value cell;
+    if (!terrain_cell(vm, row, col, &cell) || cell.t != MEM_MAP) { wr_i(vm, dst, 0); return; }
+    Value t;
+    if (!map_find(cell, v_str(S_type), &t) || t.t != MEM_STRING) { wr_i(vm, dst, 0); return; }
+    if (t.v == S_water)    { wr_i(vm, dst, 1); return; }
+    if (t.v == S_obstacle) { wr_i(vm, dst, 2); return; }
+    wr_i(vm, dst, 0);
+}
+
+// VM_CellCount(name,i,j)：名为 name 的全局表（二维压成一维，行距 = grid_cols+2）
+//   任何异常 → -1；正常 → 该格数组长度
+void impl_VM_CellCount(Vm& vm, const uint8_t* args, int argc, int dst) {
+    (void)argc;
+    Value nv = rd_v(vm, argslot(args, 0));
+    if (nv.t != MEM_STRING || !str_ok(nv.v)) { wr_i(vm, dst, -1); return; }
+    Value* tbl = global_var_sid(nv.v);
+    if (!tbl || tbl->t != MEM_ARRAY) { wr_i(vm, dst, -1); return; }
+    double cols = 0, rows = 0;
+    Value* gc = global_var_sid(S_grid_cols); if (gc) v_num_of(vm, *gc, &cols);
+    Value* gr = global_var_sid(S_grid_rows); if (gr) v_num_of(vm, *gr, &rows);
+    int i = (int)g_num_arg(vm, args, 1), j = (int)g_num_arg(vm, args, 2);
+    if (i < 0 || i >= (int)cols || j < 0 || j >= (int)rows) { wr_i(vm, dst, -1); return; }
+    int idx = j * ((int)cols + 2) + i;
+    int ta = tbl->v;
+    if (ta < 0 || ta >= (int)g_arr_pool.size()) { wr_i(vm, dst, -1); return; }
+    if (idx < 0 || idx >= (int)g_arr_pool[ta].size()) { wr_i(vm, dst, -1); return; }
+    Value cell = g_arr_pool[ta][idx];
+    if (cell.t != MEM_ARRAY) { wr_i(vm, dst, -1); return; }
+    int ca = cell.v;
+    if (ca < 0 || ca >= (int)g_arr_pool.size()) { wr_i(vm, dst, -1); return; }
+    wr_i(vm, dst, (int)g_arr_pool[ca].size());
+}
+
+// VM_CellItem(name,i,j,k)：该格数组的第 k 个；异常 → undefined
+void impl_VM_CellItem(Vm& vm, const uint8_t* args, int argc, int dst) {
+    (void)argc;
+    Value nv = rd_v(vm, argslot(args, 0));
+    if (nv.t != MEM_STRING || !str_ok(nv.v)) { Value u; u.t = MEM_UNDEFINED; u.v = 0; wr_v(vm, dst, u); return; }
+    Value* tbl = global_var_sid(nv.v);
+    if (!tbl || tbl->t != MEM_ARRAY) { Value u; u.t = MEM_UNDEFINED; u.v = 0; wr_v(vm, dst, u); return; }
+    double cols = 0;
+    Value* gc = global_var_sid(S_grid_cols); if (gc) v_num_of(vm, *gc, &cols);
+    int i = (int)g_num_arg(vm, args, 1), j = (int)g_num_arg(vm, args, 2), k = (int)g_num_arg(vm, args, 3);
+    int idx = j * ((int)cols + 2) + i;
+    int ta = tbl->v;
+    if (ta < 0 || ta >= (int)g_arr_pool.size() || idx < 0 || idx >= (int)g_arr_pool[ta].size()) {
+        Value u; u.t = MEM_UNDEFINED; u.v = 0; wr_v(vm, dst, u); return;
+    }
+    Value cell = g_arr_pool[ta][idx];
+    if (cell.t != MEM_ARRAY) { Value u; u.t = MEM_UNDEFINED; u.v = 0; wr_v(vm, dst, u); return; }
+    int ca = cell.v;
+    if (ca < 0 || ca >= (int)g_arr_pool.size() || k < 0 || k >= (int)g_arr_pool[ca].size()) {
+        Value u; u.t = MEM_UNDEFINED; u.v = 0; wr_v(vm, dst, u); return;
+    }
+    wr_v(vm, dst, g_arr_pool[ca][k]);
+}
+
+// VM_CellContains(name,i,j,value)：该格里有没有这个值（数字/字符串各比各的）
+void impl_VM_CellContains(Vm& vm, const uint8_t* args, int argc, int dst) {
+    (void)argc;
+    Value nv = rd_v(vm, argslot(args, 0));
+    if (nv.t != MEM_STRING || !str_ok(nv.v)) { wr_i(vm, dst, 0); return; }
+    Value* tbl = global_var_sid(nv.v);
+    if (!tbl || tbl->t != MEM_ARRAY) { wr_i(vm, dst, 0); return; }
+    double cols = 0;
+    Value* gc = global_var_sid(S_grid_cols); if (gc) v_num_of(vm, *gc, &cols);
+    int i = (int)g_num_arg(vm, args, 1), j = (int)g_num_arg(vm, args, 2);
+    int idx = j * ((int)cols + 2) + i;
+    int ta = tbl->v;
+    if (ta < 0 || ta >= (int)g_arr_pool.size() || idx < 0 || idx >= (int)g_arr_pool[ta].size()) { wr_i(vm, dst, 0); return; }
+    Value cell = g_arr_pool[ta][idx];
+    if (cell.t != MEM_ARRAY) { wr_i(vm, dst, 0); return; }
+    int ca = cell.v;
+    if (ca < 0 || ca >= (int)g_arr_pool.size()) { wr_i(vm, dst, 0); return; }
+    Value key = rd_v(vm, argslot(args, 3));
+    for (size_t z = 0; z < g_arr_pool[ca].size(); z++) {
+        const Value& e = g_arr_pool[ca][z];
+        if (e.t == key.t && e.v == key.v) { wr_i(vm, dst, 1); return; }
+        if (e.t == MEM_INT && key.t == MEM_FLOAT) { double d; v_num_of(vm, key, &d); if ((double)e.v == d) { wr_i(vm, dst, 1); return; } }
+        if (e.t == MEM_FLOAT && key.t == MEM_INT) { double d; v_num_of(vm, e, &d); if (d == (double)key.v) { wr_i(vm, dst, 1); return; } }
+    }
+    wr_i(vm, dst, 0);
+}
+
+
+// VM_SetTerrain(col,row,type)：把 grid_terrains[row][col].type 写成给定值
+//   （越界什么都不做；写 map 用 ds_map_set 那套 allow_store）
+void impl_VM_SetTerrain(Vm& vm, const uint8_t* args, int argc, int dst) {
+    (void)argc; (void)dst;
+    int col = (int)g_num_arg(vm, args, 0), row = (int)g_num_arg(vm, args, 1);
+    double cols = 0, rows = 0;
+    Value* gc = global_var_sid(S_grid_cols); if (gc) v_num_of(vm, *gc, &cols);
+    Value* gr = global_var_sid(S_grid_rows); if (gr) v_num_of(vm, *gr, &rows);
+    if (row < 0 || row >= (int)rows || col < 0 || col >= (int)cols) return;
+    Value cell;
+    if (!terrain_cell(vm, row, col, &cell) || cell.t != MEM_MAP) return;
+    Value nv = rd_v(vm, argslot(args, 2));
+    if (nv.t != MEM_STRING) return;                       // type 只接受字符串
+    int m = cell.v;
+    if (m < 0 || m >= (int)g_map_pool.size()) return;
+    Value key = v_str(S_type);
+    if (!allow_store(key, cell, S_VM_SetTerrain)) return;
+    if (!allow_store(nv, cell, S_VM_SetTerrain)) return;
+    std::map<Value, Value, ValueLess>& mp = g_map_pool[m];
+    std::map<Value, Value, ValueLess>::iterator it = mp.find(key);
+    if (it != mp.end()) { release(it->second); it->second = nv; }
+    else mp[key] = nv;
+}
+
+
+// ── 批次 4A：格子/植物（数据读写；语义参考 scr_command_VM.gml，按 VM 结构重写）──
+// 取 global.grid_plants 某格的实例列表（拿不到 → NULL）
+static std::vector<Value>* plant_cell(Vm& vm, int col, int row) {
+    Value* g = global_var_sid(S_grid_plants);
+    if (!g || g->t != MEM_GRID) return NULL;
+    int gi = g->v;
+    if (gi < 0 || gi >= (int)g_grid_pool.size()) return NULL;
+    Grid& gr = g_grid_pool[gi];
+    if (col < 0 || col >= gr.w || row < 0 || row >= gr.h) return NULL;
+    Value cell = gr.cells[(size_t)row * gr.w + col];
+    if (cell.t != MEM_LIST) return NULL;
+    int li = cell.v;
+    if (li < 0 || li >= (int)g_list_pool.size()) return NULL;
+    return &g_list_pool[li];
+}
+// 某实例的 plant_id 是不是 "player"
+static bool is_player(Vm& vm, int id) {
+    Value* p = inst_var_sid(id, S_plant_id);
+    return p && p->t == MEM_STRING && p->v == S_player;
+}
+static int grid_dim(Vm& vm, int sid) {
+    Value* p = global_var_sid(sid);
+    double d = 0;
+    if (p) v_num_of(vm, *p, &d);
+    return (int)d;
+}
+
+// VM_ClearPlants(col,row)：col/row == -1 表示整列/整行；player 不清
+void impl_VM_ClearPlants(Vm& vm, const uint8_t* args, int argc, int dst) {
+    (void)argc; (void)dst;
+    int col = (int)g_num_arg(vm, args, 0), row = (int)g_num_arg(vm, args, 1);
+    int cols = grid_dim(vm, S_grid_cols), rows = grid_dim(vm, S_grid_rows);
+    int c1 = (col == -1) ? 0 : col, c2 = (col == -1) ? cols - 1 : col;
+    int r1 = (row == -1) ? 0 : row, r2 = (row == -1) ? rows - 1 : row;
+    for (int r = r1; r <= r2; r++) {
+        for (int c = c1; c <= c2; c++) {
+            std::vector<Value>* lst = plant_cell(vm, c, r);
+            if (!lst) continue;
+            for (int i = (int)lst->size() - 1; i >= 0; i--) {
+                Value e = (*lst)[i];
+                int id = (e.t == MEM_INT) ? e.v : -1;
+                if (id < 0 || !inst_get(id)) continue;
+                if (is_player(vm, id)) continue;          // 玩家本体不清
+                inst_destroy(id);                         // 唯一入口（含 Destroy 事件）
+            }
+        }
+    }
+}
+
+// VM_WakePlants(col,row)：睡着的非玩家植物 awake_buff_timer = 1
+void impl_VM_WakePlants(Vm& vm, const uint8_t* args, int argc, int dst) {
+    (void)argc; (void)dst;
+    int col = (int)g_num_arg(vm, args, 0), row = (int)g_num_arg(vm, args, 1);
+    int cols = grid_dim(vm, S_grid_cols), rows = grid_dim(vm, S_grid_rows);
+    int c1 = (col == -1) ? 0 : col, c2 = (col == -1) ? cols - 1 : col;
+    int r1 = (row == -1) ? 0 : row, r2 = (row == -1) ? rows - 1 : row;
+    for (int r = r1; r <= r2; r++) {
+        for (int c = c1; c <= c2; c++) {
+            std::vector<Value>* lst = plant_cell(vm, c, r);
+            if (!lst) continue;
+            for (size_t i = 0; i < lst->size(); i++) {
+                Value e = (*lst)[i];
+                int id = (e.t == MEM_INT) ? e.v : -1;
+                if (id < 0 || !inst_get(id)) continue;
+                if (is_player(vm, id)) continue;
+                Value* st = inst_var_sid(id, S_state);
+                int s = (st && st->t == MEM_INT) ? st->v : -1;
+                if (s != 4) continue;                     // CARD_STATE.SLEEP == 4
+                Value one; one.t = MEM_INT; one.v = 1;
+                inst_var_set_sid(id, S_awake_buff_timer, one);
+            }
+        }
+    }
+}
+
+// VM_GetPlantAt(col,row,layer)：第一个匹配的植物实例 id；没有 → -1
+//   （VM_ClientWrapId 目前是转发占位 → 先直接返回实例 id，语义待宿主映射）
+void impl_VM_GetPlantAt(Vm& vm, const uint8_t* args, int argc, int dst) {
+    (void)argc;
+    int col = (int)g_num_arg(vm, args, 0), row = (int)g_num_arg(vm, args, 1);
+    Value lv = rd_v(vm, argslot(args, 2));
+    bool all = (lv.t == MEM_STRING && lv.v == S_all);
+    int cols = grid_dim(vm, S_grid_cols), rows = grid_dim(vm, S_grid_rows);
+    int c1 = (col == -1) ? 0 : col, c2 = (col == -1) ? cols - 1 : col;
+    int r1 = (row == -1) ? 0 : row, r2 = (row == -1) ? rows - 1 : row;
+    for (int r = r1; r <= r2; r++) {
+        for (int c = c1; c <= c2; c++) {
+            std::vector<Value>* lst = plant_cell(vm, c, r);
+            if (!lst) continue;
+            for (size_t i = 0; i < lst->size(); i++) {
+                Value e = (*lst)[i];
+                int id = (e.t == MEM_INT) ? e.v : -1;
+                if (id < 0 || !inst_get(id)) continue;
+                if (!all) {
+                    Value* t = inst_var_sid(id, S_plant_type);
+                    if (!(t && t->t == MEM_STRING && lv.t == MEM_STRING && t->v == lv.v)) continue;
+                }
+                wr_i(vm, dst, id);
+                return;
+            }
+        }
+    }
+    wr_i(vm, dst, -1);
+}
+
+// VM_GetPlantCountAt(col,row,type)：数匹配的植物
+void impl_VM_GetPlantCountAt(Vm& vm, const uint8_t* args, int argc, int dst) {
+    (void)argc;
+    int col = (int)g_num_arg(vm, args, 0), row = (int)g_num_arg(vm, args, 1);
+    Value tv = rd_v(vm, argslot(args, 2));
+    bool all = (tv.t == MEM_STRING && tv.v == S_all);
+    int cols = grid_dim(vm, S_grid_cols), rows = grid_dim(vm, S_grid_rows);
+    int c1 = (col == -1) ? 0 : col, c2 = (col == -1) ? cols - 1 : col;
+    int r1 = (row == -1) ? 0 : row, r2 = (row == -1) ? rows - 1 : row;
+    int n = 0;
+    for (int r = r1; r <= r2; r++) {
+        for (int c = c1; c <= c2; c++) {
+            std::vector<Value>* lst = plant_cell(vm, c, r);
+            if (!lst) continue;
+            for (size_t i = 0; i < lst->size(); i++) {
+                Value e = (*lst)[i];
+                int id = (e.t == MEM_INT) ? e.v : -1;
+                if (id < 0 || !inst_get(id)) continue;
+                if (!all) {
+                    Value* pid = inst_var_sid(id, S_plant_id);
+                    if (!(pid && pid->t == MEM_STRING && tv.t == MEM_STRING && pid->v == tv.v)) continue;
+                }
+                n++;
+            }
+        }
+    }
+    wr_i(vm, dst, n);
+}
+
+// VM_ClearPlantsByType(name)：name == -1 → 清所有非玩家植物
+//   按卡片精确清需要 deck_get_card_data（还没实现）→ 那种情况只提示一次
+void impl_VM_ClearPlantsByType(Vm& vm, const uint8_t* args, int argc, int dst) {
+    (void)argc; (void)dst;
+    Value nv = rd_v(vm, argslot(args, 0));
+    bool all = (nv.t == MEM_INT && nv.v == -1);
+    if (!all) {
+        static bool warned = false;
+        if (!warned) { warned = true; printf("[vm] VM_ClearPlantsByType: 按卡片清需要 deck_get_card_data（未实现），本次跳过\n"); }
+        return;
+    }
+    int cols = grid_dim(vm, S_grid_cols), rows = grid_dim(vm, S_grid_rows);
+    for (int r = 0; r < rows; r++) {
+        for (int c = 0; c < cols; c++) {
+            std::vector<Value>* lst = plant_cell(vm, c, r);
+            if (!lst) continue;
+            for (int i = (int)lst->size() - 1; i >= 0; i--) {
+                Value e = (*lst)[i];
+                int id = (e.t == MEM_INT) ? e.v : -1;
+                if (id < 0 || !inst_get(id)) continue;
+                if (is_player(vm, id)) continue;
+                inst_destroy(id);
+            }
+        }
+    }
+}
+
+// VM_GetPlantCount()：数活着的 obj_card_parent
+void impl_VM_GetPlantCount(Vm& vm, const uint8_t* args, int argc, int dst) {
+    (void)args; (void)argc;
+    wr_i(vm, dst, inst_count(std::string("obj_card_parent")));
+}
+
 void ds_map_size(Vm& vm, const uint8_t* args, int argc, int dst) {
     int m = handle_arg(vm, args, 0, MEM_MAP, S_ds_map_size);
     if (m < 0) { wr_i(vm, dst, 0); return; }

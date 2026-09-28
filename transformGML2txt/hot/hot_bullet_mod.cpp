@@ -37,8 +37,8 @@ static void bul_init(Vm& vm, int s, Vm* mv, bool with_list) {
 // 场上敌人个数（GML 的 instance_number(obj_enemy_parent)：**含子对象**）
 static int bul_enemy_count() {
     int n = 0;
-    for (size_t i = 1; i < g_instances.size(); i++)
-        if (g_instances[i].alive && inst_is_sid((int)i, S_obj_enemy_parent)) n++;
+    for (std::unordered_map<int, int>::iterator it = g_inst_alive.begin(); it != g_inst_alive.end(); ++it)
+        if (inst_is_sid(it->first, S_obj_enemy_parent)) n++;
     return n;
 }
 

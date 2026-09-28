@@ -108,10 +108,9 @@ bool hot_homing_step(Vm& vm) {
         g_scan_x[t]  = 0;
         g_scan_hp[t] = -1;
     }
-    for (size_t k = 1; k < g_instances.size(); k++) {
-        if (!g_instances[k].alive) continue;
-        if (!inst_is_sid((int)k, S_obj_enemy_parent)) continue;
-        int e = (int)k;
+    for (std::unordered_map<int, int>::iterator it = g_inst_alive.begin(); it != g_inst_alive.end(); ++it) {
+        if (!inst_is_sid(it->first, S_obj_enemy_parent)) continue;
+        int e = it->first;
         if (!(get_num_sid(e, S_hp) > 0 && get_num_sid(e, S_y) > 0)) continue;
         const Value* tt = inst_var_sid(e, S_target_type);
         int slot = -1;

@@ -90,26 +90,285 @@ NATIVE_STUBS = [
 ]
 
 NATIVE_IMPL = [
-    "run_block", "ds_list_create", "ds_list_destroy", "ds_list_clear", "ds_list_add",
-    "ds_list_delete", "ds_list_size", "ds_list_find_value", "ds_list_find_index",
-    "array_literal", "array_get", "array_set", "array_pop", "array_clear", "array_contains",
-    "ds_map_create", "ds_map_set", "ds_map_delete", "ds_map_size", "ds_map_clear",
-    "ds_map_keys_to_array", "ds_map_destroy", "struct_get", "struct_set", "struct_exists",
-    "array_push", "ds_map_exists", "ds_map_find_value", "VM_Execute", "ds_grid_create",
-    "ds_grid_set", "ds_grid_get", "merge_colour", "ds_grid_width", "ds_grid_height",
-    "ds_grid_clear", "ds_grid_destroy", "array_length", "array_get_index", "array_delete",
-    "array_resize", "array_create", "array_shuffle", "ds_exists", "instance_exists",
-    "instance_number", "instance_create_depth", "instance_destroy", "variable_instance_exists",
-    "variable_instance_get", "variable_instance_set", "floor", "round", "abs", "max", "min",
-    "clamp", "lerp", "random", "random_range", "irandom_range", "sin", "cos", "degtorad",
-    "lengthdir_x", "lengthdir_y", "point_direction", "point_distance", "is_real", "is_string",
-    "is_array", "is_struct", "is_undefined", "string", "json_stringify",
-    "variable_global_exists", "variable_global_get", "merge_color", "damage_enemy",
-    "calculate_plant_depth", "get_grid_position_from_world", "get_world_position_from_grid",
-    "audio_play_sound", "send_message", "show_debug_message", "run_event_user", "ceil",
-    "make_color_rgb", "draw_set_color", "draw_set_alpha", "draw_set_font", "draw_set_halign",
-    "draw_set_valign", "draw_rectangle", "draw_rectangle_color", "draw_roundrect",
-    "string_width_ext", "string_height_ext", "network_broadcast_active_skill",
+    "run_block",
+    "ds_list_create",
+    "ds_list_destroy",
+    "ds_list_clear",
+    "ds_list_add",
+    "ds_list_delete",
+    "ds_list_size",
+    "ds_list_find_value",
+    "ds_list_find_index",
+    "array_literal",
+    "array_get",
+    "array_set",
+    "array_pop",
+    "array_clear",
+    "array_contains",
+    "ds_map_create",
+    "ds_map_set",
+    "ds_map_delete",
+    "ds_map_size",
+    "ds_map_clear",
+    "ds_map_keys_to_array",
+    "ds_map_destroy",
+    "struct_get",
+    "struct_set",
+    "struct_exists",
+    "array_push",
+    "ds_map_exists",
+    "ds_map_find_value",
+    "VM_Execute",
+    "ds_grid_create",
+    "ds_grid_set",
+    "ds_grid_get",
+    "merge_colour",
+    "ds_grid_width",
+    "ds_grid_height",
+    "ds_grid_clear",
+    "ds_grid_destroy",
+    "array_length",
+    "array_get_index",
+    "array_delete",
+    "array_resize",
+    "array_create",
+    "array_shuffle",
+    "ds_exists",
+    "instance_exists",
+    "instance_number",
+    "instance_create_depth",
+    "instance_destroy",
+    "variable_instance_exists",
+    "variable_instance_get",
+    "variable_instance_set",
+    "floor",
+    "round",
+    "abs",
+    "max",
+    "min",
+    "clamp",
+    "lerp",
+    "random",
+    "random_range",
+    "irandom_range",
+    "sin",
+    "cos",
+    "degtorad",
+    "lengthdir_x",
+    "lengthdir_y",
+    "point_direction",
+    "point_distance",
+    "is_real",
+    "is_string",
+    "is_array",
+    "is_struct",
+    "is_undefined",
+    "string",
+    "json_stringify",
+    "variable_global_exists",
+    "variable_global_get",
+    "merge_color",
+    "damage_enemy",
+    "calculate_plant_depth",
+    "get_grid_position_from_world",
+    "get_world_position_from_grid",
+    "audio_play_sound",
+    "send_message",
+    "show_debug_message",
+    "run_event_user",
+    "ceil",
+    "make_color_rgb",
+    "draw_set_color",
+    "draw_set_alpha",
+    "draw_set_font",
+    "draw_set_halign",
+    "draw_set_valign",
+    "draw_rectangle",
+    "draw_rectangle_color",
+    "draw_roundrect",
+    "string_width_ext",
+    "string_height_ext",
+    "network_broadcast_active_skill",
+    "audio_group_set_gain",
+    "audio_is_paused",
+    "audio_is_playing",
+    "buffer_load",
+    "clear_deck",
+    "deck_slot_count",
+    "ds_map_add",
+    "get_card_attire_list",
+    "get_card_craft_rule",
+    "get_material_amount",
+    "get_task_data",
+    "get_task_state",
+    "is_card_unlocked",
+    "is_level_completed",
+    "is_weapon_unlocked",
+    "load_custom_deck",
+    "mod_card_vm_deck_refresh",
+    "refresh_cookbook_list",
+    "refresh_level_button",
+    "refresh_task_list",
+    "save_file",
+    "save_to_custom_deck",
+    "shop_list_recharge",
+    "sprite_get_width",
+    "string_width",
+    "surface_free",
+    "texture_prefetch",
+    "update_notices",
+    "view_get_camera",
+    "window_get_fullscreen",
+    "window_has_focus",
+    "window_set_cursor",
+    "VM_FlushHooks",
+    "add_material_amount",
+    "add_task_progress",
+    "array_copy",
+    "audio_pause_all",
+    "audio_resume_sound",
+    "audio_sound_gain",
+    "buffer_read",
+    "camera_set_view_pos",
+    "draw_notices",
+    "draw_sprite",
+    "edit_task_progress",
+    "edit_task_state",
+    "equip_cookbook",
+    "http_request",
+    "ini_open",
+    "is_gem_unlocked",
+    "sprite_get_height",
+    "string_height",
+    "string_length",
+    "surface_exists",
+    "upgrade_card_shape",
+    "window_set_fullscreen",
+    "audio_pause_sound",
+    "audio_resume_all",
+    "buffer_delete",
+    "equip_attire",
+    "get_task_progress",
+    "ini_write_real",
+    "instance_log_enable",
+    "is_attire_unlocked",
+    "is_task_unlocked",
+    "json_parse",
+    "mouse_check_button_released",
+    "string_copy",
+    "surface_create",
+    "surface_set_target",
+    "unequip_cookbook",
+    "upgrade_card",
+    "add_net_id",
+    "audio_group_get_gain",
+    "deck_slot_is_empty",
+    "draw_clear_alpha",
+    "draw_line",
+    "get_gem_max_level",
+    "ini_close",
+    "refresh_reward_button",
+    "remove_task",
+    "room_restart",
+    "string_replace_all",
+    "surface_reset_target",
+    "unequip_attire",
+    "unlock_card",
+    "unlock_task",
+    "window_handle",
+    "deck_ensure_size",
+    "draw_surface",
+    "get_gem_craft_rule",
+    "get_load_audio",
+    "get_material_info",
+    "get_plant_shape_data",
+    "gpu_set_tex_filter",
+    "mouse_check_button",
+    "native_enable_ime",
+    "ord",
+    "sprite_get_name",
+    "unlock_weapon",
+    "version_greater",
+    "audio_exists",
+    "deck_slot_max",
+    "draw_text_ext",
+    "edit_gem_max_level",
+    "instance_log_disable",
+    "native_disable_ime",
+    "show_question",
+    "unlock_gem",
+    "window_enable_borderless_fullscreen",
+    "add_to_deck",
+    "edit_gem_level",
+    "native_stop_mouse_limit",
+    "unlock_attire",
+    "url_open",
+    "native_start_mouse_limit",
+    "remove_from_deck",
+    "device_mouse_x_to_gui",
+    "get_cookbook_data",
+    "keyboard_check_pressed",
+    "keyboard_get_string",
+    "device_mouse_y_to_gui",
+    "draw_text_ext_transformed",
+    "mouse_check_button_pressed",
+    "irandom",
+    "select_shovel",
+    "variable_global_set",
+    "deselect_shovel",
+    "reset_task_state",
+    "sort_plants_in_grid",
+    "get_map_object_data",
+    "network_broadcast_shovel_remove",
+    "gui_stack_pop",
+    "instance_find",
+    "sh_disconnect",
+    "game_end",
+    "game_set_speed",
+    "refresh_task_progress",
+    "complete_level",
+    "gui_stack_to",
+    "real",
+    "room_goto",
+    "mod_sync_props_tick",
+    "object_is_ancestor",
+    "create_battle_slots",
+    "draw_enable_drawevent",
+    "chr",
+    "string_pos",
+    "file_exists",
+    "camera_get_view_x",
+    "string_delete",
+    "file_text_open_write",
+    "file_text_write_string",
+    "file_text_close",
+    "camera_get_view_y",
+    "camera_get_view_width",
+    "camera_get_view_height",
+    "audio_create_stream",
+    "room_exists",
+    "directory_exists",
+    "directory_create",
+    "network_destroy",
+    "variable_struct_remove",
+    "buffer_create",
+    "buffer_write",
+    "disconnect",
+    "file_text_open_append",
+    "file_text_open_read",
+    "string_starts_with",
+    "buffer_get_size",
+    "date_current_datetime",
+    "file_text_eof",
+    "buffer_seek",
+    "date_datetime_string",
+    "file_text_read_string",
+    "buffer_tell",
+    "file_text_readln",
+    "file_text_writeln",
+    "buffer_copy",
+    "buffer_poke",
+    "network_send_raw"
 ]
 
 GAME_NAMES = [
@@ -973,6 +1232,12 @@ class Parser(object):
                 el = self.stmt() if self.isK("if") else self.body()
             return ("if", c, th, el)
 
+        if self.isK("repeat"):
+            # repeat 是**语句**（不是函数）：翻译器没实现，明确停下，
+            # 别让它掉进"函数调用"那条路去查 native 表（那样会静默变成空操作）。
+            bail("repeat 语句不支持",
+                 "翻译器没实现 repeat 循环（它不是函数，不该按函数解析）",
+                 "改写成计数循环：for (var _i = 0; _i < N; _i++) { ... }")
         if self.isK("while"):
             self.adv()
             c = self.expr()
@@ -2092,7 +2357,9 @@ SKIP_OBJECTS = {"obj_card_mod", "obj_card_slot", "obj_enemy_mod", "obj_bullet_mo
                 "obj_Homing_Bullet_Management",
                 # 三个 mod 单位对象：跟上面三个 mod 对象同构（插件 VM_CreateInstance 建、
                 # 再 VM_SetProp 写 mod_type），进 C++，不转 bin
-                "obj_weapon_mod", "obj_gem_mod", "obj_effect_mod"}
+                "obj_weapon_mod", "obj_gem_mod", "obj_effect_mod",
+                # obj_shell = 内嵌调试控制台 + 原生脚本注册 + 网络异步；跟战斗无关，留 GM
+                "obj_shell"}
 
 # 白名单：写在这里的对象直接跳过，不转、也不算失败。一行一个名字，加逗号。
 WHITELIST = (
@@ -2106,23 +2373,25 @@ def object_group(obj_dir):
     name = os.path.basename(obj_dir.rstrip("/\\"))
     yy = os.path.join(obj_dir, name + ".yy")
     if not os.path.isfile(yy):
-        return ""
+        return "other"
     with open(yy, "rb") as f:
         src = f.read().decode("utf-8-sig", "replace")
     m = re.search(r'"parent"\s*:\s*\{(.*?)\}', src, re.S)
     if not m:
-        return ""
+        return "other"
     p = re.search(r'"path"\s*:\s*"([^"]+)"', m.group(1))
     if not p:
-        return ""
+        return "other"
     parts = p.group(1).split("/")
     if len(parts) < 3:
-        return ""
+        return "other"
     top = parts[2][:-3] if parts[2].endswith(".yy") else parts[2]
     for gname, gdir in GROUP_DIRS:
         if top == gname:
             return gdir
-    return ""
+    # 其它资源树文件夹也编（不白名单过滤）：文件夹名规范化后直接当分组目录
+    g = re.sub(r"[^a-z0-9]+", "_", top.lower()).strip("_")
+    return g or "other"
 
 
 def yyp_objects():
@@ -2168,6 +2437,8 @@ def scan_mode():
     stat = dict((gdir, [0, 0, 0]) for _, gdir in GROUP_DIRS)   # [总数,   停]
 
     for g, name, path in jobs:
+        if g not in stat:
+            stat[g] = [0, 0, 0]
         stat[g][0] += 1
         files = event_files_in(path)
         if not files:
@@ -2204,7 +2475,7 @@ def scan_mode():
     log.append("-" * 72)
     log.append("SUMMARY")
     tot = ot = st = 0
-    for _, gdir in GROUP_DIRS:
+    for gdir in sorted(stat, key=lambda k: -stat[k][0]):
         n, o, s = stat[gdir]
         tot += n
         ot += o
@@ -2214,7 +2485,7 @@ def scan_mode():
     dump_log(log)
 
     print("")
-    for s in log[-len(GROUP_DIRS) - 2:]:
+    for s in log[-16:]:
         print(s)
     print("log: %s" % LOG_PATH)
     return 0
@@ -2251,6 +2522,71 @@ def callbin_mode(in_path, out_path):
     return 0
 
 
+
+def recursive_mode(root, out_root):
+    """--recursive：递归扫一个目录
+
+      · 含**单个 function** 的 .gml   → 编成一个 .callbin（文件名就是函数名）
+      · 含事件 .gml 的目录            → 编成一个对象 .bin（对象名 = 目录名）
+      输出镜像到 out_root 下，保持相对路径。
+
+      典型用法（两步）：
+        gm2bin.py kernel/function --recursive --out bin_kernel            # 先出 callbin
+        gm2bin.py kernel          --recursive --out bin_kernel --callbins bin_kernel/function
+    """
+    log = ["=" * 72,
+           "%s  RECURSIVE  %s -> %s" % (time.strftime("%Y-%m-%d %H:%M:%S"), root, out_root),
+           "-" * 72]
+    n_bin = n_cb = n_stop = 0
+    for dirpath, dirnames, filenames in os.walk(root):
+        gmls = sorted(f for f in filenames if f.endswith(".gml"))
+        if not gmls:
+            continue
+        rel = os.path.relpath(dirpath, root)
+        if rel == ".":
+            rel = os.path.basename(os.path.abspath(root))     # 根自己 → 用根的名字当子目录
+        # ① 含"单个 function"的 .gml（平铺也行）→ callbin，文件名就是函数名
+        for f in gmls:
+            p = os.path.join(dirpath, f)
+            src = open(p, "rb").read().decode("utf-8", "replace")
+            if not re.search(r"(?m)^\s*function\s+\w+\s*\(", src):
+                continue
+            out = os.path.join(out_root, rel, f[:-4] + ".callbin")
+            try:
+                gen, blocks, name, argc, slots = compile_callbin(p)
+                d = os.path.dirname(out)
+                if d:
+                    os.makedirs(d, exist_ok=True)
+                emit_callbin(out, gen, blocks, name, callbin_desc_of(src), argc, slots)
+                log.append("  callbin  %-44s %s" % (os.path.join(rel, f[:-4] + ".callbin"), name))
+                print("  callbin  %-44s %s" % (os.path.join(rel, f[:-4] + ".callbin"), name))
+                n_cb += 1
+            except Stop:
+                log.append("  STOP     %-44s %s:%d  %s | %s" % (os.path.join(rel, f), os.path.basename(LAST_BAIL[0]), LAST_BAIL[1], LAST_BAIL[2], LAST_BAIL[3]))
+                print("  STOP     %-44s %s:%d  %s" % (os.path.join(rel, f), os.path.basename(LAST_BAIL[0]), LAST_BAIL[1], LAST_BAIL[2]))
+                n_stop += 1
+        # ② 对象目录（若干事件 .gml）→ 一个 bin
+        files = event_files_in(dirpath)
+        if not files:
+            continue
+        out = os.path.join(out_root, rel, os.path.basename(dirpath) + ".bin")
+        try:
+            gen, blocks = compile_object(files)
+            b, ns, nl = emit_bin(out, gen, blocks)
+            log.append("  bin      %-44s %d blocks / %d strings" % (rel + ".bin", b, ns))
+            print("  bin      %-44s %d blocks / %d strings" % (rel + ".bin", b, ns))
+            n_bin += 1
+        except Stop:
+            log.append("  STOP     %-44s %s:%d  %s | %s" % (rel, os.path.basename(LAST_BAIL[0]), LAST_BAIL[1], LAST_BAIL[2], LAST_BAIL[3]))
+            print("  STOP     %-44s %s:%d  %s" % (rel, os.path.basename(LAST_BAIL[0]), LAST_BAIL[1], LAST_BAIL[2]))
+            n_stop += 1
+    log.append("-" * 72)
+    log.append("  total: bin %d, callbin %d, stop %d" % (n_bin, n_cb, n_stop))
+    dump_log(log)
+    print("\n  total: bin %d, callbin %d, stop %d   -> %s" % (n_bin, n_cb, n_stop, out_root))
+    return 0
+
+
 def main():
     args = sys.argv[1:]
     if not args:
@@ -2259,10 +2595,16 @@ def main():
     # --callbins <目录>：扫出已知的 callbin 函数名（影响所有调用点怎么编）；可以给多个
     rest = []
     dirs = []
+    recursive = False
+    out_dir = None
     i = 0
     while i < len(args):
         if args[i] == "--callbins" and i + 1 < len(args):
             dirs.append(args[i + 1]); i += 2; continue
+        if args[i] == "--out" and i + 1 < len(args):
+            out_dir = args[i + 1]; i += 2; continue
+        if args[i] == "--recursive":
+            recursive = True; i += 1; continue
         rest.append(args[i]); i += 1
     for d in dirs:
         n = callbin_scan_dir(d)
@@ -2274,10 +2616,17 @@ def main():
             return 1
         return callbin_mode(rest[1], rest[2])
 
+    if recursive:
+        if not rest:
+            print("usage: gm2bin.py <目录> --recursive [--out <输出目录>] [--callbins <目录>]")
+            return 1
+        return recursive_mode(rest[0], out_dir or os.path.join(HERE, "bin_kernel"))
+
     args = rest
     if len(args) < 2:
         print("usage: gm2bin.py [<gml_dir_or_file> <out.bin>]  [--callbins <dir>]")
         print("       gm2bin.py --callbin <函数.gml> <out.callbin>")
+        print("       gm2bin.py <目录> --recursive [--out <输出目录>] [--callbins <目录>]")
         return 1
 
     in_path, out_path = args[0], args[1]

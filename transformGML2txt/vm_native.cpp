@@ -7,15 +7,55 @@
 
 #include "vm.h"
 
+
+// ============================================================
+// 未实现的 native 统一兜底：转成 VM_CallFunc("同名", 实参…)
+//   名字用池下标直接给出（零哈希），实参照搬，返回值走同一个 dst。
+//   目的：**不留静默空操作** —— 调用要么被脚本 / callbin / 宿主接住，
+//         要么在 VM_CallFunc 里明确报"没有这个函数"。
+//   ⚠ 临时槽从 SCRATCH_BASE+32 起：hot 的 call_fn_sid 用的是 0..8，
+//     call_ret 用 8，不能撞。
+// ============================================================
+static void native_forward(Vm& vm, const uint8_t* args, int argc, int dst, int name_sid) {
+    int n = (argc > 8) ? 8 : argc;
+    int slots[9];
+    slots[0] = SCRATCH_BASE + 32;
+    Value nm; nm.t = MEM_STRING; nm.v = name_sid;
+    wr_v(vm, slots[0], nm);
+    for (int i = 0; i < n; i++) {
+        slots[i + 1] = SCRATCH_BASE + 33 + i;
+        wr_v(vm, slots[i + 1], rd_v(vm, argslot(args, i)));
+    }
+    int gi = S_VM_CallFunc - SID_GAME_BASE;
+    Fn fn = (gi >= 0 && gi < GAME_FN_COUNT) ? kGameFns[gi] : NULL;
+    if (!fn) {
+        if (dst >= 0) { Value u; u.t = MEM_UNDEFINED; u.v = 0; wr_v(vm, dst, u); }
+        return;
+    }
+    fn(vm, (const uint8_t*)slots, n + 1, dst);
+}
+
 #define NATIVE_STUB(NAME) \
-    static void NAME(Vm& vm, const uint8_t* args, int argc, int dst) { (void)vm; (void)args; (void)argc; (void)dst; }
+    static void NAME(Vm& vm, const uint8_t* args, int argc, int dst) { native_forward(vm, args, argc, dst, S_##NAME); }
 NATIVE_FN_LIST(NATIVE_STUB)
 #undef NATIVE_STUB
+
+// 占位接口：先什么都不做（实现以后挂到表尾，顺序不能变）
+#define PLACEHOLDER_STUB(NAME) \
+    static void NAME(Vm& vm, const uint8_t* args, int argc, int dst) { native_forward(vm, args, argc, dst, S_##NAME); }
+PLACEHOLDER_FN_LIST(PLACEHOLDER_STUB)
+#undef PLACEHOLDER_STUB
 
 const Fn kNativeFns[] = {
 #define NATIVE_ENTRY(NAME) NAME,
     NATIVE_FN_LIST(NATIVE_ENTRY)
 #undef NATIVE_ENTRY
+#define PLACEHOLDER_ENTRY(NAME) NAME,
+    PLACEHOLDER_FN_LIST(PLACEHOLDER_ENTRY)
+#undef PLACEHOLDER_ENTRY
+#define NATIVE_EXTRA_ENTRY(NAME) NAME,
+    NATIVE_EXTRA_LIST(NATIVE_EXTRA_ENTRY)
+#undef NATIVE_EXTRA_ENTRY
     run_block,
     ds_list_create,
     ds_list_destroy,

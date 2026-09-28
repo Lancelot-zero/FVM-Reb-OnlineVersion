@@ -63,9 +63,9 @@ global._VM_create_counter = 100000;
 ds_map_clear(global._VM_id_to_real);
 ds_map_clear(global._VM_real_to_vm_id);
 global.map_draw_slots = [];
-repeat (64) { array_push(global.map_draw_slots, { sprite: noone, x: 0, y: 0, alpha: 1, image_angle: 0, image_xscale: 1, image_yscale: 1 }); }
+for (var _i = 0; _i < 64; _i++) { array_push(global.map_draw_slots, { sprite: noone, x: 0, y: 0, alpha: 1, image_angle: 0, image_xscale: 1, image_yscale: 1 }); }
 global.map_draw_slots_front = [];
-repeat (64) { array_push(global.map_draw_slots_front, { sprite: noone, x: 0, y: 0, alpha: 1, image_angle: 0, image_xscale: 1, image_yscale: 1 }); }
+for (var _i = 0; _i < 64; _i++) { array_push(global.map_draw_slots_front, { sprite: noone, x: 0, y: 0, alpha: 1, image_angle: 0, image_xscale: 1, image_yscale: 1 }); }
 global.map_sprite_current = global.level_data.level_sprite;
 global.map_sprite_target = global.level_data.level_sprite;
 global.map_fade_alpha = 0;
@@ -451,7 +451,7 @@ function drawLoader(){
 	draw_set_color(c_white);
 	draw_rectangle(_x1 - 2, _y1 - 2, _x1 + _bar_w + 2, _y1 + _bar_h + 2, false);
 
-	draw_set_color($fde98b);
+	draw_set_color(0xFDE98B);      // 原写法 $fde98b 是 GM 的十六进制字面量；翻译器只认 0x，语义相同
 	draw_rectangle(_x1, _y1, _x1 + _bar_w * _ratio, _y1 + _bar_h, false);
 
 	draw_sprite_ext(spr_game_logo, 0, room_width / 2, room_height / 3, 1, 1, 0, c_white, 1);
