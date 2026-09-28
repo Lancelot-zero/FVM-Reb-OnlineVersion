@@ -56,18 +56,18 @@ bool hot_bulletscreen_create(Vm& vm) {
     Instance* in = inst_get(s);
     if (!in) return true;
 
-    in->depth = mk_num(-700);                      // 内置：UI(-2900 以下) 之后、敌人(0/-200) 之前
-    in->vars["bullet_max"]   = mk_num(BS_MAX);     // ⚠ 要跟 g_bullets 的大小一致
-    in->vars["count"]        = mk_num(0);          // 活动子弹数（唯一的活动长度，Step/Draw/加弹都读它）
+    inst_f(*in, F_depth) = mk_num(-700);                      // 内置：UI(-2900 以下) 之后、敌人(0/-200) 之前
+    in->vars[S_bullet_max]   = mk_num(BS_MAX);     // ⚠ 要跟 g_bullets 的大小一致
+    in->vars[S_count]        = mk_num(0);          // 活动子弹数（唯一的活动长度，Step/Draw/加弹都读它）
 
     // 子弹合并（默认关闭 = 原逻辑：加不进去就丢）
-    in->vars["merge_enable"] = mk_num(0);
-    in->vars["merge_lv1"]    = mk_num(500);
-    in->vars["merge_lv2"]    = mk_num(800);
-    in->vars["debug_merge"]  = mk_num(0);
+    in->vars[S_merge_enable] = mk_num(0);
+    in->vars[S_merge_lv1]    = mk_num(500);
+    in->vars[S_merge_lv2]    = mk_num(800);
+    in->vars[S_debug_merge]  = mk_num(0);
     {
-        static const char* stats[] = { "merge_n", "merge1_n", "merge2_n", "add_n", "drop_n",
-                                       "count_max", "_stat_frame", "_stat_merge", "_stat_add", "_stat_drop" };
+        static const int stats[] = { S_merge_n, S_merge1_n, S_merge2_n, S_add_n, S_drop_n,
+                                       S_count_max, S__stat_frame, S__stat_merge, S__stat_add, S__stat_drop };
         for (size_t i = 0; i < sizeof(stats) / sizeof(stats[0]); i++)
             in->vars[stats[i]] = mk_num(0);
     }
@@ -83,7 +83,7 @@ bool hot_bulletscreen_create(Vm& vm) {
 bool hot_bulletscreen_draw(Vm& vm) {
     int s = vm.cur_instance;
     if (!inst_get(s)) return true;
-    for (int i = (int)get_num(s, "count") - 1; i >= 0; i--) {
+    for (int i = (int)get_num_sid(s, S_count) - 1; i >= 0; i--) {
         Bullet& b = g_bullets[i];
         if (b.spr.t == MEM_INT && b.spr.v == -1) continue;       // spr == -1：没贴图
         Value d[9];
@@ -96,7 +96,7 @@ bool hot_bulletscreen_draw(Vm& vm) {
         d[6] = mk_num(b.angle);
         d[7] = mk_num(16777215);                                 // c_white
         d[8] = mk_num(1);
-        call_fn_v(vm, "draw_sprite_ext", d, 9, -1);
+        call_fn_sid(vm, S_draw_sprite_ext, d, 9, -1);
     }
     return true;
 }
@@ -105,7 +105,7 @@ bool hot_bulletscreen_draw(Vm& vm) {
 bool hot_bulletscreen_destroy(Vm& vm) {
     int s = vm.cur_instance;
     if (!inst_get(s)) return true;
-    set_num(s, "count", 0);
+    set_num_sid(s, S_count, 0);
     g_cell_n.clear();
     g_bullet_grid.clear();
     return true;
@@ -118,9 +118,9 @@ static void bs_hit_enemy(Vm& vm, Bullet& b, int e) {
     da[0] = mk_num(e);
     da[1] = mk_num(b.dmg);
     da[2] = b.damage_type;
-    call_fn_v(vm, "damage_enemy", da, 3, -1);
-    if (b.freeze > 0 && truthy(inst_var(e, "ice_ok"))) {
-        if (get_num(e, "ice_timer") < b.freeze) set_num(e, "ice_timer", b.freeze);
+    call_fn_sid(vm, S_damage_enemy, da, 3, -1);
+    if (b.freeze > 0 && truthy(inst_var_sid(e, S_ice_ok))) {
+        if (get_num_sid(e, S_ice_timer) < b.freeze) set_num_sid(e, S_ice_timer, b.freeze);
     }
 }
 
@@ -130,8 +130,8 @@ static bool bs_scan_cell(Vm& vm, Bullet& b, const Value& cell, bool all, double*
     for (int k = 0; k < cn; k++) {
         int e = (int)num_of(&container_at(cell, k));
         if (!inst_get(e)) continue;
-        if (get_num(e, "hp") <= 0) continue;
-        if ((b.ttype & (int)get_num(e, "tbit")) == 0) continue;
+        if (get_num_sid(e, S_hp) <= 0) continue;
+        if ((b.ttype & (int)get_num_sid(e, S_tbit)) == 0) continue;
         bs_hit_enemy(vm, b, e);
         if (!all) {
             *left -= 1;
@@ -146,36 +146,36 @@ static bool bs_scan_cell(Vm& vm, Bullet& b, const Value& cell, bool all, double*
 bool hot_bulletscreen_step(Vm& vm) {
     int s = vm.cur_instance;
     if (!inst_get(s)) return true;
-    if (gtrue(vm, "is_paused")) return true;
+    if (gtrue_sid(S_is_paused)) return true;
 
     // ── 网格参数只读一次（等价 get_grid_position_from_world(x,y,true) 的裸算法，不建结构体）──
-    bool has_grid = global_exists("enemy_array") && global_exists("grid_cols") && global_exists("grid_rows")
-                 && global_exists("grid_offset_x") && global_exists("grid_offset_y")
-                 && global_exists("grid_cell_size_x") && global_exists("grid_cell_size_y");
+    bool has_grid = global_exists_sid(S_enemy_array) && global_exists_sid(S_grid_cols) && global_exists_sid(S_grid_rows)
+                 && global_exists_sid(S_grid_offset_x) && global_exists_sid(S_grid_offset_y)
+                 && global_exists_sid(S_grid_cell_size_x) && global_exists_sid(S_grid_cell_size_y);
     double stride = 0, rows = 0, gox = 0, goy = 0, gcsx = 1, gcsz = 1;
     if (has_grid) {
-        stride = gnumv(vm, "grid_cols") + 2;
-        rows   = gnumv(vm, "grid_rows");
-        gox    = gnumv(vm, "grid_offset_x");
-        goy    = gnumv(vm, "grid_offset_y");
-        gcsx   = gnumv(vm, "grid_cell_size_x");
-        gcsz   = gnumv(vm, "grid_cell_size_y");
+        stride = gnumv_sid(S_grid_cols) + 2;
+        rows   = gnumv_sid(S_grid_rows);
+        gox    = gnumv_sid(S_grid_offset_x);
+        goy    = gnumv_sid(S_grid_offset_y);
+        gcsx   = gnumv_sid(S_grid_cell_size_x);
+        gcsz   = gnumv_sid(S_grid_cell_size_y);
         if (gcsx <= 0 || gcsz <= 0) has_grid = false;
     }
-    double cols = has_grid ? gnumv(vm, "grid_cols") : 0;
+    double cols = has_grid ? gnumv_sid(S_grid_cols) : 0;
 
     // 快照（cell_flag / cell_terrain_flag 由 obj_battle 每帧重建）：长度对得上才认为本帧有效
-    Value cell_flag = gv(vm, "cell_flag");
-    Value terrain   = gv(vm, "cell_terrain_flag");
-    bool snap_ok = has_grid && cols > 0 && rows > 0 && global_exists("cell_flag")&& (double)container_size(cell_flag) == cols * rows;
-    bool snap_ok_ob = has_grid && cols > 0 && rows > 0 && global_exists("cell_terrain_flag")&& (double)container_size(terrain) == cols * rows;
+    Value cell_flag = gv_sid(S_cell_flag);
+    Value terrain   = gv_sid(S_cell_terrain_flag);
+    bool snap_ok = has_grid && cols > 0 && rows > 0 && global_exists_sid(S_cell_flag)&& (double)container_size(cell_flag) == cols * rows;
+    bool snap_ok_ob = has_grid && cols > 0 && rows > 0 && global_exists_sid(S_cell_terrain_flag)&& (double)container_size(terrain) == cols * rows;
 
-    int len = (int)get_num(s, "count");
+    int len = (int)get_num_sid(s, S_count);
     if (len <= 0) return true;
 
-    Value enemy_array = gv(vm, "enemy_array");
-    Value enemy_left  = gv(vm, "enemy_array_left");
-    Value grid_plants = gv(vm, "grid_plants");
+    Value enemy_array = gv_sid(S_enemy_array);
+    Value enemy_left  = gv_sid(S_enemy_array_left);
+    Value grid_plants = gv_sid(S_grid_plants);
 
     for (int i = len - 1; i >= 0; i--) {
         Bullet& b = g_bullets[i];                    // 直接改数组里的那一颗（原版是改句柄指着的 ds_map）
@@ -222,14 +222,14 @@ bool hot_bulletscreen_step(Vm& vm) {
                         && ((b.flag & (int)array_n(vm, cell_flag, (int)(pr * cols + pc))) != 0)) {
                     // 这一格的卡片列表
                     Value ga[3]; ga[0] = grid_plants; ga[1] = mk_num(pc); ga[2] = mk_num(pr);
-                    Value cards = call_ret(vm, "ds_grid_get", ga, 3);
+                    Value cards = call_ret_sid(vm, S_ds_grid_get, ga, 3);
                     Value la[1]; la[0] = cards;
-                    int ncard = (int)num_of(&call_ret(vm, "ds_list_size", la, 1));
+                    int ncard = (int)num_of(&call_ret_sid(vm, S_ds_list_size, la, 1));
                     for (int ci = 0; ci < ncard; ci++) {
                         Value fa[2]; fa[0] = cards; fa[1] = mk_num(ci);
-                        int car = (int)num_of(&call_ret(vm, "ds_list_find_value", fa, 2));
+                        int car = (int)num_of(&call_ret_sid(vm, S_ds_list_find_value, fa, 2));
                         if (!inst_get(car)) continue;
-                        Value* cfp = inst_var(car, "bullet_flag");
+                        Value* cfp = inst_var_sid(car, S_bullet_flag);
                         if (!cfp) continue;                       // variable_instance_exists
                         int cf = (int)num_of(cfp);
                         if (cf <= 0) continue;
@@ -238,49 +238,49 @@ bool hot_bulletscreen_step(Vm& vm) {
                         bool thaw = ((cf & 2) != 0);
                         // ① 内置表现
                         if ((cf & 1) != 0) {                      // 过火类
-                            b.spr = mk_str(vm, "spr_fire_bullet");
-                            Value sa[1]; sa[0] = mk_str(vm, "spr_fire_bullet");
-                            b.frames = num_of(&call_ret(vm, "sprite_get_number", sa, 1));
+                            b.spr = mk_str_sid(S_spr_fire_bullet);
+                            Value sa[1]; sa[0] = mk_str_sid(S_spr_fire_bullet);
+                            b.frames = num_of(&call_ret_sid(vm, S_sprite_get_number, sa, 1));
                             b.scale = 1.8;
-                            Value au[3]; au[0] = mk_str(vm, "snd_bullet_burnt"); au[1] = mk_num(0); au[2] = mk_num(0);
-                            call_fn_v(vm, "audio_play_sound", au, 3, -1);
+                            Value au[3]; au[0] = mk_str_sid(S_snd_bullet_burnt); au[1] = mk_num(0); au[2] = mk_num(0);
+                            call_fn_sid(vm, S_audio_play_sound, au, 3, -1);
                         }
                         if (thaw) {                               // 解冻类
-                            b.spr = mk_str(vm, "spr_xiaolongbao_bullet");
-                            Value sa[1]; sa[0] = mk_str(vm, "spr_xiaolongbao_bullet");
-                            b.frames = num_of(&call_ret(vm, "sprite_get_number", sa, 1));
-                            Value au[3]; au[0] = mk_str(vm, "snd_bullet_burnt"); au[1] = mk_num(0); au[2] = mk_num(0);
-                            call_fn_v(vm, "audio_play_sound", au, 3, -1);
+                            b.spr = mk_str_sid(S_spr_xiaolongbao_bullet);
+                            Value sa[1]; sa[0] = mk_str_sid(S_spr_xiaolongbao_bullet);
+                            b.frames = num_of(&call_ret_sid(vm, S_sprite_get_number, sa, 1));
+                            Value au[3]; au[0] = mk_str_sid(S_snd_bullet_burnt); au[1] = mk_num(0); au[2] = mk_num(0);
+                            call_fn_sid(vm, S_audio_play_sound, au, 3, -1);
                         }
                         // ② 增益（解冻位不启用；解冻另外把子弹自己的冰冻帧数清零）
                         Value* p = NULL;
                         if (thaw) {
                             b.freeze = 0;
                         } else {
-                            double mul = (p = inst_var(car, "bullet_mul_dmg"))    ? num_of(p) : 1;
-                            double add = (p = inst_var(car, "bullet_add_dmg"))    ? num_of(p) : 0;
-                            double fm  = (p = inst_var(car, "bullet_freeze_mul")) ? num_of(p) : 1;
-                            double fa2 = (p = inst_var(car, "bullet_freeze_add")) ? num_of(p) : 0;
+                            double mul = (p = inst_var_sid(car, S_bullet_mul_dmg))    ? num_of(p) : 1;
+                            double add = (p = inst_var_sid(car, S_bullet_add_dmg))    ? num_of(p) : 0;
+                            double fm  = (p = inst_var_sid(car, S_bullet_freeze_mul)) ? num_of(p) : 1;
+                            double fa2 = (p = inst_var_sid(car, S_bullet_freeze_add)) ? num_of(p) : 0;
                             b.dmg    = b.dmg * mul + add;
                             b.freeze = b.freeze * fm + fa2;
-                            if ((p = inst_var(car, "bullet_flip_x")) && num_of(p) != 0)
+                            if ((p = inst_var_sid(car, S_bullet_flip_x)) && num_of(p) != 0)
                                 b.vx = -b.vx;
-                            if ((p = inst_var(car, "bullet_flip_y")) && num_of(p) != 0)
+                            if ((p = inst_var_sid(car, S_bullet_flip_y)) && num_of(p) != 0)
                                 b.vy = -b.vy;
-                            if ((p = inst_var(car, "bullet_angle_add")))
+                            if ((p = inst_var_sid(car, S_bullet_angle_add)))
                                 b.angle += num_of(p);
-                            if ((p = inst_var(car, "bullet_scale"))) {
+                            if ((p = inst_var_sid(car, S_bullet_scale))) {
                                 double sc = num_of(p);
                                 if (is_numv(p) && sc > 0) b.scale *= sc;
                             }
-                            if ((p = inst_var(car, "bullet_hits_add"))) {
+                            if ((p = inst_var_sid(car, S_bullet_hits_add))) {
                                 double ha = num_of(p);
                                 if (is_numv(p) && ha > 0 && b.hits >= 0)
                                     b.hits += ha;
                             }
                         }
                         // 销毁指令：0 = 不启用；负数 = 立即销毁；正数 = 只减穿透次数
-                        if ((p = inst_var(car, "bullet_destroy"))) {
+                        if ((p = inst_var_sid(car, S_bullet_destroy))) {
                             double bd = num_of(p);
                             if (is_numv(p) && bd != 0) {
                                 if (bd < 0) kill_all = true;
@@ -295,9 +295,9 @@ bool hot_bulletscreen_step(Vm& vm) {
                         if (thaw) b.flag |= 1;
 
                         // ④ 每弹每卡只做一次：穿过计数 + 可选的充能
-                        add_num(car, "bullet_pass_count", 1);
-                        if ((p = inst_var(car, "bullet_charge_self")) && num_of(p) != 0)
-                            add_num(car, "bullet_charge_dmg", b.dmg);
+                        add_num_sid(car, S_bullet_pass_count, 1);
+                        if ((p = inst_var_sid(car, S_bullet_charge_self)) && num_of(p) != 0)
+                            add_num_sid(car, S_bullet_charge_dmg, b.dmg);
 
                         if (kill_all) break;
                         if (b.flag <= 0) break;                   // 没位可吃了
@@ -324,7 +324,7 @@ bool hot_bulletscreen_step(Vm& vm) {
                     double cr = b.cell_range;
                     if (cr < 0) cr = 0;
 
-                    if (cr == 0 && col < stride && (col >= 0 || global_exists("enemy_array_left"))) {
+                    if (cr == 0 && col < stride && (col >= 0 || global_exists_sid(S_enemy_array_left))) {
                         // 快路：只扫自己那一格（绝大多数子弹）
                         Value cell = (col < 0) ? container_at(enemy_left, (int)row): container_at(enemy_array, (int)(row * stride + col));
                         bs_scan_cell(vm, b, cell, all, &left);
@@ -334,7 +334,7 @@ bool hot_bulletscreen_step(Vm& vm) {
                         double r2 = row + cr; if (r2 >= rows) r2 = rows - 1;
                         if (col < 0) {
                             // 负列（场外左侧）：敌人在 global.enemy_array_left[row] 里
-                            if (global_exists("enemy_array_left")) {
+                            if (global_exists_sid(S_enemy_array_left)) {
                                 for (double r = r1; r <= r2; r++) {
                                     Value cell = container_at(enemy_left, (int)r);
                                     if (bs_scan_cell(vm, b, cell, all, &left)) break;
@@ -362,35 +362,35 @@ bool hot_bulletscreen_step(Vm& vm) {
 
             // 6. 到期 → 生成销毁对象
             if (b.hits == 0 || b.life == 0) {
-                std::string dname = pool_text(vm.strings, &b.death_obj);
-                if (!dname.empty() && str_is(vm, &b.spr, "spr_fire_bullet")) {
+                std::string dname = pool_text(&b.death_obj);
+                if (!dname.empty() && str_is_sid(&b.spr, S_spr_fire_bullet)) {
                     // 被卡片点燃过的弹（spr 已换成火焰弹）走原版的火焰命中特效
-                    if (obj_known(vm, "obj_fire_bullet_effect")) {
+                    if (obj_known(vm, str_at(S_obj_fire_bullet_effect))) {
                         Value fa[4];
                         fa[0] = mk_num(bx); fa[1] = mk_num(by);
-                        fa[2] = mk_num(get_num(s, "depth") - 1);
-                        fa[3] = mk_str(vm, "obj_fire_bullet_effect");
-                        Value fd = call_ret(vm, "instance_create_depth", fa, 4);
+                        fa[2] = mk_num(get_num_sid(s, S_depth) - 1);
+                        fa[3] = mk_str_sid(S_obj_fire_bullet_effect);
+                        Value fd = call_ret_sid(vm, S_instance_create_depth, fa, 4);
                         int fid = fd.t == MEM_INT ? fd.v : -1;
-                        if (inst_get(fid)) inst_var_set(fid, "sprite_index", mk_str(vm, "spr_fire_bullet_effect"));
+                        if (inst_get(fid)) inst_var_set_sid(fid, S_sprite_index, mk_str_sid(S_spr_fire_bullet_effect));
                     }
                 } else if (!dname.empty()) {
                     // GML: asset_get_index(death_obj)，找不到再补一次 "obj_" 前缀
                     std::string full = dname;
-                    if (!obj_known(vm, full)) full = "obj_" + dname;
+                    if (!obj_known(vm, full)) full = str_at(S_obj_) + dname;
                     if (obj_known(vm, full)) {
                         Value da[4];
                         da[0] = mk_num(bx); da[1] = mk_num(by);
-                        da[2] = mk_num(get_num(s, "depth") - 1);
+                        da[2] = mk_num(get_num_sid(s, S_depth) - 1);
                         da[3] = mk_str(vm, full.c_str());
-                        Value dv = call_ret(vm, "instance_create_depth", da, 4);
+                        Value dv = call_ret_sid(vm, S_instance_create_depth, da, 4);
                         int did = dv.t == MEM_INT ? dv.v : -1;
                         if (inst_get(did)) {
-                            if (b.death_mod.t == MEM_STRING) inst_var_set(did, "mod_type", b.death_mod);
-                            std::string sname = pool_text(vm.strings, &b.death_spr);
+                            if (b.death_mod.t == MEM_STRING) inst_var_set_sid(did, S_mod_type, b.death_mod);
+                            std::string sname = pool_text(&b.death_spr);
                             if (!sname.empty()) {
                                 Value ga[1]; ga[0] = b.death_spr;
-                                inst_var_set(did, "sprite_index", call_ret(vm, "get_load_sprite", ga, 1));
+                                inst_var_set_sid(did, S_sprite_index, call_ret_sid(vm, S_get_load_sprite, ga, 1));
                             }
                         }
                     }
@@ -404,18 +404,18 @@ bool hot_bulletscreen_step(Vm& vm) {
         //    "空子弹模板"留在数组末尾；原生数组没有模板，槽 c 已经越界，下一颗加进来时
         //    每个字段都会被整份覆盖，所以这一句可以省。
         if (gone) {
-            int c = (int)get_num(s, "count") - 1;
-            set_num(s, "count", c);
+            int c = (int)get_num_sid(s, S_count) - 1;
+            set_num_sid(s, S_count, c);
             if (c != i) g_bullets[i] = g_bullets[c];
         }
     }
 
     // 8. 合并索引重建（只在合并打开时做；关闭时整段跳过）
-    if (snap_ok && truthy(inst_var(s, "merge_enable"))) {
+    if (snap_ok && truthy(inst_var_sid(s, S_merge_enable))) {
         int cells = (int)(cols * rows);
         g_cell_n.assign(cells, 0);
         if ((int)g_bullet_grid.size() != cells * 16) g_bullet_grid.assign(cells * 16, -1);
-        int cnt = (int)get_num(s, "count");
+        int cnt = (int)get_num_sid(s, S_count);
         for (int gi = 0; gi < cnt; gi++) {
             Bullet& gb = g_bullets[gi];
             if (gb.hits == 0 || gb.life == 0) continue;
@@ -433,22 +433,22 @@ bool hot_bulletscreen_step(Vm& vm) {
     }
 
     // 9. 合并统计（debug_merge = false 就只计数不打印）
-    if (get_num(s, "count") > get_num(s, "count_max")) set_num(s, "count_max", get_num(s, "count")); add_num(s, "_stat_frame", 1);
-    if (truthy(inst_var(s, "debug_merge")) && get_num(s, "_stat_frame") >= 60) {
+    if (get_num_sid(s, S_count) > get_num_sid(s, S_count_max)) set_num_sid(s, S_count_max, get_num_sid(s, S_count)); add_num_sid(s, S__stat_frame, 1);
+    if (truthy(inst_var_sid(s, S_debug_merge)) && get_num_sid(s, S__stat_frame) >= 60) {
         // 字符串拼接照 GML 的格式来（宿主调 show_debug_message 看输出）
         char buf[256];
-        double mn = get_num(s, "merge_n") - get_num(s, "_stat_merge");
-        double an = get_num(s, "add_n")   - get_num(s, "_stat_add");
-        double dn = get_num(s, "drop_n")  - get_num(s, "_stat_drop");
+        double mn = get_num_sid(s, S_merge_n) - get_num_sid(s, S__stat_merge);
+        double an = get_num_sid(s, S_add_n)   - get_num_sid(s, S__stat_add);
+        double dn = get_num_sid(s, S_drop_n)  - get_num_sid(s, S__stat_drop);
         snprintf(buf, sizeof(buf), "[弹幕] 合并=%d (累计 严%d/宽%d) 新建=%d 丢弃=%d 当前=%d 峰值=%d",
-                 (int)mn, (int)get_num(s, "merge1_n"), (int)get_num(s, "merge2_n"),
-                 (int)an, (int)dn, (int)get_num(s, "count"), (int)get_num(s, "count_max"));
+                 (int)mn, (int)get_num_sid(s, S_merge1_n), (int)get_num_sid(s, S_merge2_n),
+                 (int)an, (int)dn, (int)get_num_sid(s, S_count), (int)get_num_sid(s, S_count_max));
         Value m[1]; m[0] = mk_str(vm, buf);
-        call_fn_v(vm, "show_debug_message", m, 1, -1);
-        set_num(s, "_stat_merge", get_num(s, "merge_n"));
-        set_num(s, "_stat_add",   get_num(s, "add_n"));
-        set_num(s, "_stat_drop",  get_num(s, "drop_n"));
-        set_num(s, "_stat_frame", 0);
+        call_fn_sid(vm, S_show_debug_message, m, 1, -1);
+        set_num_sid(s, S__stat_merge, get_num_sid(s, S_merge_n));
+        set_num_sid(s, S__stat_add,   get_num_sid(s, S_add_n));
+        set_num_sid(s, S__stat_drop,  get_num_sid(s, S_drop_n));
+        set_num_sid(s, S__stat_frame, 0);
     }
     return true;
 }

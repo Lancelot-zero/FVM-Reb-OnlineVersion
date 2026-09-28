@@ -51,39 +51,39 @@ Fn kGameFns[] = {
     GAME_FN_LIST(GAME_ENTRY)
 #undef GAME_ENTRY
 };
-const int GAME_FN_COUNT = (int)(sizeof(kGameFns) / sizeof(kGameFns[0]));
+// 条数定义在 vm.h（预置段要用它算下标基址）；这里卡住"表长度没变"
+static_assert(sizeof(kGameFns) / sizeof(kGameFns[0]) == GAME_FN_COUNT,
+              "kGameFns 的长度和 vm.h 的 GAME_FN_COUNT 对不上");
 
-// 有真实现的游戏 API：名字 → 函数。实体在 vm_callbin.cpp / 以后别的 .cpp
-struct GameImpl { const char* name; Fn fn; };
+// 有真实现的游戏 API：**池下标** → 函数（下标就是 names.h 里 S_VM_xxx 的值）
+//   实体在 vm_callbin.cpp / vm_instance.cpp 等处
+struct GameImpl { int sid; Fn fn; };
 static const GameImpl kGameImpls[] = {
-    { "VM_CallFunc",   impl_VM_CallFunc   },
-    { "VM_FuncExists", impl_VM_FuncExists },
-    { "VM_FuncDesc",   impl_VM_FuncDesc   },
+    { S_VM_CallFunc,   impl_VM_CallFunc   },
+    { S_VM_FuncExists, impl_VM_FuncExists },
+    { S_VM_FuncDesc,   impl_VM_FuncDesc   },
+    { S_VM_GetProp,    impl_VM_GetProp    },
+    { S_VM_SetProp,    impl_VM_SetProp    },
 };
 
 bool g_game_fns_patched = false;
 
-// 名字表：和 kGameFns 一一对应（顺序 = FUNC_DEFS，不能改）
-//   给 C++ 硬编码块按名字调游戏 API 用（hot/）
-static const char* kGameNames[] = {
-#define GAME_STR(NAME) #NAME,
-    GAME_FN_LIST(GAME_STR)
-#undef GAME_STR
-};
-
 void patch_game_fns() {
     for (size_t g = 0; g < sizeof(kGameImpls) / sizeof(kGameImpls[0]); g++) {
-        for (int i = 0; i < GAME_FN_COUNT; i++) {
-            if (strcmp(kGameNames[i], kGameImpls[g].name) == 0) {
-                kGameFns[i] = kGameImpls[g].fn;
-                break;
-            }
+        int i = kGameImpls[g].sid - SID_GAME_BASE;      // 池下标 → game id
+        if (i < 0 || i >= GAME_FN_COUNT) {
+            printf("[vm] patch_game_fns: 下标 %d 不在 game 段\n", kGameImpls[g].sid);
+            continue;
         }
+        kGameFns[i] = kGameImpls[g].fn;
     }
 }
 
+// 名字 → game id：走全局字符串池（预置段里函数名占 1..N），一次哈希就够
+//   没预置的（脚本里现造的字符串）自然落在别的区间 → -1
 int game_id(const char* name) {
-    for (int i = 0; i < GAME_FN_COUNT; i++)
-        if (strcmp(kGameNames[i], name) == 0) return i;
-    return -1;
+    int sid = str_find(name);
+    if (sid < 0) return -1;
+    if (sid < SID_GAME_BASE || sid >= SID_GAME_BASE + GAME_FN_COUNT) return -1;
+    return sid - SID_GAME_BASE;
 }

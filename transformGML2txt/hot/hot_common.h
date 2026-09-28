@@ -3,6 +3,7 @@
 //
 //   hot/ 目录的组织：
 //     hot_common.h / hot_common.cpp   共用工具（取值、调用、mod VM、父类事件…）
+//     （字符串名字在 ../names.h：S_xxx 的枚举值就是池下标）
 //     hot_objects.h                   各对象的热块函数声明（注册表要用）
 //     hot_table.cpp                   kHotBlocks 注册表 + run_hot_block/has_hot_block
 //     hot_<对象>.cpp                  一个对象一个文件，里面只放它的热块
@@ -14,6 +15,25 @@
 #define FVM_HOT_COMMON_H
 
 #include "../vm.h"
+
+// ── 按池下标干活的几个口子（手上已经有 S_xxx 时用，零哈希）──
+Value mk_str_sid(int sid);                       // 字符串值（池里已有，不再查）
+bool  str_is_sid(const Value* v, int sid);
+Value gv_sid(int sid);                           // 读全局（没有 → undefined）
+double gnumv_sid(int sid);
+bool   gtrue_sid(int sid);
+
+// ── 同一批 helper 的池下标版（名字是编译期常量 S_xxx 时用，零哈希）──
+void   set_num_sid(int inst, int sid, double x);
+Value  iv_or_sid(int inst, int sid, double dflt);
+void   set_var_sid(int inst, int sid, Value v);
+double get_num_sid(int inst, int sid);
+void   add_num_sid(int inst, int sid, double d);
+void   set_iv_sid(int inst, int sid, int n);
+void   add_iv_sid(int inst, int sid, int d);
+Value* global_var_sid(int sid);
+void   global_var_set_sid(int sid, Value v);
+bool   global_exists_sid(int sid);
 #include <cmath>
 #include <cstdlib>
 #include <string>
@@ -77,7 +97,11 @@ void array_setn(Vm& vm, const Value& arr, int i, double x);
 void m_set(Vm& vm, const Value& map, const char* key, const Value& v);
 void m_setnum(Vm& vm, const Value& map, const char* key, double x);
 double m_num(Vm& vm, const Value& map, const char* key);
-std::string pool_text(const std::vector<std::string>& pool, const Value* v);
+std::string pool_text(const Value* v);
+void call_fn_sid(Vm& vm, int sid, const Value* vals, int argc, int dst);
+Value call_ret_sid(Vm& vm, int sid, const Value* vals, int argc);
+void call_fn_int_sid(Vm& vm, int sid, const int* vals, int argc, int dst);
+Value call_ret_held_sid(Vm& vm, int sid, const Value* vals, int argc);
 bool str_is_any(Vm& vm, Vm* other, const Value* v, const char* s);
 Vm* mod_vm_of_inst(Vm& vm, int inst, const char* idvar);
 bool mod_run_block(Vm* mv, int inst, const char* block, const char* cur_global);
@@ -111,7 +135,7 @@ bool hot_enemy_step(Vm& vm);
 bool hot_homing_create(Vm& vm);
 bool hot_homing_draw(Vm& vm);
 bool hot_homing_step(Vm& vm);
-Value m_chain(Vm& vm, Value root, const char* const* keys, int n);
+Value m_chain_sid(Vm& vm, Value root, const int* keys, int n);   // keys 是池下标数组
 double make_weapon_gems(Vm& vm, int s, const Value& gem_list, double gem_index_in);
 bool hot_player_create(Vm& vm);
 bool hot_player_step(Vm& vm);
@@ -123,6 +147,29 @@ bool hot_player_mouse_53(Vm& vm);
 bool obj_known(Vm& vm, const std::string& obj);
 bool run_hot_block(Vm& vm, const std::string& obj, const std::string& block);
 bool has_hot_block(const std::string& obj, const std::string& block);
+bool has_hot_block_sid(int obj_sid, int block_sid);
 bool has_hot_object(const std::string& obj);
+bool has_hot_object_sid(int obj_sid);
+bool run_hot_block_sid(Vm& vm, int obj_sid, int block_sid);
+bool has_hot_object(const std::string& obj);
+
+
+// ── 池下标版（名字是 S_xxx 常量时用）──
+Value  m_get_sid(Vm& vm, const Value& map, int sid);
+Value  v_struct_sid(Vm& vm, const Value& s, int sid);
+Value  v_member_sid(Vm& vm, const Value& obj, int sid);
+void   m_set_sid(Vm& vm, const Value& map, int sid, const Value& v);
+void   m_setnum_sid(Vm& vm, const Value& map, int sid, double x);
+double m_num_sid(Vm& vm, const Value& map, int sid);
+double m_or_num_sid(Vm& vm, const Value& map, int sid, double dflt);
+bool   mod_run_block_sid(Vm* mv, int inst, int sid, const char* cur_global);
+bool   inst_is_sid(int id, int sid);
+bool   inst_event_sid(Vm& vm, int inst, int sid);
+bool   inst_event_inherited_sid(Vm& vm, int inst, int sid);
+bool   hot_inherited_sid(Vm& vm, int obj_sid, int block_sid);
+bool   hot_enemymod_mouse_sid(Vm& vm, int sid);
+Vm*    mod_vm_of_inst_sid(Vm& vm, int inst, int sid);
+
+bool str_is_any_sid(Vm& vm, Vm* other, const Value* v, int sid);
 
 #endif // FVM_HOT_COMMON_H

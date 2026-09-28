@@ -9,9 +9,15 @@
 // ============================================================
 // 块表
 // ============================================================
-const Block* Vm::find_block(const std::string& name) const {
-    std::map<std::string, Block>::const_iterator it = blocks.find(name);
+const Block* Vm::find_block_sid(int sid) const {
+    std::unordered_map<int, Block>::const_iterator it = blocks.find(sid);
     return (it == blocks.end()) ? NULL : &it->second;
+}
+
+// 手上只有名字：先换池下标（不在池里 = 这个 VM 不可能有这个名字的块）
+const Block* Vm::find_block(const std::string& name) const {
+    int sid = str_find(name);
+    return (sid < 0) ? NULL : find_block_sid(sid);
 }
 
 bool Vm::run_named(const std::string& name) {
@@ -27,6 +33,18 @@ bool Vm::run_named(const std::string& name) {
         ok = run(*b);
     }
     return ok;
+}
+
+// 同 run_named，但池下标已经在手上（字节码 run_block 那条路）
+bool Vm::run_named_sid(int sid) {
+    int obj_sid = str_find(obj);           // 硬编码块的 key 是"对象 + 块"两个池下标
+    if (obj_sid >= 0 && run_hot_block_sid(*this, obj_sid, sid)) return true;
+    const Block* b = find_block_sid(sid);
+    if (!b) {
+        printf("[vm] block not found: %s / %s\n", obj.c_str(), str_at(sid).c_str());
+        return false;
+    }
+    return run(*b);
 }
 
 // ============================================================
@@ -333,6 +351,87 @@ bool Vm::run(const Block& blk) {
 }
 
 // ============================================================
+// 装载期：把 bin 自带的字符串池并进全局池，并把字节码里内联的字符串常量
+//   改写成全局下标。
+//   只有 OP_ASSIGN 会内联字符串下标（[dst i32][ty u8][idx u16]），别的指令只带槽号。
+//   这里走一遍指令流：没正好走到块尾就说明指令布局和这份表对不上 → 报错返回 false。
+//   宁可装载失败，也不能让错位的下标进池 —— 那是静默改语义。
+// ============================================================
+static int op_fixed_len(uint8_t op) {
+    switch (op) {
+    case OP_COPY: return 8;
+    case OP_ADD: case OP_SUB: case OP_MUL: case OP_DIV: case OP_MOD:
+    case OP_EQ: case OP_NEQ: case OP_GT: case OP_GTE: case OP_LT: case OP_LTE:
+    case OP_IF:
+    case OP_BAND: case OP_BOR: case OP_BXOR: case OP_SHL: case OP_SHR: return 12;
+    case OP_JMP:     return 4;
+    case OP_HALT:    return 0;
+    case OP_LOAD_ELEM: case OP_BNOT: return 8;
+    default:         return -1;      // 未知，或变长（OP_ASSIGN / OP_CALL / OP_NATIVE）
+    }
+}
+
+bool remap_block_strings(std::vector<Block>& blocks,
+                         const std::vector<std::string>& local_pool) {
+    // 先把局部池并进全局池，拿到"局部下标 → 全局下标"
+    std::vector<int> remap(local_pool.size());
+    for (size_t i = 0; i < local_pool.size(); i++) {
+        remap[i] = intern_str(local_pool[i]);
+        if (remap[i] > 0xFFFF) {
+            printf("[vm] 全局字符串池已超过 65535，OP_ASSIGN 的 u16 装不下\n");
+            return false;
+        }
+    }
+
+    for (size_t bi = 0; bi < blocks.size(); bi++) {
+        std::vector<uint8_t>& c = blocks[bi].code;
+        const size_t n = c.size();
+        size_t p = 0;
+        while (p < n) {
+            uint8_t op = c[p++];
+            if (op == OP_ASSIGN) {
+                if (p + 5 > n) { printf("[vm] 块 %s：指令被截断\n", blocks[bi].name.c_str()); return false; }
+                p += 4;                                   // dst
+                uint8_t ty = c[p++];
+                if (ty == MEM_STRING) {
+                    if (p + 2 > n) { printf("[vm] 块 %s：字符串下标被截断\n", blocks[bi].name.c_str()); return false; }
+                    int idx = (int)ld16(&c[p]);
+                    if (idx < 0 || idx >= (int)remap.size()) {
+                        printf("[vm] 块 %s：字符串下标 %d 越界（本 bin 池只有 %zu 条）\n",
+                               blocks[bi].name.c_str(), idx, remap.size());
+                        return false;
+                    }
+                    uint16_t g = (uint16_t)remap[(size_t)idx];
+                    c[p]     = (uint8_t)(g & 0xFF);
+                    c[p + 1] = (uint8_t)(g >> 8);
+                    p += 2;
+                } else {
+                    p += 4;                               // 浮点 / 整数
+                }
+            } else if (op == OP_CALL || op == OP_NATIVE) {
+                if (p + 3 > n) { printf("[vm] 块 %s：调用指令被截断\n", blocks[bi].name.c_str()); return false; }
+                p += 2;                                   // fid u16
+                int argc = (int)c[p++];
+                if (p + 4 + (size_t)argc * 4 > n) {
+                    printf("[vm] 块 %s：调用指令的实参被截断\n", blocks[bi].name.c_str());
+                    return false;
+                }
+                p += 4 + (size_t)argc * 4;                // dst + args
+            } else {
+                int k = op_fixed_len(op);
+                if (k < 0 || p + (size_t)k > n) {
+                    printf("[vm] 块 %s：未知操作码 %d（字符串下标重写中止）\n",
+                           blocks[bi].name.c_str(), (int)op);
+                    return false;
+                }
+                p += (size_t)k;
+            }
+        }
+    }
+    return true;
+}
+
+// ============================================================
 // .bin / .callbin 共用的那半截：从 d[off] 开始读"字符串池 + 块表"
 //   callbin 的头在它前面，body 完全一样，所以两边共用这一段
 // ============================================================
@@ -417,17 +516,17 @@ int main(int argc, char** argv) {
             if (a == "--load" && i + 1 < argc) { callbin_load(argv[++i]); continue; }   // 再多装几个（互相调用用）
             bool isstr = a.size() >= 2 && a.front() == '"' && a.back() == '"';
             if (isstr) {
-                Value v; v.t = MEM_STRING; v.v = host.intern(a.substr(1, a.size() - 2));
+                Value v; v.t = MEM_STRING; v.v = intern_str(a.substr(1, a.size() - 2));
                 av.push_back(v);
             } else {
                 av.push_back(cli_num(a));
             }
         }
         Value ret = cli_undef();
-        bool ok = callbin_invoke(host, fname, av.empty() ? NULL : &av[0], (int)av.size(), &ret);
+        bool ok = callbin_invoke(host, intern_str(fname), av.empty() ? NULL : &av[0], (int)av.size(), &ret);
         if (!ok) { printf("[vm] 调用失败（返回值 undefined）\n"); return 1; }
         if (ret.t == MEM_UNDEFINED)                  printf("=> undefined\n");
-        else if (ret.t == MEM_STRING)                printf("=> \"%s\"\n", host.strings[(size_t)ret.v].c_str());
+        else if (ret.t == MEM_STRING)                printf("=> \"%s\"\n", str_at(ret.v).c_str());
         else if (ret.t == MEM_FLOAT) { float f; memcpy(&f, &ret.v, 4); printf("=> %g\n", (double)f); }
         else                                         printf("=> %d\n", ret.v);
         release(ret);                            // callbin_invoke 转交过来的那一份（非容器空操作）
@@ -461,7 +560,8 @@ int main(int argc, char** argv) {
     }
 
     Vm vm;
-    vm.init_strings(f.strings);
+    // 把本 bin 的字符串池并进全局池，并把字节码里的字符串常量换成全局下标
+    if (!remap_block_strings(f.blocks, f.strings)) return 1;
 
     // 对象名从文件名取：.../obj_obstacle.bin → obj_obstacle
     // （.bin 本身没存对象名，只有块名）
@@ -484,8 +584,8 @@ int main(int argc, char** argv) {
     }
 
     // _VM_CONST_INIT 是字面量池初始化块，读入即执行
-    if (vm.find_block("_VM_CONST_INIT")) {
-        if (!vm.run_named("_VM_CONST_INIT")) return 2;
+    if (vm.find_block_sid(S__VM_CONST_INIT)) {
+        if (!vm.run_named_sid(S__VM_CONST_INIT)) return 2;
     }
 
     if (!vm.run_named(block)) return 1;

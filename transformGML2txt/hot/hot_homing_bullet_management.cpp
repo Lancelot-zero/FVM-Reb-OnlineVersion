@@ -58,8 +58,8 @@ bool hot_homing_create(Vm& vm) {
     Instance* in = inst_get(s);
     if (!in) return true;
 
-    in->depth = mk_num(-700);
-    in->vars["max_bullets"] = mk_num(HB_MAX);     // ⚠ 要跟 g_homing 的大小一致
+    inst_f(*in, F_depth) = mk_num(-700);
+    in->vars[S_max_bullets] = mk_num(HB_MAX);     // ⚠ 要跟 g_homing 的大小一致
 
     // 原版这里 list = []、scan_id/x/hp = array_create(6, ...)、scan_types/scan_bit = [...]：
     // 全是本对象自己的内部量，换成文件级原生数组后 Create 只要把状态清干净。
@@ -86,7 +86,7 @@ bool hot_homing_draw(Vm& vm) {
         d[6] = mk_num(-b.spin);
         d[7] = mk_num(16777215);                                  // c_white
         d[8] = mk_num(1);
-        call_fn_v(vm, "draw_sprite_ext", d, 9, -1);
+        call_fn_sid(vm, S_draw_sprite_ext, d, 9, -1);
     }
     return true;
 }
@@ -96,7 +96,7 @@ bool hot_homing_draw(Vm& vm) {
 bool hot_homing_step(Vm& vm) {
     int s = vm.cur_instance;
     if (!inst_get(s)) return true;
-    if (gtrue(vm, "is_paused")) return true;
+    if (gtrue_sid(S_is_paused)) return true;
 
     int len = g_homing_n;
     if (len <= 0) return true;
@@ -110,21 +110,21 @@ bool hot_homing_step(Vm& vm) {
     }
     for (size_t k = 1; k < g_instances.size(); k++) {
         if (!g_instances[k].alive) continue;
-        if (!inst_is((int)k, "obj_enemy_parent")) continue;
+        if (!inst_is_sid((int)k, S_obj_enemy_parent)) continue;
         int e = (int)k;
-        if (!(get_num(e, "hp") > 0 && get_num(e, "y") > 0)) continue;
-        const Value* tt = inst_var(e, "target_type");
+        if (!(get_num_sid(e, S_hp) > 0 && get_num_sid(e, S_y) > 0)) continue;
+        const Value* tt = inst_var_sid(e, S_target_type);
         int slot = -1;
-        if      (str_is(vm, tt, "normal"))      slot = 0;
-        else if (str_is(vm, tt, "air"))         slot = 1;
-        else if (str_is(vm, tt, "dance"))       slot = 2;
-        else if (str_is(vm, tt, "obstacle"))    slot = 3;
-        else if (str_is(vm, tt, "diver"))       slot = 4;
-        else if (str_is(vm, tt, "underground")) slot = 5;
+        if      (str_is_sid(tt, S_normal))      slot = 0;
+        else if (str_is_sid(tt, S_air))         slot = 1;
+        else if (str_is_sid(tt, S_dance))       slot = 2;
+        else if (str_is_sid(tt, S_obstacle))    slot = 3;
+        else if (str_is_sid(tt, S_diver))       slot = 4;
+        else if (str_is_sid(tt, S_underground)) slot = 5;
         if (slot < 0) continue;
         int    sid = g_scan_id[slot];
         double sx  = g_scan_x[slot], shp = g_scan_hp[slot];
-        double ex = get_num(e, "x"), ehp = get_num(e, "hp");
+        double ex = get_num_sid(e, S_x), ehp = get_num_sid(e, S_hp);
         if (sid == -4 || ex < sx || (ex == sx && ehp > shp)) {
             g_scan_id[slot] = e;
             g_scan_x[slot]  = ex;
@@ -133,11 +133,11 @@ bool hot_homing_step(Vm& vm) {
     }
 
     // 网格参数只读一次（只有模式 1 的"本行正前方"索敌要用）
-    bool has_grid = global_exists("enemy_array") && global_exists("grid_cols") && global_exists("grid_rows");
-    double stride = has_grid ? gnumv(vm, "grid_cols") + 2 : 0;
-    double rows   = has_grid ? gnumv(vm, "grid_rows") : 0;
+    bool has_grid = global_exists_sid(S_enemy_array) && global_exists_sid(S_grid_cols) && global_exists_sid(S_grid_rows);
+    double stride = has_grid ? gnumv_sid(S_grid_cols) + 2 : 0;
+    double rows   = has_grid ? gnumv_sid(S_grid_rows) : 0;
     Value enemy_array; enemy_array.t = MEM_UNDEFINED; enemy_array.v = 0;
-    if (has_grid) enemy_array = gv(vm, "enemy_array");
+    if (has_grid) enemy_array = gv_sid(S_enemy_array);
 
     for (int i = len - 1; i >= 0; i--) {
         HomingBullet& b = g_homing[i];
@@ -149,9 +149,9 @@ bool hot_homing_step(Vm& vm) {
             int best = -4;
             int anchor = b.anchor;
             if (b.mode == 1 && has_grid && inst_get(anchor)) {
-                double arow = get_num(anchor, "grid_row"), acol = get_num(anchor, "grid_col");
+                double arow = get_num_sid(anchor, S_grid_row), acol = get_num_sid(anchor, S_grid_col);
                 if (arow >= 0 && arow < rows && acol >= 0) {
-                    double ax = get_num(anchor, "x");
+                    double ax = get_num_sid(anchor, S_x);
                     double rowb = arow * stride;
                     double cend = std::fmin(acol + 1, stride - 1);
                     double bhp = -1;
@@ -163,17 +163,17 @@ bool hot_homing_step(Vm& vm) {
                             Value fe = array_v(vm, farr, fk);
                             int fid = (int)num_of(&fe);
                             if (!inst_get(fid)) continue;
-                            if (get_num(fid, "hp") <= 0 || get_num(fid, "y") <= 0) continue;
-                            if ((b.ttype & (int)get_num(fid, "tbit")) == 0) continue;
-                            double fx = get_num(fid, "x");
+                            if (get_num_sid(fid, S_hp) <= 0 || get_num_sid(fid, S_y) <= 0) continue;
+                            if ((b.ttype & (int)get_num_sid(fid, S_tbit)) == 0) continue;
+                            double fx = get_num_sid(fid, S_x);
                             if (fx < ax || fx > ax + 150) continue;
-                            if (get_num(fid, "hp") > bhp) { bhp = get_num(fid, "hp"); best = fid; }
+                            if (get_num_sid(fid, S_hp) > bhp) { bhp = get_num_sid(fid, S_hp); best = fid; }
                         }
                     }
                 }
             }
             if (best == -4) {                                  // 兜底：快照里最左的可命中敌人
-                double best_x = gnumv(vm, "room_width"), best_hp = -1;
+                double best_x = gnumv_sid(S_room_width), best_hp = -1;
                 for (int qt = 0; qt < 6; qt++) {
                     int qid = g_scan_id[qt];
                     if (qid == -4) continue;
@@ -184,19 +184,19 @@ bool hot_homing_step(Vm& vm) {
             }
             int tg = b.target;
             if (best != -4) b.target = best;
-            else if (!inst_get(tg) || get_num(tg, "hp") <= 0) b.target = -4;
+            else if (!inst_get(tg) || get_num_sid(tg, S_hp) <= 0) b.target = -4;
 
             tg = b.target;
             if (inst_get(tg)) {
                 // 不留惯性：每帧直接把朝向设成"正对目标"（瞄 y-75）
                 Value pa[4];
                 pa[0] = mk_num(b.x); pa[1] = mk_num(b.y);
-                pa[2] = mk_num(get_num(tg, "x"));  pa[3] = mk_num(get_num(tg, "y") - 75);
-                double ang = num_of(&call_ret(vm, "point_direction", pa, 4));
+                pa[2] = mk_num(get_num_sid(tg, S_x));  pa[3] = mk_num(get_num_sid(tg, S_y) - 75);
+                double ang = num_of(&call_ret_sid(vm, S_point_direction, pa, 4));
                 b.angle = ang;
                 Value la[2]; la[0] = mk_num(b.spd); la[1] = mk_num(ang);
-                b.vx = num_of(&call_ret(vm, "lengthdir_x", la, 2));
-                b.vy = num_of(&call_ret(vm, "lengthdir_y", la, 2));
+                b.vx = num_of(&call_ret_sid(vm, S_lengthdir_x, la, 2));
+                b.vy = num_of(&call_ret_sid(vm, S_lengthdir_y, la, 2));
             }
         }
 
@@ -220,16 +220,16 @@ bool hot_homing_step(Vm& vm) {
             }
             // ── 4. 命中：只认锁定的那个目标（像素距离口径，和原版一致）──
             int tg = b.target;
-            if (b.hits != 0 && inst_get(tg) && get_num(tg, "hp") > 0) {
-                if ((b.ttype & (int)get_num(tg, "tbit")) != 0
-                        && std::fabs(get_num(tg, "x") - bx) <= 90
-                        && std::fabs(get_num(tg, "y") - by) <= 85) {
+            if (b.hits != 0 && inst_get(tg) && get_num_sid(tg, S_hp) > 0) {
+                if ((b.ttype & (int)get_num_sid(tg, S_tbit)) != 0
+                        && std::fabs(get_num_sid(tg, S_x) - bx) <= 90
+                        && std::fabs(get_num_sid(tg, S_y) - by) <= 85) {
                     // 走敌人自己的受击事件（闪白 + 音效 + 护盾），不在这儿手抄父对象那 16 行
                     Value da[3];
                     da[0] = mk_num(tg);
                     da[1] = mk_num(b.dmg);
                     da[2] = b.damage_type;
-                    call_fn_v(vm, "damage_enemy", da, 3, -1);
+                    call_fn_sid(vm, S_damage_enemy, da, 3, -1);
                     b.hits = 0;
                 }
             }
@@ -240,23 +240,23 @@ bool hot_homing_step(Vm& vm) {
                 // GML: asset_get_index(death_obj)，没有就再试 "obj_" + death_obj。
                 // 我们这边"对象"就是名字（没有数字 asset 索引），所以这里换成"名字认不认得"：
                 //   obj_known 查的就是 VM 块表 + 硬编码表，跟 asset_get_index != -1 一个意思
-                std::string nm = pool_text(vm.strings, &b.death_obj);
+                std::string nm = pool_text(&b.death_obj);
                 if (!nm.empty()) {
                     std::string full = nm;
-                    if (!obj_known(vm, full)) full = "obj_" + nm;
+                    if (!obj_known(vm, full)) full = str_at(S_obj_) + nm;
                     if (obj_known(vm, full)) {
                         Value ca[4];
                         ca[0] = mk_num(bx); ca[1] = mk_num(by);
-                        ca[2] = mk_num(get_num(s, "depth") - 1);
+                        ca[2] = mk_num(get_num_sid(s, S_depth) - 1);
                         ca[3] = mk_str(vm, full.c_str());
-                        Value d = call_ret(vm, "instance_create_depth", ca, 4);
+                        Value d = call_ret_sid(vm, S_instance_create_depth, ca, 4);
                         int did = d.t == MEM_INT ? d.v : -1;
                         if (inst_get(did)) {
-                            if (!pool_text(vm.strings, &b.death_mod).empty())
-                                inst_var_set(did, "mod_type", b.death_mod);
-                            if (!pool_text(vm.strings, &b.death_spr).empty()) {
+                            if (!pool_text(&b.death_mod).empty())
+                                inst_var_set_sid(did, S_mod_type, b.death_mod);
+                            if (!pool_text(&b.death_spr).empty()) {
                                 Value ga[1]; ga[0] = b.death_spr;
-                                inst_var_set(did, "sprite_index", call_ret(vm, "get_load_sprite", ga, 1));
+                                inst_var_set_sid(did, S_sprite_index, call_ret_sid(vm, S_get_load_sprite, ga, 1));
                             }
                         }
                     }

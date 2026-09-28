@@ -21,11 +21,12 @@ void run_block(Vm& vm, const uint8_t* args, int argc, int dst) {
         return;
     }
     int si = rd_i(vm, slot);
-    if (si < 0 || si >= (int)vm.strings.size()) {
+    if (!str_ok(si)) {
         printf("[vm] run_block: bad string index %d\n", si);
         return;
     }
-    vm.run_named(vm.strings[(size_t)si]);
+    // 池下标直接传下去（块表就是按池下标存的）—— 不用取文本、不用拷贝
+    vm.run_named_sid(si);
 }
 
 // ── 跑"某个实例的某个块" ──

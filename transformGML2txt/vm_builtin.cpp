@@ -40,7 +40,7 @@ void wr_num(Vm& vm, int dst, double x)  { wr_v(vm, dst, mk_num(x)); }
 void wr_bool(Vm& vm, int dst, bool b)   { wr_i(vm, dst, b ? 1 : 0); }
 
 Value mk_str(Vm& vm, const char* s) {
-    Value v; v.t = MEM_STRING; v.v = vm.intern(s);
+    Value v; v.t = MEM_STRING; v.v = intern_str(s);
     return v;
 }
 
@@ -59,6 +59,8 @@ double gnum(const char* name) {
     if (p->t == MEM_FLOAT) { float f; int iv = p->v; memcpy(&f, &iv, 4); return (double)f; }
     return (double)p->v;
 }
+double gnum_sid(int sid) { return gnum(str_at(sid).c_str()); }
+
 
 // 结构体（GM 的 {a: 1, b: 2} 在我们这儿就是键是字符串的 map）
 void struct_begin(Vm& vm, int slot) {
@@ -224,7 +226,7 @@ void string(Vm& vm, const uint8_t* args, int argc, int dst) {
     char buf[64];
     if (t == MEM_STRING) { wr_v(vm, dst, rd_v(vm, slot)); return; }
     if (t == MEM_FLOAT)          { float f; memcpy(&f, &v, 4); snprintf(buf, sizeof(buf), "%.2f", (double)f); }
-    else if (t == MEM_UNDEFINED) snprintf(buf, sizeof(buf), "undefined");
+    else if (t == MEM_UNDEFINED) snprintf(buf, sizeof(buf), "%s", str_at(S_undefined).c_str());
     else if (t == MEM_ARRAY)     snprintf(buf, sizeof(buf), "[array]");
     else if (t == MEM_MAP)       snprintf(buf, sizeof(buf), "[struct]");
     else if (t == MEM_GRID)      snprintf(buf, sizeof(buf), "[grid]");
@@ -255,17 +257,17 @@ static void json_esc(std::string& out, const std::string& s) {
 }
 static void json_val(Vm& vm, Value v, std::string& out, int depth) {
     char buf[64];
-    if (depth > 16) { out += "null"; return; }
+    if (depth > 16) { out += str_at(S_null); return; }
     switch (v.t) {
     case MEM_STRING:
-        if (v.v >= 0 && v.v < (int)vm.strings.size()) json_esc(out, vm.strings[(size_t)v.v]);
+        if (str_ok(v.v)) json_esc(out, str_at(v.v));
         else out += "\"\"";
         return;
     case MEM_FLOAT:
     case MEM_INT:
         json_num(buf, sizeof(buf), v); out += buf; return;
     case MEM_UNDEFINED:
-        out += "null"; return;
+        out += str_at(S_null); return;
     case MEM_ARRAY:
     case MEM_LIST: {
         out += '[';
@@ -282,8 +284,8 @@ static void json_val(Vm& vm, Value v, std::string& out, int depth) {
         std::vector<std::pair<Value, Value> > kv = map_pairs(v);
         for (size_t i = 0; i < kv.size(); i++) {
             if (i) out += ',';
-            if (kv[i].first.t == MEM_STRING && kv[i].first.v >= 0 && kv[i].first.v < (int)vm.strings.size())
-                json_esc(out, vm.strings[(size_t)kv[i].first.v]);
+            if (kv[i].first.t == MEM_STRING && kv[i].first.v >= 0 && kv[i].first.v < (int)g_strings.size())
+                json_esc(out, str_at(kv[i].first.v));
             else { json_num(buf, sizeof(buf), kv[i].first); out += buf; }
             out += ':';
             json_val(vm, kv[i].second, out, depth + 1);
@@ -292,7 +294,7 @@ static void json_val(Vm& vm, Value v, std::string& out, int depth) {
         return;
     }
     default:
-        out += "null"; return;
+        out += str_at(S_null); return;
     }
 }
 void json_stringify(Vm& vm, const uint8_t* args, int argc, int dst) {
@@ -310,8 +312,8 @@ void variable_global_exists(Vm& vm, const uint8_t* args, int argc, int dst) {
     int slot = argslot(args, 0);
     if (rd_t(vm, slot) != MEM_STRING) { wr_bool(vm, dst, false); return; }
     int si = rd_i(vm, slot);
-    if (si < 0 || si >= (int)vm.strings.size()) { wr_bool(vm, dst, false); return; }
-    wr_bool(vm, dst, global_exists(vm.strings[(size_t)si]));
+    if (!str_ok(si)) { wr_bool(vm, dst, false); return; }
+    wr_bool(vm, dst, global_exists(str_at(si)));
 }
 void variable_global_get(Vm& vm, const uint8_t* args, int argc, int dst) {
     (void)argc;
@@ -319,7 +321,7 @@ void variable_global_get(Vm& vm, const uint8_t* args, int argc, int dst) {
     Value* p = NULL;
     if (rd_t(vm, slot) == MEM_STRING) {
         int si = rd_i(vm, slot);
-        if (si >= 0 && si < (int)vm.strings.size()) p = global_var(vm.strings[(size_t)si]);
+        if (str_ok(si)) p = global_var(str_at(si));
     }
     if (!p) { Value u; u.t = MEM_UNDEFINED; u.v = 0; wr_v(vm, dst, u); return; }
     wr_v(vm, dst, *p);
@@ -352,15 +354,15 @@ void damage_enemy(Vm& vm, const uint8_t* args, int argc, int dst) {
     (void)argc;
     int inst = rd_i(vm, argslot(args, 0));
     double dmg = num_at(vm, args, 1);
-    std::string type = "normal";                     // undefined / 空串 → "normal"
+    std::string type = str_at(S_normal);                     // undefined / 空串 → "normal"
     int ts = argslot(args, 2);
     if (rd_t(vm, ts) == MEM_STRING) {
         int si = rd_i(vm, ts);
-        if (si >= 0 && si < (int)vm.strings.size() && !vm.strings[(size_t)si].empty())
-            type = vm.strings[(size_t)si];
+        if (str_ok(si) && !str_at(si).empty())
+            type = str_at(si);
     }
     if (!inst_get(inst)) { wr_i(vm, dst, 0); return; }
-    Value* hs = inst_var(inst, "hit_sound");         // 有 hit_sound 就播（音频是宿主的 → 空实现）
+    Value* hs = inst_var_sid(inst, S_hit_sound);         // 有 hit_sound 就播（音频是宿主的 → 空实现）
     if (hs) {
         wr_v(vm, SCRATCH_BASE + 4, *hs);
         wr_i(vm, SCRATCH_BASE + 5, 0);
@@ -368,8 +370,8 @@ void damage_enemy(Vm& vm, const uint8_t* args, int argc, int dst) {
         int sa[3]; sa[0] = SCRATCH_BASE + 4; sa[1] = SCRATCH_BASE + 5; sa[2] = SCRATCH_BASE + 6;
         call_slots(vm, audio_play_sound, sa, 3, -1);
     }
-    inst_var_set(inst, "damage_amount", mk_num(dmg));
-    inst_var_set(inst, "damage_type", mk_str(vm, type.c_str()));
+    inst_var_set_sid(inst, S_damage_amount, mk_num(dmg));
+    inst_var_set_sid(inst, S_damage_type, mk_str(vm, type.c_str()));
     // with (inst) { ... event_user(0) } —— 事件号 0 → _OBJECT_USER_EVENT_0
     wr_i(vm, SCRATCH_BASE + 4, inst);
     wr_i(vm, SCRATCH_BASE + 5, 0);
@@ -386,10 +388,10 @@ void damage_enemy(Vm& vm, const uint8_t* args, int argc, int dst) {
 static void put_cell_struct(Vm& vm, int dst, double col, double row, double cx, double cy) {
     int map = SCRATCH_BASE + 16, ks = SCRATCH_BASE + 17, vs = SCRATCH_BASE + 18;
     struct_begin(vm, map);
-    wr_v(vm, ks, mk_str(vm, "col")); wr_num(vm, vs, col); struct_put(vm, map, ks, vs);
-    wr_v(vm, ks, mk_str(vm, "row")); wr_num(vm, vs, row); struct_put(vm, map, ks, vs);
-    wr_v(vm, ks, mk_str(vm, "x"));   wr_num(vm, vs, cx);  struct_put(vm, map, ks, vs);
-    wr_v(vm, ks, mk_str(vm, "y"));   wr_num(vm, vs, cy);  struct_put(vm, map, ks, vs);
+    wr_v(vm, ks, mk_str_sid(S_col)); wr_num(vm, vs, col); struct_put(vm, map, ks, vs);
+    wr_v(vm, ks, mk_str_sid(S_row)); wr_num(vm, vs, row); struct_put(vm, map, ks, vs);
+    wr_v(vm, ks, mk_str_sid(S_x));   wr_num(vm, vs, cx);  struct_put(vm, map, ks, vs);
+    wr_v(vm, ks, mk_str_sid(S_y));   wr_num(vm, vs, cy);  struct_put(vm, map, ks, vs);
     Value h = rd_v(vm, map);
     wr_v(vm, dst, h);                        // dst 接一份
     Value z; z.t = MEM_INT; z.v = 0;
@@ -399,18 +401,18 @@ static void put_cell_struct(Vm& vm, int dst, double col, double row, double cx, 
 void get_world_position_from_grid(Vm& vm, const uint8_t* args, int argc, int dst) {
     (void)argc;
     double col = num_at(vm, args, 0), row = num_at(vm, args, 1);
-    double csx = gnum("grid_cell_size_x"), csy = gnum("grid_cell_size_y");
-    double cx = gnum("grid_offset_x") + col * csx + csx / 2;
-    double cy = gnum("grid_offset_y") + row * csy + csy / 2;
+    double csx = gnum_sid(S_grid_cell_size_x), csy = gnum_sid(S_grid_cell_size_y);
+    double cx = gnum_sid(S_grid_offset_x) + col * csx + csx / 2;
+    double cy = gnum_sid(S_grid_offset_y) + row * csy + csy / 2;
     put_cell_struct(vm, dst, col, row, cx, cy);
 }
 
 void get_grid_position_from_world(Vm& vm, const uint8_t* args, int argc, int dst) {
     double wx = num_at(vm, args, 0), wy = num_at(vm, args, 1);
     bool raw = (argc >= 3) && (num_at(vm, args, 2) != 0);
-    double ox = gnum("grid_offset_x"), oy = gnum("grid_offset_y");
-    double csx = gnum("grid_cell_size_x"), csy = gnum("grid_cell_size_y");
-    double cols = gnum("grid_cols"), rows = gnum("grid_rows");
+    double ox = gnum_sid(S_grid_offset_x), oy = gnum_sid(S_grid_offset_y);
+    double csx = gnum_sid(S_grid_cell_size_x), csy = gnum_sid(S_grid_cell_size_y);
+    double cols = gnum_sid(S_grid_cols), rows = gnum_sid(S_grid_rows);
     double col = std::floor((wx - ox) / csx);
     double row = std::floor((wy - oy) / csy);
     if (!raw) {                              // 回绕到扩展区（照 GML 抄）
@@ -434,11 +436,11 @@ void calculate_plant_depth(Vm& vm, const uint8_t* args, int argc, int dst) {
     int slot = argslot(args, 2);
     if (rd_t(vm, slot) == MEM_STRING) {
         int si = rd_i(vm, slot);
-        if (si >= 0 && si < (int)vm.strings.size()) {
-            static const char* order[] = { "lilypad", "shield_inner", "normal", "shield_outer", "coffee" };
-            const std::string& t = vm.strings[(size_t)si];
+        if (str_ok(si)) {
+            static const int order[] = { S_lilypad, S_shield_inner, S_normal, S_shield_outer, S_coffee };
+            const std::string& t = str_at(si);
             for (int i = 0; i < 5; i++)
-                if (t == order[i]) { offset = -i; break; }
+                if (t == str_at(order[i])) { offset = -i; break; }
         }
     }
     double d = base + offset;
@@ -463,8 +465,8 @@ void show_debug_message(Vm& vm, const uint8_t* args, int argc, int dst) {
     (void)argc; (void)dst;
     int slot = argslot(args, 0);
     int t = rd_t(vm, slot), v = rd_i(vm, slot);
-    if (t == MEM_STRING && v >= 0 && v < (int)vm.strings.size())
-        printf("[vm] %s\n", vm.strings[(size_t)v].c_str());
+    if (t == MEM_STRING && v >= 0 && v < (int)g_strings.size())
+        printf("[vm] %s\n", str_at(v).c_str());
     else
         printf("[vm] show_debug_message: non-string argument\n");
 }

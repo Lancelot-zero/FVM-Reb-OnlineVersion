@@ -279,12 +279,12 @@ static int stamp_of(const Value& v) {
 }
 
 // 把 child 放进 parent 之前调用：能放返回 true；逆序（或自己塞自己）就打印 + 返回 false
-static bool allow_store(const Value& child, const Value& parent, const char* who) {
+static bool allow_store(const Value& child, const Value& parent, int fsid) {
     if (!is_container(child)) return true;
     bool self = (child.t == parent.t && child.v == parent.v);
     if (!self && stamp_of(child) > stamp_of(parent)) return true;   // 正序：放行
     printf("[vm] %s: backwards reference rejected (%s), element not stored\n",
-           who, self ? "a container cannot hold itself"
+           str_at(fsid).c_str(), self ? "a container cannot hold itself"
                      : "an older container cannot be stored into a newer one");
     return false;
 }
@@ -295,33 +295,34 @@ static bool allow_store(const Value& child, const Value& parent, const char* who
 //   不满足就打印错误、返回 -1，调用方立刻 return——
 //   绝不拿一个来路不明的下标去池里乱串。
 // ============================================================
-static const char* type_name(int ty) {
+// 类型名 → **池下标**（拼报错信息时用 str_at 取文本；名字全在 names.h 里）
+static int type_name(int ty) {
     switch (ty) {
-    case MEM_INT:       return "int";
-    case MEM_FLOAT:     return "float";
-    case MEM_STRING:    return "string";
-    case MEM_ARRAY:     return "array";
-    case MEM_MAP:       return "map/struct";
-    case MEM_GRID:      return "grid";
-    case MEM_LIST:      return "list";
-    case MEM_UNDEFINED: return "undefined";
+    case MEM_INT:       return S_int;
+    case MEM_FLOAT:     return S_float;
+    case MEM_STRING:    return S_string;
+    case MEM_ARRAY:     return S_array;
+    case MEM_MAP:       return S_map_struct;
+    case MEM_GRID:      return S_grid;
+    case MEM_LIST:      return S_list;
+    case MEM_UNDEFINED: return S_undefined;
     }
-    return "unknown";
+    return S_unknown;
 }
 
 // k = 第几个参数（0 起），want = 期望类型，who = 函数名（报错用）
-static int handle_arg(Vm& vm, const uint8_t* args, int k, int want, const char* who) {
+static int handle_arg(Vm& vm, const uint8_t* args, int k, int want, int fsid) {
     int slot = argslot(args, k);
     int ty   = rd_t(vm, slot);
     if (ty != want) {
         printf("[vm] %s: argument %d must be %s (got %s)\n",
-               who, k + 1, type_name(want), type_name(ty));
+               str_at(fsid).c_str(), k + 1, str_at(type_name(want)).c_str(), str_at(type_name(ty)).c_str());
         return -1;
     }
     Value v = rd_v(vm, slot);
     if (!is_live(v)) {
         printf("[vm] %s: argument %d (%s %d) was already destroyed\n",
-               who, k + 1, type_name(want), v.v);
+               str_at(fsid).c_str(), k + 1, str_at(type_name(want)).c_str(), v.v);
         return -1;
     }
     return v.v;
@@ -341,19 +342,19 @@ void array_literal(Vm& vm, const uint8_t* args, int argc, int dst) {
     Value self{MEM_ARRAY, a};
     for (int k = 0; k < argc; k++) {
         Value e = rd_v(vm, argslot(args, k));
-        if (!allow_store(e, self, "array_literal")) continue;   // 会成环就不收这个元素
+        if (!allow_store(e, self, S_array_literal)) continue;   // 会成环就不收这个元素
         retain(e);                        // 元素进容器 = 多一个引用
         g_arr_pool[a].push_back(e);
     }
     give_handle(vm, dst, self);
 }
 void array_set(Vm& vm, const uint8_t* args, int argc, int dst) {
-    int a = handle_arg(vm, args, 0, MEM_ARRAY, "array_set");
+    int a = handle_arg(vm, args, 0, MEM_ARRAY, S_array_set);
     if (a < 0) { wr_i(vm, dst, -1); return; }
     int i = rd_i(vm, argslot(args, 1));
     if (i < 0) { wr_i(vm, dst, -1); return; }
     Value nv = rd_v(vm, argslot(args, 2));
-    if (!allow_store(nv, Value{MEM_ARRAY, a}, "array_set")) { wr_i(vm, dst, -1); return; }
+    if (!allow_store(nv, Value{MEM_ARRAY, a}, S_array_set)) { wr_i(vm, dst, -1); return; }
     if (i >= (int)g_arr_pool[a].size()) g_arr_pool[a].resize((size_t)i + 1);
     Value ov = g_arr_pool[a][i];
     retain(nv);                           // 先拿新的
@@ -362,23 +363,23 @@ void array_set(Vm& vm, const uint8_t* args, int argc, int dst) {
     wr_i(vm, dst, 0);
 }
 void array_get(Vm& vm, const uint8_t* args, int argc, int dst) {
-    int a = handle_arg(vm, args, 0, MEM_ARRAY, "array_get");
+    int a = handle_arg(vm, args, 0, MEM_ARRAY, S_array_get);
     if (a < 0) return;
     int i = rd_i(vm, argslot(args, 1));
     if (i < 0 || i >= (int)g_arr_pool[a].size()) return;
     wr_v(vm, dst, g_arr_pool[a][i]);      // wr_v 会 retain，槽接一份引用
 }
 void array_push(Vm& vm, const uint8_t* args, int argc, int dst) {
-    int a = handle_arg(vm, args, 0, MEM_ARRAY, "array_push");
+    int a = handle_arg(vm, args, 0, MEM_ARRAY, S_array_push);
     if (a < 0) { wr_i(vm, dst, -1); return; }
     Value nv = rd_v(vm, argslot(args, 1));
-    if (!allow_store(nv, Value{MEM_ARRAY, a}, "array_push")) { wr_i(vm, dst, -1); return; }
+    if (!allow_store(nv, Value{MEM_ARRAY, a}, S_array_push)) { wr_i(vm, dst, -1); return; }
     retain(nv);
     g_arr_pool[a].push_back(nv);
     wr_i(vm, dst, (int)g_arr_pool[a].size() - 1);
 }
 void array_pop(Vm& vm, const uint8_t* args, int argc, int dst) {
-    int a = handle_arg(vm, args, 0, MEM_ARRAY, "array_pop");
+    int a = handle_arg(vm, args, 0, MEM_ARRAY, S_array_pop);
     if (a < 0) return;
     if (g_arr_pool[a].empty()) return;
     Value v = g_arr_pool[a].back();
@@ -387,13 +388,13 @@ void array_pop(Vm& vm, const uint8_t* args, int argc, int dst) {
     else { wr_v(vm, dst, v); release(v); } // 槽接手（wr_v 里 retain），再把容器这份放掉
 }
 void array_clear(Vm& vm, const uint8_t* args, int argc, int dst) {
-    int a = handle_arg(vm, args, 0, MEM_ARRAY, "array_clear");
+    int a = handle_arg(vm, args, 0, MEM_ARRAY, S_array_clear);
     if (a < 0) { wr_i(vm, dst, 0); return; }
     arr_drop_children(a);                 // 放掉元素（一层，不递归），然后清空
     wr_i(vm, dst, 0);
 }
 void array_contains(Vm& vm, const uint8_t* args, int argc, int dst) {
-    int a = handle_arg(vm, args, 0, MEM_ARRAY, "array_contains");
+    int a = handle_arg(vm, args, 0, MEM_ARRAY, S_array_contains);
     if (a < 0) { wr_i(vm, dst, 0); return; }
     Value k = rd_v(vm, argslot(args, 1));
     for (size_t i = 0; i < g_arr_pool[a].size(); i++)
@@ -405,12 +406,12 @@ void array_contains(Vm& vm, const uint8_t* args, int argc, int dst) {
 //   都是"就地改这个数组"，句柄不变（跟 GML 的数组是一个引用语义）。
 //   元素比较一律按 [类型 + 值] 比 —— 1 和 "1" 不是一回事（GML 的 == 也这么判）。
 void array_length(Vm& vm, const uint8_t* args, int argc, int dst) {
-    int a = handle_arg(vm, args, 0, MEM_ARRAY, "array_length");
+    int a = handle_arg(vm, args, 0, MEM_ARRAY, S_array_length);
     if (a < 0) { wr_i(vm, dst, 0); return; }
     wr_i(vm, dst, (int)g_arr_pool[a].size());
 }
 void array_get_index(Vm& vm, const uint8_t* args, int argc, int dst) {
-    int a = handle_arg(vm, args, 0, MEM_ARRAY, "array_get_index");
+    int a = handle_arg(vm, args, 0, MEM_ARRAY, S_array_get_index);
     if (a < 0) { wr_i(vm, dst, -1); return; }
     Value k = rd_v(vm, argslot(args, 1));
     for (size_t i = 0; i < g_arr_pool[a].size(); i++)
@@ -419,7 +420,7 @@ void array_get_index(Vm& vm, const uint8_t* args, int argc, int dst) {
 }
 // array_delete(arr, index, number)：从 index 起删 number 个，后面的往前挪
 void array_delete(Vm& vm, const uint8_t* args, int argc, int dst) {
-    int a = handle_arg(vm, args, 0, MEM_ARRAY, "array_delete");
+    int a = handle_arg(vm, args, 0, MEM_ARRAY, S_array_delete);
     if (a < 0) { wr_i(vm, dst, 0); return; }
     int i = rd_i(vm, argslot(args, 1));
     int n = rd_i(vm, argslot(args, 2));
@@ -432,7 +433,7 @@ void array_delete(Vm& vm, const uint8_t* args, int argc, int dst) {
 }
 // array_resize(arr, size)：变长填空 0（GML 填的就是 0），变短放掉被砍掉的
 void array_resize(Vm& vm, const uint8_t* args, int argc, int dst) {
-    int a = handle_arg(vm, args, 0, MEM_ARRAY, "array_resize");
+    int a = handle_arg(vm, args, 0, MEM_ARRAY, S_array_resize);
     if (a < 0) { wr_i(vm, dst, 0); return; }
     int n = rd_i(vm, argslot(args, 1));
     if (n < 0) n = 0;
@@ -451,12 +452,12 @@ void array_create(Vm& vm, const uint8_t* args, int argc, int dst) {
     if (argc >= 2) fill = rd_v(vm, argslot(args, 1));
     int a = arr_take();
     Value self{MEM_ARRAY, a};
-    if (!allow_store(fill, self, "array_create")) { give_handle(vm, dst, self); return; }
+    if (!allow_store(fill, self, S_array_create)) { give_handle(vm, dst, self); return; }
     for (int k = 0; k < n; k++) { retain(fill); g_arr_pool[a].push_back(fill); }
     give_handle(vm, dst, self);
 }
 void array_shuffle(Vm& vm, const uint8_t* args, int argc, int dst) {
-    int a = handle_arg(vm, args, 0, MEM_ARRAY, "array_shuffle");
+    int a = handle_arg(vm, args, 0, MEM_ARRAY, S_array_shuffle);
     if (a < 0) { wr_i(vm, dst, 0); return; }
     std::vector<Value>& arr = g_arr_pool[a];
     for (int i = (int)arr.size() - 1; i > 0; i--) {          // 标准 Fisher-Yates
@@ -489,13 +490,13 @@ void ds_map_create(Vm& vm, const uint8_t* args, int argc, int dst) {
     give_handle(vm, dst, Value{MEM_MAP, m});
 }
 void ds_map_set(Vm& vm, const uint8_t* args, int argc, int dst) {
-    int m = handle_arg(vm, args, 0, MEM_MAP, "ds_map_set");
+    int m = handle_arg(vm, args, 0, MEM_MAP, S_ds_map_set);
     if (m < 0) { wr_i(vm, dst, 0); return; }
     Value key = rd_v(vm, argslot(args, 1));
     Value nv  = rd_v(vm, argslot(args, 2));
     Value self{MEM_MAP, m};
-    if (!allow_store(key, self, "ds_map_set")) { wr_i(vm, dst, 0); return; }   // 键也可能是容器
-    if (!allow_store(nv, self, "ds_map_set")) { wr_i(vm, dst, 0); return; }
+    if (!allow_store(key, self, S_ds_map_set)) { wr_i(vm, dst, 0); return; }   // 键也可能是容器
+    if (!allow_store(nv, self, S_ds_map_set)) { wr_i(vm, dst, 0); return; }
     std::map<Value, Value, ValueLess>& mp = g_map_pool[m];
     std::map<Value, Value, ValueLess>::iterator it = mp.find(key);
     if (it != mp.end()) {
@@ -511,18 +512,18 @@ void ds_map_set(Vm& vm, const uint8_t* args, int argc, int dst) {
     wr_i(vm, dst, 0);
 }
 void ds_map_exists(Vm& vm, const uint8_t* args, int argc, int dst) {
-    int m = handle_arg(vm, args, 0, MEM_MAP, "ds_map_exists");
+    int m = handle_arg(vm, args, 0, MEM_MAP, S_ds_map_exists);
     if (m < 0) { wr_i(vm, dst, 0); return; }
     wr_i(vm, dst, g_map_pool[m].count(rd_v(vm, argslot(args, 1))) ? 1 : 0);
 }
 void ds_map_find_value(Vm& vm, const uint8_t* args, int argc, int dst) {
-    int m = handle_arg(vm, args, 0, MEM_MAP, "ds_map_find_value");
+    int m = handle_arg(vm, args, 0, MEM_MAP, S_ds_map_find_value);
     if (m < 0) return;
     std::map<Value, Value, ValueLess>::iterator it = g_map_pool[m].find(rd_v(vm, argslot(args, 1)));
     if (it != g_map_pool[m].end()) wr_v(vm, dst, it->second);   // wr_v 里 retain
 }
 void ds_map_delete(Vm& vm, const uint8_t* args, int argc, int dst) {
-    int m = handle_arg(vm, args, 0, MEM_MAP, "ds_map_delete");
+    int m = handle_arg(vm, args, 0, MEM_MAP, S_ds_map_delete);
     if (m < 0) { wr_i(vm, dst, 0); return; }
     std::map<Value, Value, ValueLess>& mp = g_map_pool[m];
     std::map<Value, Value, ValueLess>::iterator it = mp.find(rd_v(vm, argslot(args, 1)));
@@ -534,18 +535,18 @@ void ds_map_delete(Vm& vm, const uint8_t* args, int argc, int dst) {
     wr_i(vm, dst, 0);
 }
 void ds_map_size(Vm& vm, const uint8_t* args, int argc, int dst) {
-    int m = handle_arg(vm, args, 0, MEM_MAP, "ds_map_size");
+    int m = handle_arg(vm, args, 0, MEM_MAP, S_ds_map_size);
     if (m < 0) { wr_i(vm, dst, 0); return; }
     wr_i(vm, dst, (int)g_map_pool[m].size());
 }
 void ds_map_clear(Vm& vm, const uint8_t* args, int argc, int dst) {
-    int m = handle_arg(vm, args, 0, MEM_MAP, "ds_map_clear");
+    int m = handle_arg(vm, args, 0, MEM_MAP, S_ds_map_clear);
     if (m < 0) { wr_i(vm, dst, 0); return; }
     map_drop_children(m);
     wr_i(vm, dst, 0);
 }
 void ds_map_keys_to_array(Vm& vm, const uint8_t* args, int argc, int dst) {
-    int m = handle_arg(vm, args, 0, MEM_MAP, "ds_map_keys_to_array");
+    int m = handle_arg(vm, args, 0, MEM_MAP, S_ds_map_keys_to_array);
     if (m < 0) return;
     std::vector<Value> keys;
     for (std::map<Value, Value, ValueLess>::iterator it = g_map_pool[m].begin(); it != g_map_pool[m].end(); ++it) {
@@ -554,12 +555,12 @@ void ds_map_keys_to_array(Vm& vm, const uint8_t* args, int argc, int dst) {
     }
     int a = arr_take();
     Value self{MEM_ARRAY, a};
-    for (size_t k = 0; k < keys.size(); k++) allow_store(keys[k], self, "ds_map_keys_to_array");
+    for (size_t k = 0; k < keys.size(); k++) allow_store(keys[k], self, S_ds_map_keys_to_array);
     g_arr_pool[a] = keys;
     give_handle(vm, dst, self);
 }
 void ds_map_destroy(Vm& vm, const uint8_t* args, int argc, int dst) {
-    int m = handle_arg(vm, args, 0, MEM_MAP, "ds_map_destroy");
+    int m = handle_arg(vm, args, 0, MEM_MAP, S_ds_map_destroy);
     if (m < 0) { wr_i(vm, dst, 0); return; }
     release(Value{MEM_MAP, m});           // 调用方交还自己那份引用
     wr_i(vm, dst, 0);
@@ -584,7 +585,7 @@ void ds_grid_create(Vm& vm, const uint8_t* args, int argc, int dst) {
     give_handle(vm, dst, Value{MEM_GRID, gi});
 }
 void ds_grid_get(Vm& vm, const uint8_t* args, int argc, int dst) {
-    int gi = handle_arg(vm, args, 0, MEM_GRID, "ds_grid_get");
+    int gi = handle_arg(vm, args, 0, MEM_GRID, S_ds_grid_get);
     if (gi < 0) return;
     int c = rd_i(vm, argslot(args, 1)), r = rd_i(vm, argslot(args, 2));
     Grid& g = g_grid_pool[gi];
@@ -592,14 +593,14 @@ void ds_grid_get(Vm& vm, const uint8_t* args, int argc, int dst) {
     wr_v(vm, dst, g.cells[(size_t)r * g.w + c]);
 }
 void ds_grid_set(Vm& vm, const uint8_t* args, int argc, int dst) {
-    int gi = handle_arg(vm, args, 0, MEM_GRID, "ds_grid_set");
+    int gi = handle_arg(vm, args, 0, MEM_GRID, S_ds_grid_set);
     if (gi < 0) return;
     int c = rd_i(vm, argslot(args, 1)), r = rd_i(vm, argslot(args, 2));
     Grid& g = g_grid_pool[gi];
     if (c < 0 || c >= g.w || r < 0 || r >= g.h) return;
     size_t k = (size_t)r * g.w + c;
     Value nv = rd_v(vm, argslot(args, 3));
-    if (!allow_store(nv, Value{MEM_GRID, gi}, "ds_grid_set")) return;
+    if (!allow_store(nv, Value{MEM_GRID, gi}, S_ds_grid_set)) return;
     Value ov = g.cells[k];
     retain(nv);
     if (ov.t != nv.t || ov.v != nv.v) release(ov);
@@ -607,21 +608,21 @@ void ds_grid_set(Vm& vm, const uint8_t* args, int argc, int dst) {
     wr_i(vm, dst, 0);
 }
 void ds_grid_width(Vm& vm, const uint8_t* args, int argc, int dst) {
-    int gi = handle_arg(vm, args, 0, MEM_GRID, "ds_grid_width");
+    int gi = handle_arg(vm, args, 0, MEM_GRID, S_ds_grid_width);
     if (gi < 0) { wr_i(vm, dst, 0); return; }
     wr_i(vm, dst, g_grid_pool[gi].w);
 }
 void ds_grid_height(Vm& vm, const uint8_t* args, int argc, int dst) {
-    int gi = handle_arg(vm, args, 0, MEM_GRID, "ds_grid_height");
+    int gi = handle_arg(vm, args, 0, MEM_GRID, S_ds_grid_height);
     if (gi < 0) { wr_i(vm, dst, 0); return; }
     wr_i(vm, dst, g_grid_pool[gi].h);
 }
 void ds_grid_clear(Vm& vm, const uint8_t* args, int argc, int dst) {
-    int gi = handle_arg(vm, args, 0, MEM_GRID, "ds_grid_clear");
+    int gi = handle_arg(vm, args, 0, MEM_GRID, S_ds_grid_clear);
     if (gi < 0) return;
     Grid& g = g_grid_pool[gi];
     Value nv = rd_v(vm, argslot(args, 1));
-    if (!allow_store(nv, Value{MEM_GRID, gi}, "ds_grid_clear")) return;
+    if (!allow_store(nv, Value{MEM_GRID, gi}, S_ds_grid_clear)) return;
     for (size_t k = 0; k < g.cells.size(); k++) {         // 旧格子里的引用全放掉
         Value ov = g.cells[k];
         retain(nv);                                      // 每个格子存一份新的
@@ -631,7 +632,7 @@ void ds_grid_clear(Vm& vm, const uint8_t* args, int argc, int dst) {
     wr_i(vm, dst, 0);
 }
 void ds_grid_destroy(Vm& vm, const uint8_t* args, int argc, int dst) {
-    int gi = handle_arg(vm, args, 0, MEM_GRID, "ds_grid_destroy");
+    int gi = handle_arg(vm, args, 0, MEM_GRID, S_ds_grid_destroy);
     if (gi < 0) { wr_i(vm, dst, 0); return; }
     release(Value{MEM_GRID, gi});
     wr_i(vm, dst, 0);
@@ -643,30 +644,30 @@ void ds_list_create(Vm& vm, const uint8_t* args, int argc, int dst) {
     give_handle(vm, dst, Value{MEM_LIST, l});
 }
 void ds_list_destroy(Vm& vm, const uint8_t* args, int argc, int dst) {
-    int l = handle_arg(vm, args, 0, MEM_LIST, "ds_list_destroy");
+    int l = handle_arg(vm, args, 0, MEM_LIST, S_ds_list_destroy);
     if (l < 0) { wr_i(vm, dst, 0); return; }
     release(Value{MEM_LIST, l});
     wr_i(vm, dst, 0);
 }
 void ds_list_clear(Vm& vm, const uint8_t* args, int argc, int dst) {
-    int l = handle_arg(vm, args, 0, MEM_LIST, "ds_list_clear");
+    int l = handle_arg(vm, args, 0, MEM_LIST, S_ds_list_clear);
     if (l < 0) { wr_i(vm, dst, 0); return; }
     list_drop_children(l);
     wr_i(vm, dst, 0);
 }
 void ds_list_add(Vm& vm, const uint8_t* args, int argc, int dst) {
-    int l = handle_arg(vm, args, 0, MEM_LIST, "ds_list_add");
+    int l = handle_arg(vm, args, 0, MEM_LIST, S_ds_list_add);
     if (l < 0) { wr_i(vm, dst, -1); return; }
     for (int k = 1; k < argc; k++) {                      // ds_list_add 可以一次加多个
         Value nv = rd_v(vm, argslot(args, k));
-        if (!allow_store(nv, Value{MEM_LIST, l}, "ds_list_add")) { wr_i(vm, dst, -1); return; }
+        if (!allow_store(nv, Value{MEM_LIST, l}, S_ds_list_add)) { wr_i(vm, dst, -1); return; }
         retain(nv);
         g_list_pool[l].push_back(nv);
     }
     wr_i(vm, dst, 0);
 }
 void ds_list_delete(Vm& vm, const uint8_t* args, int argc, int dst) {
-    int l = handle_arg(vm, args, 0, MEM_LIST, "ds_list_delete");
+    int l = handle_arg(vm, args, 0, MEM_LIST, S_ds_list_delete);
     if (l < 0) { wr_i(vm, dst, 0); return; }
     int i = rd_i(vm, argslot(args, 1));
     if (i >= 0 && i < (int)g_list_pool[l].size()) {
@@ -676,19 +677,19 @@ void ds_list_delete(Vm& vm, const uint8_t* args, int argc, int dst) {
     wr_i(vm, dst, 0);
 }
 void ds_list_size(Vm& vm, const uint8_t* args, int argc, int dst) {
-    int l = handle_arg(vm, args, 0, MEM_LIST, "ds_list_size");
+    int l = handle_arg(vm, args, 0, MEM_LIST, S_ds_list_size);
     if (l < 0) { wr_i(vm, dst, 0); return; }
     wr_i(vm, dst, (int)g_list_pool[l].size());
 }
 void ds_list_find_value(Vm& vm, const uint8_t* args, int argc, int dst) {
-    int l = handle_arg(vm, args, 0, MEM_LIST, "ds_list_find_value");
+    int l = handle_arg(vm, args, 0, MEM_LIST, S_ds_list_find_value);
     if (l < 0) return;
     int i = rd_i(vm, argslot(args, 1));
     if (i < 0 || i >= (int)g_list_pool[l].size()) return;
     wr_v(vm, dst, g_list_pool[l][i]);
 }
 void ds_list_find_index(Vm& vm, const uint8_t* args, int argc, int dst) {
-    int l = handle_arg(vm, args, 0, MEM_LIST, "ds_list_find_index");
+    int l = handle_arg(vm, args, 0, MEM_LIST, S_ds_list_find_index);
     if (l < 0) { wr_i(vm, dst, -1); return; }
     Value v = rd_v(vm, argslot(args, 1));
     for (size_t i = 0; i < g_list_pool[l].size(); i++)

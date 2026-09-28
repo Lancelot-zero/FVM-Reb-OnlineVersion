@@ -8,6 +8,7 @@
 //      VM 析构时把名下的实例一起收掉，免得 owner 指针悬空。
 //   2) 对象名 → VM          g_vm_of_object（跨对象派发找 VM 用）
 //   3) 全局变量             g_globals（GML 的 global.x，进程级，VM 挂掉也不清）
+//   4) 全局字符串池          g_strings / g_str_map（所有 Vm 共用一张，见 vm.h 那一段）
 // ============================================================
 
 #include "vm.h"
@@ -15,23 +16,89 @@
 
 std::vector<Instance> g_instances;
 
+// ── 全局字符串池 ──
+//   文本 → 全局下标，intern 去重；Value.t == MEM_STRING 的 v 就是这里的下标。
+//   装载 bin / callbin 时靠 remap_block_strings 把字节码里内联的局部下标换成全局下标。
+std::vector<std::string>             g_strings;
+std::unordered_map<std::string, int> g_str_map;
+
+static const std::string kEmptyString;
+
+// 预置段灌过没有。必须挡在**任何** intern 之前：函数名要占住固定的下标区间，
+//   晚一步进来（比如先合并了某个 bin 的池）下标就整体错位、SID_* 全废。
+static bool g_pool_seeded = false;
+
+void pool_seed() {
+    if (g_pool_seeded) return;
+    g_pool_seeded = true;                                  // 先置位：下面 intern_str 会看到，不再递归回来
+    seed_names();                                          // names.cpp：把 S_xxx 那 843 个按顺序灌进来
+
+    // 自检：随便挑几个，确认"真灌进去的下标"和"枚举值"一致。
+    //   枚举值和灌池顺序都由 names.h/names.cpp 保证，这里是从另一条路（名字 → 池）验一遍。
+    //   错了就是"悄悄读写到别的字符串/属性上"，不报错不崩溃，所以必须开机验。
+    struct { const char* n; int sid; } probe[] = {
+        { str_at(S__find_right_cell).c_str(), S__find_right_cell },   // native 段头
+        { "VM_BanCard",       S_VM_BanCard       },   // game 段头
+        { "image_blend",      S_image_blend      },   // 字段段尾
+    };
+    for (size_t i = 0; i < sizeof(probe) / sizeof(probe[0]); i++) {
+        int got = intern_str(probe[i].n);
+        if (got != probe[i].sid)
+            printf("[vm] 字符串池预置段对不上：%s 在 %d，枚举是 %d\n",
+                   probe[i].n, got, probe[i].sid);
+    }
+}
+
+bool str_ok(int i) { return i >= 0 && i < (int)g_strings.size(); }
+
+const std::string& str_at(int i) {
+    return str_ok(i) ? g_strings[(size_t)i] : kEmptyString;
+}
+
+// 「名字 → 池下标」的唯一入口（只查不建）：没有 → -1
+//   全项目所有"池里有没有这个名字"的判断都走它，别的地方不再直接摸 g_str_map。
+int str_find(const std::string& s) {
+    std::unordered_map<std::string, int>::iterator it = g_str_map.find(s);
+    return (it == g_str_map.end()) ? -1 : it->second;
+}
+
+// 「名字 → 池下标」，没有就建（池只增不减）
+int intern_str(const std::string& s) {
+    if (!g_pool_seeded) pool_seed();                       // 兜底：谁先碰池谁负责把预置段灌上
+    int id = str_find(s);
+    if (id >= 0) return id;                                // 已有 → 原下标
+    g_strings.push_back(s);
+    id = (int)g_strings.size() - 1;
+    g_str_map[s] = id;
+    return id;
+}
+
 // 对象名 → 拥有它的 VM（全局一张表，见 vm.h 的说明）
 std::unordered_map<std::string, Vm*> g_vm_of_object;
 
-// 全局变量表：名字 → 值（见 vm.h 的说明）
-std::unordered_map<std::string, Value> g_globals;
+// 全局变量表：名字的池下标 → 值（GML 的 global.x，进程级，VM 挂掉也不清）
+std::unordered_map<int, Value> g_globals;
 
-Value* global_var(const std::string& name) {
-    std::unordered_map<std::string, Value>::iterator it = g_globals.find(name);
+Value* global_var_sid(int sid) {
+    std::unordered_map<int, Value>::iterator it = g_globals.find(sid);
     return (it == g_globals.end()) ? NULL : &it->second;
 }
 
-void global_var_set(const std::string& name, Value v) {
-    g_globals[name] = v;
+void global_var_set_sid(int sid, Value v) { g_globals[sid] = v; }
+
+bool global_exists_sid(int sid) { return g_globals.find(sid) != g_globals.end(); }
+
+// 名字版：一次哈希换池下标；名字没进过池 → 不可能存在
+Value* global_var(const std::string& name) {
+    int sid = str_find(name);
+    return (sid < 0) ? NULL : global_var_sid(sid);
 }
 
+void global_var_set(const std::string& name, Value v) { global_var_set_sid(intern_str(name), v); }
+
 bool global_exists(const std::string& name) {
-    return g_globals.find(name) != g_globals.end();
+    int sid = str_find(name);
+    return (sid >= 0) && global_exists_sid(sid);
 }
 
 Vm* vm_of_object(const std::string& obj) {
@@ -60,47 +127,26 @@ void mod_vm_register(const std::string& mod_id, Vm* vm) {
 static std::deque<int> g_inst_free;
 
 // ============================================================
-// 内置字段表：名字 → 成员指针
-//   既是"名字派发"的查表，也是"内置变量清单"（要遍历全部变量时用它 + vars）
-//
-//   快路径的规矩（定死了，别再扩）：
-//     · **只有内置变量走这张表** —— 它们在任何实例上都存在，读 `inst.x` 不会出错
+// 19 个内置变量（名单在 vm.h 的 INNER_FIELD_LIST）
+//   序号 = Instance::_inner 的下标；名字预置进全局字符串池（SID_FIELD_BASE 起 19 个）。
+//   规矩（定死了，别再扩）：
+//     · **只有这 19 个走 _inner** —— 它们在任何实例上都存在，读 `inst.x` 不会出错
 //     · 其它属性一律走名字 → vars，**不要**给自定义属性编 id/固定槽：
 //       `inst.atk` 这种没设过的时候必须返回 undefined（mod 脚本靠这个兜底，
 //       平台侧每帧有几十次 VM_IsUndefined），编成固定槽会把这个语义弄没
-//     · 以后实现 VM_GetProp / VM_SetProp 时：先 inst_field()，不命中再查 vars；
+//     · VM_GetProp / VM_SetProp：属性名的池下标落在字段段就偏移直取，否则查 vars；
 //       写不存在的属性就地在 vars 里建；读不存在的返回 undefined（不是报错）
-//   名字仍是字符串（全局字符串池 + Value 当 key 那套偷懒没做）
 // ============================================================
-struct FieldDef { const char* name; Value Instance::* ptr; };
 
-static const FieldDef kFields[] = {
-    { "x",                 &Instance::x                 },
-    { "y",                 &Instance::y                 },
-    { "sprite_index",      &Instance::sprite_index      },
-    { "image_index",       &Instance::image_index       },
-    { "image_speed",       &Instance::image_speed       },
-    { "image_xscale",      &Instance::image_xscale      },
-    { "image_yscale",      &Instance::image_yscale      },
-    { "image_alpha",       &Instance::image_alpha       },
-    { "image_angle",       &Instance::image_angle       },
-    { "image_blend",       &Instance::image_blend       },
-    { "depth",             &Instance::depth             },
-    { "speed",             &Instance::speed             },
-    { "direction",         &Instance::direction         },
-    { "hspeed",            &Instance::hspeed            },
-    { "vspeed",            &Instance::vspeed            },
-    { "gravity",           &Instance::gravity           },
-    { "gravity_direction", &Instance::gravity_direction },
-    { "friction",          &Instance::friction          },
-    { "visible",           &Instance::visible           },
-};
-static const size_t kFieldCount = sizeof(kFields) / sizeof(kFields[0]);
+// 池下标 → 内置字段（不是内置名 → NULL）—— 一次区间判断，没有字符串比较
+Value* inst_field_sid(Instance& in, int sid) {
+    return sid_is_field(sid) ? &in._inner[field_of_sid(sid)] : NULL;
+}
 
+// 名字 → 内置字段：一次哈希拿池下标，再判区间（名字不在池里 = 自定义属性）
 Value* inst_field(Instance& in, const std::string& name) {
-    for (size_t i = 0; i < kFieldCount; i++)
-        if (name == kFields[i].name) return &(in.*(kFields[i].ptr));
-    return NULL;
+    int sid = str_find(name);
+    return (sid < 0) ? NULL : inst_field_sid(in, sid);
 }
 
 // 默认值照 GML：位置/动画帧/角度/速度类 = 0，缩放和透明度 = 1，
@@ -108,14 +154,14 @@ Value* inst_field(Instance& in, const std::string& name) {
 void inst_init(Instance& in) {
     Value zero;  zero.t  = MEM_INT;   zero.v  = 0;
     Value one;   one.t   = MEM_FLOAT; { float f = 1.0f; memcpy(&one.v, &f, 4); }
-    for (size_t i = 0; i < kFieldCount; i++) in.*(kFields[i].ptr) = zero;
-    in.image_xscale = one;
-    in.image_yscale = one;
-    in.image_alpha  = one;
-    in.image_speed  = one;
-    in.sprite_index = Value{MEM_INT, -1};
-    in.visible      = Value{MEM_INT, 1};
-    in.image_blend  = Value{MEM_INT, 16777215};
+    for (int i = 0; i < FIELD_COUNT; i++) in._inner[i] = zero;
+    inst_f(in, F_image_xscale) = one;
+    inst_f(in, F_image_yscale) = one;
+    inst_f(in, F_image_alpha)  = one;
+    inst_f(in, F_image_speed)  = one;
+    inst_f(in, F_sprite_index) = Value{MEM_INT, -1};
+    inst_f(in, F_visible)      = Value{MEM_INT, 1};
+    inst_f(in, F_image_blend)  = Value{MEM_INT, 16777215};
 }
 
 int inst_new(Vm* vm, const std::string& obj) {
@@ -202,21 +248,93 @@ int inst_at(const std::string& obj, int k) {
     return -1;
 }
 
-Value* inst_var(int id, const std::string& name) {
+Value* inst_var_sid(int id, int sid) {
     Instance* in = inst_get(id);
     if (!in) return NULL;
-    Value* f = inst_field(*in, name);
-    if (f) return f;                                   // 内置字段优先
-    std::map<std::string, Value>::iterator it = in->vars.find(name);
+    Value* f = inst_field_sid(*in, sid);               // 内置字段优先（一次区间判断）
+    if (f) return f;
+    std::unordered_map<int, Value>::iterator it = in->vars.find(sid);
     return (it == in->vars.end()) ? NULL : &it->second;
 }
 
-void inst_var_set(int id, const std::string& name, Value v) {
+void inst_var_set_sid(int id, int sid, Value v) {
     Instance* in = inst_get(id);
     if (!in) return;
-    Value* f = inst_field(*in, name);
+    Value* f = inst_field_sid(*in, sid);
     if (f) { *f = v; return; }                         // 内置字段直接写
-    in->vars[name] = v;
+    in->vars[sid] = v;
+}
+
+Value* inst_var(int id, const std::string& name) {
+    // 名字先换成池下标（vars 的 key 就是它）：没进过池的名字两边都不可能命中
+    int sid = str_find(name);
+    return (sid < 0) ? NULL : inst_var_sid(id, sid);
+}
+
+void inst_var_set(int id, const std::string& name, Value v) {
+    inst_var_set_sid(id, intern_str(name), v);         // 没有就进池（写新属性必然要建 key）
+}
+
+// ============================================================
+// VM_GetProp / VM_SetProp（属性读写，字节码里那 4 万个调用点走这里）
+//   属性名传进来就是**池下标**，所以：
+//     · 落在字段段（SID_FIELD_BASE..+19） → `_inner[下标 - SID_FIELD_BASE]`，一次偏移
+//     · inst == 0                        → 全局变量（GML 的 global.x）
+//     · 其它                             → vars；读不到返回 undefined，写到就地建
+// ⚠ 写容器句柄（array/map/grid/list）时不在这里做引用计数 —— 和 inst_var_set 一个口径，
+//   容器句柄的 retain/release 由调用方（hot 的 set_var / 容器池）负责。
+// ============================================================
+static Value undef() { Value u; u.t = MEM_UNDEFINED; u.v = 0; return u; }
+
+static Instance* prop_target(Vm& vm, const uint8_t* args, int* out_global) {
+    *out_global = 0;
+    int slot = argslot(args, 0);
+    if (rd_t(vm, slot) != MEM_INT) return NULL;
+    int id = rd_i(vm, slot);
+    if (id == 0) { *out_global = 1; return NULL; }     // 0 = 全局
+    return inst_get(id);
+}
+
+void impl_VM_GetProp(Vm& vm, const uint8_t* args, int argc, int dst) {
+    if (argc < 2) { wr_v(vm, dst, undef()); return; }
+    int nslot = argslot(args, 1);
+    if (rd_t(vm, nslot) != MEM_STRING) { wr_v(vm, dst, undef()); return; }
+    int sid = rd_i(vm, nslot);
+    if (!str_ok(sid)) { wr_v(vm, dst, undef()); return; }
+
+    int is_global = 0;
+    Instance* in = prop_target(vm, args, &is_global);
+    if (is_global) {                                   // 全局：读不到 → undefined
+        Value* p = global_var(str_at(sid));
+        wr_v(vm, dst, p ? *p : undef());
+        return;
+    }
+    if (!in) { wr_v(vm, dst, undef()); return; }
+
+    Value* f = inst_field_sid(*in, sid);               // 内置字段：偏移直取
+    if (f) { wr_v(vm, dst, *f); return; }
+
+    std::unordered_map<int, Value>::iterator it = in->vars.find(sid);
+    wr_v(vm, dst, (it == in->vars.end()) ? undef() : it->second);
+}
+
+void impl_VM_SetProp(Vm& vm, const uint8_t* args, int argc, int dst) {
+    (void)dst;
+    if (argc < 3) return;
+    int nslot = argslot(args, 1);
+    if (rd_t(vm, nslot) != MEM_STRING) return;
+    int sid = rd_i(vm, nslot);
+    if (!str_ok(sid)) return;
+    Value v = rd_v(vm, argslot(args, 2));
+
+    int is_global = 0;
+    Instance* in = prop_target(vm, args, &is_global);
+    if (is_global) { global_var_set(str_at(sid), v); return; }
+    if (!in) return;
+
+    Value* f = inst_field_sid(*in, sid);
+    if (f) { *f = v; return; }                         // 内置字段：偏移直写
+    in->vars[sid] = v;                                 // 没有就就地建
 }
 
 // ============================================================
@@ -235,7 +353,7 @@ static int inst_arg(Vm& vm, const uint8_t* args, int k, int* out_id, std::string
     int ty   = rd_t(vm, slot);
     if (ty == MEM_STRING) {
         int si = rd_i(vm, slot);
-        if (si >= 0 && si < (int)vm.strings.size()) { *out_obj = vm.strings[(size_t)si]; return 2; }
+        if (str_ok(si)) { *out_obj = str_at(si); return 2; }
         return 0;
     }
     if (ty == MEM_INT) { *out_id = rd_i(vm, slot); return 1; }
@@ -265,10 +383,10 @@ void instance_create_depth(Vm& vm, const uint8_t* args, int argc, int dst) {
         return;
     }
     int nid = inst_new(&vm, obj);
-    inst_var_set(nid, "x",     rd_v(vm, argslot(args, 0)));
-    inst_var_set(nid, "y",     rd_v(vm, argslot(args, 1)));
-    inst_var_set(nid, "depth", rd_v(vm, argslot(args, 2)));
-    run_block_on(vm, obj, nid, "_OBJECT_CREATE");     // GML：创建时跑 Create
+    inst_var_set_sid(nid, S_x,     rd_v(vm, argslot(args, 0)));
+    inst_var_set_sid(nid, S_y,     rd_v(vm, argslot(args, 1)));
+    inst_var_set_sid(nid, S_depth, rd_v(vm, argslot(args, 2)));
+    run_block_on(vm, obj, nid, str_at(S__OBJECT_CREATE));     // GML：创建时跑 Create
     wr_i(vm, dst, nid);
 }
 
@@ -285,7 +403,7 @@ void instance_destroy(Vm& vm, const uint8_t* args, int argc, int dst) {
     Instance* in = inst_get(target);
     if (!in) { wr_i(vm, dst, 0); return; }
     std::string obj = in->obj;                        // ⚠ 先把名字拷出来：inst_kill 之后指针还指着，但别依赖它
-    run_block_on(vm, obj, target, "_OBJECT_DESTROY"); // GML：销毁前跑 Destroy
+    run_block_on(vm, obj, target, str_at(S__OBJECT_DESTROY)); // GML：销毁前跑 Destroy
     inst_kill(target);
     wr_i(vm, dst, 0);
 }
@@ -301,8 +419,8 @@ void variable_instance_exists(Vm& vm, const uint8_t* args, int argc, int dst) {
     int slot = argslot(args, 1);
     if (rd_t(vm, slot) != MEM_STRING) { printf("[vm] variable_instance_exists: argument 2 must be a string\n"); wr_i(vm, dst, 0); return; }
     int si = rd_i(vm, slot);
-    if (si < 0 || si >= (int)vm.strings.size()) { wr_i(vm, dst, 0); return; }
-    wr_i(vm, dst, inst_var(id, vm.strings[(size_t)si]) ? 1 : 0);
+    if (!str_ok(si)) { wr_i(vm, dst, 0); return; }
+    wr_i(vm, dst, inst_var(id, str_at(si)) ? 1 : 0);
 }
 
 // variable_instance_get(inst, name)：没有 → undefined（不是 0）
@@ -315,7 +433,7 @@ void variable_instance_get(Vm& vm, const uint8_t* args, int argc, int dst) {
         Value u; u.t = MEM_UNDEFINED; u.v = 0; wr_v(vm, dst, u);
         return;
     }
-    Value* p = inst_var(id, vm.strings[(size_t)rd_i(vm, slot)]);
+    Value* p = inst_var(id, str_at(rd_i(vm, slot)));
     if (!p) { Value u; u.t = MEM_UNDEFINED; u.v = 0; wr_v(vm, dst, u); return; }
     wr_v(vm, dst, *p);
 }
@@ -328,7 +446,7 @@ void variable_instance_set(Vm& vm, const uint8_t* args, int argc, int dst) {
     if (!inst_get(id)) { wr_i(vm, dst, 0); return; }
     int slot = argslot(args, 1);
     if (rd_t(vm, slot) != MEM_STRING) { printf("[vm] variable_instance_set: argument 2 must be a string\n"); wr_i(vm, dst, 0); return; }
-    const std::string& name = vm.strings[(size_t)rd_i(vm, slot)];
+    std::string name = str_at(rd_i(vm, slot));      // 拷贝一份：全局池可能被 intern 撑大重分配
     Value* p  = inst_var(id, name);
     Value  nv = rd_v(vm, argslot(args, 2));
     retain(nv);                                       // 存进实例变量 = 多一个引用

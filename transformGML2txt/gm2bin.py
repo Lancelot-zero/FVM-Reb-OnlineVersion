@@ -11,9 +11,9 @@
 # 每次运行都往 convert.log 追加一段：输入哪个目录、哪个事件文件过了、
 # 卡在哪个文件的第几行、为什么、结果写没写出来。
 #
-# 内置 id 从源头读，这里不另存一份：
-#   vm.h            的 NATIVE_FN_LIST → 内部函数 id（0 = run_block）
-#   compiler_defs.h 的 FUNC_DEFS      → 游戏函数 id（VM_* 那 150 个）
+# 内置 id 表在本文件里显式维护（NATIVE_STUBS / NATIVE_IMPL / GAME_NAMES），
+# 不再从 vm.h / compiler_defs.h 解析 —— 这样 gm2bin 能独立跑（不依赖 C++ 源码）。
+# id = 下标，只能往尾部追加；C++ 那边加了函数，就往对应列表尾部补一行。
 # ============================================================
 
 import contextlib
@@ -57,34 +57,113 @@ BIN_PREC = {"*": 90, "/": 90, "%": 90,
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
-def load_native_ids():
-    with open(os.path.join(HERE, "vm.h"), "r", encoding="utf-8") as f:
-        src = f.read()
-    m = re.search(r"#define NATIVE_FN_LIST\(X\)(.*?)\n\n", src, re.S)
-    if not m:
-        raise SystemExit("vm.h has no NATIVE_FN_LIST")
-    names = re.findall(r"X\(([^)]+)\)", m.group(0))
-    # 表尾还有显式列出来的项（实现过的那些），也要算进去（表在 vm_native.cpp
-    with open(os.path.join(HERE, "vm_native.cpp"), "r", encoding="utf-8") as f:
-        tsrc = f.read()
-    tm = re.search(r"const Fn kNativeFns\[\] = \{(.*?)\n\};", tsrc, re.S)
-    if tm:
-        names += re.findall(r"(?m)^\s{4}([A-Za-z_][A-Za-z0-9_]*),\s*$", tm.group(1))
-    return {n: i for i, n in enumerate(names)}
+# ============================================================
+# 内置函数 id 表 —— gm2bin 自己维护，唯一真源
+#   id = 列表下标，**只能往尾部追加**：中间插、删、重排都会让老 bin 里
+#   烘的数字 id 整体错位（旧产物会静默调错函数，不报错、不崩溃）。
+#   · NATIVE_STUBS —— vm.h 的 NATIVE_FN_LIST(X)，宏生成的占位（已冻结）
+#   · NATIVE_IMPL  —— vm_native.cpp 尾部显式列出的实现（新函数追加在这里）
+#   · GAME_NAMES   —— LabMapCompiler/compiler_defs.h 的 FUNC_DEFS 顺序
+#   这三份是快照，不和 C++ 源码对账；C++ 那边加了函数就往对应列表尾部补。
+# ============================================================
+
+NATIVE_STUBS = [
+    "_find_right_cell", "alarm_get", "armor_drop", "array_deep_copy", "asset_get_index",
+    "audio_stop_sound", "boss_array_shuffle", "boss_random", "bresenham", "buffer_exists",
+    "bullet_screen_add_Ex", "bullet_screen_add_Exs", "Camera_Shock", "can_hit",
+    "can_place_at_position", "can_target_on", "card_created", "card_equipped_attire_id",
+    "clear_train_body", "connectOnesToTwos", "create_train_body", "create_train_body_order",
+    "create_train_body_pos", "deck_get_card_data", "draw_self", "draw_set_colour",
+    "draw_sprite_ext", "draw_text", "effect_create_above", "event_perform",
+    "find_priority_enemy", "get_attire_info", "get_card_info_simple", "get_gem_index",
+    "get_gem_info", "get_gem_level", "get_load_sprite", "get_plant_data_with_skill",
+    "get_weapon_info", "homing_bullet_add", "instance_position", "into_act",
+    "is_cookbook_equipped", "mod_base_tick", "mod_enemy_init", "mod_inst_add", "mod_inst_del",
+    "move_towards_point", "network_apply_plant_level", "network_spawn_enemy",
+    "object_get_name", "place_meeting", "point_in_rectangle", "position_meeting",
+    "remove_train_body", "screen_flash", "set_net_id", "shader_get_uniform", "shader_reset",
+    "shader_set", "show_notice", "sprite_add", "sprite_collision_mask", "sprite_exists",
+    "sprite_get_number", "sprite_set_offset", "variable_struct_exists", "vm_hook_run",
+    "card_destroyed", "get_nearest_grid_position", "collision_other", "inst_array_read",
+    "inst_array_assign", "inst_array_index", "inst_array_delete", "inst_array_pop",
+    "inst_array_resize", "inst_array_shuffle", "inst_array_create",
+]
+
+NATIVE_IMPL = [
+    "run_block", "ds_list_create", "ds_list_destroy", "ds_list_clear", "ds_list_add",
+    "ds_list_delete", "ds_list_size", "ds_list_find_value", "ds_list_find_index",
+    "array_literal", "array_get", "array_set", "array_pop", "array_clear", "array_contains",
+    "ds_map_create", "ds_map_set", "ds_map_delete", "ds_map_size", "ds_map_clear",
+    "ds_map_keys_to_array", "ds_map_destroy", "struct_get", "struct_set", "struct_exists",
+    "array_push", "ds_map_exists", "ds_map_find_value", "VM_Execute", "ds_grid_create",
+    "ds_grid_set", "ds_grid_get", "merge_colour", "ds_grid_width", "ds_grid_height",
+    "ds_grid_clear", "ds_grid_destroy", "array_length", "array_get_index", "array_delete",
+    "array_resize", "array_create", "array_shuffle", "ds_exists", "instance_exists",
+    "instance_number", "instance_create_depth", "instance_destroy", "variable_instance_exists",
+    "variable_instance_get", "variable_instance_set", "floor", "round", "abs", "max", "min",
+    "clamp", "lerp", "random", "random_range", "irandom_range", "sin", "cos", "degtorad",
+    "lengthdir_x", "lengthdir_y", "point_direction", "point_distance", "is_real", "is_string",
+    "is_array", "is_struct", "is_undefined", "string", "json_stringify",
+    "variable_global_exists", "variable_global_get", "merge_color", "damage_enemy",
+    "calculate_plant_depth", "get_grid_position_from_world", "get_world_position_from_grid",
+    "audio_play_sound", "send_message", "show_debug_message", "run_event_user", "ceil",
+    "make_color_rgb", "draw_set_color", "draw_set_alpha", "draw_set_font", "draw_set_halign",
+    "draw_set_valign", "draw_rectangle", "draw_rectangle_color", "draw_roundrect",
+    "string_width_ext", "string_height_ext", "network_broadcast_active_skill",
+]
+
+GAME_NAMES = [
+    "VM_BanCard", "VM_SetCardLevelCap", "VM_SetMaxSlots", "VM_ShellPrint", "VM_ShowNotice",
+    "VM_CreatePlatform", "VM_SpawnPlant", "VM_SpawnEnemy", "VM_SpawnBoss", "VM_LoadSprite",
+    "VM_SpawnObject", "VM_SetProp", "VM_GetWave", "VM_GetSubwave", "VM_GetProp",
+    "VM_GetLastBoss", "VM_GetLastCreatedEnemy", "VM_GetLastKilledEnemy",
+    "VM_GetLastCreatedCard", "VM_GetLastDestroyedCard", "VM_GetFlame", "VM_SetFlame",
+    "VM_SetTerrain", "VM_ClearPlants", "VM_Random", "VM_GetLastIdlePlatform",
+    "VM_SetPlatformParams", "VM_SetMapBackground", "VM_SetDrawSlot", "VM_GetLoadedSpriteName",
+    "VM_GameWin", "VM_GameLose", "VM_SetDrawSlot_front", "VM_SpawnCats", "VM_ClearMapObjects",
+    "VM_BanGem", "VM_SetRowFeature", "VM_ClearPlantsByType", "VM_WakePlants", "VM_SetCardProp",
+    "VM_SetEnemyProp", "VM_ShowNoticeDur", "VM_SetEventEnabled", "VM_RefreshPlatformSnapshots",
+    "VM_GetMouseX", "VM_GetMouseY", "VM_GetMouseCol", "VM_GetMouseRow", "VM_GetTerrain",
+    "VM_GetMousePressed", "VM_GetKeyDown", "VM_GetKeyPressed", "VM_GetEnemyCount",
+    "VM_GetPlantCount", "VM_GetPlantCountAt", "VM_PlaySound", "VM_GetPlantAt", "VM_SwapPlants",
+    "VM_SwapPlantRects", "VM_CompactColumn", "VM_CompactRow", "VM_CompactColumnRev",
+    "VM_CompactRowRev", "VM_SpawnPlantsRandom", "VM_CreateButton", "VM_GetLastClickedButton",
+    "VM_LoadSpriteFrames", "VM_ApplyPlantLevel", "VM_LoadSpritePerm", "VM_FreeSpritePerm",
+    "VM_SetCardSlotProp", "VM_CalcCardSlotProp", "VM_GetCardSlotCount", "VM_GetPreviewCard",
+    "VM_AliasSprite", "VM_LoadSpriteFrames_Ex", "VM_GetLastBossStateChangeId",
+    "VM_GetLastBossOldState", "VM_GetLastBossNewState", "VM_ArrayGet", "VM_ArraySet",
+    "VM_ArrayDel", "VM_ArrayADD", "VM_ArraySize", "VM_ArrayClear", "VM_ArrayClearAll",
+    "VM_SetNoticeStyle", "VM_conveyor_belt_able", "VM_Slot_add", "VM_BanAllCard",
+    "VM_CannelBanCard", "VM_BanWeapon", "VM_BanSuperWeapon", "VM_BanShield",
+    "VM_SetCardShapeCap", "VM_SetCardSkillCap", "VM_GetKilledProp", "VM_IsUndefined",
+    "VM_IsDestroyed", "VM_LoadSound", "VM_Floor", "VM_Ceil", "VM_SpawnBatMouse",
+    "VM_GetTimeLimit", "VM_SetTimeLimit", "VM_SetDrawSlotEx", "VM_SetDrawSlotEx_front",
+    "VM_SetWaveAuto", "VM_SetWave", "VM_GetCurCard", "VM_EnemyInRange", "VM_GetHomingTarget",
+    "VM_GetInstancesInRange", "VM_CreateInstance", "VM_LoadSpritePerm_Ex",
+    "VM_SetShovelFlameRate", "VM_BulletScreenAdd", "VM_DrawSpriteExt", "VM_RunStep",
+    "VM_DestroyInstance", "VM_GetCardProp", "VM_CanPlace", "VM_CallFunc", "VM_FuncExists",
+    "VM_FuncDesc", "VM_SpriteExists", "VM_AliasSpritePerm", "VM_ArrayExists", "VM_CellCount",
+    "VM_CellItem", "VM_CellContains", "VM_ArrayContains", "VM_InstArrayExists",
+    "VM_InstArraySize", "VM_InstArrayItem", "VM_InstArraySet", "VM_InstArrayAdd",
+    "VM_InstArrayDel", "VM_InstArrayClear", "VM_InstArrayContains", "VM_HomingBulletAdd",
+    "VM_DamageEnemy", "VM_DamageEnemyAsh", "VM_BulletScreenAdd_Ex", "VM_BulletScreenAdd_Exs",
+    "VM_GetInfo", "VM_CatInRow", "VM_MapObj", "VM_GetInstanceCount", "VM_GetInstanceAt",
+]
 
 
-def load_game_ids():
-    with open(os.path.join(HERE, "..", "LabMapCompiler", "compiler_defs.h"),
-              "r", encoding="utf-8") as f:
-        src = f.read()
-    m = re.search(r"FUNC_DEFS\s*=\s*\{(.*?)\n\};", src, re.S)
-    if not m:
-        raise SystemExit("compiler_defs.h has no FUNC_DEFS")
-    return {n: i for i, n in enumerate(re.findall(r'\{"(VM_[A-Za-z0-9_]+)"', m.group(1)))}
+def _id_table(names, what):
+    """名字 -> id（= 下标）；重名直接报错，别让两次运行给出不同 id"""
+    tbl = {}
+    for i, n in enumerate(names):
+        if n in tbl:
+            raise SystemExit("%s id 表里名字重复：%s（下标 %d 和 %d）" % (what, n, tbl[n], i))
+        tbl[n] = i
+    return tbl
 
 
-NATIVE_ID = load_native_ids()
-GAME_ID = load_game_ids()
+NATIVE_NAMES = NATIVE_STUBS + NATIVE_IMPL
+NATIVE_ID = _id_table(NATIVE_NAMES, "native")
+GAME_ID = _id_table(GAME_NAMES, "game")
 
 FID_GETPROP = GAME_ID["VM_GetProp"]
 FID_SETPROP = GAME_ID["VM_SetProp"]
@@ -1210,13 +1289,13 @@ class Cg(object):
     def nat(self, name, args):
         if name not in NATIVE_ID:
             bail('function "%s" has no builtin' % name,
-                 "not in vm.h NATIVE_FN_LIST",
-                 "add it to vm.h NATIVE_FN_LIST")
+                 "not in gm2bin 的 NATIVE_IMPL 列表",
+                 "加到 NATIVE_IMPL 末尾，并在 C++ 侧同位置补上实现")
         return self.native_call(NATIVE_ID[name], args)
 
     def nat_void(self, name, args):
         if name not in NATIVE_ID:
-            bail('function "%s" has no builtin' % name, "not in vm.h NATIVE_FN_LIST")
+            bail('function "%s" has no builtin' % name, "not in gm2bin 的 NATIVE_IMPL 列表")
         self.native_void(NATIVE_ID[name], args)
 
     def self_slot(self):

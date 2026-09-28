@@ -18,96 +18,96 @@ bool hot_enemy_create(Vm& vm) {
     if (!in) return true;
 
     // 初始化直接落地：内置字段写字段（这里就这三个），其余写 vars
-    in->image_xscale = mk_num(1.8);
-    in->image_yscale = mk_num(1.8);
-    in->image_speed  = mk_num(0);
+    inst_f(*in, F_image_xscale) = mk_num(1.8);
+    inst_f(*in, F_image_yscale) = mk_num(1.8);
+    inst_f(*in, F_image_speed)  = mk_num(0);
 
-    struct NV { const char* n; double v; };
+    struct NV { int n;              /* 池下标 */ double v; };
     static const NV nums[] = {
-        { "atk",               10   },
-        { "atk_cycle",         36   },   // 0.6 * 60
-        { "move_speed",        0.32 },
-        { "move_speed_modify", 1    },
-        { "hp",                100  },
-        { "maxhp",             100  },
-        { "hurt_rate",         0.5  },
-        { "state",             2    },   // ENEMY_STATE.NORMAL
-        { "flash_speed",       6    },
-        { "attack_anim",       4    },
-        { "move_anim",         8    },
-        { "death_anim",        13   },
-        { "flash_value",       0    },
-        { "timer",             0    },
-        { "attack_timer",      0    },
-        { "target_plant",     -4    },   // noone
-        { "attack_range",      90   },
-        { "immune_to_ash",     0    },
-        { "ice_timer",         0    },
-        { "is_slowdown",       0    },
-        { "frozen_timer",      0    },
-        { "is_frozen",         0    },
-        { "helmet_hp",         0    },
-        { "helmet_max_hp",     0    },
-        { "shield_hp",         0    },
-        { "shield_max_hp",     0    },
-        { "special_ash",       0    },
-        { "current_frozen",    0    },
-        { "is_stun",           0    },
-        { "stun_timer",        0    },
-        { "giant_type",        0    },
-        { "is_boss",           0    },
-        { "can_dropped",       0    },
-        { "is_scare",          0    },
-        { "scare_timer",       0    },
-        { "y_move",            0    },
-        { "left_move_flashs",  0    },
-        { "flash_color",       16777215 },   // #FFFFFF
-        { "grid_col",          99   },
-        { "grid_row",          99   },
-        { "damage_amount",     0    },
-        { "water_effect_timer",0    },
-        { "hp_modified",       0    },
-        { "frame_count",       0    },
-        { "random_count",      0    },
-        { "pre_state",        -1    },
-        { "pre_hp",           -1    },
-        { "ice_ok",            1    },
+        { S_atk, 10 },
+        { S_atk_cycle, 36 },  // 0.6 * 60
+        { S_move_speed, 0.32 },
+        { S_move_speed_modify, 1 },
+        { S_hp, 100 },
+        { S_maxhp, 100 },
+        { S_hurt_rate, 0.5 },
+        { S_state, 2 },  // ENEMY_STATE.NORMAL
+        { S_flash_speed, 6 },
+        { S_attack_anim, 4 },
+        { S_move_anim, 8 },
+        { S_death_anim, 13 },
+        { S_flash_value, 0 },
+        { S_timer, 0 },
+        { S_attack_timer, 0 },
+        { S_target_plant, -4 },  // noone
+        { S_attack_range, 90 },
+        { S_immune_to_ash, 0 },
+        { S_ice_timer, 0 },
+        { S_is_slowdown, 0 },
+        { S_frozen_timer, 0 },
+        { S_is_frozen, 0 },
+        { S_helmet_hp, 0 },
+        { S_helmet_max_hp, 0 },
+        { S_shield_hp, 0 },
+        { S_shield_max_hp, 0 },
+        { S_special_ash, 0 },
+        { S_current_frozen, 0 },
+        { S_is_stun, 0 },
+        { S_stun_timer, 0 },
+        { S_giant_type, 0 },
+        { S_is_boss, 0 },
+        { S_can_dropped, 0 },
+        { S_is_scare, 0 },
+        { S_scare_timer, 0 },
+        { S_y_move, 0 },
+        { S_left_move_flashs, 0 },
+        { S_flash_color, 16777215 },  // #FFFFFF
+        { S_grid_col, 99 },
+        { S_grid_row, 99 },
+        { S_damage_amount, 0 },
+        { S_water_effect_timer, 0 },
+        { S_hp_modified, 0 },
+        { S_frame_count, 0 },
+        { S_random_count, 0 },
+        { S_pre_state, -1 },
+        { S_pre_hp, -1 },
+        { S_ice_ok, 1 },
     };
     for (size_t i = 0; i < sizeof(nums) / sizeof(nums[0]); i++)
         in->vars[nums[i].n] = mk_num(nums[i].v);
 
-    struct SV { const char* n; const char* v; };
+    struct SV { int n;              /* 池下标 */ const char* v; };
     static const SV strs[] = {
-        { "ice_sprite",  "spr_mouse_frozen" },
-        { "stun_sprite", "spr_mouse_stun"   },
-        { "mouse_id",    ""                 },
-        { "target_type", "normal"           },
-        { "damage_type", ""                 },
-        { "hit_sound",   "snd_hit1"         },
+        { S_ice_sprite, str_at(S_spr_mouse_frozen).c_str() },
+        { S_stun_sprite, str_at(S_spr_mouse_stun).c_str() },
+        { S_mouse_id, "" },
+        { S_target_type, str_at(S_normal).c_str() },
+        { S_damage_type, "" },
+        { S_hit_sound, str_at(S_snd_hit1).c_str() },
     };
     for (size_t i = 0; i < sizeof(strs) / sizeof(strs[0]); i++)
         in->vars[strs[i].n] = mk_str(vm, strs[i].v);
 
-    set_num(s, "shader_hit", get_num(s, "hit_effect_2"));    // shader_hit = hit_effect_2
+    set_num_sid(s, S_shader_hit, get_num_sid(s, S_hit_effect_2));    // shader_hit = hit_effect_2
     {
         Value a[2];
-        a[0] = *inst_var(s, "shader_hit"); a[1] = mk_str(vm, "u_progress");
-        set_var(s, "u_progress",   call_ret(vm, "shader_get_uniform", a, 2));
-        a[1] = mk_str(vm, "u_flashColor");
-        set_var(s, "u_flashColor", call_ret(vm, "shader_get_uniform", a, 2));
+        a[0] = *inst_var_sid(s, S_shader_hit); a[1] = mk_str_sid(S_u_progress);
+        set_var_sid(s, S_u_progress,   call_ret_sid(vm, S_shader_get_uniform, a, 2));
+        a[1] = mk_str_sid(S_u_flashColor);
+        set_var_sid(s, S_u_flashColor, call_ret_sid(vm, S_shader_get_uniform, a, 2));
     }
     // block_mouse_id_list = ["mouse_train_1"]
     {
-        Value e[1]; e[0] = mk_str(vm, "mouse_train_1");
-        set_var(s, "block_mouse_id_list", call_ret(vm, "array_literal", e, 1));
+        Value e[1]; e[0] = mk_str_sid(S_mouse_train_1);
+        set_var_sid(s, S_block_mouse_id_list, call_ret_sid(vm, S_array_literal, e, 1));
     }
     // random_seed = irandom_range(0, 4096)
     {
         Value a[2]; a[0] = mk_num(0); a[1] = mk_num(4096);
-        set_num(s, "random_seed", num_of(&call_ret(vm, "irandom_range", a, 2)));
+        set_num_sid(s, S_random_seed, num_of(&call_ret_sid(vm, S_irandom_range, a, 2)));
     }
-    set_num(s, "_state_prev", get_num(s, "state"));                       // _state_prev = state
-    set_num(s, "tbit", enemy_tbit_of(vm, inst_var(s, "target_type")));    // tbit = enemy_tbit_of(...)
+    set_num_sid(s, S__state_prev, get_num_sid(s, S_state));                       // _state_prev = state
+    set_num_sid(s, S_tbit, enemy_tbit_of(vm, inst_var_sid(s, S_target_type)));    // tbit = enemy_tbit_of(...)
     return true;
 }
 
@@ -118,65 +118,65 @@ bool hot_enemy_draw(Vm& vm) {
     int s = vm.cur_instance;
     if (!inst_get(s)) return true;
 
-    call_fn(vm, "draw_self", NULL, 0, -1);
+    call_fn_int_sid(vm, S_draw_self, NULL, 0, -1);
 
-    if (get_num(s, "flash_value") > 0) {
-        Value sa[1]; sa[0] = *inst_var(s, "shader_hit");
-        call_fn_v(vm, "shader_set", sa, 1, -1);
+    if (get_num_sid(s, S_flash_value) > 0) {
+        Value sa[1]; sa[0] = *inst_var_sid(s, S_shader_hit);
+        call_fn_sid(vm, S_shader_set, sa, 1, -1);
         Value d[9];
-        d[0] = *inst_var(s, "sprite_index");
-        d[1] = *inst_var(s, "image_index");
-        d[2] = mk_num(get_num(s, "x"));
-        d[3] = mk_num(get_num(s, "y"));
-        d[4] = *inst_var(s, "image_xscale");
-        d[5] = *inst_var(s, "image_yscale");
-        d[6] = *inst_var(s, "image_angle");
-        d[7] = *inst_var(s, "flash_color");
-        d[8] = mk_num(get_num(s, "flash_value") / 200.0);
-        call_fn_v(vm, "draw_sprite_ext", d, 9, -1);
-        call_fn(vm, "shader_reset", NULL, 0, -1);
+        d[0] = *inst_var_sid(s, S_sprite_index);
+        d[1] = *inst_var_sid(s, S_image_index);
+        d[2] = mk_num(get_num_sid(s, S_x));
+        d[3] = mk_num(get_num_sid(s, S_y));
+        d[4] = *inst_var_sid(s, S_image_xscale);
+        d[5] = *inst_var_sid(s, S_image_yscale);
+        d[6] = *inst_var_sid(s, S_image_angle);
+        d[7] = *inst_var_sid(s, S_flash_color);
+        d[8] = mk_num(get_num_sid(s, S_flash_value) / 200.0);
+        call_fn_sid(vm, S_draw_sprite_ext, d, 9, -1);
+        call_fn_int_sid(vm, S_shader_reset, NULL, 0, -1);
     }
-    if (get_num(s, "is_slowdown") != 0) {
+    if (get_num_sid(s, S_is_slowdown) != 0) {
         Value m[3]; m[0] = mk_num(16777215); m[1] = mk_num(16711680); m[2] = mk_num(0.5);
-        inst_var_set(s, "image_blend", call_ret(vm, "merge_color", m, 3));
+        inst_var_set_sid(s, S_image_blend, call_ret_sid(vm, S_merge_color, m, 3));
     } else {
-        set_num(s, "image_blend", 16777215);
+        set_num_sid(s, S_image_blend, 16777215);
     }
-    if (get_num(s, "is_frozen") != 0) {
+    if (get_num_sid(s, S_is_frozen) != 0) {
         Value d[9];
-        d[0] = *inst_var(s, "ice_sprite");
+        d[0] = *inst_var_sid(s, S_ice_sprite);
         d[1] = mk_num(0);
-        d[2] = mk_num(get_num(s, "x"));
-        d[3] = mk_num(get_num(s, "y") + 50);
+        d[2] = mk_num(get_num_sid(s, S_x));
+        d[3] = mk_num(get_num_sid(s, S_y) + 50);
         d[4] = mk_num(1.8); d[5] = mk_num(1.8); d[6] = mk_num(0);
         d[7] = mk_num(16777215); d[8] = mk_num(1);
-        call_fn_v(vm, "draw_sprite_ext", d, 9, -1);
+        call_fn_sid(vm, S_draw_sprite_ext, d, 9, -1);
     }
-    if (get_num(s, "is_scare") != 0) {
+    if (get_num_sid(s, S_is_scare) != 0) {
         Value d[9];
-        d[0] = mk_str(vm, "spr_mouse_scared");
+        d[0] = mk_str_sid(S_spr_mouse_scared);
         d[1] = mk_num(0);
-        d[2] = mk_num(get_num(s, "x") - 45);
-        d[3] = mk_num(get_num(s, "y") - 125);
+        d[2] = mk_num(get_num_sid(s, S_x) - 45);
+        d[3] = mk_num(get_num_sid(s, S_y) - 125);
         d[4] = mk_num(1.8); d[5] = mk_num(1.8); d[6] = mk_num(0);
         d[7] = mk_num(16777215); d[8] = mk_num(1);
-        call_fn_v(vm, "draw_sprite_ext", d, 9, -1);
+        call_fn_sid(vm, S_draw_sprite_ext, d, 9, -1);
     }
-    if (get_num(s, "is_stun") != 0) {
-        Value spr = *inst_var(s, "stun_sprite");
+    if (get_num_sid(s, S_is_stun) != 0) {
+        Value spr = *inst_var_sid(s, S_stun_sprite);
         Value na[1]; na[0] = spr;
-        double n = num_of(&call_ret(vm, "sprite_get_number", na, 1));
-        Value fa[1]; fa[0] = mk_num(get_num(s, "stun_timer") / 5);
-        double fl = num_of(&call_ret(vm, "floor", fa, 1));
+        double n = num_of(&call_ret_sid(vm, S_sprite_get_number, na, 1));
+        Value fa[1]; fa[0] = mk_num(get_num_sid(s, S_stun_timer) / 5);
+        double fl = num_of(&call_ret_sid(vm, S_floor, fa, 1));
         double idx = n - fmod(fl, n);                       // (floor(timer/5) mod n)
         Value d[9];
         d[0] = spr;
         d[1] = mk_num(idx);
-        d[2] = mk_num(get_num(s, "x") - 20);
-        d[3] = mk_num(get_num(s, "y") - 150);
+        d[2] = mk_num(get_num_sid(s, S_x) - 20);
+        d[3] = mk_num(get_num_sid(s, S_y) - 150);
         d[4] = mk_num(1.8); d[5] = mk_num(1.8); d[6] = mk_num(0);
         d[7] = mk_num(16777215); d[8] = mk_num(1);
-        call_fn_v(vm, "draw_sprite_ext", d, 9, -1);
+        call_fn_sid(vm, S_draw_sprite_ext, d, 9, -1);
     }
     return true;
 }
@@ -187,68 +187,68 @@ bool hot_enemy_draw(Vm& vm) {
 bool hot_enemy_draw_64(Vm& vm) {
     int s = vm.cur_instance;
     if (!inst_get(s)) return true;
-    if (truthy(global_var("is_paused"))) return true;
-    if (!(truthy(global_var("enemy_hpbar")) && get_num(s, "hp") > 0)) return true;
+    if (truthy(global_var_sid(S_is_paused))) return true;
+    if (!(truthy(global_var_sid(S_enemy_hpbar)) && get_num_sid(s, S_hp) > 0)) return true;
 
     Value a1[1]; a1[0] = mk_num(0.5);
-    call_fn_v(vm, "draw_set_alpha", a1, 1, -1);
+    call_fn_sid(vm, S_draw_set_alpha, a1, 1, -1);
 
-    double bar_x = get_num(s, "x");
-    double bar_y = get_num(s, "y") - 30;
+    double bar_x = get_num_sid(s, S_x);
+    double bar_y = get_num_sid(s, S_y) - 30;
     double bar_w = 80, bar_h = 20;
 
-    { Value c[1]; c[0] = mk_num(16777215); call_fn_v(vm, "draw_set_color", c, 1, -1); }
+    { Value c[1]; c[0] = mk_num(16777215); call_fn_sid(vm, S_draw_set_color, c, 1, -1); }
     {
         Value r[5];
         r[0] = mk_num(bar_x - bar_w / 2); r[1] = mk_num(bar_y);
         r[2] = mk_num(bar_x + bar_w / 2); r[3] = mk_num(bar_y + bar_h);
         r[4] = mk_num(1);
-        call_fn_v(vm, "draw_rectangle", r, 5, -1);
+        call_fn_sid(vm, S_draw_rectangle, r, 5, -1);
     }
-    double hp_ratio = get_num(s, "hp") / get_num(s, "maxhp");
-    hp_ratio = (get_num(s, "hp") * 100) / get_num(s, "maxhp");
+    double hp_ratio = get_num_sid(s, S_hp) / get_num_sid(s, S_maxhp);
+    hp_ratio = (get_num_sid(s, S_hp) * 100) / get_num_sid(s, S_maxhp);
     hp_ratio = hp_ratio * 0.01;
     {
         Value cl[3]; cl[0] = mk_num(hp_ratio); cl[1] = mk_num(0); cl[2] = mk_num(1);
-        hp_ratio = num_of(&call_ret(vm, "clamp", cl, 3));
+        hp_ratio = num_of(&call_ret_sid(vm, S_clamp, cl, 3));
     }
-    { Value c[1]; c[0] = mk_num(8388736); call_fn_v(vm, "draw_set_color", c, 1, -1); }   // c_purple
+    { Value c[1]; c[0] = mk_num(8388736); call_fn_sid(vm, S_draw_set_color, c, 1, -1); }   // c_purple
     {
         Value r[5];
         r[0] = mk_num(bar_x - bar_w / 2); r[1] = mk_num(bar_y);
         r[2] = mk_num(bar_x - bar_w / 2 + bar_w * hp_ratio); r[3] = mk_num(bar_y + bar_h);
         r[4] = mk_num(0);
-        call_fn_v(vm, "draw_rectangle", r, 5, -1);
+        call_fn_sid(vm, S_draw_rectangle, r, 5, -1);
     }
-    if (get_num(s, "shield_hp") > 0 && get_num(s, "shield_max_hp") != 0) {
+    if (get_num_sid(s, S_shield_hp) > 0 && get_num_sid(s, S_shield_max_hp) != 0) {
         Value cl[3];
-        cl[0] = mk_num(get_num(s, "shield_hp") / get_num(s, "shield_max_hp"));
+        cl[0] = mk_num(get_num_sid(s, S_shield_hp) / get_num_sid(s, S_shield_max_hp));
         cl[1] = mk_num(0); cl[2] = mk_num(1);
-        double sr = num_of(&call_ret(vm, "clamp", cl, 3));
-        Value c[1]; c[0] = mk_num(16776960); call_fn_v(vm, "draw_set_color", c, 1, -1);  // c_aqua
+        double sr = num_of(&call_ret_sid(vm, S_clamp, cl, 3));
+        Value c[1]; c[0] = mk_num(16776960); call_fn_sid(vm, S_draw_set_color, c, 1, -1);  // c_aqua
         Value r[5];
         r[0] = mk_num(bar_x - bar_w / 2); r[1] = mk_num(bar_y);
         r[2] = mk_num(bar_x - bar_w / 2 + bar_w * sr); r[3] = mk_num(bar_y + bar_h);
         r[4] = mk_num(0);
-        call_fn_v(vm, "draw_rectangle", r, 5, -1);
+        call_fn_sid(vm, S_draw_rectangle, r, 5, -1);
     }
-    { Value h[1]; h[0] = mk_num(1); call_fn_v(vm, "draw_set_halign", h, 1, -1); }        // fa_center
-    { Value v[1]; v[0] = mk_num(1); call_fn_v(vm, "draw_set_valign", v, 1, -1); }        // fa_middle
-    { Value f[1]; f[0] = mk_str(vm, "font_yuan"); call_fn_v(vm, "draw_set_font", f, 1, -1); }
-    { Value c[1]; c[0] = mk_num(16777215); call_fn_v(vm, "draw_set_color", c, 1, -1); }
-    if (get_num(s, "shield_hp") > 0) {
+    { Value h[1]; h[0] = mk_num(1); call_fn_sid(vm, S_draw_set_halign, h, 1, -1); }        // fa_center
+    { Value v[1]; v[0] = mk_num(1); call_fn_sid(vm, S_draw_set_valign, v, 1, -1); }        // fa_middle
+    { Value f[1]; f[0] = mk_str_sid(S_font_yuan); call_fn_sid(vm, S_draw_set_font, f, 1, -1); }
+    { Value c[1]; c[0] = mk_num(16777215); call_fn_sid(vm, S_draw_set_color, c, 1, -1); }
+    if (get_num_sid(s, S_shield_hp) > 0) {
         Value c[1]; c[0] = mk_num(0);                                                    // c_black
-        call_fn_v(vm, "draw_set_colour", c, 1, -1);
+        call_fn_sid(vm, S_draw_set_colour, c, 1, -1);
     }
     {
-        Value sa[1]; sa[0] = mk_num(get_num(s, "hp"));
-        Value txt = call_ret(vm, "string", sa, 1);
+        Value sa[1]; sa[0] = mk_num(get_num_sid(s, S_hp));
+        Value txt = call_ret_sid(vm, S_string, sa, 1);
         Value t[3];
-        t[0] = mk_num(get_num(s, "x")); t[1] = mk_num(bar_y + 9); t[2] = txt;
-        call_fn_v(vm, "draw_text", t, 3, -1);
+        t[0] = mk_num(get_num_sid(s, S_x)); t[1] = mk_num(bar_y + 9); t[2] = txt;
+        call_fn_sid(vm, S_draw_text, t, 3, -1);
     }
     Value a2[1]; a2[0] = mk_num(1);
-    call_fn_v(vm, "draw_set_alpha", a2, 1, -1);
+    call_fn_sid(vm, S_draw_set_alpha, a2, 1, -1);
     return true;
 }
 
@@ -259,18 +259,18 @@ bool hot_enemy_draw_64(Vm& vm) {
 //       if is_drop < 10 { instance_create_depth(x, y-50, depth-200, obj_coin) }
 //   }
 bool hot_enemy_destroy(Vm& vm) {
-    if (truthy(global_var("laboretory_room"))) return true;   // 实验房里不掉
+    if (truthy(global_var_sid(S_laboretory_room))) return true;   // 实验房里不掉
     int self = vm.cur_instance;
     if (inst_get(self)) {
         Value a2[2]; a2[0] = mk_num(0); a2[1] = mk_num(100);
-        double is_drop = num_of(&call_ret(vm, "random_range", a2, 2));
+        double is_drop = num_of(&call_ret_sid(vm, S_random_range, a2, 2));
         if (is_drop < 10) {
             Value args[4];
-            args[0] = mk_num(get_num(self, "x"));
-            args[1] = mk_num(get_num(self, "y") - 50);
-            args[2] = mk_num(get_num(self, "depth") - 200);
-            args[3] = mk_str(vm, "obj_coin");                 // 对象名在这边就是字符串
-            call_fn_v(vm, "instance_create_depth", args, 4, -1);
+            args[0] = mk_num(get_num_sid(self, S_x));
+            args[1] = mk_num(get_num_sid(self, S_y) - 50);
+            args[2] = mk_num(get_num_sid(self, S_depth) - 200);
+            args[3] = mk_str_sid(S_obj_coin);                 // 对象名在这边就是字符串
+            call_fn_sid(vm, S_instance_create_depth, args, 4, -1);
         }
     }
     return true;
@@ -287,21 +287,21 @@ bool hot_enemy_destroy(Vm& vm) {
 bool hot_enemy_user_event_0(Vm& vm) {
     int self = vm.cur_instance;
     if (!inst_get(self)) return true;
-    set_num(self, "flash_value", 150);
-    double shield = get_num(self, "shield_hp");
-    double dmg    = get_num(self, "damage_amount");
-    const Value* dtype = inst_var(self, "damage_type");
+    set_num_sid(self, S_flash_value, 150);
+    double shield = get_num_sid(self, S_shield_hp);
+    double dmg    = get_num_sid(self, S_damage_amount);
+    const Value* dtype = inst_var_sid(self, S_damage_type);
     if (shield > 0) {
-        if (str_is(vm, dtype, "normal")) {
-            set_num(self, "shield_hp", shield - dmg);
-        } else if (str_is(vm, dtype, "pierce")) {
-            set_num(self, "shield_hp", shield - dmg);
-            add_num(self, "hp", -dmg);
+        if (str_is_sid(dtype, S_normal)) {
+            set_num_sid(self, S_shield_hp, shield - dmg);
+        } else if (str_is_sid(dtype, S_pierce)) {
+            set_num_sid(self, S_shield_hp, shield - dmg);
+            add_num_sid(self, S_hp, -dmg);
         } else {
-            add_num(self, "hp", -dmg);
+            add_num_sid(self, S_hp, -dmg);
         }
     } else {
-        add_num(self, "hp", -dmg);
+        add_num_sid(self, S_hp, -dmg);
     }
     return true;
 }
@@ -313,7 +313,7 @@ bool hot_enemy_user_event_0(Vm& vm) {
 // 跑 mod VM 里的一个块 —— 平台那边是：
 double world_y_of_grid(Vm& vm, double col, double row) {
     Value a[2]; a[0] = mk_num(col); a[1] = mk_num(row);
-    Value s = call_ret(vm, "get_world_position_from_grid", a, 2);
+    Value s = call_ret_sid(vm, S_get_world_position_from_grid, a, 2);
     return num_of(&v_struct(vm, s, "y"));
 }
 
@@ -324,17 +324,17 @@ double world_y_of_grid(Vm& vm, double col, double row) {
 //     · 攻击：同样的档位，再加一层 move_anim*4（有盾）或 move_anim*2（没盾）
 //   attack=false 时 anim = move_anim；attack=true 时 anim = attack_anim
 double enemy_anim_frame(Vm& vm, int s, bool attack) {
-    double anim = attack ? get_num(s, "attack_anim") : get_num(s, "move_anim");
-    double ma   = get_num(s, "move_anim");
-    double f    = std::floor(get_num(s, "timer") / get_num(s, "flash_speed"));
+    double anim = attack ? get_num_sid(s, S_attack_anim) : get_num_sid(s, S_move_anim);
+    double ma   = get_num_sid(s, S_move_anim);
+    double f    = std::floor(get_num_sid(s, S_timer) / get_num_sid(s, S_flash_speed));
     double base = std::fmod(f, anim);                       // GML 的 mod
-    double hp = get_num(s, "hp"), maxhp = get_num(s, "maxhp"), helmet = get_num(s, "helmet_hp");
-    double hurt = get_num(s, "hurt_rate");
+    double hp = get_num_sid(s, S_hp), maxhp = get_num_sid(s, S_maxhp), helmet = get_num_sid(s, S_helmet_hp);
+    double hurt = get_num_sid(s, S_hurt_rate);
     bool heavy;                                             // 重伤档（血量比例 <= hurt_rate）
     if (helmet > 0 && hp > maxhp - helmet) heavy = !((hp + helmet - maxhp) / maxhp > hurt);
     else                                   heavy = !(hp / (maxhp - helmet) > hurt);
-    bool shielded  = get_num(s, "shield_max_hp") > 0 && get_num(s, "shield_hp") > 0;
-    bool shield_ok = get_num(s, "shield_hp") > hurt * get_num(s, "shield_max_hp");
+    bool shielded  = get_num_sid(s, S_shield_max_hp) > 0 && get_num_sid(s, S_shield_hp) > 0;
+    bool shield_ok = get_num_sid(s, S_shield_hp) > hurt * get_num_sid(s, S_shield_max_hp);
     double off;
     if (shielded) {
         if (shield_ok) off = heavy ? 0 : anim * 2;
@@ -355,20 +355,20 @@ double enemy_anim_frame(Vm& vm, int s, bool attack) {
 int enemy_find_plant(Vm& vm, int s) {
     const double NOONE = -4;
 
-    Value scratch = gv(vm, "_eat_scratch");
+    Value scratch = gv_sid(S__eat_scratch);
     for (int i = 0; i < 4; i++) {                            // 先全清成 noone
         Value a[3]; a[0] = scratch; a[1] = mk_num(i); a[2] = mk_num(NOONE);
-        call_fn_v(vm, "array_set", a, 3, -1);
+        call_fn_sid(vm, S_array_set, a, 3, -1);
     }
     if (scratch.t != MEM_ARRAY) return (int)NOONE;           // 没有暂存数组就找不到东西
 
-    if (!global_exists("grid_plants")) return (int)NOONE;
-    Value grid = gv(vm, "grid_plants");
+    if (!global_exists_sid(S_grid_plants)) return (int)NOONE;
+    Value grid = gv_sid(S_grid_plants);
     Value da[2]; da[0] = grid; da[1] = mk_num(3);            // ds_type_grid
-    if (!truthy(&call_ret(vm, "ds_exists", da, 2))) return (int)NOONE;
+    if (!truthy(&call_ret_sid(vm, S_ds_exists, da, 2))) return (int)NOONE;
 
-    double cols = gnumv(vm, "grid_cols"), rows = gnumv(vm, "grid_rows");
-    double gc   = get_num(s, "grid_col"), gr = get_num(s, "grid_row");
+    double cols = gnumv_sid(S_grid_cols), rows = gnumv_sid(S_grid_rows);
+    double gc   = get_num_sid(s, S_grid_col), gr = get_num_sid(s, S_grid_row);
     double start = std::fmax(gc - 2, -1);
     double end   = std::fmin(gc + 2, cols - 1);
 
@@ -376,30 +376,30 @@ int enemy_find_plant(Vm& vm, int s) {
         if (gr < 0 || gr >= rows) continue;
         double wrapped = std::fmod(c + cols + 64, cols + 64);          // (_c+cols+64)%(cols+64)
         Value ga[3]; ga[0] = grid; ga[1] = mk_num(wrapped); ga[2] = mk_num(gr);
-        Value list = call_ret(vm, "ds_grid_get", ga, 3);               // 借来的句柄：grid 里存着它，安全
+        Value list = call_ret_sid(vm, S_ds_grid_get, ga, 3);               // 借来的句柄：grid 里存着它，安全
         Value la[1]; la[0] = list;
-        int ln = (int)num_of(&call_ret(vm, "ds_list_size", la, 1));
+        int ln = (int)num_of(&call_ret_sid(vm, S_ds_list_size, la, 1));
         for (int k = 0; k < ln; k++) {
             Value ga2[2]; ga2[0] = list; ga2[1] = mk_num(k);
-            Value plant = call_ret(vm, "ds_list_find_value", ga2, 2);
+            Value plant = call_ret_sid(vm, S_ds_list_find_value, ga2, 2);
             int pid = plant.t == MEM_INT ? plant.v : (int)num_of(&plant);
             if (!inst_get(pid)) continue;                              // instance_exists
-            double dx = get_num(pid, "x") - get_num(s, "x");
-            double ar = get_num(s, "attack_range");
+            double dx = get_num_sid(pid, S_x) - get_num_sid(s, S_x);
+            double ar = get_num_sid(s, S_attack_range);
             bool in_front = (ar > 0) ? (dx < 0 && dx > -ar) : (dx > 0 && dx < -ar);
-            bool type_ok  = !str_is(vm, inst_var(pid, "feature_type"), "dwarf")
-                            || truthy(inst_var(s, "giant_type"));
-            if (!in_front || get_num(pid, "grid_row") != get_num(s, "grid_row") || !type_ok) continue;
+            bool type_ok  = !str_is_sid(inst_var_sid(pid, S_feature_type), S_dwarf)
+                            || truthy(inst_var_sid(s, S_giant_type));
+            if (!in_front || get_num_sid(pid, S_grid_row) != get_num_sid(s, S_grid_row) || !type_ok) continue;
             // 按 eat_order（ds_list）的优先级填格
-            Value order = gv(vm, "eat_order");
+            Value order = gv_sid(S_eat_order);
             Value oa[1]; oa[0] = order;
-            int on = (order.t == MEM_LIST) ? (int)num_of(&call_ret(vm, "ds_list_size", oa, 1)) : 0;
+            int on = (order.t == MEM_LIST) ? (int)num_of(&call_ret_sid(vm, S_ds_list_size, oa, 1)) : 0;
             for (int i = 0; i < on; i++) {
                 Value oa2[2]; oa2[0] = order; oa2[1] = mk_num(i);
-                Value tar = call_ret(vm, "ds_list_find_value", oa2, 2);
-                if (str_eq(vm, inst_var(pid, "plant_type"), &tar)) {
+                Value tar = call_ret_sid(vm, S_ds_list_find_value, oa2, 2);
+                if (str_eq(vm, inst_var_sid(pid, S_plant_type), &tar)) {
                     Value sa[3]; sa[0] = scratch; sa[1] = mk_num(i); sa[2] = mk_num(pid);
-                    call_fn_v(vm, "array_set", sa, 3, -1);
+                    call_fn_sid(vm, S_array_set, sa, 3, -1);
                     break;
                 }
             }
@@ -407,7 +407,7 @@ int enemy_find_plant(Vm& vm, int s) {
     }
     for (int i = 0; i < 4; i++) {                            // 取第一个非 noone
         Value a[2]; a[0] = scratch; a[1] = mk_num(i);
-        Value v = call_ret(vm, "array_get", a, 2);
+        Value v = call_ret_sid(vm, S_array_get, a, 2);
         double n = num_of(&v);
         if (n != NOONE) return (int)n;
     }
@@ -422,94 +422,93 @@ bool hot_enemy_step_2(Vm& vm) {
     int s = vm.cur_instance;
     if (!inst_get(s)) return true;
 
-    set_num(s, "tbit", enemy_tbit_of(vm, inst_var(s, "target_type")));
-    set_num(s, "ice_ok", inst_var(s, "ice_timer") ? 1 : 0);   // variable_instance_exists(id,"ice_timer")
+    set_num_sid(s, S_tbit, enemy_tbit_of(vm, inst_var_sid(s, S_target_type)));
+    set_num_sid(s, S_ice_ok, inst_var_sid(s, S_ice_timer) ? 1 : 0);   // variable_instance_exists(id,"ice_timer")
 
-    set_num(s, "damage_amount", 0);
-    inst_var_set(s, "damage_type", mk_str(vm, ""));
+    set_num_sid(s, S_damage_amount, 0);
+    inst_var_set_sid(s, S_damage_type, mk_str(vm, ""));
 
     // ── 难度修正（只做一次）──
-    if (!truthy(inst_var(s, "hp_modified"))) {
-        static const char* hpv[] = { "maxhp", "hp", "helmet_hp", "helmet_max_hp", "shield_hp", "shield_max_hp" };
-        double diff = gnumv(vm, "difficulty");
+    if (!truthy(inst_var_sid(s, S_hp_modified))) {
+        static const int hpv[] = { S_maxhp, S_hp, S_helmet_hp, S_helmet_max_hp, S_shield_hp, S_shield_max_hp };
+        double diff = gnumv_sid(S_difficulty);
         if (diff == 0)
-            for (int i = 0; i < 6; i++) set_num(s, hpv[i], get_num(s, hpv[i]) * 0.8);
+            for (int i = 0; i < 6; i++) set_num_sid(s, hpv[i], get_num_sid(s, hpv[i]) * 0.8);
         if (diff >= 3)
             // GML 里 map_id == "tower_cake" 与否**两个分支都是 1.2**，照抄，不是漏写
-            for (int i = 0; i < 6; i++) set_num(s, hpv[i], get_num(s, hpv[i]) * 1.2);
-        Value lf = gv(vm, "level_file");
+            for (int i = 0; i < 6; i++) set_num_sid(s, hpv[i], get_num_sid(s, hpv[i]) * 1.2);
+        Value lf = gv_sid(S_level_file);
         if (lf.t == MEM_MAP) {
-            Value ver = v_struct(vm, lf, "version");
-            if ((ver.t == MEM_INT || ver.t == MEM_FLOAT) && !truthy(inst_var(s, "is_boss"))) {
-                double hm = num_of(&v_struct(vm, lf, "hp_modify"));
-                for (int i = 0; i < 6; i++) set_num(s, hpv[i], get_num(s, hpv[i]) * hm);
+            Value ver = v_struct_sid(vm, lf, S_version);
+            if ((ver.t == MEM_INT || ver.t == MEM_FLOAT) && !truthy(inst_var_sid(s, S_is_boss))) {
+                double hm = num_of(&v_struct_sid(vm, lf, S_hp_modify));
+                for (int i = 0; i < 6; i++) set_num_sid(s, hpv[i], get_num_sid(s, hpv[i]) * hm);
             }
         }
-        set_num(s, "hp_modified", 1);
+        set_num_sid(s, S_hp_modified, 1);
     }
 
     // ── 地形位：障碍=bit0、黏液=bit1、岩浆=bit2、海水=bit3 ──
-    double tc = gnumv(vm, "grid_cols"), tr = gnumv(vm, "grid_rows");
-    Value flag = gv(vm, "cell_terrain_flag");
-    bool has_terrain = global_exists("cell_terrain_flag") && tc > 0 && tr > 0
+    double tc = gnumv_sid(S_grid_cols), tr = gnumv_sid(S_grid_rows);
+    Value flag = gv_sid(S_cell_terrain_flag);
+    bool has_terrain = global_exists_sid(S_cell_terrain_flag) && tc > 0 && tr > 0
                        && (double)container_size(flag) == tc * tr;   // array_length(...) == tc*tr
     double tf = 0;
     if (has_terrain) {
-        double gr = get_num(s, "grid_row"), gc = get_num(s, "grid_col");
+        double gr = get_num_sid(s, S_grid_row), gc = get_num_sid(s, S_grid_col);
         if (gr >= 0 && gr < tr && gc >= 0 && gc < tc)
             tf = num_of(&container_at(flag, (int)(gr * tc + gc)));
     }
     bool slow = false;
-    const Value* tt = inst_var(s, "target_type");
-    if (((int)tf & 4) != 0 && (str_is(vm, tt, "normal") || str_is(vm, tt, "dance")
-                               || str_is(vm, tt, "air") || str_is(vm, tt, "obstacle"))) slow = true;
-    if (((int)tf & 2) != 0 && (str_is(vm, tt, "normal") || str_is(vm, tt, "dance"))) slow = true;
-    set_num(s, "move_speed_modify", slow ? 2 : 1);
+    const Value* tt = inst_var_sid(s, S_target_type);
+    if (((int)tf & 4) != 0 && (str_is_sid(tt, S_normal) || str_is_sid(tt, S_dance)
+                               || str_is_sid(tt, S_air) || str_is_sid(tt, S_obstacle))) slow = true;
+    if (((int)tf & 2) != 0 && (str_is_sid(tt, S_normal) || str_is_sid(tt, S_dance))) slow = true;
+    set_num_sid(s, S_move_speed_modify, slow ? 2 : 1);
 
     // ── Boss 状态切换到技能时广播给客户端 ──
     {
-        Value net = gv(vm, "network");
+        Value net = gv_sid(S_network);
         Value mode; mode.t = MEM_UNDEFINED; mode.v = 0;
-        if (net.t == MEM_MAP) mode = v_struct(vm, net, "mode");
-        if (str_is(vm, &mode, "server") && truthy(inst_var(s, "is_boss"))
-                && get_num(s, "state") != get_num(s, "_state_prev")) {
-            Value map = v_struct(vm, net, "map_instance_id_net_id");
+        if (net.t == MEM_MAP) mode = v_struct_sid(vm, net, S_mode);
+        if (str_is_sid(&mode, S_server) && truthy(inst_var_sid(s, S_is_boss))
+                && get_num_sid(s, S_state) != get_num_sid(s, S__state_prev)) {
+            Value map = v_struct_sid(vm, net, S_map_instance_id_net_id);
             Value ea[2]; ea[0] = map; ea[1] = mk_num(s);
-            if (truthy(&call_ret(vm, "ds_map_exists", ea, 2))) {
+            if (truthy(&call_ret_sid(vm, S_ds_map_exists, ea, 2))) {
                 Value net_id = v_map(vm, map, mk_num(s));
                 // 先把要发的属性收进局部：下面建 map 之后就不方便再插 call_ret 了
-                static const char* extra[] = {
-                    "x_move_speed", "y_move_speed", "target_pos", "target_coord", "skill_timer",
-                    "jump_times", "skill_move_type", "skill_choose", "skill_change_style",
-                    "is_reversed", "image_angle", "image_xscale", "image_alpha", "visible",
-                    "move_time", "grid_col", "grid_row",
+                static const int extra[] = { S_x_move_speed, S_y_move_speed, S_target_pos, S_target_coord, S_skill_timer,
+                    S_jump_times, S_skill_move_type, S_skill_choose, S_skill_change_style,
+                    S_is_reversed, S_image_angle, S_image_xscale, S_image_alpha, S_visible,
+                    S_move_time, S_grid_col, S_grid_row,
                 };
                 const int NX = (int)(sizeof(extra) / sizeof(extra[0]));
-                const char* kn[24]; Value kv[24]; int nk = 0;
+                int kn[24]; Value kv[24]; int nk = 0;        // kn 存池下标
                 for (int i = 0; i < NX; i++) {
-                    Value* p = inst_var(s, extra[i]);          // variable_instance_exists(id, ...)
+                    Value* p = inst_var_sid(s, extra[i]);          // variable_instance_exists(id, ...)
                     if (p) { kn[nk] = extra[i]; kv[nk] = *p; nk++; }
                 }
-                Value st = call_ret_held(vm, "ds_map_create", NULL, 0);
+                Value st = call_ret_held_sid(vm, S_ds_map_create, NULL, 0);
                 Value ka[3]; ka[0] = st;
-                static const char* base[] = { "state", "timer", "x", "y", "random_count" };
+                static const int base[] = { S_state, S_timer, S_x, S_y, S_random_count };
                 for (int i = 0; i < 5; i++) {
-                    ka[1] = mk_str(vm, base[i]);
-                    ka[2] = mk_num(get_num(s, base[i]));
-                    call_fn_v(vm, "ds_map_set", ka, 3, -1);
+                    ka[1] = mk_str_sid(base[i]);
+                    ka[2] = mk_num(get_num_sid(s, base[i]));
+                    call_fn_sid(vm, S_ds_map_set, ka, 3, -1);
                 }
                 for (int i = 0; i < nk; i++) {
-                    ka[1] = mk_str(vm, kn[i]);
+                    ka[1] = mk_str_sid(kn[i]);
                     ka[2] = kv[i];
-                    call_fn_v(vm, "ds_map_set", ka, 3, -1);
+                    call_fn_sid(vm, S_ds_map_set, ka, 3, -1);
                 }
-                Value js = call_ret(vm, "json_stringify", &st, 1);
+                Value js = call_ret_sid(vm, S_json_stringify, &st, 1);
                 release(st);                                         // call_ret_held 那份还回去
-                Value list = v_struct(vm, net, "connected_clients");
+                Value list = v_struct_sid(vm, net, S_connected_clients);
                 int n = 0;
                 if (list.t == MEM_ARRAY) {
                     Value la[1]; la[0] = list;
-                    n = (int)num_of(&call_ret(vm, "array_length", la, 1));
+                    n = (int)num_of(&call_ret_sid(vm, S_array_length, la, 1));
                 }
                 for (int i = 0; i < n; i++) {
                     Value item = v_array(vm, list, mk_num(i));
@@ -518,32 +517,32 @@ bool hot_enemy_step_2(Vm& vm) {
                     msg[1] = mk_num(25);                          // MSG_MODIFY_PROP
                     msg[2] = net_id;
                     msg[3] = js;
-                    call_fn_v(vm, "send_message", msg, 4, -1);
+                    call_fn_sid(vm, S_send_message, msg, 4, -1);
                 }
             }
         }
     }
-    set_num(s, "_state_prev", get_num(s, "state"));
+    set_num_sid(s, S__state_prev, get_num_sid(s, S_state));
 
     // ── 掉血钩子 ──
-    if (get_num(s, "pre_hp") > get_num(s, "hp")) {
-        global_var_set("_VM_last_damaged_enemy", mk_num(s));
-        Value* buf = global_var("_VM_ENEMY_DAMAGED");
+    if (get_num_sid(s, S_pre_hp) > get_num_sid(s, S_hp)) {
+        global_var_set_sid(S__VM_last_damaged_enemy, mk_num(s));
+        Value* buf = global_var_sid(S__VM_ENEMY_DAMAGED);
         if (buf) {
             Value b[1]; b[0] = *buf;
-            Value bexists = call_ret(vm, "buffer_exists", b, 1);      // buffer 还没建模 → 恒为 0
+            Value bexists = call_ret_sid(vm, S_buffer_exists, b, 1);      // buffer 还没建模 → 恒为 0
             if (truthy(&bexists)) {
                 Value a[3];
-                a[0] = global_var("__vm") ? *global_var("__vm") : mk_num(0);
+                a[0] = global_var_sid(S___vm) ? *global_var_sid(S___vm) : mk_num(0);
                 a[1] = *buf;
-                a[2] = mk_str(vm, "_VM_ENEMY_DAMAGED");
-                call_fn_v(vm, "VM_Execute", a, 3, -1);
+                a[2] = mk_str_sid(S__VM_ENEMY_DAMAGED);
+                call_fn_sid(vm, S_VM_Execute, a, 3, -1);
             }
         }
-        Value h[1]; h[0] = mk_str(vm, "_VM_ENEMY_DAMAGED");
-        call_fn_v(vm, "vm_hook_run", h, 1, -1);
+        Value h[1]; h[0] = mk_str_sid(S__VM_ENEMY_DAMAGED);
+        call_fn_sid(vm, S_vm_hook_run, h, 1, -1);
     }
-    set_num(s, "pre_hp", get_num(s, "hp"));
+    set_num_sid(s, S_pre_hp, get_num_sid(s, S_hp));
     return true;
 }
 
@@ -556,195 +555,195 @@ bool hot_enemy_step(Vm& vm) {
     int s = vm.cur_instance;
     if (!inst_get(s)) return true;
 
-    if (gtrue(vm, "is_paused")) return true;
+    if (gtrue_sid(S_is_paused)) return true;
 
-    set_num(s, "_state_prev", get_num(s, "state"));
+    set_num_sid(s, S__state_prev, get_num_sid(s, S_state));
 
     // 客户端：直接死亡，不等待服务端
-    if (get_num(s, "hp") <= 0 && get_num(s, "state") != 3) {
-        set_num(s, "timer", 0);
-        set_num(s, "state", 3);                              // ENEMY_STATE.DEAD
-        set_num(s, "target_plant", -4);                      // noone
+    if (get_num_sid(s, S_hp) <= 0 && get_num_sid(s, S_state) != 3) {
+        set_num_sid(s, S_timer, 0);
+        set_num_sid(s, S_state, 3);                              // ENEMY_STATE.DEAD
+        set_num_sid(s, S_target_plant, -4);                      // noone
     }
 
     // 网格位置（内联算，GML 那边是为了避免每帧建结构体）
-    set_num(s, "grid_col", std::floor((get_num(s, "x") - gnumv(vm, "grid_offset_x")) / gnumv(vm, "grid_cell_size_x")));
-    set_num(s, "grid_row", std::floor((get_num(s, "y") - gnumv(vm, "grid_offset_y")) / gnumv(vm, "grid_cell_size_y")));
+    set_num_sid(s, S_grid_col, std::floor((get_num_sid(s, S_x) - gnumv_sid(S_grid_offset_x)) / gnumv_sid(S_grid_cell_size_x)));
+    set_num_sid(s, S_grid_row, std::floor((get_num_sid(s, S_y) - gnumv_sid(S_grid_offset_y)) / gnumv_sid(S_grid_cell_size_y)));
 
     // 减速 / 冰冻 / 恐惧 / 眩晕
-    if (get_num(s, "ice_timer") > 0)    { add_num(s, "ice_timer", -1);    set_num(s, "is_slowdown", 1); } else set_num(s, "is_slowdown", 0);
-    if (get_num(s, "frozen_timer") > 0) { set_num(s, "current_frozen", 1); add_num(s, "frozen_timer", -1); set_num(s, "is_frozen", 1); } else set_num(s, "is_frozen", 0);
-    if (get_num(s, "scare_timer") > 0)  { add_num(s, "scare_timer", -1);  set_num(s, "is_scare", 1); } else set_num(s, "is_scare", 0);
-    if (get_num(s, "stun_timer") > 0)   { add_num(s, "stun_timer", -1);   set_num(s, "is_stun", 1); }
-    else { set_num(s, "is_stun", 0); inst_var_set(s, "stun_sprite", mk_str(vm, "spr_mouse_stun")); }
-    if (get_num(s, "flash_value") > 0) add_num(s, "flash_value", -10);
-    if (get_num(s, "hp") <= 0) {                             // 死了就把控制类计时器清掉
-        set_num(s, "frozen_timer", 0);
-        set_num(s, "scare_timer", 0);
-        set_num(s, "left_move_flashs", 0);
-        set_num(s, "stun_timer", 0);
+    if (get_num_sid(s, S_ice_timer) > 0)    { add_num_sid(s, S_ice_timer, -1);    set_num_sid(s, S_is_slowdown, 1); } else set_num_sid(s, S_is_slowdown, 0);
+    if (get_num_sid(s, S_frozen_timer) > 0) { set_num_sid(s, S_current_frozen, 1); add_num_sid(s, S_frozen_timer, -1); set_num_sid(s, S_is_frozen, 1); } else set_num_sid(s, S_is_frozen, 0);
+    if (get_num_sid(s, S_scare_timer) > 0)  { add_num_sid(s, S_scare_timer, -1);  set_num_sid(s, S_is_scare, 1); } else set_num_sid(s, S_is_scare, 0);
+    if (get_num_sid(s, S_stun_timer) > 0)   { add_num_sid(s, S_stun_timer, -1);   set_num_sid(s, S_is_stun, 1); }
+    else { set_num_sid(s, S_is_stun, 0); inst_var_set_sid(s, S_stun_sprite, mk_str_sid(S_spr_mouse_stun)); }
+    if (get_num_sid(s, S_flash_value) > 0) add_num_sid(s, S_flash_value, -10);
+    if (get_num_sid(s, S_hp) <= 0) {                             // 死了就把控制类计时器清掉
+        set_num_sid(s, S_frozen_timer, 0);
+        set_num_sid(s, S_scare_timer, 0);
+        set_num_sid(s, S_left_move_flashs, 0);
+        set_num_sid(s, S_stun_timer, 0);
     }
 
     double cur_atk_cycle = 0, cur_move_speed = 0;
-    if (truthy(inst_var(s, "is_slowdown"))) {
-        set_num(s, "flash_speed", 12);
-        cur_move_speed = get_num(s, "move_speed") / 2;
-        cur_atk_cycle  = get_num(s, "atk_cycle") * 2;
+    if (truthy(inst_var_sid(s, S_is_slowdown))) {
+        set_num_sid(s, S_flash_speed, 12);
+        cur_move_speed = get_num_sid(s, S_move_speed) / 2;
+        cur_atk_cycle  = get_num_sid(s, S_atk_cycle) * 2;
     } else {
-        set_num(s, "flash_speed", 6);
-        cur_move_speed = get_num(s, "move_speed");
-        cur_atk_cycle  = get_num(s, "atk_cycle");
+        set_num_sid(s, S_flash_speed, 6);
+        cur_move_speed = get_num_sid(s, S_move_speed);
+        cur_atk_cycle  = get_num_sid(s, S_atk_cycle);
     }
 
     // 上下抖动（左移闪避的那套）
-    if (get_num(s, "left_move_flashs") > 0) {
-        add_num(s, "y", get_num(s, "y_move"));
-        add_num(s, "left_move_flashs", -1);
-        double y = get_num(s, "y"), ym = get_num(s, "y_move");
+    if (get_num_sid(s, S_left_move_flashs) > 0) {
+        add_num_sid(s, S_y, get_num_sid(s, S_y_move));
+        add_num_sid(s, S_left_move_flashs, -1);
+        double y = get_num_sid(s, S_y), ym = get_num_sid(s, S_y_move);
         if ((y <= world_y_of_grid(vm, 0, 0) + 38 && ym < 0)
-                || (y >= world_y_of_grid(vm, 0, gnumv(vm, "grid_rows") - 1) + 38 && ym > 0)) {
-            set_num(s, "left_move_flashs", 0);
-            set_num(s, "y_move", 0);
+                || (y >= world_y_of_grid(vm, 0, gnumv_sid(S_grid_rows) - 1) + 38 && ym > 0)) {
+            set_num_sid(s, S_left_move_flashs, 0);
+            set_num_sid(s, S_y_move, 0);
         }
     }
-    if (truthy(inst_var(s, "is_frozen")) || truthy(inst_var(s, "is_scare")) || truthy(inst_var(s, "is_stun")))
+    if (truthy(inst_var_sid(s, S_is_frozen)) || truthy(inst_var_sid(s, S_is_scare)) || truthy(inst_var_sid(s, S_is_stun)))
         return true;                                         // GML 的 exit
 
-    add_num(s, "timer", 1);
+    add_num_sid(s, S_timer, 1);
 
     // 目标植物已经没了 → 清掉目标
     {
-        int tp = (int)get_num(s, "target_plant");
-        if (inst_get(tp) && get_num(tp, "hp") <= 0) set_num(s, "target_plant", -4);
+        int tp = (int)get_num_sid(s, S_target_plant);
+        if (inst_get(tp) && get_num_sid(tp, S_hp) <= 0) set_num_sid(s, S_target_plant, -4);
     }
 
-    double state = get_num(s, "state");
+    double state = get_num_sid(s, S_state);
 
     if (state == 2) {                                        // ── ENEMY_STATE.NORMAL ──
-        add_num(s, "x", -(cur_move_speed * get_num(s, "move_speed_modify")));
-        set_num(s, "image_index", enemy_anim_frame(vm, s, false));
+        add_num_sid(s, S_x, -(cur_move_speed * get_num_sid(s, S_move_speed_modify)));
+        set_num_sid(s, S_image_index, enemy_anim_frame(vm, s, false));
         int plant = enemy_find_plant(vm, s);
         if (plant != -4) {
-            set_num(s, "state", 1);                          // ENEMY_STATE.ATTACK
-            set_num(s, "target_plant", plant);
-            set_num(s, "attack_timer", 0);
-            set_num(s, "timer", 0);
+            set_num_sid(s, S_state, 1);                          // ENEMY_STATE.ATTACK
+            set_num_sid(s, S_target_plant, plant);
+            set_num_sid(s, S_attack_timer, 0);
+            set_num_sid(s, S_timer, 0);
         }
     } else if (state == 1) {                                 // ── ENEMY_STATE.ATTACK ──
-        set_num(s, "image_index", enemy_anim_frame(vm, s, true));
+        set_num_sid(s, S_image_index, enemy_anim_frame(vm, s, true));
         int plant = enemy_find_plant(vm, s);
         if (plant != -4) {
-            set_num(s, "target_plant", plant);
+            set_num_sid(s, S_target_plant, plant);
         } else {
-            set_num(s, "state", 2);                          // 没目标了 → 回到 NORMAL
-            set_num(s, "target_plant", -4);
-            set_num(s, "attack_timer", 0);
-            set_num(s, "timer", 0);
+            set_num_sid(s, S_state, 2);                          // 没目标了 → 回到 NORMAL
+            set_num_sid(s, S_target_plant, -4);
+            set_num_sid(s, S_attack_timer, 0);
+            set_num_sid(s, S_timer, 0);
         }
-        add_num(s, "attack_timer", 1);
-        if (get_num(s, "attack_timer") >= cur_atk_cycle) {
-            int tp = (int)get_num(s, "target_plant");
+        add_num_sid(s, S_attack_timer, 1);
+        if (get_num_sid(s, S_attack_timer) >= cur_atk_cycle) {
+            int tp = (int)get_num_sid(s, S_target_plant);
             if (inst_get(tp)) {
                 // with (target_plant) { if !invincible hp -= other.atk; event_user(2) ... }
-                if (!truthy(inst_var(tp, "invincible"))) add_num(tp, "hp", -get_num(s, "atk"));
+                if (!truthy(inst_var_sid(tp, S_invincible))) add_num_sid(tp, S_hp, -get_num_sid(s, S_atk));
                 Value ea[2]; ea[0] = mk_num(tp); ea[1] = mk_num(2);
-                call_fn_v(vm, "run_event_user", ea, 2, -1);  // 那一格的 UserEvent 2
+                call_fn_sid(vm, S_run_event_user, ea, 2, -1);  // 那一格的 UserEvent 2
             }
             // 播放音效：obj_battle.chomp_sound_list[a]（取 obj_battle 的第一个实例）
             Value ia[2]; ia[0] = mk_num(0); ia[1] = mk_num(2);
-            int a = (int)num_of(&call_ret(vm, "irandom_range", ia, 2));
-            int bat = inst_at("obj_battle", 0);
-            Value* sndl = (bat > 0) ? inst_var(bat, "chomp_sound_list") : NULL;
+            int a = (int)num_of(&call_ret_sid(vm, S_irandom_range, ia, 2));
+            int bat = inst_at(str_at(S_obj_battle), 0);
+            Value* sndl = (bat > 0) ? inst_var_sid(bat, S_chomp_sound_list) : NULL;
             if (sndl && sndl->t == MEM_LIST) {
                 Value la[2]; la[0] = *sndl; la[1] = mk_num(a);
-                Value snd = call_ret(vm, "ds_list_find_value", la, 2);
+                Value snd = call_ret_sid(vm, S_ds_list_find_value, la, 2);
                 Value sa[3]; sa[0] = snd; sa[1] = mk_num(0); sa[2] = mk_num(0);
-                call_fn_v(vm, "audio_play_sound", sa, 3, -1);
+                call_fn_sid(vm, S_audio_play_sound, sa, 3, -1);
             }
-            set_num(s, "attack_timer", 0);
+            set_num_sid(s, S_attack_timer, 0);
         }
     } else if (state == 3) {                                 // ── ENEMY_STATE.DEAD ──
-        set_num(s, "ice_timer", 0);
-        set_num(s, "frozen_timer", 0);
-        double ma = get_num(s, "move_anim"), aa = get_num(s, "attack_anim"), da = get_num(s, "death_anim");
-        double layer = (get_num(s, "shield_max_hp") > 0 && get_num(s, "shield_hp") > 0) ? (ma * 4 + aa * 4)
+        set_num_sid(s, S_ice_timer, 0);
+        set_num_sid(s, S_frozen_timer, 0);
+        double ma = get_num_sid(s, S_move_anim), aa = get_num_sid(s, S_attack_anim), da = get_num_sid(s, S_death_anim);
+        double layer = (get_num_sid(s, S_shield_max_hp) > 0 && get_num_sid(s, S_shield_hp) > 0) ? (ma * 4 + aa * 4)
                                                                                        : (ma * 2 + aa * 2);
-        if (get_num(s, "image_index") >= da + layer - 1) add_num(s, "image_alpha", -0.08);
-        else set_num(s, "image_index", std::fmod(std::floor(get_num(s, "timer") / get_num(s, "flash_speed")), da) + layer);
+        if (get_num_sid(s, S_image_index) >= da + layer - 1) add_num_sid(s, S_image_alpha, -0.08);
+        else set_num_sid(s, S_image_index, std::fmod(std::floor(get_num_sid(s, S_timer) / get_num_sid(s, S_flash_speed)), da) + layer);
     }
     // （IDLE=0 / ACTING=4 两个 case 里本来就是空的）
 
     // 死亡处理
-    if (get_num(s, "hp") <= 0 && get_num(s, "state") != 3) {
-        set_num(s, "timer", 0);
-        set_num(s, "state", 3);
-        set_num(s, "target_plant", -4);
+    if (get_num_sid(s, S_hp) <= 0 && get_num_sid(s, S_state) != 3) {
+        set_num_sid(s, S_timer, 0);
+        set_num_sid(s, S_state, 3);
+        set_num_sid(s, S_target_plant, -4);
     }
     // 透明度处理
-    if (get_num(s, "image_alpha") <= 0 && get_num(s, "state") == 3)
-        call_fn(vm, "instance_destroy", NULL, 0, -1);
+    if (get_num_sid(s, S_image_alpha) <= 0 && get_num_sid(s, S_state) == 3)
+        call_fn_int_sid(vm, S_instance_destroy, NULL, 0, -1);
 
     // 网格位置对应的深度（僵尸比植物稍微靠后一点）
-    set_num(s, "depth", -10 - (get_num(s, "grid_row") * 45) - (9 * 5));
+    set_num_sid(s, S_depth, -10 - (get_num_sid(s, S_grid_row) * 45) - (9 * 5));
 
     // 跑到最左边 → 游戏结束
     {
         Value pm[3];
-        pm[0] = mk_num(get_num(s, "x")); pm[1] = mk_num(get_num(s, "y")); pm[2] = mk_str(vm, "obj_cat");
-        Value hitcat = call_ret(vm, "place_meeting", pm, 3);
-        Value ai[2]; ai[0] = *inst_var(s, "block_mouse_id_list"); ai[1] = *inst_var(s, "mouse_id");
-        double mi = num_of(&call_ret(vm, "array_get_index", ai, 2));
+        pm[0] = mk_num(get_num_sid(s, S_x)); pm[1] = mk_num(get_num_sid(s, S_y)); pm[2] = mk_str_sid(S_obj_cat);
+        Value hitcat = call_ret_sid(vm, S_place_meeting, pm, 3);
+        Value ai[2]; ai[0] = *inst_var_sid(s, S_block_mouse_id_list); ai[1] = *inst_var_sid(s, S_mouse_id);
+        double mi = num_of(&call_ret_sid(vm, S_array_get_index, ai, 2));
         // ⚠ place_meeting 的碰撞还没建模（空壳 → 0），这里等于"永远没碰到猫"
-        if (get_num(s, "x") < gnumv(vm, "grid_offset_x") - 150 && get_num(s, "hp") > 0
+        if (get_num_sid(s, S_x) < gnumv_sid(S_grid_offset_x) - 150 && get_num_sid(s, S_hp) > 0
                 && !truthy(&hitcat) && mi == -1) {
-            Value net = gv(vm, "network");
+            Value net = gv_sid(S_network);
             Value mode; mode.t = MEM_UNDEFINED; mode.v = 0;
-            if (net.t == MEM_MAP) mode = v_struct(vm, net, "mode");
-            if (str_is(vm, &mode, "server")) {
-                Value list = v_struct(vm, net, "connected_clients");
+            if (net.t == MEM_MAP) mode = v_struct_sid(vm, net, S_mode);
+            if (str_is_sid(&mode, S_server)) {
+                Value list = v_struct_sid(vm, net, S_connected_clients);
                 int n = 0;
                 if (list.t == MEM_ARRAY) {
                     Value la[1]; la[0] = list;
-                    n = (int)num_of(&call_ret(vm, "array_length", la, 1));
+                    n = (int)num_of(&call_ret_sid(vm, S_array_length, la, 1));
                 }
                 for (int i = 0; i < n; i++) {
                     Value item = v_array(vm, list, mk_num(i));
                     Value msg[3];
                     msg[0] = item; msg[1] = mk_num(10);      // MSG_GAME_OVER
                     msg[2] = mk_num(0);
-                    call_fn_v(vm, "send_message", msg, 3, -1);
+                    call_fn_sid(vm, S_send_message, msg, 3, -1);
                 }
             }
-            if (!str_is(vm, &mode, "client")) {
-                global_var_set("is_paused", mk_num(1));
-                global_var_set("game_over", mk_num(1));
+            if (!str_is_sid(&mode, S_client)) {
+                global_var_set_sid(S_is_paused, mk_num(1));
+                global_var_set_sid(S_game_over, mk_num(1));
                 Value ca[4];
-                ca[0] = mk_num(gnumv(vm, "room_width") / 2);
-                ca[1] = mk_num(gnumv(vm, "room_height") / 2);
+                ca[0] = mk_num(gnumv_sid(S_room_width) / 2);
+                ca[1] = mk_num(gnumv_sid(S_room_height) / 2);
                 ca[2] = mk_num(-3001);
-                ca[3] = mk_str(vm, "obj_game_over");
-                call_fn_v(vm, "instance_create_depth", ca, 4, -1);
-                Value sa[3]; sa[0] = mk_str(vm, "snd_lose"); sa[1] = mk_num(0); sa[2] = mk_num(0);
-                call_fn_v(vm, "audio_play_sound", sa, 3, -1);
+                ca[3] = mk_str_sid(S_obj_game_over);
+                call_fn_sid(vm, S_instance_create_depth, ca, 4, -1);
+                Value sa[3]; sa[0] = mk_str_sid(S_snd_lose); sa[1] = mk_num(0); sa[2] = mk_num(0);
+                call_fn_sid(vm, S_audio_play_sound, sa, 3, -1);
             }
         }
     }
 
     // 破冰动画
-    if (truthy(inst_var(s, "current_frozen")) && !truthy(inst_var(s, "is_frozen"))) {
-        Value sa[3]; sa[0] = mk_str(vm, "snd_mouse_unfreeze"); sa[1] = mk_num(0); sa[2] = mk_num(0);
-        call_fn_v(vm, "audio_play_sound", sa, 3, -1);
+    if (truthy(inst_var_sid(s, S_current_frozen)) && !truthy(inst_var_sid(s, S_is_frozen))) {
+        Value sa[3]; sa[0] = mk_str_sid(S_snd_mouse_unfreeze); sa[1] = mk_num(0); sa[2] = mk_num(0);
+        call_fn_sid(vm, S_audio_play_sound, sa, 3, -1);
         Value ca[4];
-        ca[0] = mk_num(get_num(s, "x"));
-        ca[1] = mk_num(get_num(s, "y") + 50);
-        ca[2] = mk_num(get_num(s, "depth"));
-        ca[3] = mk_str(vm, "obj_unfreeze_effect");
-        Value fx = call_ret(vm, "instance_create_depth", ca, 4);
+        ca[0] = mk_num(get_num_sid(s, S_x));
+        ca[1] = mk_num(get_num_sid(s, S_y) + 50);
+        ca[2] = mk_num(get_num_sid(s, S_depth));
+        ca[3] = mk_str_sid(S_obj_unfreeze_effect);
+        Value fx = call_ret_sid(vm, S_instance_create_depth, ca, 4);
         int fid = fx.t == MEM_INT ? fx.v : -1;
-        if (inst_get(fid)) inst_var_set(fid, "sprite_index", *inst_var(s, "ice_sprite"));
-        inst_var_set(s, "ice_sprite", mk_str(vm, "spr_mouse_frozen"));
-        set_num(s, "current_frozen", 0);
-        add_num(s, "frame_count", 1);
+        if (inst_get(fid)) inst_var_set_sid(fid, S_sprite_index, *inst_var_sid(s, S_ice_sprite));
+        inst_var_set_sid(s, S_ice_sprite, mk_str_sid(S_spr_mouse_frozen));
+        set_num_sid(s, S_current_frozen, 0);
+        add_num_sid(s, S_frame_count, 1);
         // ⚠ frame_count++ 在 GML 里就在这个 if 里面（缩进看着像在外面，但大括号在里面），照抄
     }
     return true;

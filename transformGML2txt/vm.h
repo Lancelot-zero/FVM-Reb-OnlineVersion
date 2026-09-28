@@ -135,9 +135,17 @@ Vm* vm_of_object(const std::string& obj);     // 没有这个对象 → NULL
 //   GML 的 global.x 是进程级的，所有对象/实例共用一份，所以不放 Vm 里。
 //   VM 挂掉也不清（全局变量活到进程结束）。
 //   游戏 API 里 inst == 0 就是"读/写全局变量"的那个哨兵。
-extern std::unordered_map<std::string, Value> g_globals;
-Value* global_var(const std::string& name);                  // 没有 → NULL
-void   global_var_set(const std::string& name, Value v);     // 没有就建
+// 全局变量表（GML 的 global.x）：名字的**池下标** → 值（整数 key）
+extern std::unordered_map<int, Value> g_globals;
+
+// 池下标版：手上已经有下标时用（零哈希）
+Value* global_var_sid(int sid);                            // 没有 → NULL
+void   global_var_set_sid(int sid, Value v);               // 没有就建
+bool   global_exists_sid(int sid);
+
+// 名字版：一次哈希换下标（名字不在池里 = 不可能存在）。动态名字走这条
+Value* global_var(const std::string& name);
+void   global_var_set(const std::string& name, Value v);
 bool   global_exists(const std::string& name);
 
 // mod VM 注册表：mod id（enemy_id / card_id / bullet_id …）→ 管这个 mod 的 VM
@@ -150,35 +158,71 @@ extern std::unordered_map<std::string, Vm*> g_mod_vms;
 Vm*  mod_vm(const std::string& mod_id);                      // 没有 → NULL
 void mod_vm_register(const std::string& mod_id, Vm* vm);
 
+// 函数表条数：要和 kNativeFns / kGameFns 的实际长度一致
+//   （两个 .cpp 里有 static_assert 卡住；加函数只能往表尾加，这里跟着改）
+static const int NATIVE_FN_COUNT = 178;
+static const int GAME_FN_COUNT   = 150;
+
+// 预置段的固定基址（段边界；下标本身看 names.h 的 S_xxx）
+//   0 = 空串 | 1..178 = native 名字 | 179..328 = game 名字 | 329..347 = 19 个内置变量名
+enum {
+    SID_EMPTY       = 0,
+    SID_NATIVE_BASE = 1,
+    SID_GAME_BASE   = SID_NATIVE_BASE + NATIVE_FN_COUNT,
+    SID_FIELD_BASE  = SID_GAME_BASE + GAME_FN_COUNT
+};
+
+// ── 19 个内置变量：一份名单，序号就是 Instance::_inner 的下标 ──
+//   名字同时也预置进全局字符串池（SID_FIELD_BASE 起连续 19 个），所以
+//   "属性名的池下标"落在这一段时就是 `_inner[下标 - SID_FIELD_BASE]`，一次偏移直取。
+//   名单只在这里写一次：枚举、名字表、默认值表全从它生成，顺序不可能漂。
+#define INNER_FIELD_LIST(X) \
+    X(x) X(y) X(sprite_index) X(image_index) X(image_speed)                    \
+    X(image_xscale) X(image_yscale) X(image_alpha) X(image_angle) X(image_blend) \
+    X(depth) X(speed) X(direction) X(hspeed) X(vspeed)                         \
+    X(gravity) X(gravity_direction) X(friction) X(visible)
+
+enum {
+#define FIELD_ENUM(NAME) F_##NAME,
+    INNER_FIELD_LIST(FIELD_ENUM)
+#undef FIELD_ENUM
+    FIELD_COUNT
+};
+
 struct Instance {
     std::string                  obj;    // 对象名，例如 "obj_cloud"
     bool                         alive;  // 销毁了置 false（下标进复用队列）
     Vm*                          vm;     // 属于哪个 VM（VM 死的时候要把名下的都收掉）
 
-    // ── 常用内置变量 ──
-    //   GML 里这些就是实例变量，宿主（位移、碰撞、绘制）天天读写，所以单独占字段，
-    //   不走 vars 那张 map。字段是照项目里的实际使用频率挑的（2073 个 gml 统计）。
-    //   都存成 Value（和内存槽同一个 8 字节结构），这样 inst_var() 能直接返回它的指针。
-    Value x, y;                                        // 位置
-    Value sprite_index;                                // 精灵（-1 = 没有）
-    Value image_index, image_speed;                    // 动画帧 / 速度
-    Value image_xscale, image_yscale, image_alpha, image_angle, image_blend;
-    Value depth;                                       // 绘制层
-    Value speed, direction, hspeed, vspeed, gravity, gravity_direction, friction;
-    Value visible;
+    // ── 常用内置变量（19 个）──
+    //   GML 里这些就是实例变量，宿主（位移、碰撞、绘制）天天读写，所以集中占一个数组，
+    //   不走 vars 那张 map。名单照项目里的实际使用频率挑的（2073 个 gml 统计）。
+    //   都存成 Value（和内存槽同一个 8 字节结构），这样读写就是一次偏移。
+    Value _inner[FIELD_COUNT];
 
-    // 其它实例变量：名字 → 值
-    std::map<std::string, Value> vars;
+    // 其它实例变量：名字的**池下标** → 值（整数 key；数据不需要有序，用 unordered）
+    std::unordered_map<int, Value> vars;
 };
 
 // 内置字段填默认值（inst_new 里调）
 void inst_init(Instance& in);
 
-// 名字 → 内置字段的指针；不是内置名就返回 NULL（调用方再去看 vars）
+// 字段序号 → 那个 Value（越界不查，调用方保证序号合法）
+static inline Value& inst_f(Instance& in, int f) { return in._inner[f]; }
+
+// 字段名的池下标（预置段里连续 19 个）
+static inline int field_sid(int f) { return SID_FIELD_BASE + f; }
+static inline bool sid_is_field(int sid) {
+    return sid >= SID_FIELD_BASE && sid < SID_FIELD_BASE + FIELD_COUNT;
+}
+static inline int field_of_sid(int sid) { return sid - SID_FIELD_BASE; }
+
+// 名字 / 池下标 → 内置字段的指针；不是内置字段就返回 NULL（调用方再去看 vars）
 Value* inst_field(Instance& in, const std::string& name);
+Value* inst_field_sid(Instance& in, int sid);
 
 // ⚠ 就两条硬规矩（Initialize/Create 里想直接写字段时按这个来）：
-//   · 名字在 kFields 那 19 个内置里 → 写内置字段（in->x / in->depth / …）
+//   · 名字在 INNER_FIELD_LIST 那 19 个里 → 写 inst_f(in, F_xxx)（就是 _inner 的一格）
 //   · 不是内置 → 只能落 vars（in->vars[name]）；写反了两边读不到一起
 //   · 数字/字符串不需要引用计数；**容器句柄**要 retain/release（走 hot 的 set_var）
 
@@ -195,6 +239,8 @@ int       inst_count(const std::string& obj);          // 某对象还活着几�
 int       inst_at(const std::string& obj, int k);      // 某对象的第 k 个活实例 id（没有 → -1）
 Value*    inst_var(int id, const std::string& name);   // 取变量（没有 → NULL）
 void      inst_var_set(int id, const std::string& name, Value v);  // 写变量（没有就建）
+Value*    inst_var_sid(int id, int sid);               // 同上，池下标已经在手上（零哈希）
+void      inst_var_set_sid(int id, int sid, Value v);
 
 struct ValueLess {
     bool operator()(const Value& a, const Value& b) const {
@@ -223,6 +269,49 @@ static inline float   ldf (const uint8_t* p) { float v;      memcpy(&v, p, 4); r
 //   args 指向参数表开头，argc 个参数各是 s32 的槽号
 //   dst  = 结果槽号（-1 = 无返回值）
 typedef void (*Fn)(Vm& vm, const uint8_t* args, int argc, int dst);
+
+// 函数表条数：要和 kNativeFns / kGameFns 的实际长度一致
+//   （两个 .cpp 里有 static_assert 卡住；加函数只能往表尾加，这里跟着改）
+//   ⚠ 定义在 struct Instance 之前，因为预置段的基址（SID_*）要用它算。
+
+// ============================================================
+// 全局字符串池（所有 Vm 共用一张，不再是每个 Vm 一份）
+//   文本 → 下标，intern 去重。Value.t == MEM_STRING 时，v 就是这里的下标。
+//   装载 bin / callbin 时把它自带的池并进来，并把字节码里内联的字符串常量
+//   改写成全局下标（remap_block_strings）—— 于是同一个字符串在任何 VM 里都是
+//   同一个下标：比较能退化成整数比较，跨 VM 传值也不用重新 intern。
+//   ⚠ 单线程：只在装载期和 intern 时写，平时只读。
+//   ⚠ 下标在字节码里是 u16（OP_ASSIGN），池上限 65535；超了装载时直接报错。
+//   ⚠ 卸载一个 Vm **不回收**它带来的字符串（可能还有别人在用）→ 池只增不减。
+// ============================================================
+extern std::vector<std::string>             g_strings;
+extern std::unordered_map<std::string, int> g_str_map;
+
+bool str_ok(int i);                       // 下标是否合法（0 <= i < 池大小）
+const std::string& str_at(int i);         // 取字符串（越界 → 空串，不抛）
+int  str_find(const std::string& s);      // 名字 → 下标（**只查不建**，没有 → -1）
+int  intern_str(const std::string& s);    // 名字 → 下标（没有就建），返回全局下标
+
+// 池下标 → 字符串值（下标是编译期常量 S_xxx 时用；零哈希）
+static inline Value mk_str_sid(int sid) {
+    Value v; v.t = MEM_STRING; v.v = sid;
+    return v;
+}
+
+// ── 预置段：函数名也进池，下标直接当函数编号用 ──
+//   第一次碰池之前（intern_str 会自己兜一下）按 kNativeNames / kGameNames 的顺序
+//   intern 一遍，于是固定成：
+//     下标 0                        = 空串
+//     1 .. NATIVE_FN_COUNT          = native 名字（顺序 = kNativeFns）
+//     往后 GAME_FN_COUNT 个          = game 名字（顺序 = kGameFns）
+//     再 FIELD_COUNT 个             = 19 个内置变量名（顺序 = INNER_FIELD_LIST）
+//   所以"名字在池里的下标"就能直接换算成函数/字段：看落在哪个区间，减掉基址取数组。
+//   按名字调内置因此不用再线性扫描；拿编译期常量 SID_* 的调用点连哈希都省了。
+//   （基址 SID_* 定义在上面 struct Instance 之前）
+
+void pool_seed();                         // 把预置段灌进池（幂等；intern_str 会自己调）
+Fn   fn_of_sid(int sid);                  // 池下标 → 函数（不是函数名 → NULL）
+Fn   fn_by_name(const char* name);        // 名字 → 函数（一次哈希；找不到 → NULL）
 
 // ============================================================
 // 游戏 API（顺序 = 原 VM 的 FUNC_DEFS，不能改）
@@ -266,7 +355,6 @@ typedef void (*Fn)(Vm& vm, const uint8_t* args, int argc, int dst);
     X(VM_GetInfo) X(VM_CatInRow) X(VM_MapObj) X(VM_GetInstanceCount) X(VM_GetInstanceAt)
 
 extern Fn  kGameFns[];          // 不是 const：已实现的那几个在启动时按名字换进表里
-extern const int GAME_FN_COUNT;
 
 // ============================================================
 // 内部函数（OP_NATIVE 调用）
@@ -382,14 +470,17 @@ int native_id(const char* name);
 int game_id(const char* name);
 
 // 跑"硬编码的热块"（hot/hot_table.cpp）：有 → 跑 C++ 版并返回 true；没有 → false（让解释器去跑）
+//   _sid 版：对象名和块名的**池下标**已经在手上（零哈希、零字符串比较）
 bool run_hot_block(Vm& vm, const std::string& obj, const std::string& block);
+bool run_hot_block_sid(Vm& vm, int obj_sid, int block_sid);
 // 有没有这个热块（不跑）。派发事件前先问一下：父对象不在 VM 的块表里，
 // 但它的 Create/Destroy 是硬编码的，别当成"块找不到"报错
 bool has_hot_block(const std::string& obj, const std::string& block);
+bool has_hot_block_sid(int obj_sid, int block_sid);
+bool has_hot_object_sid(int obj_sid);
 // 跑某个实例的某个事件，**沿父对象往上找同名块**（GML 的事件继承；event_user / 碰撞 / 自定义事件都走这条）。
 //   硬编码这边找到并跑了 → true；一条都没有 → false（调用方再走解释器那条路）
 bool run_hot_event_inherited(Vm& vm, int inst, const char* block);
-extern const int NATIVE_FN_COUNT;
 
 // 函数返回值约定：被调块用 OP_COPY 把返回值写进 0 号槽（RET_SLOT），然后 OP_HALT。
 // 调用方 run_block 回来之后直接读 0 号槽。字面量池从 1 号槽开始，0 号不给别人用。
@@ -558,8 +649,8 @@ struct Block {
 // ============================================================
 class Vm {
 public:
-    std::vector<std::string> strings;   // 字符串池
-    std::unordered_map<std::string, int> str_map;   // 文本 → 池下标（intern 查重用）
+    // 字符串池是**全局**的（g_strings / g_str_map，见文件上面那一段）：
+    //   Value.v 对字符串来说就是全局下标，任何一个 VM 里的字符串都能互相比、互相传。
     char*                    mem;       // 纯字节内存：每槽 8 字节 [type:int32][value:int32]
 
     // ── 一个 bin = 一个 Vm = 一个对象 ──
@@ -567,7 +658,7 @@ public:
     //   blocks  块名 → 块（这个对象的全部块）
     //   ⚠ 一个 Vm 只装一个对象：要跑"别的对象"的块 = 跨 VM，用 vm_of_object(obj) 找过去
     std::string                  obj;
-    std::map<std::string, Block> blocks;
+    std::unordered_map<int, Block> blocks;   // 块名的池下标 → 块（整数 key，不用有序）
 
     // 这个 Vm 名下的实例（inst_new 插入、inst_kill 摘掉、析构时按它收尾）
     //   ⚠ 存**实例 id** 不是指针：全局实例表会扩容重分配，销毁的下标还会被复用
@@ -586,9 +677,9 @@ public:
     //   宿主（平台侧）自己知道自己装的是哪类，直接赋 vm.kind 就行。
     std::string                               kind;
 
-    // 命名数组：数组名 → 数组。给 VM_ArrayGet/Set/ADD/Del/Size/Clear/ClearAll/Exists/Contains
-    // 那批游戏 API 用（原版是 vm.arrays 那个 ds_map），**和 GM 转 bin 无关**。
-    std::map<std::string, std::vector<Value>> named_arrays;
+    // 命名数组：数组名（**池下标**）→ 数组。给 VM_ArrayGet/Set/ADD/Del/Size/Clear/ClearAll/
+    // Exists/Contains 那批游戏 API 用（原版是 vm.arrays 那个 ds_map），和 GM 转 bin 无关。
+    std::unordered_map<int, std::vector<Value>> named_arrays;
 
     // ── mod 单位账本（obj_card_mod / obj_enemy_mod / obj_bullet_mod 用）──
     //   平台那边的 mod VM 是个结构体，字段就是这几个（src_mod.gml:2052 mod_inst_add /
@@ -637,23 +728,6 @@ public:
     // 从"对象名 → VM"那张全局表里摘掉自己（定义在 vm_instance.cpp）
     void unregister_objects();
 
-    void init_strings(const std::vector<std::string>& pool) {
-        strings = pool;
-        str_map.clear();
-        for (size_t i = 0; i < strings.size(); i++) str_map[strings[i]] = (int)i;
-    }
-
-    // 把字符串塞进本 VM 的池（已有就返回原下标）—— C++ 硬编码块要传字符串（对象名等）时用
-    //   跟平台侧的 vm.str_map 一个套路：查重是 O(1)，不会每次线性扫池
-    int intern(const std::string& s) {
-        std::unordered_map<std::string, int>::iterator it = str_map.find(s);
-        if (it != str_map.end()) return it->second;
-        strings.push_back(s);
-        int id = (int)strings.size() - 1;
-        str_map[s] = id;
-        return id;
-    }
-
     // 装一个 bin：定下"这个 Vm 是哪个对象"，把它的块表灌进来
     //   同时登记到"对象名 → VM"那张全局表（跨对象的派发靠它找过来）
     void load_object(const std::string& object_name, const std::vector<Block>& blks) {
@@ -663,14 +737,18 @@ public:
         g_vm_of_object[object_name] = this;
         obj = object_name;
         blocks.clear();
-        for (size_t i = 0; i < blks.size(); i++) blocks[blks[i].name] = blks[i];
+        for (size_t i = 0; i < blks.size(); i++)
+            blocks[intern_str(blks[i].name)] = blks[i];     // key = 块名的池下标
     }
 
     // 查块：没有就返回 NULL（一个 Vm 只有一个对象，所以不用给对象名）
+    //   两种入口：手上已经有池下标的走 _sid 版（零哈希），只有名字的走名字版
+    const Block* find_block_sid(int sid) const;
     const Block* find_block(const std::string& name) const;
 
     // 找块并执行（硬编码块优先；嵌套调用自己会恢复上下文）
     bool run_named(const std::string& name);
+    bool run_named_sid(int sid);
 
     // ── 执行一个块（实现在 vm.cpp）──
     bool run(const Block& blk);
@@ -690,8 +768,13 @@ public:
 bool parse_bin_body(const uint8_t* d, size_t size, size_t off,
                     std::vector<std::string>& strings, std::vector<Block>& blocks);
 
+// 装载期：把 bin 自带的字符串池并进全局池，并把每个块里内联的字符串常量
+//   改写成全局下标（实现在 vm.cpp）。返回 false = 字节码走飞了（指令布局对不上）
+//   或池超过 65535 —— 两种情况都必须当成装载失败，不能让错的下标悄悄进池。
+bool remap_block_strings(std::vector<Block>& blocks,
+                         const std::vector<std::string>& local_pool);
+
 static const int    CALLBIN_MAGIC    = 0x4E424C43;      // 'C''L''B''N'（小端读）
-static const char*  CALLBIN_ENTRY    = "_CALL_ENTRY";   // callbin 的函数体块名
 static const size_t CALL_MEM_SLOTS   = 131072;          // 共享内存 1 MB / 8
 
 extern std::vector<char> g_call_mem;                    // 固定大小共享内存（首次调用时分配）
@@ -709,13 +792,13 @@ struct CallBin {
     int         slots;     // 一帧要多少槽
     Vm*         vm;        // 它自己的 Vm（无独立 mem）
 };
-extern std::map<std::string, CallBin> g_call_dict;      // 函数名 → callbin
+extern std::map<int, CallBin> g_call_dict;      // 函数名的**池下标** → callbin
 
 bool callbin_load(const std::string& path);             // 读一个 .callbin 进字典
 void callbin_clear();                                   // 清字典（热重载用）
 
 // 调一个 callbin：argv 是实参，返回值写 ret（找不到/参数个数不对/内存不够 → false）
-bool callbin_invoke(Vm& caller, const std::string& name, const Value* argv, int argn, Value* ret);
+bool callbin_invoke(Vm& caller, int sid, const Value* argv, int argn, Value* ret);
 
 // 游戏 API 的真实现（id 122/123/124）——**名字带 impl_**：
 //   因为 vm_api.cpp 里那三个名字已经被宏生成的 static 空壳占住了，
@@ -723,6 +806,8 @@ bool callbin_invoke(Vm& caller, const std::string& name, const Value* argv, int 
 void impl_VM_CallFunc(Vm& vm, const uint8_t* args, int argc, int dst);
 void impl_VM_FuncExists(Vm& vm, const uint8_t* args, int argc, int dst);
 void impl_VM_FuncDesc(Vm& vm, const uint8_t* args, int argc, int dst);
+void impl_VM_GetProp(Vm& vm, const uint8_t* args, int argc, int dst);   // vm_instance.cpp
+void impl_VM_SetProp(Vm& vm, const uint8_t* args, int argc, int dst);
 
 // ============================================================
 // 槽读写（vm_container.cpp 和以后的内部函数实现都用这套）
@@ -761,4 +846,15 @@ static inline void wr_i(Vm& vm, int slot, int x) {
     slot_write(vm, slot, v);
 }
 
+
+
+// ============================================================
+// 字符串名字表（S_xxx）放最后：它要用上面几个 *_LIST 宏（native / game / 字段）
+// ============================================================
+#include "names.h"
+
+// callbin 的函数体块名（池下标）—— 在 names.h 之后，所以 S__CALL_ENTRY 已声明
+static const int CALLBIN_ENTRY = S__CALL_ENTRY;
+
 #endif // FVM_VM_H
+

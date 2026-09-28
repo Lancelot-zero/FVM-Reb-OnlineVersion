@@ -41,15 +41,16 @@ Value mk_num(double x) {
 
 
 Value mk_str(Vm& vm, const char* s) {
-    Value v; v.t = MEM_STRING; v.v = vm.intern(s);
+    Value v; v.t = MEM_STRING; v.v = intern_str(s);
     return v;
 }
 
 
 // Initialize / Create 里那种"一次写几十个字段"的地方，现在直接写：
-//   内置字段（19 个）→ in->xxx；其余 → in->vars[name]。这里几个 helper 留给**每帧**那些
+//   内置字段（19 个）→ in->xxx；其余 → in->vars[intern_str(name)]。这里几个 helper 留给**每帧**那些
 //   按名字读写的地方用（它们名字可能是运行时来的，走这条不出错）。
 void set_num(int inst, const char* name, double x) { inst_var_set(inst, name, mk_num(x)); }
+void set_num_sid(int inst, int sid, double x)       { inst_var_set_sid(inst, sid, mk_num(x)); }
 
 // 取实例变量，没有就给个默认值。
 //   ⚠ 别写 `*inst_var(s, "xxx")` —— inst_var 在变量不存在时返回 NULL，
@@ -57,6 +58,11 @@ void set_num(int inst, const char* name, double x) { inst_var_set(inst, name, mk
 //     而这些"引擎内置"（bbox_*、hit_effect_2 这类由宿主补的）我们没法假定它一定在。
 Value iv_or(int inst, const char* name, double dflt) {
     Value* p = inst_var(inst, name);
+    return p ? *p : mk_num(dflt);
+}
+
+Value iv_or_sid(int inst, int sid, double dflt) {
+    Value* p = inst_var_sid(inst, sid);
     return p ? *p : mk_num(dflt);
 }
 
@@ -72,25 +78,35 @@ void set_var(int inst, const char* name, Value v) {
     inst_var_set(inst, name, v);
 }
 
+void set_var_sid(int inst, int sid, Value v) {
+    Value* p = inst_var_sid(inst, sid);
+    Value old = p ? *p : Value{MEM_INT, 0};
+    retain(v);
+    if (old.t != v.t || old.v != v.v) release(old);
+    inst_var_set_sid(inst, sid, v);
+}
+
 
 // enemy_tbit_of(target_type)：敌人类型 → 命中位掩码
 //   宏值见 scr_command_VM.gml:5567（HIT_NORMAL=1 … HIT_UNDERGROUND=32、HIT_OTHER=64）
 bool str_is(Vm& vm, const Value* v, const char* s);   // 定义在下面
 
 int enemy_tbit_of(Vm& vm, const Value* t) {
-    if (str_is(vm, t, "normal"))      return 1;
-    if (str_is(vm, t, "air"))         return 2;
-    if (str_is(vm, t, "dance"))       return 4;
-    if (str_is(vm, t, "obstacle"))    return 8;
-    if (str_is(vm, t, "diver"))       return 16;
-    if (str_is(vm, t, "underground")) return 32;
+    if (str_is_sid(t, S_normal))      return 1;
+    if (str_is_sid(t, S_air))         return 2;
+    if (str_is_sid(t, S_dance))       return 4;
+    if (str_is_sid(t, S_obstacle))    return 8;
+    if (str_is_sid(t, S_diver))       return 16;
+    if (str_is_sid(t, S_underground)) return 32;
     return 64;                                              // HIT_OTHER
 }
 
 
 double get_num(int inst, const char* name) { return num_of(inst_var(inst, name)); }
+double get_num_sid(int inst, int sid)      { return num_of(inst_var_sid(inst, sid)); }
 
 void add_num(int inst, const char* name, double d) { set_num(inst, name, get_num(inst, name) + d); }
+void add_num_sid(int inst, int sid, double d)      { set_num_sid(inst, sid, get_num_sid(inst, sid) + d); }
 
 // GML 的真值：手册写的是"<= 0.5 为假，> 0.5 为真"（整数 0 假、1 真，跟 !=0 一致；
 // 差别只在浮点 0 < x <= 0.5 这种）
@@ -101,35 +117,51 @@ bool truthy(const Value* v) {
 }
 
 
-// 这个值是不是那个字符串（按池里的文本比，不是比下标）
+// 这个值是不是那个字符串（按池下标比：池是全局的，同下标必然同文本）
+bool str_is_sid(const Value* v, int sid) {
+    return v && v->t == MEM_STRING && v->v == sid;
+}
+
+// 这个值是不是那个字符串（池是全局的：先看下标，下标不同再比文本）
 bool str_is(Vm& vm, const Value* v, const char* s) {
+    (void)vm;                                       // 池全局化之后不用 Vm 了
     if (!v || v->t != MEM_STRING) return false;
-    if (v->v < 0 || v->v >= (int)vm.strings.size()) return false;
-    return vm.strings[(size_t)v->v] == s;
+    if (!str_ok(v->v)) return false;
+    return str_at(v->v) == s;
 }
 
 
 // 读全局：**直接查全局表**，不绕 VM_GetProp（那个还是空壳，绕它拿到的恒为 0）。
 //   别的实例的变量用 inst_var/get_num 直接读，同理。
 //   ⚠ 老代码里有几处 v_getprop(vm, 0, "xxx") —— 那是错的，已经改掉
+//   下标版（S_xxx）零哈希；名字版留给运行时才知道名字的地方。
+Value gv_sid(int sid) {
+    Value* p = global_var_sid(sid);
+    if (p) return *p;
+    Value u; u.t = MEM_UNDEFINED; u.v = 0;
+    return u;
+}
+
 Value gv(Vm& vm, const char* name) {
+    (void)vm;
     Value* p = global_var(name);
     if (p) return *p;
     Value u; u.t = MEM_UNDEFINED; u.v = 0;
     return u;
 }
 
+double gnumv_sid(int sid)            { Value v = gv_sid(sid); return num_of(&v); }
+bool   gtrue_sid(int sid)            { Value v = gv_sid(sid); return truthy(&v); }
 double gnumv(Vm& vm, const char* name) { return num_of(&gv(vm, name)); }
 bool   gtrue(Vm& vm, const char* name) { Value v = gv(vm, name); return truthy(&v); }
 
 // 两个字符串值是不是同一串文字
-//   （槽里的字符串存的是池下标，OP_EQ 是拿下标当数字比的 —— 同一段文字未必同一个下标，
-//     所以硬编码块里比字符串一律按文字比，别用 num_of）
+//   （池是全局的：**同下标必然同文本**，所以先比下标，不同再比文本）
 bool str_eq(Vm& vm, const Value* a, const Value* b) {
+    (void)vm;                                       // 池全局化之后不用 Vm 了
     if (!a || !b || a->t != MEM_STRING || b->t != MEM_STRING) return false;
-    if (a->v < 0 || a->v >= (int)vm.strings.size()) return false;
-    if (b->v < 0 || b->v >= (int)vm.strings.size()) return false;
-    return vm.strings[(size_t)a->v] == vm.strings[(size_t)b->v];
+    if (!str_ok(a->v) || !str_ok(b->v)) return false;
+    return a->v == b->v || str_at(a->v) == str_at(b->v);
 }
 
 
@@ -138,47 +170,80 @@ void set_iv(int inst, const char* name, int n) {
     inst_var_set(inst, name, v);
 }
 
+void set_iv_sid(int inst, int sid, int n) {
+    Value v; v.t = MEM_INT; v.v = n;
+    inst_var_set_sid(inst, sid, v);
+}
+
 
 void add_iv(int inst, const char* name, int d) {
     set_iv(inst, name, iv_of(inst_var(inst, name)) + d);
+}
+
+void add_iv_sid(int inst, int sid, int d) {
+    set_iv_sid(inst, sid, iv_of(inst_var_sid(inst, sid)) + d);
 }
 
 
 // 按名字调一个内部函数 / 游戏 API：值先写进 scratch 槽（槽号连续），再派发
 //   vals 里放的是"值"，不是槽号；最多 8 个参数
 // 还没进 native / game API 表的函数 —— 占位（这两张表以后要补就补，先别让硬编码块卡住）
+//   按**池下标**判（原来是逐条 strcmp）
 //   画图 / UI：空实现（真正画图是宿主/引擎的事）
-const char* kVoidStubs[] = {
-    "draw_set_alpha", "draw_set_color", "draw_set_colour",
-    "draw_set_halign", "draw_set_valign", "draw_set_font",
-    "draw_rectangle", "draw_text",
-};
+static bool is_void_stub(int sid) {
+    switch (sid) {
+        case S_draw_set_alpha: case S_draw_set_color: case S_draw_set_colour:
+        case S_draw_set_halign: case S_draw_set_valign: case S_draw_set_font:
+        case S_draw_rectangle: case S_draw_text:
+            return true;
+        default:
+            return false;
+    }
+}
 
 //   项目脚本函数（还没搬过来）：返回 undefined —— 跟 GML 里"查不到"一个效果，
 //   调用方的 `!= undefined` 判断会正常走"没数据"那条路，而不是拿到一堆 0 当真数据
-const char* kUndefStubs[] = {
-    "get_plant_data", "get_card_info", "get_cookbook_data",
-};
+static bool is_undef_stub(int sid) {
+    switch (sid) {
+        case S_get_plant_data: case S_get_card_info: case S_get_cookbook_data:
+            return true;
+        default:
+            return false;
+    }
+}
 
 
-void call_fn_v(Vm& vm, const char* name, const Value* vals, int argc, int dst) {
-    int slots[8];
+// 值写进 scratch 槽（槽号连续），返回实际参数个数 —— call_fn_v / call_fn_sid 共用的前半截
+static int fill_args(Vm& vm, int* slots, const Value* vals, int argc) {
     if (argc > 8) argc = 8;
     for (int i = 0; i < argc; i++) {
         slots[i] = SCRATCH_BASE + i;
         wr_v(vm, slots[i], vals[i]);
     }
-    int id = native_id(name);
-    if (id >= 0) { kNativeFns[id](vm, (const uint8_t*)slots, argc, dst); return; }
-    id = game_id(name);
-    if (id >= 0) { kGameFns[id](vm, (const uint8_t*)slots, argc, dst); return; }
-    for (size_t i = 0; i < sizeof(kVoidStubs) / sizeof(kVoidStubs[0]); i++)
-        if (strcmp(kVoidStubs[i], name) == 0) return;                    // 占位：什么都不做
-    for (size_t i = 0; i < sizeof(kUndefStubs) / sizeof(kUndefStubs[0]); i++)
-        if (strcmp(kUndefStubs[i], name) == 0) {                         // 占位：返回 undefined
-            if (dst >= 0) { Value u; u.t = MEM_UNDEFINED; u.v = 0; wr_v(vm, dst, u); }
-            return;
-        }
+    return argc;
+}
+
+// 按**池下标**调（sid 是编译期常量时用 SID_xxx）：没有名字、没有哈希，一次区间判断 + 数组下标
+void call_fn_sid(Vm& vm, int sid, const Value* vals, int argc, int dst) {
+    Fn fn = fn_of_sid(sid);
+    if (!fn) { printf("[vm] call_fn_sid: 池下标 %d 不是内置函数\n", sid); return; }
+    int slots[8];
+    argc = fill_args(vm, slots, vals, argc);
+    fn(vm, (const uint8_t*)slots, argc, dst);
+}
+
+void call_fn_v(Vm& vm, const char* name, const Value* vals, int argc, int dst) {
+    int slots[8];
+    argc = fill_args(vm, slots, vals, argc);
+    // 名字 → 池下标（一次哈希），之后全是整数判断
+    int sid = str_find(name);
+    Fn fn = (sid < 0) ? NULL : fn_of_sid(sid);
+    if (fn) { fn(vm, (const uint8_t*)slots, argc, dst); return; }
+    if (sid >= 0 && is_void_stub(sid)) return;                           // 占位：什么都不做
+    if (sid >= 0 && is_undef_stub(sid)) {                                // 占位：返回 undefined
+        if (dst >= 0) { Value u; u.t = MEM_UNDEFINED; u.v = 0; wr_v(vm, dst, u); }
+        return;
+    }
     printf("[vm] call_fn: no such function '%s'\n", name);
 }
 
@@ -188,6 +253,13 @@ void call_fn(Vm& vm, const char* name, const int* vals, int argc, int dst) {
     if (argc > 8) argc = 8;
     for (int i = 0; i < argc; i++) tmp[i] = mk_num((double)vals[i]);
     call_fn_v(vm, name, tmp, argc, dst);
+}
+
+void call_fn_int_sid(Vm& vm, int sid, const int* vals, int argc, int dst) {
+    Value tmp[8];
+    if (argc > 8) argc = 8;
+    for (int i = 0; i < argc; i++) tmp[i] = mk_num((double)vals[i]);
+    call_fn_sid(vm, sid, tmp, argc, dst);
 }
 
 
@@ -203,10 +275,26 @@ Value call_ret(Vm& vm, const char* name, const Value* vals, int argc) {
 }
 
 
+// 同上，但按池下标调（编译期常量 SID_xxx）—— 顺手能写出来的调用点都该用这个
+Value call_ret_sid(Vm& vm, int sid, const Value* vals, int argc) {
+    int dst = SCRATCH_BASE + 8;
+    Value z; z.t = MEM_INT; z.v = 0;
+    wr_v(vm, dst, z);
+    call_fn_sid(vm, sid, vals, argc, dst);
+    return rd_v(vm, dst);
+}
+
+
 // 同一个意思，但把结果**留住**（多 retain 一份），后面再 call_ret 也不会被冲掉；
 //   用完必须自己 release()。容器/结构体要跨调用用的时候用这个。
 Value call_ret_held(Vm& vm, const char* name, const Value* vals, int argc) {
     Value v = call_ret(vm, name, vals, argc);
+    retain(v);
+    return v;
+}
+
+Value call_ret_held_sid(Vm& vm, int sid, const Value* vals, int argc) {
+    Value v = call_ret_sid(vm, sid, vals, argc);
     retain(v);
     return v;
 }
@@ -223,13 +311,13 @@ Value call_ret_held(Vm& vm, const char* name, const Value* vals, int argc) {
 //   （值都是按值传递的，嵌套调用不会互相踩 scratch 槽）
 Value v_getprop(Vm& vm, int inst, const char* name) {
     Value a[2]; a[0] = mk_num(inst); a[1] = mk_str(vm, name);
-    return call_ret(vm, "VM_GetProp", a, 2);
+    return call_ret_sid(vm, S_VM_GetProp, a, 2);      // 池下标是编译期常量：不查名字
 }
 
 // 对"值"（结构体等）取成员：a.b → VM_GetProp(a, "b")（跟翻译器的 member → get_prop 一致）
 Value v_member(Vm& vm, const Value& obj, const char* name) {
     Value a[2]; a[0] = obj; a[1] = mk_str(vm, name);
-    return call_ret(vm, "VM_GetProp", a, 2);
+    return call_ret_sid(vm, S_VM_GetProp, a, 2);
 }
 
 bool is_undef(const Value& v) { return v.t == MEM_UNDEFINED; }
@@ -256,7 +344,7 @@ Value v_struct(Vm& vm, const Value& s, const char* key) {
 
 Value v_grid(Vm& vm, const Value& g, const Value& c, const Value& r) {
     Value a[3]; a[0] = g; a[1] = c; a[2] = r;
-    return call_ret(vm, "ds_grid_get", a, 3);
+    return call_ret_sid(vm, S_ds_grid_get, a, 3);
 }
 
 
@@ -271,10 +359,10 @@ Value v_grid(Vm& vm, const Value& g, const Value& c, const Value& r) {
 //   ⚠ 还有一处语义：GML 的 with (obj_parent) / instance_exists(obj_parent)
 //     **包含子对象**（obj_enemy_mod 也算 obj_enemy_parent）。这里靠 inst_is() 判。
 const char* hot_parent_of(const char* obj) {
-    if (strcmp(obj, "obj_card_mod")         == 0) return "obj_card_parent";
-    if (strcmp(obj, "obj_enemy_mod")        == 0) return "obj_enemy_parent";
-    if (strcmp(obj, "obj_player_character") == 0) return "obj_card_parent";
-    if (strcmp(obj, "obj_bullet_mod")       == 0) return NULL;   // 无父对象
+    if (obj == str_at(S_obj_card_mod)) return str_at(S_obj_card_parent).c_str();
+    if (obj == str_at(S_obj_enemy_mod)) return str_at(S_obj_enemy_parent).c_str();
+    if (obj == str_at(S_obj_player_character)) return str_at(S_obj_card_parent).c_str();
+    if (obj == str_at(S_obj_bullet_mod)) return NULL;   // 无父对象
     return NULL;
 }
 
@@ -311,7 +399,7 @@ Value array_v(Vm& vm, const Value& arr, int i) {
 
 void array_setv(Vm& vm, const Value& arr, int i, const Value& v) {
     Value a[3]; a[0] = arr; a[1] = mk_num(i); a[2] = v;
-    call_fn_v(vm, "array_set", a, 3, -1);
+    call_fn_sid(vm, S_array_set, a, 3, -1);
 }
 
 double array_n(Vm& vm, const Value& arr, int i) {
@@ -330,7 +418,7 @@ void array_setn(Vm& vm, const Value& arr, int i, double x) {
 //       call_ret 借来的，用 ds_map_find_value 的话 call_ret 会先把那份引用放掉
 //   写：走 ds_map_set（它自己会 retain，安全）
 Value m_get(Vm& vm, const Value& map, const char* key) {
-    Value k; k.t = MEM_STRING; k.v = vm.intern(key);
+    Value k; k.t = MEM_STRING; k.v = intern_str(key);
     Value out; out.t = MEM_UNDEFINED; out.v = 0;
     map_find(map, k, &out);
     return out;
@@ -338,7 +426,7 @@ Value m_get(Vm& vm, const Value& map, const char* key) {
 
 void m_set(Vm& vm, const Value& map, const char* key, const Value& v) {
     Value a[3]; a[0] = map; a[1] = mk_str(vm, key); a[2] = v;
-    call_fn_v(vm, "ds_map_set", a, 3, -1);
+    call_fn_sid(vm, S_ds_map_set, a, 3, -1);
 }
 
 void m_setnum(Vm& vm, const Value& map, const char* key, double x) {
@@ -357,26 +445,21 @@ double m_num(Vm& vm, const Value& map, const char* key) {
 //   平台原型：src_mod.gml:2039 mod_base_tick / 2052 mod_inst_add / 2060 mod_inst_del
 //   "这个实例属于哪个 mod 的 VM" = 实例上的 enemy_id / card_id / bullet_id 查 g_mod_vms
 //
-//   ⚠ 字符串池是**每个 VM 一份**的（见 vm.h）。实例变量是全局共享的，所以一个
-//     mod VM 写进实例变量的字符串（比如 mod_step_enter_condition = "cell"），
-//     它的下标属于**那个 mod VM 的池**；宿主的硬编码块读它时得认这个池。
-//     这里统一走 str_is_any()：先按宿主池比，不中再按 mod VM 池比。
-//     （根治办法是全局字符串池 —— 那是以后的事，先这么兼容）
+//   ⚠ 字符串池现在是**全局一张**（见 vm.h）：任何 VM 写进实例变量的字符串，
+//     下标都是全局的，谁读都是同一串文字 —— 不用再分"谁的池"。
+//     str_is_any() 那个双池判断因此退化成一次普通比较（签名留着，调用点不用改）。
 // ============================================================
 
-// 按某个池取文本（越界 → 空串）
-std::string pool_text(const std::vector<std::string>& pool, const Value* v) {
-    if (!v || v->t != MEM_STRING || v->v < 0 || v->v >= (int)pool.size()) return std::string();
-    return pool[(size_t)v->v];
+// 按全局池取文本（越界 → 空串）
+std::string pool_text(const Value* v) {
+    if (!v || v->t != MEM_STRING || !str_ok(v->v)) return std::string();
+    return str_at(v->v);
 }
 
-// 这个值是不是某个字符串：宿主池 + （可选的）另一个池
+// 这个值是不是某个字符串：池全局化之后只有一个池，直接按文字比
 bool str_is_any(Vm& vm, Vm* other, const Value* v, const char* s) {
-    if (!v || v->t != MEM_STRING) return false;
-    if (v->v >= 0 && v->v < (int)vm.strings.size() && vm.strings[(size_t)v->v] == s) return true;
-    if (other && other != &vm && v->v >= 0 && v->v < (int)other->strings.size()
-            && other->strings[(size_t)v->v] == s) return true;
-    return false;
+    (void)other;                                    // 另一个池已经不存在了
+    return str_is(vm, v, s);
 }
 
 
@@ -384,7 +467,7 @@ bool str_is_any(Vm& vm, Vm* other, const Value* v, const char* s) {
 Vm* mod_vm_of_inst(Vm& vm, int inst, const char* idvar) {
     Value* p = inst_var(inst, idvar);
     if (!p || p->t != MEM_STRING) return NULL;
-    std::string id = pool_text(vm.strings, p);
+    std::string id = pool_text(p);
     if (id.empty()) return NULL;                       // 池不认识这个下标 → 当没有
     return mod_vm(id);
 }
@@ -427,10 +510,10 @@ void mod_inst_del_v(Vm* mv, int inst, bool with_list) {
 // mod_base_tick(_inst)：倒计时 > 0 时每帧 -1 并加透明度
 void mod_base_tick_v(int inst) {
     if (!inst_get(inst)) return;
-    if (!inst_var(inst, "mod_countdown") || !inst_var(inst, "mod_alpha_add")) return;
-    if (get_num(inst, "mod_countdown") > 0) {
-        add_num(inst, "mod_countdown", -1);
-        add_num(inst, "image_alpha", get_num(inst, "mod_alpha_add"));
+    if (!inst_var_sid(inst, S_mod_countdown) || !inst_var_sid(inst, S_mod_alpha_add)) return;
+    if (get_num_sid(inst, S_mod_countdown) > 0) {
+        add_num_sid(inst, S_mod_countdown, -1);
+        add_num_sid(inst, S_image_alpha, get_num_sid(inst, S_mod_alpha_add));
     }
 }
 
@@ -455,10 +538,10 @@ bool is_numv(const Value* v) { return v && (v->t == MEM_INT || v->t == MEM_FLOAT
 // 字符串优先按 mod VM 的池解（mod VM 的数组/命名数组里存的字符串都是那个池的）
 std::string text_pref_mod(Vm& vm, Vm* mv, const Value& v) {
     if (mv && mv != &vm) {
-        std::string s = pool_text(mv->strings, &v);
+        std::string s = pool_text(&v);
         if (!s.empty()) return s;
     }
-    return pool_text(vm.strings, &v);
+    return pool_text(&v);
 }
 
 
@@ -485,4 +568,42 @@ bool inst_event_inherited(Vm& vm, int inst, const char* block) {
         obj = p;
     }
     return false;
+}
+
+// ============================================================
+// 池下标版（名字是编译期常量 S_xxx 时用；调用点不再出现字面量）
+//   map/struct：直接吃 sid；块名/对象名：内部 str_at 取文本（O(1)）
+// ============================================================
+Value m_get_sid(Vm& vm, const Value& map, int sid) {
+    Value k; k.t = MEM_STRING; k.v = sid;
+    Value out; out.t = MEM_UNDEFINED; out.v = 0;
+    map_find(map, k, &out);
+    return out;
+}
+Value v_struct_sid(Vm& vm, const Value& s, int sid) { return m_get_sid(vm, s, sid); }
+Value v_member_sid(Vm& vm, const Value& obj, int sid) {
+    Value a[2]; a[0] = obj; a[1] = mk_str_sid(sid);
+    return call_ret_sid(vm, S_VM_GetProp, a, 2);
+}
+void m_set_sid(Vm& vm, const Value& map, int sid, const Value& v) {
+    Value a[3]; a[0] = map; a[1] = mk_str_sid(sid); a[2] = v;
+    call_fn_sid(vm, S_ds_map_set, a, 3, -1);
+}
+void   m_setnum_sid(Vm& vm, const Value& map, int sid, double x) { Value v = mk_num(x); m_set_sid(vm, map, sid, v); }
+double m_num_sid(Vm& vm, const Value& map, int sid) { Value v = m_get_sid(vm, map, sid); return num_of(&v); }
+double m_or_num_sid(Vm& vm, const Value& map, int sid, double dflt) {
+    Value v = m_get_sid(vm, map, sid); return v.t == MEM_UNDEFINED ? dflt : num_of(&v);
+}
+bool mod_run_block_sid(Vm* mv, int inst, int sid, const char* cur_global) {
+    return mod_run_block(mv, inst, str_at(sid).c_str(), cur_global);
+}
+bool inst_is_sid(int id, int sid)                        { return inst_is(id, str_at(sid).c_str()); }
+bool inst_event_sid(Vm& vm, int inst, int sid)           { return inst_event(vm, inst, str_at(sid).c_str()); }
+bool inst_event_inherited_sid(Vm& vm, int inst, int sid) { return inst_event_inherited(vm, inst, str_at(sid).c_str()); }
+bool hot_inherited_sid(Vm& vm, int o, int b)             { return hot_inherited(vm, str_at(o).c_str(), str_at(b).c_str()); }
+bool hot_enemymod_mouse_sid(Vm& vm, int sid)             { return hot_enemymod_mouse(vm, str_at(sid).c_str()); }
+Vm*  mod_vm_of_inst_sid(Vm& vm, int inst, int sid)       { return mod_vm_of_inst(vm, inst, str_at(sid).c_str()); }
+
+bool str_is_any_sid(Vm& vm, Vm* other, const Value* v, int sid) {
+    return str_is_any(vm, other, v, str_at(sid).c_str());
 }

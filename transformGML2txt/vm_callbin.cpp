@@ -26,7 +26,7 @@
 
 std::vector<char> g_call_mem;                       // 共享内存（首次调用时才分配）
 size_t            g_call_off = 0;                   // 当前偏移（槽）
-std::map<std::string, CallBin> g_call_dict;         // 函数名 → callbin
+std::map<int, CallBin> g_call_dict;                 // 函数名的池下标 → callbin
 bool              g_call_abort = false;             // 触上限 → 强制结束整条调用链
 
 static Value undef_v() { Value u; u.t = MEM_UNDEFINED; u.v = 0; return u; }
@@ -41,7 +41,7 @@ static const int CALL_MAX_DEPTH = 512;
 static int g_call_depth = 0;
 
 void callbin_clear() {
-    std::map<std::string, CallBin>::iterator it = g_call_dict.begin();
+    std::map<int, CallBin>::iterator it = g_call_dict.begin();
     for (; it != g_call_dict.end(); ++it) delete it->second.vm;
     g_call_dict.clear();
     g_call_off = 0;
@@ -93,17 +93,22 @@ bool callbin_load(const std::string& path) {
         printf("[vm] %s 的块表读不出来\n", path.c_str());
         return false;
     }
+    // 本 callbin 的池并进全局池 + 字节码里的字符串常量换成全局下标
+    if (!remap_block_strings(blocks, strings)) return false;
+
+    // 字典的 key = 函数名在全局池里的下标（池全局化了，同一个名字永远是同一下标）
+    int sid = intern_str(name);
 
     // 同名重载：把旧的换掉（热重载复用这个名字）
-    std::map<std::string, CallBin>::iterator old = g_call_dict.find(name);
+    std::map<int, CallBin>::iterator old = g_call_dict.find(sid);
     if (old != g_call_dict.end()) { delete old->second.vm; g_call_dict.erase(old); }
 
     Vm* f = new Vm(true);                     // true = 不分配 mem，mem 每次调用时借共享内存
-    f->init_strings(strings);
     // 注意：**不登记进 g_vm_of_object** —— 它是函数，不是对象；
     //   登记了会让 vm_of_object("函数名") 命中，把函数当成对象。
     f->obj = name;
-    for (size_t i = 0; i < blocks.size(); i++) f->blocks[blocks[i].name] = blocks[i];
+    for (size_t i = 0; i < blocks.size(); i++)
+        f->blocks[intern_str(blocks[i].name)] = blocks[i];   // key = 块名的池下标
 
     CallBin cb;
     cb.name  = name;
@@ -111,20 +116,20 @@ bool callbin_load(const std::string& path) {
     cb.argc  = argc;
     cb.slots = slots;
     cb.vm    = f;
-    g_call_dict[name] = cb;
+    g_call_dict[sid] = cb;
     return true;
 }
 
-// ── 真正干活的：调一个 callbin ──
-bool callbin_invoke(Vm& caller, const std::string& name, const Value* argv, int argn, Value* ret) {
-    std::map<std::string, CallBin>::iterator it = g_call_dict.find(name);
+// ── 真正干活的：调一个 callbin（sid = 函数名的池下标）──
+bool callbin_invoke(Vm& caller, int sid, const Value* argv, int argn, Value* ret) {
+    std::map<int, CallBin>::iterator it = g_call_dict.find(sid);
     if (it == g_call_dict.end()) {
-        printf("[vm] VM_CallFunc: 字典里没有 \"%s\"\n", name.c_str());
+        printf("[vm] VM_CallFunc: 字典里没有 \"%s\"\n", str_at(sid).c_str());
         return false;
     }
     CallBin& cb = it->second;
     if (argn != cb.argc) {
-        printf("[vm] VM_CallFunc: \"%s\" 要 %d 个参数，给了 %d 个\n", name.c_str(), cb.argc, argn);
+        printf("[vm] VM_CallFunc: \"%s\" 要 %d 个参数，给了 %d 个\n", cb.name.c_str(), cb.argc, argn);
         return false;
     }
     if (g_call_mem.empty()) g_call_mem.assign(CALL_MEM_SLOTS * 8, 0);
@@ -140,7 +145,7 @@ bool callbin_invoke(Vm& caller, const std::string& name, const Value* argv, int 
     // 共享内存不够：打印报错 + 强制结束整条链，顶层拿到 undefined
     if (g_call_off + (size_t)cb.slots > CALL_MEM_SLOTS) {
         printf("[vm] VM_CallFunc: 共享内存不够了 —— \"%s\" 要 %d 槽，已用 %d/%d，强制结束\n",
-               name.c_str(), cb.slots, (int)g_call_off, (int)CALL_MEM_SLOTS);
+               cb.name.c_str(), cb.slots, (int)g_call_off, (int)CALL_MEM_SLOTS);
         g_call_abort = true;
         return false;
     }
@@ -153,10 +158,10 @@ bool callbin_invoke(Vm& caller, const std::string& name, const Value* argv, int 
     g_call_off += (size_t)cb.slots;              // 进函数：偏移往前走
     g_call_depth++;
 
-    f->run_named("_VM_CONST_INIT");              // 字面量填进这一帧（每帧都得填，帧是复用的）
+    f->run_named_sid(S__VM_CONST_INIT);              // 字面量填进这一帧（每帧都得填，帧是复用的）
     for (int i = 0; i < argn; i++) wr_v(*f, 1 + i, argv[i]);   // 槽 1..argc = 实参
     f->cur_instance = caller.cur_instance;       // 函数体里的"当前实例"就是调用方那个
-    f->run_named(CALLBIN_ENTRY);                 // 跑函数体
+    f->run_named_sid(CALLBIN_ENTRY);                 // 跑函数体
 
     bool aborted = g_call_abort;                 // 触上限了：这一层也算失败，别算返回值
     Value r = aborted ? undef_v() : rd_v(*f, 0); // 槽 0 = 返回值
@@ -190,16 +195,15 @@ void impl_VM_CallFunc(Vm& vm, const uint8_t* args, int argc, int dst) {
         return;
     }
     int si = rd_i(vm, s0);
-    if (si < 0 || si >= (int)vm.strings.size()) {
+    if (!str_ok(si)) {
         printf("[vm] VM_CallFunc: 函数名下标越界 %d\n", si);
         if (dst >= 0) wr_v(vm, dst, undef_v());
         return;
     }
-    std::string name = vm.strings[(size_t)si];
-
+    // si 就是函数名的池下标，直接当字典 key —— 不用取文本、不用构造 std::string
     int n = argc - 1;
     if (n > CALL_MAX_ARGS) {
-        printf("[vm] VM_CallFunc: \"%s\" 实参太多（%d > %d）\n", name.c_str(), n, CALL_MAX_ARGS);
+        printf("[vm] VM_CallFunc: \"%s\" 实参太多（%d > %d）\n", str_at(si).c_str(), n, CALL_MAX_ARGS);
         if (dst >= 0) wr_v(vm, dst, undef_v());
         return;
     }
@@ -207,7 +211,7 @@ void impl_VM_CallFunc(Vm& vm, const uint8_t* args, int argc, int dst) {
     for (int i = 0; i < n; i++) av[i] = rd_v(vm, argslot(args, i + 1));
 
     Value ret = undef_v();
-    if (!callbin_invoke(vm, name, av, n, &ret)) ret = undef_v();
+    if (!callbin_invoke(vm, si, av, n, &ret)) ret = undef_v();
     if (dst >= 0) wr_v(vm, dst, ret);   // 写进调用方的槽（wr_v 会自己 retain 一份）
     release(ret);                       // 放掉 callbin_invoke 转交过来的那一份（非容器空操作）
 }
@@ -218,8 +222,8 @@ void impl_VM_FuncExists(Vm& vm, const uint8_t* args, int argc, int dst) {
     int s0 = argslot(args, 0);
     if (rd_t(vm, s0) != MEM_STRING) { wr_i(vm, dst, 0); return; }
     int si = rd_i(vm, s0);
-    if (si < 0 || si >= (int)vm.strings.size()) { wr_i(vm, dst, 0); return; }
-    wr_i(vm, dst, g_call_dict.count(vm.strings[(size_t)si]) ? 1 : 0);
+    if (!str_ok(si)) { wr_i(vm, dst, 0); return; }
+    wr_i(vm, dst, g_call_dict.count(si) ? 1 : 0);
 }
 
 // ── 游戏 API：VM_FuncDesc(函数名) → 说明字符串（没有 → ""） ──
@@ -229,12 +233,12 @@ void impl_VM_FuncDesc(Vm& vm, const uint8_t* args, int argc, int dst) {
         int s0 = argslot(args, 0);
         if (rd_t(vm, s0) == MEM_STRING) {
             int si = rd_i(vm, s0);
-            if (si >= 0 && si < (int)vm.strings.size()) {
-                std::map<std::string, CallBin>::iterator it = g_call_dict.find(vm.strings[(size_t)si]);
+            if (str_ok(si)) {
+                std::map<int, CallBin>::iterator it = g_call_dict.find(si);
                 if (it != g_call_dict.end()) desc = it->second.desc;
             }
         }
     }
-    Value v; v.t = MEM_STRING; v.v = vm.intern(desc);
+    Value v; v.t = MEM_STRING; v.v = intern_str(desc);
     wr_v(vm, dst, v);
 }
