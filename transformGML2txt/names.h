@@ -788,7 +788,35 @@
     X(undefined) \
     X(unknown) \
     /* map_* 系列 */ \
-    X(map_struct)
+    X(map_struct) \
+    /* 其余 mod 对象名 */ \
+    X(obj_gem_mod) \
+    X(obj_effect_mod) \
+    X(_mod_pending_effect_id) \
+    X(mod_follow_instance) \
+    X(mod_prestep_dx) \
+    X(mod_prestep_dy) \
+    X(weapon_info) \
+    X(atk_impact) \
+    X(attack_gem) \
+    X(gem_id) \
+    X(gem_info) \
+    X(gem_level) \
+    X(tooltip_text) \
+    X(clickable) \
+    X(clicked) \
+    X(on_click) \
+    X(icon) \
+    X(first_cooldown) \
+    X(_mod_pending_gem_level) \
+    X(mod_step_card_area) \
+    X(font_hei) \
+    X(bbox_bottom) \
+    X(cool) \
+    X(enemy_area) \
+    X(enemy_area_mod) \
+    X(card_area) \
+    X(card_area_mod)
 
 // ── 全清单：段顺序 = 池顺序 ──
 #define NAME_LIST(X) \

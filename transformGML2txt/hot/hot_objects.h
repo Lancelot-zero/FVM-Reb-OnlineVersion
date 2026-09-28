@@ -86,4 +86,34 @@ bool hot_cardslot_user_event_0(Vm& vm);
 bool hot_cardslot_func_select_slot(Vm& vm);
 bool hot_cardslot_func_try_place_once(Vm& vm);
 
+// ---- hot_effect_mod.cpp ----
+bool hot_effectmod_create(Vm& vm);
+bool hot_effectmod_step(Vm& vm);
+bool hot_effectmod_draw(Vm& vm);
+bool hot_effectmod_destroy(Vm& vm);
+bool hot_effectmod_mouse(Vm& vm, const char* block);
+bool hot_effectmod_click(Vm& vm);
+bool hot_effectmod_mouse_enter(Vm& vm);
+bool hot_effectmod_mouse_leave(Vm& vm);
+
+// ---- hot_weapon_mod.cpp ----
+bool hot_weaponmod_create(Vm& vm);
+bool hot_weaponmod_step(Vm& vm);
+bool hot_weaponmod_draw(Vm& vm);
+bool hot_weaponmod_destroy(Vm& vm);
+bool hot_weaponmod_mouse(Vm& vm, const char* block);
+bool hot_weaponmod_click(Vm& vm);
+bool hot_weaponmod_mouse_enter(Vm& vm);
+bool hot_weaponmod_mouse_leave(Vm& vm);
+
+// ---- hot_gem_mod.cpp ----
+bool hot_gemmod_create(Vm& vm);
+bool hot_gemmod_step(Vm& vm);
+bool hot_gemmod_draw(Vm& vm);
+bool hot_gemmod_destroy(Vm& vm);
+bool hot_gemmod_mouse(Vm& vm, const char* block);
+bool hot_gemmod_click(Vm& vm);
+bool hot_gemmod_mouse_enter(Vm& vm);
+bool hot_gemmod_mouse_leave(Vm& vm);
+
 #endif // FVM_HOT_OBJECTS_H

@@ -74,6 +74,30 @@ const HotBlock kHotBlocks[] = {
     { S_obj_card_slot, S__OBJECT_USER_EVENT_0,  hot_cardslot_user_event_0     },
     { S_obj_card_slot, S__FUNC_select_slot,     hot_cardslot_func_select_slot },
     { S_obj_card_slot, S__FUNC_try_place_once,  hot_cardslot_func_try_place_once },
+    // obj_weapon_mod（无父对象；id 变量 = weapon_id，注册表 mod_weapon_vms）
+    { S_obj_weapon_mod, S__OBJECT_CREATE,       hot_weaponmod_create      },
+    { S_obj_weapon_mod, S__OBJECT_STEP,         hot_weaponmod_step        },
+    { S_obj_weapon_mod, S__OBJECT_DRAW,         hot_weaponmod_draw        },
+    { S_obj_weapon_mod, S__OBJECT_DESTROY,      hot_weaponmod_destroy     },
+    { S_obj_weapon_mod, S__OBJECT_CLICK,        hot_weaponmod_click       },
+    { S_obj_weapon_mod, S__OBJECT_MOUSE_ENTER,  hot_weaponmod_mouse_enter },
+    { S_obj_weapon_mod, S__OBJECT_MOUSE_LEAVE,  hot_weaponmod_mouse_leave },
+    // obj_gem_mod（没有父对象；id 变量 = gem_id，注册表 mod_gem_vms）
+    { S_obj_gem_mod, S__OBJECT_CREATE,       hot_gemmod_create      },
+    { S_obj_gem_mod, S__OBJECT_STEP,         hot_gemmod_step        },
+    { S_obj_gem_mod, S__OBJECT_DRAW,         hot_gemmod_draw        },
+    { S_obj_gem_mod, S__OBJECT_DESTROY,      hot_gemmod_destroy     },
+    { S_obj_gem_mod, S__OBJECT_CLICK,        hot_gemmod_click       },
+    { S_obj_gem_mod, S__OBJECT_MOUSE_ENTER,  hot_gemmod_mouse_enter },
+    { S_obj_gem_mod, S__OBJECT_MOUSE_LEAVE,  hot_gemmod_mouse_leave },
+    // obj_effect_mod（没有父对象；id 变量 = mod_type，注册表 mod_effect_vms）
+    { S_obj_effect_mod, S__OBJECT_CREATE,       hot_effectmod_create      },
+    { S_obj_effect_mod, S__OBJECT_STEP,         hot_effectmod_step        },
+    { S_obj_effect_mod, S__OBJECT_DRAW,         hot_effectmod_draw        },
+    { S_obj_effect_mod, S__OBJECT_DESTROY,      hot_effectmod_destroy     },
+    { S_obj_effect_mod, S__OBJECT_CLICK,        hot_effectmod_click       },
+    { S_obj_effect_mod, S__OBJECT_MOUSE_ENTER,  hot_effectmod_mouse_enter },
+    { S_obj_effect_mod, S__OBJECT_MOUSE_LEAVE,  hot_effectmod_mouse_leave },
 };
 
 // 某个对象名认不认得（对 GML 的 asset_get_index(name) != -1）
