@@ -1,0 +1,472 @@
+{
+  "_note": "VM ↔ 宿主引擎 共享内存布局契约。生成物，别手改——真源是 tools/gen_host_layout.py，改布局要同时 +version 并两边重新对齐。槽 = 8 字节（Value = {int32 类型, int32 值}），全部小端，跨语言按 16 字节对齐。",
+  "version": 1,
+  "value_bytes": 8,
+  "slot_align": 16,
+  "blocks": {
+    "state": {
+      "direction": "engine -> vm",
+      "kind": "overwrite-per-frame",
+      "slots": 64,
+      "bytes": 512,
+      "producer": "引擎（宿主）",
+      "consumer": "VM",
+      "slots_map": [
+        {
+          "range": "0",
+          "slot": 0,
+          "count": 1,
+          "name": "FRAME",
+          "type": "int",
+          "comment": "帧号（引擎自己数，只增）：VM 用来判\"这一帧读过了没\""
+        },
+        {
+          "range": "1",
+          "slot": 1,
+          "count": 1,
+          "name": "MOUSE_WORLD_X",
+          "type": "float",
+          "comment": "鼠标：房间/世界 x"
+        },
+        {
+          "range": "2",
+          "slot": 2,
+          "count": 1,
+          "name": "MOUSE_WORLD_Y",
+          "type": "float",
+          "comment": "鼠标：房间/世界 y"
+        },
+        {
+          "range": "3",
+          "slot": 3,
+          "count": 1,
+          "name": "MOUSE_GUI_X",
+          "type": "float",
+          "comment": "鼠标：GUI 层 x"
+        },
+        {
+          "range": "4",
+          "slot": 4,
+          "count": 1,
+          "name": "MOUSE_GUI_Y",
+          "type": "float",
+          "comment": "鼠标：GUI 层 y"
+        },
+        {
+          "range": "5",
+          "slot": 5,
+          "count": 1,
+          "name": "MOUSE_BUTTONS",
+          "type": "int",
+          "comment": "鼠标**按住**位掩码：bit0 左 / bit1 右 / bit2 中"
+        },
+        {
+          "range": "6",
+          "slot": 6,
+          "count": 1,
+          "name": "MOUSE_PRESSED",
+          "type": "int",
+          "comment": "本帧**刚按下**位掩码（位同上）"
+        },
+        {
+          "range": "7",
+          "slot": 7,
+          "count": 1,
+          "name": "MOUSE_RELEASED",
+          "type": "int",
+          "comment": "本帧**刚松开**位掩码（位同上）"
+        },
+        {
+          "range": "8",
+          "slot": 8,
+          "count": 1,
+          "name": "SCROLL_DELTA",
+          "type": "float",
+          "comment": "本帧滚轮增量（上正下负，值域由引擎定）"
+        },
+        {
+          "range": "9",
+          "slot": 9,
+          "count": 1,
+          "name": "FOCUS",
+          "type": "int",
+          "comment": "窗口焦点 0/1"
+        },
+        {
+          "range": "10",
+          "slot": 10,
+          "count": 1,
+          "name": "IME_ON",
+          "type": "int",
+          "comment": "输入法开关 0/1"
+        },
+        {
+          "range": "11",
+          "slot": 11,
+          "count": 1,
+          "name": "WINDOW_W",
+          "type": "int",
+          "comment": "窗口宽（像素）"
+        },
+        {
+          "range": "12",
+          "slot": 12,
+          "count": 1,
+          "name": "WINDOW_H",
+          "type": "int",
+          "comment": "窗口高（像素）"
+        },
+        {
+          "range": "13",
+          "slot": 13,
+          "count": 1,
+          "name": "FRAME_MS",
+          "type": "float",
+          "comment": "本帧耗时 ms"
+        },
+        {
+          "range": "14",
+          "slot": 14,
+          "count": 1,
+          "name": "TIME_TOTAL",
+          "type": "float",
+          "comment": "累计时间（秒或 ms 由引擎定，只要一致）"
+        },
+        {
+          "range": "15",
+          "slot": 15,
+          "count": 1,
+          "name": "RESERVED_15",
+          "type": "int",
+          "comment": "预留（保持 0；要用先改这里再 +版本）"
+        },
+        {
+          "range": "16-23",
+          "slot": 16,
+          "count": 8,
+          "name": "KEY_DOWN_WORDS",
+          "type": "int",
+          "comment": "键盘\"当前按住\"位图：8 槽 = 256 位，位号 = vk 键码 0..255",
+          "word_slots": [
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23
+          ]
+        },
+        {
+          "range": "24-31",
+          "slot": 24,
+          "count": 8,
+          "name": "KEY_PRESSED_WORDS",
+          "type": "int",
+          "comment": "键盘\"本帧刚按下\"位图：8 槽",
+          "word_slots": [
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31
+          ]
+        },
+        {
+          "range": "32-39",
+          "slot": 32,
+          "count": 8,
+          "name": "KEY_RELEASED_WORDS",
+          "type": "int",
+          "comment": "键盘\"本帧刚松开\"位图：8 槽",
+          "word_slots": [
+            32,
+            33,
+            34,
+            35,
+            36,
+            37,
+            38,
+            39
+          ]
+        },
+        {
+          "range": "40-63",
+          "slot": 40,
+          "count": 24,
+          "name": "RESERVED",
+          "type": "int",
+          "comment": "预留 24 槽：留给以后（输入法文本 / 手柄 / 触摸 / 剪贴板…）"
+        }
+      ],
+      "keyboard_bitmap": {
+        "words_per_bitmap": 8,
+        "bits_per_word": 32,
+        "vk_max": 255,
+        "bitmaps": {
+          "down": 16,
+          "pressed": 24,
+          "released": 32
+        },
+        "lookup": "word_slot = w0 + (vk >> 5); bit = vk & 31; down = (word >> bit) & 1",
+        "out_of_range": "vk 不在 0..255 → 当\"没按\"",
+        "rule": "vk → 槽 HOST_LAYOUT_STATE_KEY_*_W0 + (vk >> 5)，位 (vk & 31)；取法 (word >> (vk & 31)) & 1。vk 不在 0..255 一律当\"没按\"。选\"低位在前\"，是因为这样 vk 连续时读起来也是连续的；反过来的话每个字内部要倒序，写的人和读的人都要多想一步。"
+      }
+    },
+    "command": {
+      "direction": "vm -> engine",
+      "kind": "count + fixed-records",
+      "slots": 4097,
+      "bytes": 32776,
+      "producer": "VM",
+      "consumer": "引擎（宿主）",
+      "count_slot": 0,
+      "record_base_slot": 1,
+      "max_records": 512,
+      "slots_per_record": 8,
+      "record_bytes": 64,
+      "record_fields": [
+        {
+          "index": 0,
+          "name": "CMD",
+          "type": "i32",
+          "comment": "命令号（本契约的命令清单见 JSON 的 commands 段）"
+        },
+        {
+          "index": 1,
+          "name": "INT_A",
+          "type": "i32",
+          "comment": "整数参数 1"
+        },
+        {
+          "index": 2,
+          "name": "INT_B",
+          "type": "i32",
+          "comment": "整数参数 2"
+        },
+        {
+          "index": 3,
+          "name": "FLOAT_A",
+          "type": "f32",
+          "comment": "float 参数 1（x）"
+        },
+        {
+          "index": 4,
+          "name": "FLOAT_B",
+          "type": "f32",
+          "comment": "float 参数 2（y）"
+        },
+        {
+          "index": 5,
+          "name": "FLOAT_C",
+          "type": "f32",
+          "comment": "float 参数 3（w）"
+        },
+        {
+          "index": 6,
+          "name": "FLOAT_D",
+          "type": "f32",
+          "comment": "float 参数 4（h）"
+        },
+        {
+          "index": 7,
+          "name": "FLOAT_E",
+          "type": "f32",
+          "comment": "float 参数 5（alpha 这类）"
+        }
+      ],
+      "rules": [
+        "生产方（VM）在**每帧第一次写之前**把计数清 0，然后只往后追；计数 = 这帧已经写了几条。",
+        "消费方（引擎）只读 [0, 计数)，**不许**自己清计数——清了就是两个写者，会踩。",
+        "计数 > 上限：当作写不下（响亮报错 / 丢弃并计数），**不**回绕覆盖前面的记录。"
+      ]
+    },
+    "request": {
+      "direction": "vm -> engine",
+      "kind": "append-stream (host_shm_*)",
+      "transport": "DLL_VM/host/host_shared.cpp 的 host_shm_*（初始 64KB / 不够翻倍 / 上限 16MB）",
+      "capacity_note": "容量和游标**不在这里写死**：那是 host_shm_size() / host_shm_cursor() 的事，写进契约就等于同一件事有两个真源。这里只定\"请求号 -> 字段顺序\"。",
+      "signature_note": "每条请求的字段顺序即字节顺序，全部小端；i32 = 4 字节，f32 = 4 字节，u32 长度 = 4 字节，bytes = 裸字节，无类型字节。",
+      "ids": [
+        {
+          "id": 1,
+          "name": "AUDIO_PLAY",
+          "comment": "播放音频",
+          "signature": [
+            {
+              "name": "snd",
+              "type": "i32"
+            },
+            {
+              "name": "loop",
+              "type": "i32"
+            },
+            {
+              "name": "gain",
+              "type": "f32"
+            },
+            {
+              "name": "pitch",
+              "type": "f32"
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "name": "AUDIO_CTRL",
+          "comment": "停止/暂停/恢复音频",
+          "signature": [
+            {
+              "name": "snd",
+              "type": "i32"
+            },
+            {
+              "name": "action",
+              "type": "i32"
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "name": "CAMERA",
+          "comment": "相机/视图",
+          "signature": [
+            {
+              "name": "action",
+              "type": "i32"
+            },
+            {
+              "name": "value",
+              "type": "f32"
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "name": "WINDOW",
+          "comment": "窗口/显示",
+          "signature": [
+            {
+              "name": "action",
+              "type": "i32"
+            },
+            {
+              "name": "value",
+              "type": "i32"
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "name": "NET_SEND",
+          "comment": "网络发送",
+          "signature": [
+            {
+              "name": "channel",
+              "type": "i32"
+            },
+            {
+              "name": "len",
+              "type": "u32"
+            },
+            {
+              "name": "data",
+              "type": "bytes"
+            }
+          ]
+        },
+        {
+          "id": 6,
+          "name": "SYSTEM",
+          "comment": "系统",
+          "signature": [
+            {
+              "name": "action",
+              "type": "i32"
+            }
+          ]
+        }
+      ],
+      "reserved_from": 7,
+      "actions": {
+        "AUDIO_ACTION": [
+          {
+            "value": 0,
+            "name": "STOP",
+            "comment": "停"
+          },
+          {
+            "value": 1,
+            "name": "PAUSE",
+            "comment": "暂停"
+          },
+          {
+            "value": 2,
+            "name": "RESUME",
+            "comment": "恢复"
+          }
+        ],
+        "CAMERA_ACTION": [
+          {
+            "value": 0,
+            "name": "SET_X",
+            "comment": "设 x"
+          },
+          {
+            "value": 1,
+            "name": "SET_Y",
+            "comment": "设 y"
+          },
+          {
+            "value": 2,
+            "name": "SET_ZOOM",
+            "comment": "设缩放"
+          }
+        ],
+        "WINDOW_ACTION": [
+          {
+            "value": 0,
+            "name": "FULLSCREEN",
+            "comment": "全屏 0/1"
+          },
+          {
+            "value": 1,
+            "name": "SIZE",
+            "comment": "设长宽"
+          },
+          {
+            "value": 2,
+            "name": "TITLE",
+            "comment": "设标题"
+          }
+        ],
+        "SYSTEM_ACTION": [
+          {
+            "value": 0,
+            "name": "EXIT",
+            "comment": "退出"
+          },
+          {
+            "value": 1,
+            "name": "FULLSCREEN",
+            "comment": "切全屏"
+          },
+          {
+            "value": 2,
+            "name": "DIALOG",
+            "comment": "弹对话框"
+          },
+          {
+            "value": 3,
+            "name": "CLIPBOARD",
+            "comment": "剪贴板"
+          }
+        ]
+      }
+    }
+  }
+}

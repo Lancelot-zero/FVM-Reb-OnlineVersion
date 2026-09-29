@@ -50,8 +50,8 @@ bool hot_enemymod_func_init(Vm& vm) {
     int s = vm.cur_instance;
     if (!inst_get(s)) return true;
     Value* eidp = inst_var_sid(s, S_enemy_id);
-    std::string eid = pool_text(eidp);
-    if (eid.empty()) return true;
+    int eid_sid = (eidp && eidp->t == MEM_STRING && str_ok(eidp->v)) ? eidp->v : -1;   // 全程带下标
+    if (eid_sid < 0) return true;
     Value* inited = inst_var_sid(s, S_mod_enemy_inited_id);
     if (inited && inited->t == MEM_STRING && inited->v == eidp->v) return true;   // 已经按这个 id 初始化过
 
@@ -62,13 +62,13 @@ bool hot_enemymod_func_init(Vm& vm) {
         Value a[2]; a[0] = emap; a[1] = *eidp;
         known = truthy(&call_ret_sid(vm, S_ds_map_exists, a, 2));
     }
-    Vm* mv = mod_vm(eid);                                          // global.mod_enemy_vms[? enemy_id]
+    Vm* mv = mod_vm_sid(eid_sid);                                   // 零哈希（原来是 pool_text + str_find）my_id]
     if (!known && mv) known = true;
 
     if (!known) {
         // 非法 mod 敌人 → 换成普通小老鼠（铁锅鼠）替身，本实例销毁
         Value m[1];
-        m[0] = mk_str(vm, ("[mod 敌人] 未注册的 enemy_id，换成普通老鼠: " + eid).c_str());
+        m[0] = mk_str(vm, ("[mod 敌人] 未注册的 enemy_id，换成普通老鼠: " + str_at(eid_sid)).c_str());
         call_fn_sid(vm, S_show_debug_message, m, 1, -1);
         // _nid = ds_map_exists(global.network.map_instance_id_net_id, id) ? ...[? id] : -1
         double nid = -1;
@@ -146,27 +146,27 @@ bool hot_enemymod_step(Vm& vm) {
     set_num_sid(s, S_prev_grid_row, get_num_sid(s, S_grid_row));
 
     Value* eidp = inst_var_sid(s, S_enemy_id);
-    std::string eid = pool_text(eidp);
+    int eid_sid = (eidp && eidp->t == MEM_STRING && str_ok(eidp->v)) ? eidp->v : -1;
     Value* inited = inst_var_sid(s, S_mod_enemy_inited_id);
-    if (!eid.empty() && !(inited && inited->t == MEM_STRING && inited->v == eidp->v)) {
+    if (eid_sid >= 0 && !(inited && inited->t == MEM_STRING && inited->v == eidp->v)) {
         run_hot_block_sid(vm, S_obj_enemy_mod, S__FUNC_mod_enemy_init);
         if (!inst_get(s)) return true;                              // 非法敌人已被换掉 → exit
         eidp = inst_var_sid(s, S_enemy_id);
-        eid = pool_text(eidp);
+        eid_sid = (eidp && eidp->t == MEM_STRING && str_ok(eidp->v)) ? eidp->v : -1;
     }
 
     hot_inherited_sid(vm, S_obj_enemy_mod, S__OBJECT_STEP);             // event_inherited()
 
     bool enter = true;
     const Value* condp = inst_var_sid(s, S_mod_step_enter_condition);
-    Vm* mv = mod_vm(eid);
+    Vm* mv = mod_vm_sid(eid_sid);
 
     // ── 盯梢 mod_watch ──
     inst_var_set_sid(s, S_mod_changed_prop, mk_str(vm, ""));
     Value watch_changed = *inst_var_sid(s, S_mod_watch_changed);
     { Value a[2]; a[0] = watch_changed; a[1] = mk_num(0);
       call_fn_sid(vm, S_array_resize, a, 2, -1); }
-    if (!eid.empty() && mv) {
+    if (eid_sid >= 0 && mv) {
         std::unordered_map<int, std::vector<Value> >::iterator wit = mv->named_arrays.find(S_mod_watch);
         if (wit != mv->named_arrays.end()) {
             // mod_watch 里存的是**属性名字符串**，下标属于 mod VM 的池
@@ -207,8 +207,8 @@ bool hot_enemymod_step(Vm& vm) {
     double cdv = 0;
     Value* sev = inst_var_sid(s, S_mod_step_enter_var);
     if (str_is_any_sid(vm, mv, condp, S_mod)) {
-        if (is_numv(sev) && num_of(sev) > 0 && inst_count(str_at(S_obj_battle)) > 0) {
-            int bat = inst_at(str_at(S_obj_battle), 0);
+        if (is_numv(sev) && num_of(sev) > 0 && inst_count_sid(S_obj_battle) > 0) {
+            int bat = inst_at_sid(S_obj_battle, 0);
             enter = (std::fmod(get_num_sid(bat, S_battle_time), num_of(sev)) == 0);
         }
     } else if (str_is_any_sid(vm, mv, condp, S_wait)) {
@@ -266,7 +266,7 @@ bool hot_enemymod_step(Vm& vm) {
         } else {
             inst_var_set_sid(s, S_mod_changed_prop, mk_str(vm, ""));
         }
-        if (!eid.empty() && mv) {
+        if (eid_sid >= 0 && mv) {
             Value bak_cur = gv_sid(S__VM_cur_card);
             global_var_set_sid(S__VM_cur_card, mk_num(s));
             mod_run_block_sid(mv, s, S__OBJECT_STEP, NULL);
@@ -366,5 +366,5 @@ bool hot_enemymod_mouse_leave(Vm& vm) { return hot_enemymod_mouse_sid(vm, S__OBJ
 bool inst_event(Vm& vm, int inst, const char* block) {
     Instance* in = inst_get(inst);
     if (!in) return false;
-    return run_block_on(vm, in->obj, inst, block);
+    return run_block_on(vm, in->obj, inst, intern_str(block));   // 块名 → 池下标
 }

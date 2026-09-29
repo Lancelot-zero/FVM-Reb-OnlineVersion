@@ -48,7 +48,7 @@ double make_weapon_gems(Vm& vm, int s, const Value& gem_list, double gem_index_i
             Value lv[1]; lv[0] = gem_id;
             inst_var_set_sid(gid, S_mod_point_gem_level, call_ret_sid(vm, S_get_gem_level, lv, 1));
             // mod 宝石：归属写完了再调一次它的步（初始化在它的 Step 顶部）
-            if (mod_vm(pool_text(&gem_id))) inst_event_sid(vm, gid, S__OBJECT_STEP);
+            if (gem_id.t == MEM_STRING && str_ok(gem_id.v) && mod_vm_sid(gem_id.v)) inst_event_sid(vm, gid, S__OBJECT_STEP);
         }
         gem_index++;
     }
@@ -427,8 +427,8 @@ bool hot_player_mouse_53(Vm& vm) {
     {
         Value mw = m_chain_sid(vm, save, kMain, 2);
         Value mw_id = m_get_sid(vm, mw, S_id);
-        std::string mid = pool_text(&mw_id);
-        if (!mid.empty() && !gtrue_sid(S__VM_ban_weapon)) {
+        int mid_sid = (mw_id.t == MEM_STRING && str_ok(mw_id.v)) ? mw_id.v : -1;   // 全程带下标
+        if (mid_sid >= 0 && !gtrue_sid(S__VM_ban_weapon)) {
             Value ga[1]; ga[0] = mw_id;
             Value info = call_ret_held_sid(vm, S_get_weapon_info, ga, 1);
             global_var_set_sid(S__mod_pending_weapon_id, mw_id);
@@ -441,7 +441,7 @@ bool hot_player_mouse_53(Vm& vm) {
             int wid2 = wi.t == MEM_INT ? wi.v : -1;
             if (inst_get(wid2)) {
                 inst_var_set_sid(wid2, S_parent_player, mk_num(s));
-                if (mod_vm(mid)) {                                   // mod_weapon_vms 里有它 → 补跑一次步
+                if (mod_vm_sid(mid_sid)) {                                   // mod_weapon_vms 里有它 → 补跑一次步
                     inst_var_set_sid(wid2, S_weapon_id, mw_id);
                     inst_event_sid(vm, wid2, S__OBJECT_STEP);
                 }
@@ -458,8 +458,8 @@ bool hot_player_mouse_53(Vm& vm) {
     {
         Value sw = m_chain_sid(vm, save, kSec, 2);
         Value sw_id = m_get_sid(vm, sw, S_id);
-        std::string sid = pool_text(&sw_id);
-        if (!sid.empty() && !gtrue_sid(S__VM_ban_shield)) {
+        int sid_sid = (sw_id.t == MEM_STRING && str_ok(sw_id.v)) ? sw_id.v : -1;   // 全程带下标
+        if (sid_sid >= 0 && !gtrue_sid(S__VM_ban_shield)) {
             Value sa[4];
             sa[0] = mk_num(get_num_sid(s, S_x)); sa[1] = mk_num(get_num_sid(s, S_y));
             sa[2] = mk_num(get_num_sid(s, S_depth)); sa[3] = mk_str_sid(S_obj_player_shield);
@@ -487,7 +487,7 @@ bool hot_player_mouse_53(Vm& vm) {
                 add_num_sid(s, S_max_hp, inc);
             }
             // 副武器再挂一个 obj_weapon_mod：只有真加载了 mod 盾 .bin 才挂
-            if (mod_vm(sid)) {
+            if (mod_vm_sid(sid_sid)) {
                 global_var_set_sid(S__mod_pending_weapon_id, sw_id);
                 Value wa[4];
                 wa[0] = mk_num(get_num_sid(s, S_x) - 10); wa[1] = mk_num(get_num_sid(s, S_y) - 100);
@@ -513,8 +513,8 @@ bool hot_player_mouse_53(Vm& vm) {
     {
         Value uw = m_chain_sid(vm, save, kSup, 2);
         Value uw_id = m_get_sid(vm, uw, S_id);
-        std::string uid = pool_text(&uw_id);
-        if (!uid.empty() && !gtrue_sid(S__VM_ban_super_weapon)) {
+        int uid_sid = (uw_id.t == MEM_STRING && str_ok(uw_id.v)) ? uw_id.v : -1;   // 全程带下标
+        if (uid_sid >= 0 && !gtrue_sid(S__VM_ban_super_weapon)) {
             Value ga[1]; ga[0] = uw_id;
             Value info = call_ret_held_sid(vm, S_get_weapon_info, ga, 1);
             global_var_set_sid(S__mod_pending_weapon_id, uw_id);
@@ -527,7 +527,7 @@ bool hot_player_mouse_53(Vm& vm) {
             int wid2 = wi.t == MEM_INT ? wi.v : -1;
             if (inst_get(wid2)) {
                 inst_var_set_sid(wid2, S_parent_player, mk_num(s));
-                if (mod_vm(uid)) {
+                if (mod_vm_sid(uid_sid)) {
                     inst_var_set_sid(wid2, S_weapon_id, uw_id);
                     inst_event_sid(vm, wid2, S__OBJECT_STEP);
                 }

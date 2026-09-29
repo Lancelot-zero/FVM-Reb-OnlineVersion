@@ -864,7 +864,7 @@ void impl_VM_ClearPlantsByType(Vm& vm, const uint8_t* args, int argc, int dst) {
 // VM_GetPlantCount()：数活着的 obj_card_parent
 void impl_VM_GetPlantCount(Vm& vm, const uint8_t* args, int argc, int dst) {
     (void)args; (void)argc;
-    wr_i(vm, dst, inst_count(std::string("obj_card_parent")));
+    wr_i(vm, dst, inst_count_sid(S_obj_card_parent));
 }
 
 void ds_map_size(Vm& vm, const uint8_t* args, int argc, int dst) {

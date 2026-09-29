@@ -34,21 +34,21 @@ void run_block(Vm& vm, const uint8_t* args, int argc, int dst) {
 //     否则"对象没装载"会被误当成"就在本 Vm 里"，把调用方自己的同名块再跑一遍
 //     （obj_melon_shield 的 Create 建 obj_melon_shield_inner，一单对象没装载就无限递归爆栈）。
 //   cur_instance 是派发上下文，进来看一眼原来是什么，跑完换回去（事件里再发事件会嵌套进来）。
-bool run_block_on(Vm& vm, const std::string& obj, int inst, const std::string& block) {
+bool run_block_on(Vm& vm, int obj_sid, int inst, int block_sid) {
     // ① 硬编码块（父对象 / 宿主对象那批，它们没有自己的 Vm）
-    if (has_hot_block(obj, block)) {
+    if (has_hot_block_sid(obj_sid, block_sid)) {
         int old_ins = vm.cur_instance;
         vm.cur_instance = inst;
-        bool ok = run_hot_block(vm, obj, block);
+        bool ok = run_hot_block_sid(vm, obj_sid, block_sid);
         vm.cur_instance = old_ins;
         return ok;
     }
     // ② 翻译出来的块：得有装着这个对象的 Vm，而且那个 Vm 里真有这个块
-    Vm* owner = vm_of_object(obj);
-    if (!owner || owner->obj != obj || !owner->find_block(block)) return false;
+    Vm* owner = vm_of_object_sid(obj_sid);
+    if (!owner || owner->obj != obj_sid) return false;
     int old_ins = owner->cur_instance;
     owner->cur_instance = inst;
-    bool ok = owner->run_named(block);
+    bool ok = owner->run_named_sid(block_sid);
     owner->cur_instance = old_ins;
     return ok;
 }
@@ -70,6 +70,6 @@ void run_event_user(Vm& vm, const uint8_t* args, int argc, int dst) {
     // ⚠ 事件要**带继承**：obj_enemy_mod 自己没有 UserEvent 0，实际跑的是 obj_enemy_parent 的
     //   （damage_enemy → event_user(0) 这条链就靠它；不走继承的话不掉血、不闪白）
     if (!run_hot_event_inherited(vm, inst, name))
-        run_block_on(vm, in->obj, inst, name);          // 硬编码里没有 → 走解释器那条路
+        run_block_on(vm, in->obj, inst, intern_str(name));   // 动态块名 → 进池一次          // 硬编码里没有 → 走解释器那条路
     wr_i(vm, dst, 0);
 }

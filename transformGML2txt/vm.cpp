@@ -5,6 +5,7 @@
 // ============================================================
 
 #include "vm.h"
+#include <array>
 
 // ============================================================
 // 块表
@@ -15,33 +16,15 @@ const Block* Vm::find_block_sid(int sid) const {
 }
 
 // 手上只有名字：先换池下标（不在池里 = 这个 VM 不可能有这个名字的块）
-const Block* Vm::find_block(const std::string& name) const {
-    int sid = str_find(name);
-    return (sid < 0) ? NULL : find_block_sid(sid);
-}
 
-bool Vm::run_named(const std::string& name) {
-    bool ok;
-    if (run_hot_block(*this, obj, name)) {
-        ok = true;                                       // 有硬编码的块 → 走 C++ 版
-    } else {
-        const Block* b = find_block(name);
-        if (!b) {
-            printf("[vm] block not found: %s / %s\n", obj.c_str(), name.c_str());
-            return false;
-        }
-        ok = run(*b);
-    }
-    return ok;
-}
 
 // 同 run_named，但池下标已经在手上（字节码 run_block 那条路）
 bool Vm::run_named_sid(int sid) {
-    int obj_sid = str_find(obj);           // 硬编码块的 key 是"对象 + 块"两个池下标
+    int obj_sid = obj;                     // obj 本身就是池下标
     if (obj_sid >= 0 && run_hot_block_sid(*this, obj_sid, sid)) return true;
     const Block* b = find_block_sid(sid);
     if (!b) {
-        printf("[vm] block not found: %s / %s\n", obj.c_str(), str_at(sid).c_str());
+        set_error(VM_E_BLOCK_NOT_FOUND, sid);
         return false;
     }
     return run(*b);
@@ -159,7 +142,7 @@ bool Vm::run(const Block& blk) {
             int b = ld32(p); p += 4;
             // mod 只接整数（和 GML 一致）：任何一个操作数是浮点就当错误，停掉这个块
             if (m[a * 2] == MEM_FLOAT || m[b * 2] == MEM_FLOAT) {
-                printf("[vm] mod with a non-integer operand (block %s)\n", blk.name.c_str());
+                set_error(VM_E_NONINT_OPERAND, blk.name_sid);
                 return false;
             }
             int x = m[a * 2 + 1], y = m[b * 2 + 1];
@@ -242,7 +225,7 @@ bool Vm::run(const Block& blk) {
             const uint8_t* args = p;
             p += argc * 4;
             if (fid >= 0 && fid < GAME_FN_COUNT) kGameFns[fid](*this, args, argc, dst);
-            else printf("[vm] unknown game function id = %d\n", fid);
+            else set_error(VM_E_UNKNOWN_GAME_FN, fid);
             break;
         }
 
@@ -253,7 +236,7 @@ bool Vm::run(const Block& blk) {
             const uint8_t* args = p;
             p += argc * 4;
             if (fid >= 0 && fid < NATIVE_FN_COUNT) kNativeFns[fid](*this, args, argc, dst);
-            else printf("[vm] unknown native function id = %d\n", fid);
+            else set_error(VM_E_UNKNOWN_NATIVE, fid);
             break;
         }
 
@@ -343,7 +326,7 @@ bool Vm::run(const Block& blk) {
             break;
         }
         default:
-            printf("[vm] unknown opcode %d (block %s)\n", (int)*(p - 1), blk.name.c_str());
+            set_error(VM_E_UNKNOWN_OPCODE, (int)*(p - 1), blk.name_sid);
             return false;
         }
     }
@@ -357,294 +340,39 @@ bool Vm::run(const Block& blk) {
 //   这里走一遍指令流：没正好走到块尾就说明指令布局和这份表对不上 → 报错返回 false。
 //   宁可装载失败，也不能让错位的下标进池 —— 那是静默改语义。
 // ============================================================
-static int op_fixed_len(uint8_t op) {
-    switch (op) {
-    case OP_COPY: return 8;
-    case OP_ADD: case OP_SUB: case OP_MUL: case OP_DIV: case OP_MOD:
-    case OP_EQ: case OP_NEQ: case OP_GT: case OP_GTE: case OP_LT: case OP_LTE:
-    case OP_IF:
-    case OP_BAND: case OP_BOR: case OP_BXOR: case OP_SHL: case OP_SHR: return 12;
-    case OP_JMP:     return 4;
-    case OP_HALT:    return 0;
-    case OP_LOAD_ELEM: case OP_BNOT: return 8;
-    default:         return -1;      // 未知，或变长（OP_ASSIGN / OP_CALL / OP_NATIVE）
-    }
+// opcode -> 操作数字节数（-1 = 变长/未知）—— 一次初始化，之后纯数组下标，无分支
+static const std::array<signed char, 256> kOpLen = [] {
+    std::array<signed char, 256> a;  a.fill(-1);
+    a[OP_COPY] = 8;
+    a[OP_ADD] = a[OP_SUB] = a[OP_MUL] = a[OP_DIV] = a[OP_MOD] = 12;
+    a[OP_EQ] = a[OP_NEQ] = a[OP_GT] = a[OP_GTE] = a[OP_LT] = a[OP_LTE] = 12;
+    a[OP_IF] = 12;  a[OP_JMP] = 4;  a[OP_HALT] = 0;
+    a[OP_LOAD_ELEM] = a[OP_BNOT] = 8;
+    for (int i = OP_BAND; i <= OP_SHR; i++) a[(size_t)i] = 12;
+    return a;
+}();
+
+int op_fixed_len(uint8_t op) { return kOpLen[op]; }
+
+// ── VM 的生命周期（原来写在实例那个文件里 ✗ → 并回 VM 自己 ✓）──
+
+void Vm::destroy_owned_instances() {
+    std::vector<int> ids;
+    box.ids(ids);                                 // inst_kill 会改 box，先拷一份
+    for (size_t i = 0; i < ids.size(); i++) inst_kill(ids[i]);
+    box.clear();
 }
 
-bool remap_block_strings(std::vector<Block>& blocks,
-                         const std::vector<std::string>& local_pool) {
-    // 先把局部池并进全局池，拿到"局部下标 → 全局下标"
-    std::vector<int> remap(local_pool.size());
-    for (size_t i = 0; i < local_pool.size(); i++) {
-        remap[i] = intern_str(local_pool[i]);
-        if (remap[i] > 0xFFFF) {
-            printf("[vm] 全局字符串池已超过 65535，OP_ASSIGN 的 u16 装不下\n");
-            return false;
-        }
+void Vm::unregister_objects() {
+    std::unordered_map<int, Vm*>::iterator it = g_vm_of_object.begin();
+    while (it != g_vm_of_object.end()) {
+        if (it->second == this) it = g_vm_of_object.erase(it);
+        else ++it;
     }
-
-    for (size_t bi = 0; bi < blocks.size(); bi++) {
-        std::vector<uint8_t>& c = blocks[bi].code;
-        const size_t n = c.size();
-        size_t p = 0;
-        while (p < n) {
-            uint8_t op = c[p++];
-            if (op == OP_ASSIGN) {
-                if (p + 5 > n) { printf("[vm] 块 %s：指令被截断\n", blocks[bi].name.c_str()); return false; }
-                p += 4;                                   // dst
-                uint8_t ty = c[p++];
-                if (ty == MEM_STRING) {
-                    if (p + 2 > n) { printf("[vm] 块 %s：字符串下标被截断\n", blocks[bi].name.c_str()); return false; }
-                    int idx = (int)ld16(&c[p]);
-                    if (idx < 0 || idx >= (int)remap.size()) {
-                        printf("[vm] 块 %s：字符串下标 %d 越界（本 bin 池只有 %zu 条）\n",
-                               blocks[bi].name.c_str(), idx, remap.size());
-                        return false;
-                    }
-                    uint16_t g = (uint16_t)remap[(size_t)idx];
-                    c[p]     = (uint8_t)(g & 0xFF);
-                    c[p + 1] = (uint8_t)(g >> 8);
-                    p += 2;
-                } else {
-                    p += 4;                               // 浮点 / 整数
-                }
-            } else if (op == OP_CALL || op == OP_NATIVE) {
-                if (p + 3 > n) { printf("[vm] 块 %s：调用指令被截断\n", blocks[bi].name.c_str()); return false; }
-                p += 2;                                   // fid u16
-                int argc = (int)c[p++];
-                if (p + 4 + (size_t)argc * 4 > n) {
-                    printf("[vm] 块 %s：调用指令的实参被截断\n", blocks[bi].name.c_str());
-                    return false;
-                }
-                p += 4 + (size_t)argc * 4;                // dst + args
-            } else {
-                int k = op_fixed_len(op);
-                if (k < 0 || p + (size_t)k > n) {
-                    printf("[vm] 块 %s：未知操作码 %d（字符串下标重写中止）\n",
-                           blocks[bi].name.c_str(), (int)op);
-                    return false;
-                }
-                p += (size_t)k;
-            }
-        }
+    // mod id → VM 那张表也要摘（同一个理由）
+    std::unordered_map<int, Vm*>::iterator mit = g_mod_vms.begin();
+    while (mit != g_mod_vms.end()) {
+        if (mit->second == this) mit = g_mod_vms.erase(mit);
+        else ++mit;
     }
-    return true;
-}
-
-// ============================================================
-// .bin / .callbin 共用的那半截：从 d[off] 开始读"字符串池 + 块表"
-//   callbin 的头在它前面，body 完全一样，所以两边共用这一段
-// ============================================================
-bool parse_bin_body(const uint8_t* d, size_t size, size_t o,
-                    std::vector<std::string>& strings, std::vector<Block>& blocks) {
-    if (o + 4 > size) return false;
-    int32_t sc = ld32(d + o); o += 4;
-    if (sc < 0) return false;
-    for (int i = 0; i < sc && o + 4 <= size; i++) {
-        int32_t len = ld32(d + o); o += 4;
-        if (len < 0 || o + (size_t)len > size) return false;
-        strings.push_back(std::string((const char*)d + o, (size_t)len));
-        o += (size_t)len;
-    }
-    while (o + 8 <= size) {
-        int32_t blen = ld32(d + o); o += 4;
-        int32_t nidx = ld32(d + o); o += 4;
-        if (blen < 0 || o + (size_t)blen > size) return false;
-        Block b;
-        b.name = (nidx >= 0 && nidx < (int)strings.size()) ? strings[(size_t)nidx]
-                                                           : std::string("<?>");
-        b.code.assign(d + o, d + o + (size_t)blen);
-        o += (size_t)blen;
-        blocks.push_back(b);
-    }
-    return true;
-}
-
-// ============================================================
-// .bin 装载
-// ============================================================
-struct BinFile {
-    std::vector<std::string> strings;
-    std::vector<Block>       blocks;
-
-    bool load(const std::string& path) {
-        FILE* fp = fopen(path.c_str(), "rb");
-        if (!fp) { printf("[vm] cannot open %s\n", path.c_str()); return false; }
-        fseek(fp, 0, SEEK_END);
-        long sz = ftell(fp);
-        fseek(fp, 0, SEEK_SET);
-        std::vector<uint8_t> d((size_t)(sz > 0 ? sz : 0));
-        if (sz > 0 && fread(d.data(), 1, (size_t)sz, fp) != (size_t)sz) {
-            fclose(fp);
-            printf("[vm] read failed %s\n", path.c_str());
-            return false;
-        }
-        fclose(fp);
-        return parse_bin_body(d.data(), d.size(), 0, strings, blocks);
-    }
-
-    int find(const std::string& name) const {
-        for (size_t i = 0; i < blocks.size(); i++)
-            if (blocks[i].name == name) return (int)i;
-        return -1;
-    }
-};
-
-// ============================================================
-// 入口
-// ============================================================
-// ── 命令行解析实参用的小工具（只给 --callbin 测试入口用）──
-static Value cli_num(const std::string& s) {
-    double d = atof(s.c_str());
-    Value v;
-    if (d == (double)(int)d) { v.t = MEM_INT; v.v = (int)d; }
-    else { v.t = MEM_FLOAT; float f = (float)d; memcpy(&v.v, &f, 4); }
-    return v;
-}
-static Value cli_undef() { Value v; v.t = MEM_UNDEFINED; v.v = 0; return v; }
-
-
-// ============================================================
-// InstBox 自检：vm --selftest-instbox
-//   覆盖：数组模式顺序/删中间；跨 16 转 map；map 顺序/反向/随机/重复取；
-//         删游标那个 / 删首 / 删尾 / 清空；增删后 at(k) 与 count 一致
-// ============================================================
-static int selftest_instbox() {
-    int fail = 0;
-    {   // ① 数组模式（< 16）
-        Vm v;
-        for (int i = 1; i <= 5; i++) v.box.add(100 + i, i);
-        if (v.box.count() != 5)             { printf("  FAIL 数组 count=%d\n", v.box.count()); fail++; }
-        if (v.box.use_map)                  { printf("  FAIL 5 个不该转 map\n"); fail++; }
-        for (int k = 0; k < 5; k++)
-            if (v.box.at(k) != 101 + k)     { printf("  FAIL 数组 at(%d)=%d\n", k, v.box.at(k)); fail++; }
-        v.box.erase(103);                   // 删中间（应位移保序）
-        if (v.box.count() != 4 || v.box.at(0) != 101 || v.box.at(1) != 102
-            || v.box.at(2) != 104 || v.box.at(3) != 105)
-            { printf("  FAIL 数组删中间后顺序\n"); fail++; }
-    }
-    {   // ② map 模式（跨过 16）
-        Vm v;
-        for (int i = 1; i <= 20; i++) v.box.add(1000 + i, i);
-        if (!v.box.use_map)                 { printf("  FAIL 20 个没转 map\n"); fail++; }
-        if (v.box.count() != 20)            { printf("  FAIL map count=%d\n", v.box.count()); fail++; }
-        for (int k = 0; k < 20; k++)        // 顺序（游标一路 ++）
-            if (v.box.at(k) != 1001 + k)    { printf("  FAIL map 顺序 at(%d)=%d\n", k, v.box.at(k)); fail++; }
-        for (int r = 0; r < 3; r++)         // 反复取同一个 k（游标不动）
-            if (v.box.at(7) != 1008)        { printf("  FAIL map 重复 at(7)=%d\n", v.box.at(7)); fail++; }
-        for (int k = 19; k >= 0; k--)       // 反向（游标一路 --）
-            if (v.box.at(k) != 1001 + k)    { printf("  FAIL map 反向 at(%d)=%d\n", k, v.box.at(k)); fail++; }
-        int ks[6] = { 0, 19, 5, 12, 1, 18 };   // 随机跳（应从最近一端重来）
-        for (int i = 0; i < 6; i++)
-            if (v.box.at(ks[i]) != 1001 + ks[i]) { printf("  FAIL map 跳 at(%d)\n", ks[i]); fail++; }
-        if (v.box.at(5) != 1006)            { printf("  FAIL 删前 at(5)\n"); fail++; }
-        v.box.erase(1006);                  // 删的正是游标那个 → 游标应落到下一个
-        if (v.box.count() != 19)            { printf("  FAIL 删游标 count=%d\n", v.box.count()); fail++; }
-        if (v.box.at(5) != 1007)            { printf("  FAIL 删游标后 at(5)=%d（应 1007）\n", v.box.at(5)); fail++; }
-        v.box.erase(1001); v.box.erase(1020);   // 删首 / 删尾
-        if (v.box.count() != 17)            { printf("  FAIL 删首尾 count=%d\n", v.box.count()); fail++; }
-        if (v.box.at(0) != 1002 || v.box.at(16) != 1019)
-            { printf("  FAIL 删首尾顺序 at(0)=%d at(16)=%d\n", v.box.at(0), v.box.at(16)); fail++; }
-        if (v.box.at(16) != 1019)           { printf("  FAIL 末尾 at(16)\n"); fail++; }
-        v.box.erase(1019);                  // 删的又是游标（末尾）→ 游标应退到前一个
-        if (v.box.count() != 16 || v.box.at(15) != 1018)
-            { printf("  FAIL 删末尾后 at(15)=%d\n", v.box.at(15)); fail++; }
-        v.box.clear();
-        if (v.box.count() != 0 || v.box.use_map) { printf("  FAIL clear\n"); fail++; }
-    }
-    printf("[selftest-instbox] %s%s\n", fail ? "FAIL " : "PASS", fail ? "" : "");
-    if (fail) printf("[selftest-instbox] %d 处不一致\n", fail);
-    return fail ? 1 : 0;
-}
-
-int main(int argc, char** argv) {
-    // ── callbin 测试入口：vm --callbin <文件.callbin> <函数名> [实参…] ──
-    //   （开发用：装进字典 → 调它 → 打印返回值。实参按整数/浮点/字符串解析）
-    if (argc >= 2 && std::string(argv[1]) == "--selftest-instbox") return selftest_instbox();
-    if (argc >= 4 && std::string(argv[1]) == "--callbin") {
-        if (!callbin_load(argv[2])) return 1;
-        std::string fname = argv[3];
-        std::vector<Value> av;
-        Vm host;                                  // 当调用方（它有自己的 mem）
-        for (int i = 4; i < argc; i++) {
-            std::string a = argv[i];
-            if (a == "--load" && i + 1 < argc) { callbin_load(argv[++i]); continue; }   // 再多装几个（互相调用用）
-            bool isstr = a.size() >= 2 && a.front() == '"' && a.back() == '"';
-            if (isstr) {
-                Value v; v.t = MEM_STRING; v.v = intern_str(a.substr(1, a.size() - 2));
-                av.push_back(v);
-            } else {
-                av.push_back(cli_num(a));
-            }
-        }
-        Value ret = cli_undef();
-        bool ok = callbin_invoke(host, intern_str(fname), av.empty() ? NULL : &av[0], (int)av.size(), &ret);
-        if (!ok) { printf("[vm] 调用失败（返回值 undefined）\n"); return 1; }
-        if (ret.t == MEM_UNDEFINED)                  printf("=> undefined\n");
-        else if (ret.t == MEM_STRING)                printf("=> \"%s\"\n", str_at(ret.v).c_str());
-        else if (ret.t == MEM_FLOAT) { float f; memcpy(&f, &ret.v, 4); printf("=> %g\n", (double)f); }
-        else                                         printf("=> %d\n", ret.v);
-        release(ret);                            // callbin_invoke 转交过来的那一份（非容器空操作）
-        callbin_clear();
-        return 0;
-    }
-
-    if (argc < 2) {
-        printf("usage: vm <file.bin> [block] [--list] [--load x.callbin]\n");
-        printf("       vm --callbin <file.callbin> <func> [args...]\n");
-        return 1;
-    }
-    BinFile f;
-    if (!f.load(argv[1])) return 1;
-
-    bool list = false;
-    std::string block;
-    for (int i = 2; i < argc; i++) {
-        std::string a = argv[i];
-        if (a == "--list")      list = true;
-        else if (a == "--load" && i + 1 < argc) callbin_load(argv[++i]);   // 先装 callbin（VM_CallFunc 要用）
-        else if (block.empty()) block = a;
-    }
-
-    printf("%s: %zu blocks, %zu strings\n", argv[1], f.blocks.size(), f.strings.size());
-
-    if (list || block.empty()) {
-        for (size_t i = 0; i < f.blocks.size(); i++)
-            printf("  [%2zu] %-32s %zu bytes\n", i, f.blocks[i].name.c_str(), f.blocks[i].code.size());
-        if (block.empty()) return 0;
-    }
-
-    Vm vm;
-    // 把本 bin 的字符串池并进全局池，并把字节码里的字符串常量换成全局下标
-    if (!remap_block_strings(f.blocks, f.strings)) return 1;
-
-    // 对象名从文件名取：.../obj_obstacle.bin → obj_obstacle
-    // （.bin 本身没存对象名，只有块名）
-    std::string objname = argv[1];
-    size_t sl = objname.find_last_of("/\\");
-    if (sl != std::string::npos) objname = objname.substr(sl + 1);
-    if (objname.size() > 4 && objname.compare(objname.size() - 4, 4, ".bin") == 0)
-        objname = objname.substr(0, objname.size() - 4);
-    vm.load_object(objname, f.blocks);
-
-    // Vm::kind：bin 里没存类型，按目录名猜（bin/card/… → "card"）。宿主也可以自己赋。
-    {
-        std::string dir = argv[1];
-        size_t sl = dir.find_last_of("/\\");
-        if (sl != std::string::npos) {
-            std::string d = dir.substr(0, sl);
-            size_t sl2 = d.find_last_of("/\\");
-            if (sl2 != std::string::npos) vm.kind = d.substr(sl2 + 1);
-        }
-    }
-
-    // _VM_CONST_INIT 是字面量池初始化块，读入即执行
-    if (vm.find_block_sid(S__VM_CONST_INIT)) {
-        if (!vm.run_named_sid(S__VM_CONST_INIT)) return 2;
-    }
-
-    if (!vm.run_named(block)) return 1;
-
-    printf("[vm] done %s\n", block.c_str());
-    return 0;
 }

@@ -106,12 +106,12 @@ bool callbin_load(const std::string& path) {
     Vm* f = new Vm(true);                     // true = 不分配 mem，mem 每次调用时借共享内存
     // 注意：**不登记进 g_vm_of_object** —— 它是函数，不是对象；
     //   登记了会让 vm_of_object("函数名") 命中，把函数当成对象。
-    f->obj = name;
+    f->obj = intern_str(name);    // 字段是池下标
     for (size_t i = 0; i < blocks.size(); i++)
-        f->blocks[intern_str(blocks[i].name)] = blocks[i];   // key = 块名的池下标
+        f->blocks[str_at(blocks[i].name_sid)] = blocks[i];   // key = 块名的池下标
 
     CallBin cb;
-    cb.name  = name;
+    cb.name_sid = intern_str(name);
     cb.desc  = desc;
     cb.argc  = argc;
     cb.slots = slots;
@@ -129,7 +129,7 @@ bool callbin_invoke(Vm& caller, int sid, const Value* argv, int argn, Value* ret
     }
     CallBin& cb = it->second;
     if (argn != cb.argc) {
-        printf("[vm] VM_CallFunc: \"%s\" 要 %d 个参数，给了 %d 个\n", cb.name.c_str(), cb.argc, argn);
+        printf("[vm] VM_CallFunc: \"%s\" 要 %d 个参数，给了 %d 个\n", str_at(cb.name_sid).c_str(), cb.argc, argn);
         return false;
     }
     if (g_call_mem.empty()) g_call_mem.assign(CALL_MEM_SLOTS * 8, 0);
@@ -145,7 +145,7 @@ bool callbin_invoke(Vm& caller, int sid, const Value* argv, int argn, Value* ret
     // 共享内存不够：打印报错 + 强制结束整条链，顶层拿到 undefined
     if (g_call_off + (size_t)cb.slots > CALL_MEM_SLOTS) {
         printf("[vm] VM_CallFunc: 共享内存不够了 —— \"%s\" 要 %d 槽，已用 %d/%d，强制结束\n",
-               cb.name.c_str(), cb.slots, (int)g_call_off, (int)CALL_MEM_SLOTS);
+               str_at(cb.name_sid).c_str(), cb.slots, (int)g_call_off, (int)CALL_MEM_SLOTS);
         g_call_abort = true;
         return false;
     }

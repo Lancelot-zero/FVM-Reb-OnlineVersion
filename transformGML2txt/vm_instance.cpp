@@ -80,7 +80,7 @@ int intern_str(const std::string& s) {
 }
 
 // 对象名 → 拥有它的 VM（全局一张表，见 vm.h 的说明）
-std::unordered_map<std::string, Vm*> g_vm_of_object;
+std::unordered_map<int, Vm*> g_vm_of_object;      // 名字池下标 → VM
 
 // 全局变量表：名字的池下标 → 值（GML 的 global.x，进程级，VM 挂掉也不清）
 std::unordered_map<int, Value> g_globals;
@@ -107,25 +107,31 @@ bool global_exists(const std::string& name) {
     return (sid >= 0) && global_exists_sid(sid);
 }
 
+Vm* vm_of_object_sid(int sid) {
+    if (sid < 0 || !str_ok(sid)) return NULL;
+    std::unordered_map<int, Vm*>::iterator it = g_vm_of_object.find(sid);
+    return (it == g_vm_of_object.end()) ? NULL : it->second;      // 零哈希
+}
 Vm* vm_of_object(const std::string& obj) {
-    std::unordered_map<std::string, Vm*>::iterator it = g_vm_of_object.find(obj);
-    return (it == g_vm_of_object.end()) ? NULL : it->second;
+    return vm_of_object_sid(str_find(obj));                        // 文本版：查一次池
 }
 
 // mod VM 注册表：mod id → VM（见 vm.h 的说明）
-std::unordered_map<std::string, Vm*> g_mod_vms;
+std::unordered_map<int, Vm*> g_mod_vms;      // mod id 池下标 → VM
 
-Vm* mod_vm(const std::string& mod_id) {
-    std::unordered_map<std::string, Vm*>::iterator it = g_mod_vms.find(mod_id);
-    return (it == g_mod_vms.end()) ? NULL : it->second;
+Vm* mod_vm_sid(int sid) {
+    if (sid < 0 || !str_ok(sid)) return NULL;
+    std::unordered_map<int, Vm*>::iterator it = g_mod_vms.find(sid);
+    return (it == g_mod_vms.end()) ? NULL : it->second;            // 零哈希
 }
+Vm* mod_vm(const std::string& mod_id) { return mod_vm_sid(str_find(mod_id)); }
 
 void mod_vm_register(const std::string& mod_id, Vm* vm) {
     if (mod_id.empty()) return;
-    std::unordered_map<std::string, Vm*>::iterator it = g_mod_vms.find(mod_id);
-    if (it != g_mod_vms.end() && it->second != vm)
-        printf("[vm] mod id '%s' already belongs to another VM, taking it over\n", mod_id.c_str());
-    g_mod_vms[mod_id] = vm;
+    int sid = intern_str(mod_id);                  // 注册期把 id 进池
+    std::unordered_map<int, Vm*>::iterator it = g_mod_vms.find(sid);
+    if (it != g_mod_vms.end() && it->second != vm) { /* 这个 id 已被别的 VM 占了 */ }
+    g_mod_vms[sid] = vm;
     if (vm) vm->mod_id = mod_id;
 }
 
@@ -242,20 +248,20 @@ void InstBox::ids(std::vector<int>& out) const {
     for (std::map<int, int>::const_iterator it = mp.begin(); it != mp.end(); ++it) out.push_back(it->first);
 }
 
-int inst_new(Vm* vm, const std::string& obj) {
+int inst_new(Vm* vm, int obj_sid) {
     int slot;
     if (!g_inst_free.empty()) {
         slot = g_inst_free.front();               // 复用回收的**槽位**
         g_inst_free.pop_front();
         Instance& in = g_instances[(size_t)slot];
         in.vars.clear();                          // 上一任的变量不许留给新实例
-        in.obj   = obj;
+        in.obj   = obj_sid;
         in.vm    = vm;
         inst_init(in);                            // 内置字段回默认值
     } else {
         if (g_instances.empty()) g_instances.push_back(Instance());   // 0 号留位：全局/当前实例的哨兵
         Instance in;
-        in.obj   = obj;
+        in.obj   = obj_sid;
         in.vm    = vm;
         inst_init(in);
         g_instances.push_back(in);
@@ -264,7 +270,7 @@ int inst_new(Vm* vm, const std::string& obj) {
     int id = ++g_next_id;                         // **id 只增不减**，和槽位无关
     g_instances[(size_t)slot].id = id;
     g_inst_alive[id] = slot;                      // 登记：id → 槽位
-    if (vm) vm->box.add(id, slot);                // owner 名下的容器（数组/map 自动）
+    if (vm) vm->instances.add(id, slot);                // owner 名下的容器（数组/map 自动）
     return id;
 }
 
@@ -283,43 +289,28 @@ void inst_kill(int id) {
     g_inst_alive.erase(it);                       // 从"活着的"里移除
     if (slot <= 0 || slot >= (int)g_instances.size()) return;
     Instance& in = g_instances[(size_t)slot];
-    if (in.vm) in.vm->box.erase(id);              // 从 owner 名下摘掉（容器内部负责保序/游标）
+    if (in.vm) in.vm->instances.erase(id);              // 从 owner 名下摘掉（容器内部负责保序/游标）
     in.vm = NULL;
     g_inst_free.push_back(slot);                  // **槽位**进复用队列（内容留着，复用时清）
 }
 
 // VM 挂掉：把自己名下的实例全收掉
-void Vm::destroy_owned_instances() {
-    std::vector<int> ids;
-    box.ids(ids);                                 // inst_kill 会改 box，先拷一份
-    for (size_t i = 0; i < ids.size(); i++) inst_kill(ids[i]);
-    box.clear();
-}
+
 
 // VM 挂掉：把"对象名 → VM"表里指向自己的条目摘掉（不留悬空指针）
-void Vm::unregister_objects() {
-    std::unordered_map<std::string, Vm*>::iterator it = g_vm_of_object.begin();
-    while (it != g_vm_of_object.end()) {
-        if (it->second == this) it = g_vm_of_object.erase(it);
-        else ++it;
-    }
-    // mod id → VM 那张表也要摘（同一个理由）
-    std::unordered_map<std::string, Vm*>::iterator mit = g_mod_vms.begin();
-    while (mit != g_mod_vms.end()) {
-        if (mit->second == this) mit = g_mod_vms.erase(mit);
-        else ++mit;
-    }
-}
 
-int inst_count(const std::string& obj) {
-    Vm* v = vm_of_object(obj);                    // 一个 VM = 一个对象 → 直接问它的容器
-    return v ? v->box.count() : 0;                // O(1)
-}
 
-int inst_at(const std::string& obj, int k) {
-    Vm* v = vm_of_object(obj);
-    return v ? v->box.at(k) : -1;                 // 数组 O(1) / map 走游标
+int inst_count_sid(int sid) {
+    Vm* v = vm_of_object_sid(sid);                 // 一个 VM = 一个对象 → 直接问它的容器
+    return v ? v->instances.count() : 0;                 // O(1)
 }
+int inst_count(const std::string& obj) { return inst_count_sid(str_find(obj)); }
+
+int inst_at_sid(int sid, int k) {
+    Vm* v = vm_of_object_sid(sid);
+    return v ? v->instances.at(k) : -1;                  // 数组 O(1) / map 走游标
+}
+int inst_at(const std::string& obj, int k) { return inst_at_sid(str_find(obj), k); }
 
 Value* inst_var_sid(int id, int sid) {
     Instance* in = inst_get(id);
@@ -338,15 +329,7 @@ void inst_var_set_sid(int id, int sid, Value v) {
     in->vars[sid] = v;
 }
 
-Value* inst_var(int id, const std::string& name) {
-    // 名字先换成池下标（vars 的 key 就是它）：没进过池的名字两边都不可能命中
-    int sid = str_find(name);
-    return (sid < 0) ? NULL : inst_var_sid(id, sid);
-}
 
-void inst_var_set(int id, const std::string& name, Value v) {
-    inst_var_set_sid(id, intern_str(name), v);         // 没有就进池（写新属性必然要建 key）
-}
 
 // ============================================================
 // VM_GetProp / VM_SetProp（属性读写，字节码里那 4 万个调用点走这里）
@@ -421,12 +404,12 @@ void impl_VM_SetProp(Vm& vm, const uint8_t* args, int argc, int dst) {
 // ============================================================
 
 // 从参数槽读一个"实例或对象名"：实例 id（>0）返回 1、对象名返回 2、别的返回 0
-static int inst_arg(Vm& vm, const uint8_t* args, int k, int* out_id, std::string* out_obj) {
+static int inst_arg(Vm& vm, const uint8_t* args, int k, int* out_id, int* out_obj_sid) {
     int slot = argslot(args, k);
     int ty   = rd_t(vm, slot);
     if (ty == MEM_STRING) {
-        int si = rd_i(vm, slot);
-        if (str_ok(si)) { *out_obj = str_at(si); return 2; }
+        int si = rd_i(vm, slot);                       // 槽里存的就是**池下标** ✓
+        if (str_ok(si)) { *out_obj_sid = si; return 2; }   // 直接吐下标，不做文本转换
         return 0;
     }
     if (ty == MEM_INT) { *out_id = rd_i(vm, slot); return 1; }
@@ -434,32 +417,32 @@ static int inst_arg(Vm& vm, const uint8_t* args, int k, int* out_id, std::string
 }
 
 void instance_exists(Vm& vm, const uint8_t* args, int argc, int dst) {
-    int id = -1; std::string obj;
-    int k = inst_arg(vm, args, 0, &id, &obj);
-    if (k == 2) { wr_i(vm, dst, inst_count(obj) > 0 ? 1 : 0); return; }
+    int id = -1; int obj_sid = -1;
+    int k = inst_arg(vm, args, 0, &id, &obj_sid);
+    if (k == 2) { wr_i(vm, dst, inst_count_sid(obj_sid) > 0 ? 1 : 0); return; }
     wr_i(vm, dst, inst_get(id) ? 1 : 0);              // k == 0 时 id 是 -1 → 0
 }
 
 void instance_number(Vm& vm, const uint8_t* args, int argc, int dst) {
-    int id = -1; std::string obj;
-    int k = inst_arg(vm, args, 0, &id, &obj);
-    if (k == 2) { wr_i(vm, dst, inst_count(obj)); return; }
+    int id = -1; int obj_sid = -1;
+    int k = inst_arg(vm, args, 0, &id, &obj_sid);
+    if (k == 2) { wr_i(vm, dst, inst_count_sid(obj_sid)); return; }
     wr_i(vm, dst, inst_get(id) ? 1 : 0);
 }
 
 // instance_create_depth(x, y, depth, obj)：建实例、摆好位置、跑 Create 事件，返回 id
 void instance_create_depth(Vm& vm, const uint8_t* args, int argc, int dst) {
-    int id = -1; std::string obj;
-    if (inst_arg(vm, args, 3, &id, &obj) != 2) {      // 第 4 个参数必须是对象名
+    int id = -1; int obj_sid = -1;
+    if (inst_arg(vm, args, 3, &id, &obj_sid) != 2) {      // 第 4 个参数必须是对象名
         printf("[vm] instance_create_depth: argument 4 must be an object name\n");
         wr_i(vm, dst, -4);                            // noone
         return;
     }
-    int nid = inst_new(&vm, obj);
+    int nid = inst_new(&vm, obj_sid);
     inst_var_set_sid(nid, S_x,     rd_v(vm, argslot(args, 0)));
     inst_var_set_sid(nid, S_y,     rd_v(vm, argslot(args, 1)));
     inst_var_set_sid(nid, S_depth, rd_v(vm, argslot(args, 2)));
-    run_block_on(vm, obj, nid, str_at(S__OBJECT_CREATE));     // GML：创建时跑 Create
+    run_block_on(vm, obj_sid, nid, S__OBJECT_CREATE);         // GML：创建时跑 Create
     wr_i(vm, dst, nid);
 }
 
@@ -467,15 +450,15 @@ void instance_create_depth(Vm& vm, const uint8_t* args, int argc, int dst) {
 void instance_destroy(Vm& vm, const uint8_t* args, int argc, int dst) {
     int target = vm.cur_instance;
     if (argc >= 1) {
-        int id = -1; std::string obj;
-        int k = inst_arg(vm, args, 0, &id, &obj);
-        if (k == 2) { target = inst_at(obj, 0); if (target < 0) { wr_i(vm, dst, 0); return; } }
+        int id = -1; int obj_sid = -1;
+        int k = inst_arg(vm, args, 0, &id, &obj_sid);
+        if (k == 2) { target = inst_at_sid(obj_sid, 0); if (target < 0) { wr_i(vm, dst, 0); return; } }
         else if (k == 1) target = id;
         else { wr_i(vm, dst, 0); return; }
     }
     Instance* in = inst_get(target);
     if (!in) { wr_i(vm, dst, 0); return; }
-    std::string obj = in->obj;                        // ⚠ 先把名字拷出来：inst_kill 之后指针还指着，但别依赖它
+    int obj_sid = in->obj;                                // ⚠ 先把下标拷出来：kill 之后别依赖指针
     inst_destroy(target);                             // 唯一入口：跑 Destroy 事件 + 回收
     wr_i(vm, dst, 0);
 }
@@ -496,55 +479,55 @@ void inst_destroy(int id) {
     if (g_inst_dying.count(id)) return;    // 正在销毁它自己的 Destroy 事件里 → 不再进来一次
     g_inst_dying.insert(id);
     Vm* vm = in->vm;
-    std::string obj = in->obj;             // 先把名字拷出来（kill 之后别依赖指针）
-    if (vm) run_block_on(*vm, obj, id, str_at(S__OBJECT_DESTROY));
+    int obj_sid = in->obj;                  // 先把下标拷出来（kill 之后别依赖指针）
+    if (vm) run_block_on(*vm, obj_sid, id, S__OBJECT_DESTROY);
     g_inst_dying.erase(id);                // 事件跑完才允许它被真正回收
     inst_kill(id);                         // 移除 + 释放槽位 + 摘 owner
 }
 // variable_instance_exists(inst, name)：内置字段恒存在；自定义变量查 vars
 //   注意这里**不看**当前实例——名字是"没有就是没有"，跟读属性返回 undefined 是两回事
 void variable_instance_exists(Vm& vm, const uint8_t* args, int argc, int dst) {
-    int id = -1; std::string obj;
-    int k = inst_arg(vm, args, 0, &id, &obj);
-    if (k == 2) { id = inst_at(obj, 0); }
+    int id = -1; int obj_sid = -1;
+    int k = inst_arg(vm, args, 0, &id, &obj_sid);
+    if (k == 2) { id = inst_at_sid(obj_sid, 0); }
     Instance* in = inst_get(id);
     if (!in) { wr_i(vm, dst, 0); return; }
     int slot = argslot(args, 1);
     if (rd_t(vm, slot) != MEM_STRING) { printf("[vm] variable_instance_exists: argument 2 must be a string\n"); wr_i(vm, dst, 0); return; }
     int si = rd_i(vm, slot);
     if (!str_ok(si)) { wr_i(vm, dst, 0); return; }
-    wr_i(vm, dst, inst_var(id, str_at(si)) ? 1 : 0);
+    wr_i(vm, dst, inst_var_sid(id, si) ? 1 : 0);
 }
 
 // variable_instance_get(inst, name)：没有 → undefined（不是 0）
 void variable_instance_get(Vm& vm, const uint8_t* args, int argc, int dst) {
-    int id = -1; std::string obj;
-    int k = inst_arg(vm, args, 0, &id, &obj);
-    if (k == 2) id = inst_at(obj, 0);
+    int id = -1; int obj_sid = -1;
+    int k = inst_arg(vm, args, 0, &id, &obj_sid);
+    if (k == 2) id = inst_at_sid(obj_sid, 0);
     int slot = argslot(args, 1);
     if (rd_t(vm, slot) != MEM_STRING || !inst_get(id)) {
         Value u; u.t = MEM_UNDEFINED; u.v = 0; wr_v(vm, dst, u);
         return;
     }
-    Value* p = inst_var(id, str_at(rd_i(vm, slot)));
+    Value* p = inst_var_sid(id, rd_i(vm, slot));
     if (!p) { Value u; u.t = MEM_UNDEFINED; u.v = 0; wr_v(vm, dst, u); return; }
     wr_v(vm, dst, *p);
 }
 
 // variable_instance_set(inst, name, value)：没有就建（GML 也这样）
 void variable_instance_set(Vm& vm, const uint8_t* args, int argc, int dst) {
-    int id = -1; std::string obj;
-    int k = inst_arg(vm, args, 0, &id, &obj);
-    if (k == 2) id = inst_at(obj, 0);
+    int id = -1; int obj_sid = -1;
+    int k = inst_arg(vm, args, 0, &id, &obj_sid);
+    if (k == 2) id = inst_at_sid(obj_sid, 0);
     if (!inst_get(id)) { wr_i(vm, dst, 0); return; }
     int slot = argslot(args, 1);
     if (rd_t(vm, slot) != MEM_STRING) { printf("[vm] variable_instance_set: argument 2 must be a string\n"); wr_i(vm, dst, 0); return; }
-    std::string name = str_at(rd_i(vm, slot));      // 拷贝一份：全局池可能被 intern 撑大重分配
-    Value* p  = inst_var(id, name);
+    int name_sid = rd_i(vm, slot);      // 拷贝一份：全局池可能被 intern 撑大重分配
+    Value* p  = inst_var_sid(id, name_sid);
     Value  nv = rd_v(vm, argslot(args, 2));
     retain(nv);                                       // 存进实例变量 = 多一个引用
     if (p && (p->t != nv.t || p->v != nv.v)) release(*p);
-    inst_var_set(id, name, nv);
+    inst_var_set_sid(id, name_sid, nv);
     wr_i(vm, dst, 0);
 }
 

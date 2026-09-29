@@ -1,0 +1,476 @@
+// 强制清除application_surface，避免上一房间图像残留
+surface_set_target(application_surface);
+draw_clear_alpha(c_black, 0); // 用透明黑色清除surface，alpha值0表示完全透明
+surface_reset_target();
+
+depth = 50
+
+instance_create_depth(0,0,-900,obj_flame_manager)
+instance_create_depth(0,0,-700,obj_Bullet_Screen_Management)   // 屏幕弹幕管理器：全场弹幕都塞它一个实例
+instance_create_depth(0,0,-700,obj_Homing_Bullet_Management)   // 追踪弹管理器：会拐弯/追目标的子弹塞它（homing_bullet_add 里还留了懒创建兜底）
+instance_create_depth(0,0,0,obj_event_manager)
+//instance_create_depth(450,1040,-900,obj_boss_hpbar)
+var mus_inst = instance_create_depth(0,0,0,obj_battle_music_controller)
+mus_inst.battle_music = global.level_data.pre_music
+
+global.game_over = false
+global.wait_sprite_load=true;
+
+instance_create_depth(0,0,0,obj_battle_pause_manager)
+instance_create_depth(0,0,-2900,obj_battle_timer_display)
+instance_create_depth(mouse_x,mouse_y,0,obj_player_character)
+
+instance_create_depth(room_width-200,room_height-25,0,obj_level_progress_bar)
+
+
+global.selected_slot = noone;
+global.current_seed = noone;
+global._VM_battle_start_done = false;
+// 波次自动推进开关：1=自动（默认）；0=关闭，由插件脚本用 VM_SetWave 完全控制波次
+global._VM_wave_auto = true;
+// mod 全局：背后灵数量（每局战斗开始都重置为 0）
+global.mod_spirit_count = 0
+//   读写：GML 侧 global.mod_spirit_count；插件侧 VM_GetProp(0, "mod_spirit_count") /
+//         VM_SetProp(0, "mod_spirit_count", 值)
+// mod 全局"每局初始化表"（插件登记，见文档 help.md 的「mod 全局变量与初始化表」）：
+//   mod_init_globals ：全局变量名数组（插件：VM_InstArrayAdd(0, "mod_init_globals", "名字")）
+//   mod_init_defaults：一一对应的默认值（可省；缺省 / 不够长 = 0）
+//   每局开始：先按名字把对应全局重置成默认值，再把两个数组去重（同名只留第一次那组、丢掉空名字）
+if (!variable_global_exists("mod_init_globals"))  variable_global_set("mod_init_globals", []);
+if (!variable_global_exists("mod_init_defaults")) variable_global_set("mod_init_defaults", []);
+var _gi_names = variable_global_get("mod_init_globals");
+var _gi_defs  = variable_global_get("mod_init_defaults");
+if (!is_array(_gi_names)) _gi_names = [];
+if (!is_array(_gi_defs))  _gi_defs  = [];
+var _gi_dn = array_length(_gi_defs);
+var _gi_uniq_names = [];
+var _gi_uniq_defs  = [];
+for (var _i = 0; _i < array_length(_gi_names); _i++) {
+    var _gn = _gi_names[_i];
+    if (!is_string(_gn) || _gn == "") continue;
+    var _gv = (_i < _gi_dn) ? _gi_defs[_i] : 0;
+    if (is_undefined(_gv)) _gv = 0;
+    variable_global_set(_gn, _gv);                    // ① 重置成默认值
+    if (array_get_index(_gi_uniq_names, _gn) != -1) continue;   // ② 去重：同名只留第一次
+    array_push(_gi_uniq_names, _gn);
+    array_push(_gi_uniq_defs, _gv);
+}
+variable_global_set("mod_init_globals", _gi_uniq_names);
+variable_global_set("mod_init_defaults", _gi_uniq_defs);
+// VM_id 初始化：每次战斗开始前重置，保证两端占位 id 从同一值起跑
+global._VM_conveyor_belt_arr = []
+global._VM_create_counter = 100000;
+ds_map_clear(global._VM_id_to_real);
+ds_map_clear(global._VM_real_to_vm_id);
+global.map_draw_slots = [];
+for (var _i = 0; _i < 64; _i++) { array_push(global.map_draw_slots, { sprite: noone, x: 0, y: 0, alpha: 1, image_angle: 0, image_xscale: 1, image_yscale: 1 }); }
+global.map_draw_slots_front = [];
+for (var _i = 0; _i < 64; _i++) { array_push(global.map_draw_slots_front, { sprite: noone, x: 0, y: 0, alpha: 1, image_angle: 0, image_xscale: 1, image_yscale: 1 }); }
+global.map_sprite_current = global.level_data.level_sprite;
+global.map_sprite_target = global.level_data.level_sprite;
+global.map_fade_alpha = 0;
+global.map_fade_step = 0.02;
+global.grid_offset_x = 695
+global.grid_cell_size_x = 107
+global.grid_cell_size_y = 116
+global.grid_offset_y = 228
+global.grid_cols = global.level_file.map_cols
+global.grid_rows = global.level_file.map_rows
+
+
+//啃食音效
+chomp_sound_list = ds_list_create()
+battle_time = 0
+boss_count = 0
+map_spr_index = 0
+
+speed_up = false
+time_limit = -1
+timer_pause = false
+
+
+ds_list_add(chomp_sound_list,snd_chomp1)
+ds_list_add(chomp_sound_list,snd_chomp2)
+ds_list_add(chomp_sound_list,snd_chomp3)
+// 释放上一场战斗遗留的全局数据结构（重新创建前先销毁旧的），防止跨局累积泄漏
+if (variable_global_exists("grid_plants") && ds_exists(global.grid_plants, ds_type_grid)) {
+	for (var _c = 0; _c < ds_grid_width(global.grid_plants); _c++) {
+		for (var _r = 0; _r < ds_grid_height(global.grid_plants); _r++) {
+			var _old_list = ds_grid_get(global.grid_plants, _c, _r);
+			if (ds_exists(_old_list, ds_type_list)) {
+				ds_list_destroy(_old_list);
+			}
+		}
+	}
+	ds_grid_destroy(global.grid_plants);
+}
+if (variable_global_exists("plant_layers") && ds_exists(global.plant_layers, ds_type_map)) {
+	ds_map_destroy(global.plant_layers);
+}
+if (variable_global_exists("shovel_order") && ds_exists(global.shovel_order, ds_type_list)) {
+	ds_list_destroy(global.shovel_order);
+}
+if (variable_global_exists("eat_order") && ds_exists(global.eat_order, ds_type_list)) {
+	ds_list_destroy(global.eat_order);
+}
+global._takoyaki_buttet_number = 0 
+global._tanghulu_buttet_number = 0 
+
+
+// 植物层级定义
+global.plant_layers = ds_map_create();
+ds_map_add(global.plant_layers, "normal", 0);      // 普通植物
+ds_map_add(global.plant_layers, "shield_inner", 1);      // 护罩植物内侧
+ds_map_add(global.plant_layers, "lilypad", 2);     // 莲叶花盆类
+ds_map_add(global.plant_layers, "shield_outer", 3);      // 护罩植物外侧
+ds_map_add(global.plant_layers, "coffee", 4);      // 咖啡豆类
+
+// 铲除顺序
+global.shovel_order = ds_list_create();
+ds_list_add(global.shovel_order,"normal", "shield","shield_outer", "lilypad","coffee");
+global.eat_order = ds_list_create();
+ds_list_add(global.eat_order,"shield","shield_outer","normal","lilypad");
+
+// 网格植物存储数据结构
+global.grid_plants = ds_grid_create(global.grid_cols+64, global.grid_rows+64);
+
+//重置任务进度
+with obj_task_manager{
+	reset_task_state()
+}
+
+// 初始化网格
+for (var col = 0; col < global.grid_cols + 64; col++) {
+    for (var row = 0; row < global.grid_rows + 64; row++) {
+        // 每个网格存储一个 ds_list，包含该网格的所有植物实例
+        var plant_list = ds_list_create();
+        ds_grid_set(global.grid_plants, col, row, plant_list);
+    }
+}
+
+var plant_list = global.level_file.map
+global.grid_terrains = global.level_file.map
+global.grid_platform_count = array_create(global.grid_rows);
+global.grid_terrains_original = array_create(global.grid_rows);
+for(var _pi = 0; _pi < global.grid_rows; _pi++){
+	global.grid_platform_count[_pi] = array_create(global.grid_cols, 0);
+	global.grid_terrains_original[_pi] = array_create(global.grid_cols);
+}
+global.row_feature = []
+for(var i = 0 ; i < global.grid_rows;i++){
+	if global.grid_terrains[i][0].type == "water"{
+		global.row_feature[i] = "water"
+	}
+	else{
+		global.row_feature[i] = "land"
+	}
+}
+
+for(var i = 0 ; i < global.grid_rows ; i++){
+	for(var j = 0 ; j < global.grid_cols ; j ++){
+		
+		// 客户端跳过
+		if (global.network.mode!="client"){
+			var cards = plant_list[i][j].plant
+			if array_length(cards) > 0{
+				// 关卡自摆的卡：给客户端的广播里标 _place_sfx=0，别让客户端开局响一串种植音效
+				global._net_map_build = true;
+				for(var k = 0; k < array_length(cards);k++){
+					var card_data = deck_get_card_data(cards[k],0)
+					var card_obj = card_data[? "obj"]
+					var new_x = global.grid_offset_x + j * global.grid_cell_size_x
+					var new_y = global.grid_offset_y + i * global.grid_cell_size_y
+					var grid_pos = get_grid_position_from_world(new_x,new_y)
+					var new_plant = instance_create_depth(grid_pos.x, grid_pos.y, 0,card_obj);
+					var depth_value = calculate_plant_depth(j, i, new_plant.plant_type);
+					card_created(new_plant, j, i);
+					new_plant.depth = depth_value;
+				}
+				global._net_map_build = false;
+			}
+		
+			var map_objs = plant_list[i][j].object
+			if array_length(map_objs) > 0{
+				for(var k = 0; k < array_length(map_objs);k++){
+					var map_obj_data = get_map_object_data(map_objs[k])
+					var map_obj = map_obj_data._obj
+					var grid_pos = get_world_position_from_grid(j,i)
+					var new_x = grid_pos.x + map_obj_data.x_offset
+					var new_y = grid_pos.y + map_obj_data.y_offset
+				
+					var new_obj = instance_create_depth(new_x, new_y, -1200,map_obj);
+					new_obj.row = i
+					new_obj.col = j
+				}
+		  }
+			
+		}
+	}
+	if (global._VM_spawn_cats) {
+		var new_x = global.grid_offset_x
+		var new_y = global.grid_offset_y + i * global.grid_cell_size_y
+		var grid_pos = get_grid_position_from_world(new_x,new_y)
+		var cat_inst = instance_create_depth(grid_pos.x - 10 - global.grid_cell_size_x, grid_pos.y+10, 0,obj_cat);
+	cat_inst.row = i
+	if global.row_feature[i] == "water" || global.map_id == "undersea_vortex"{
+		cat_inst.sprite_index = spr_crab
+		cat_inst.idle_anim = 8
+		cat_inst.awake_anim = 6
+		cat_inst.attack_anim = 9
+	}
+	}
+}
+//关卡波次
+current_wave = 0
+current_subwave = 0
+total_wave = global.level_file.total_waves
+level_stage = "ready"
+current_total_hp = 0
+current_wave_hp = 0
+hp_ratio = 0.2
+if global.difficulty >= 2{
+	hp_ratio = 0.5
+}
+enemy_list = []
+
+wave_max_time = 25*60
+wave_min_time = 4 * 60
+wave_timer = 0
+//根据难度调整最大波长
+if global.difficulty >= 3 && global.map_id != "tower_cake"{
+	wave_max_time = 12.5*60
+}
+if is_real(global.level_file.version){
+	wave_max_time = global.level_file.max_wave_time
+	wave_min_time = global.level_file.min_wave_time
+	if global.difficulty >= 3 && global.map_id != "tower_cake"{
+		wave_max_time = round(wave_max_time/2)
+	}
+}
+
+current_wave_max_time = wave_max_time
+global.prev_place_id = ""
+
+function enemy_subwave_summon(){
+    // 越界保护
+    if (is_undefined(global.level_file) || !variable_struct_exists(global.level_file, "waves")) return;
+    var _wave_count = array_length(global.level_file.waves);
+    if (current_wave < 0 || current_wave >= _wave_count) return;
+    var _subwaves = global.level_file.waves[current_wave].subwaves;
+    if (is_undefined(_subwaves)) return;
+    var _subwave_count = array_length(_subwaves);
+    if (current_subwave < 0 || current_subwave >= _subwave_count) return;
+	current_total_hp = 0
+	
+    wave_timer = wave_max_time
+	
+	if level_stage == "boss"{
+		wave_timer = 10 * 60
+	}
+	
+	if is_real(global.level_file.version){
+		if global.level_file.version >= 1.3{
+			if current_wave < total_wave{
+				if global.level_file.waves[current_wave].subwaves[current_subwave].local_max_wave_time >0{
+					wave_timer = global.level_file.waves[current_wave].subwaves[current_subwave].local_max_wave_time
+				}
+			}
+		}
+	}
+	
+	current_wave_max_time = wave_timer
+    
+    var subwave_enemy = global.level_file.waves[current_wave].subwaves
+    enemy_list = subwave_enemy[current_subwave].enemy_list
+    
+    // 第一阶段：先处理已有行数的敌人
+    var row_enemy_count = array_create(global.grid_rows, 0); // 记录每行已有敌人数
+    
+    // 先统计已有行数的敌人
+    for (var i = 0; i < array_length(enemy_list); i++) {
+        if (enemy_list[i].type != "" && enemy_list[i].row > 0) {
+            var row_index = enemy_list[i].row - 1;
+            if (row_index >= 0 && row_index < global.grid_rows) {
+                //row_enemy_count[row_index]++;
+            }
+        }
+    }
+    
+    // 创建已使用的行数组（用于第二阶段）
+    var rows_used = array_create(global.grid_rows, false);
+    
+    // 第二阶段：创建敌人实例
+    for (var i = 0; i < array_length(enemy_list); i++) {
+        if (enemy_list[i].type != "") {
+            var target_row = enemy_list[i].row;
+            var x_offset = 0;
+            
+            // 获取敌人的特性（陆地或水上）
+            var enemy_feature = global.enemy_map[? enemy_list[i].type].feature;
+            
+            // 情况1：已有行数的敌人
+            if (target_row > 0 && target_row <= global.grid_rows) {
+                // 检查该行是否适合这种敌人
+                var row_index = target_row - 1;
+                var row_type = global.row_feature[row_index];
+                
+                // 如果行类型与敌人特性不匹配，则需要重新分配
+                if ((enemy_feature == "land" && row_type != "land") || 
+                    (enemy_feature == "water" && row_type != "water")) {
+                    // 标记为需要重新分配行数
+                    target_row = 0;
+                } else {
+                    // 保留原有行数
+                    x_offset = row_enemy_count[row_index]; // 使用该行已有的敌人数作为偏移
+                    rows_used[row_index] = true; // 标记该行已使用
+                }
+            }
+            
+            // 情况2：需要随机分配行数的敌人（包括不匹配的情况）
+            if (target_row <= 0 || target_row > global.grid_rows) {
+                // 根据敌人特性筛选合适的行
+                var available_rows = [];
+                for (var r = 0; r < global.grid_rows; r++) {
+                    var row_type = global.row_feature[r];
+                    
+                    // 检查行类型是否匹配敌人特性
+                    var row_matches = false;
+                    if (enemy_feature == "land" && row_type == "land") {
+                        row_matches = true;
+                    } else if (enemy_feature == "water" && row_type == "water") {
+                        row_matches = true;
+                    }
+                    
+                    // 如果行类型匹配，并且该行未被使用，则加入可用行列表
+                    if (row_matches && !rows_used[r]) {
+                        array_push(available_rows, r + 1); // 存储行号（1-based）
+                    }
+                }
+                
+                // 如果还有未使用的匹配行
+                if (array_length(available_rows) > 0) {
+                    // 随机选择一个未使用的匹配行
+                    target_row = available_rows[irandom(array_length(available_rows) - 1)];
+                } else {
+                    // 所有匹配行都已使用，从所有匹配行中随机选择
+                    var all_matching_rows = [];
+                    for (var r = 0; r < global.grid_rows; r++) {
+                        var row_type = global.row_feature[r];
+                        
+                        var row_matches = false;
+                        if (enemy_feature == "land" && row_type == "land") {
+                            row_matches = true;
+                        } else if (enemy_feature == "water" && row_type == "water") {
+                            row_matches = true;
+                        }
+                        
+                        if (row_matches) {
+                            array_push(all_matching_rows, r + 1);
+                        }
+                    }
+                    
+                    if (array_length(all_matching_rows) > 0) {
+                        target_row = all_matching_rows[irandom(array_length(all_matching_rows) - 1)];
+                    } else {
+                        // 如果没有匹配的行，发出警告并选择第一行（或者你可以处理这个错误）
+                        show_debug_message("错误：没有适合" + enemy_feature + "敌人的行！");
+                        target_row = 1;
+                    }
+                }
+                
+                // 更新敌人的行属性
+                enemy_list[i].row = target_row;
+                var row_index = target_row - 1;
+                x_offset = row_enemy_count[row_index]; // 使用该行已有的敌人数作为偏移
+                rows_used[row_index] = true; // 标记该行已使用
+            }
+            
+            // 创建敌人实例
+            var enemy_obj = global.enemy_map[? enemy_list[i].type]._obj;
+            
+            // 计算位置（考虑偏移）
+            var new_x = global.grid_offset_x + (9 + x_offset) * global.grid_cell_size_x;
+            var new_y = global.grid_offset_y + (target_row - 1) * global.grid_cell_size_y;
+            
+            var grid_pos = get_grid_position_from_world(new_x, new_y);
+            global._mod_pending_enemy_id = enemy_list[i].type;  // mod 敌人创建前写入 pending id
+            var new_enemy = instance_create_depth(grid_pos.x+30, grid_pos.y + 38, 0, enemy_obj);
+		
+			// 服务端广播产生敌人（boss_sync列表中的走hook的MSG_EVENT_ACTIONS，此处跳过）
+			if(global.network.mode=="server" && !array_contains(global.boss_spawn_sync_list, enemy_obj)){
+				add_net_id(new_enemy.id);
+				var _net_id = global.network.map_instance_id_net_id[? new_enemy.id];
+				var _list = global.network.connected_clients;
+				var _size = array_length(_list);
+				for (var _i = 0; _i < _size; _i++) {
+					var _socket = _list[_i];
+					send_message(_socket, MSG_SPAWN_ENEMY, _net_id, grid_pos.x+30, grid_pos.y + 3, object_get_name(enemy_obj));
+				}
+				// mod 敌人：创建后补发身份（enemy_id），客户端靠它套注册表数值 + 跑插件创建块
+				var _eid = variable_instance_exists(new_enemy, "enemy_id") ? new_enemy.enemy_id : "";
+				if (_eid != "") {
+					var _eid_json = json_stringify({enemy_id: _eid});
+					for (var _k = 0; _k < _size; _k++) {
+						send_message(_list[_k], MSG_MODIFY_PROP, _net_id, _eid_json);
+					}
+				}
+			}
+            // 更新统计信息
+            current_total_hp += global.enemy_map[? enemy_list[i].type].hp;
+            
+            // 更新该行的敌人数
+            var row_index = target_row - 1;
+            row_enemy_count[row_index]++;
+        }
+    }
+    
+}
+
+function drawLoader(){
+
+	var _total = 0;
+	var _loaded = 0;
+	var _q = global._loader_sprite_queue;
+	if (_q != undefined && ds_list_size(_q) > 0) {
+		var _entry = ds_list_find_value(_q, 0);
+		_total = _entry.total;
+		_loaded = _entry.loaded;
+	}
+
+	var _bar_w = 700;
+	var _bar_h = 20;
+	var _x1 = (room_width - _bar_w) / 2;
+	var _y1 = room_height / 2 + 250;
+	var _ratio = (_total > 0) ? (_loaded / _total) : 0;
+
+	draw_set_colour(c_black);
+	draw_set_alpha(0.8);
+	draw_rectangle(0, 0, room_width, room_height, false);
+	draw_set_alpha(1);
+
+	draw_set_color(c_white);
+	draw_rectangle(_x1 - 2, _y1 - 2, _x1 + _bar_w + 2, _y1 + _bar_h + 2, false);
+
+	draw_set_color(0xFDE98B);      // 原写法 $fde98b 是 GM 的十六进制字面量；翻译器只认 0x，语义相同
+	draw_rectangle(_x1, _y1, _x1 + _bar_w * _ratio, _y1 + _bar_h, false);
+
+	draw_sprite_ext(spr_game_logo, 0, room_width / 2, room_height / 3, 1, 1, 0, c_white, 1);
+
+	draw_set_valign(fa_left)
+	draw_set_halign(fa_top)
+	draw_set_color(c_white);
+	draw_set_font(font_yuan);
+	var _text = (_total > 0 && _loaded >= _total) ? "加载完成！" : "正在加载中！ " + string(_loaded) + "/" + string(_total);
+	draw_text(_x1, _y1 - 30, _text);
+	draw_set_valign(fa_middle)
+	draw_set_halign(fa_center)
+	draw_set_colour(c_yellow)
+	draw_text(_x1 + _bar_w / 2, _y1 - 80, "本游戏为免费开源游戏，任何付费获取方式均为诈骗\n游戏作者B站名称：Spring曙光");
+			
+	var _q = global._loader_sprite_queue;
+	var _sz = (_q != undefined) ? ds_list_size(_q) : 0;
+	if (_sz == 0) {
+	    global.wait_sprite_load = false;
+	    global.is_paused = false;
+	}
+}

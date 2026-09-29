@@ -193,8 +193,8 @@ bool hot_bulletmod_step(Vm& vm) {
 
     Value* sev = inst_var_sid(s, S_mod_step_enter_var);
     if (str_is_any_sid(vm, mv, condp, S_mod)) {
-        if (is_numv(sev) && num_of(sev) > 0 && inst_count(str_at(S_obj_battle)) > 0) {
-            int bat = inst_at(str_at(S_obj_battle), 0);
+        if (is_numv(sev) && num_of(sev) > 0 && inst_count_sid(S_obj_battle) > 0) {
+            int bat = inst_at_sid(S_obj_battle, 0);
             enter = (std::fmod(get_num_sid(bat, S_battle_time), num_of(sev)) == 0);
         }
     } else if (str_is_any_sid(vm, mv, condp, S_wait)) {

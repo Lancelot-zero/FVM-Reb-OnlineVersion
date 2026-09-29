@@ -652,7 +652,7 @@ bool hot_enemy_step(Vm& vm) {
             // 播放音效：obj_battle.chomp_sound_list[a]（取 obj_battle 的第一个实例）
             Value ia[2]; ia[0] = mk_num(0); ia[1] = mk_num(2);
             int a = (int)num_of(&call_ret_sid(vm, S_irandom_range, ia, 2));
-            int bat = inst_at(str_at(S_obj_battle), 0);
+            int bat = inst_at_sid(S_obj_battle, 0);
             Value* sndl = (bat > 0) ? inst_var_sid(bat, S_chomp_sound_list) : NULL;
             if (sndl && sndl->t == MEM_LIST) {
                 Value la[2]; la[0] = *sndl; la[1] = mk_num(a);

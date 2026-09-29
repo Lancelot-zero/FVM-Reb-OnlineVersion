@@ -108,7 +108,7 @@ void impl_VM_GetInstanceCount(Vm& vm, const uint8_t* args, int argc, int dst) {
     if (argc < 1) { gwr_num(vm, dst, 0); return; }
     Value v = rd_v(vm, argslot(args, 0));
     if (v.t != MEM_STRING || !str_ok(v.v)) { gwr_num(vm, dst, 0); return; }
-    gwr_num(vm, dst, (double)inst_count(str_at(v.v)));
+    gwr_num(vm, dst, (double)inst_count_sid(v.v));
 }
 // VM_GetInstanceAt("obj_x", k)：第 k 个活实例 id（没有 → -1）
 void impl_VM_GetInstanceAt(Vm& vm, const uint8_t* args, int argc, int dst) {
@@ -116,7 +116,7 @@ void impl_VM_GetInstanceAt(Vm& vm, const uint8_t* args, int argc, int dst) {
     if (argc < 2) { gwr_num(vm, dst, -1); return; }
     Value v = rd_v(vm, argslot(args, 0));
     if (v.t != MEM_STRING || !str_ok(v.v)) { gwr_num(vm, dst, -1); return; }
-    gwr_num(vm, dst, (double)inst_at(str_at(v.v), (int)gnum_at(vm, args, 1)));
+    gwr_num(vm, dst, (double)inst_at_sid(v.v, (int)gnum_at(vm, args, 1)));
 }
 // VM_GetCurCard()：当前卡（hot/ 维护的全局 _VM_cur_card）
 void impl_VM_GetCurCard(Vm& vm, const uint8_t* args, int argc, int dst) {
@@ -243,7 +243,7 @@ void impl_VM_CreateInstance(Vm& vm, const uint8_t* a, int c, int d) {
     if (c < 1) { gwr_num(vm, d, -4); return; }
     Value v = rd_v(vm, argslot(a, 0));
     if (v.t != MEM_STRING || !str_ok(v.v)) { gwr_num(vm, d, -4); return; }
-    int id = inst_new(&vm, str_at(v.v));
+    int id = inst_new(&vm, v.v);            // 直接给池下标
     if (id < 0) { gwr_num(vm, d, -4); return; }
     if (c > 1) inst_var_set_sid(id, S_x,     rd_v(vm, argslot(a, 1)));
     if (c > 2) inst_var_set_sid(id, S_y,     rd_v(vm, argslot(a, 2)));

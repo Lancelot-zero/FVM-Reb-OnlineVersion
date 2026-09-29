@@ -398,8 +398,8 @@ bool hot_gemmod_step(Vm& vm) {
     // ── 闸门 ──
     Value* sevp = inst_var_sid(s, S_mod_step_enter_var);
     if (str_is_any_sid(vm, mv, condp, S_mod)) {                      // 按全场帧号对齐
-        if (is_numv(sevp) && num_of(sevp) > 0 && inst_count(str_at(S_obj_battle)) > 0) {
-            int bat = inst_at(str_at(S_obj_battle), 0);
+        if (is_numv(sevp) && num_of(sevp) > 0 && inst_count_sid(S_obj_battle) > 0) {
+            int bat = inst_at_sid(S_obj_battle, 0);
             enter = (std::fmod(get_num_sid(bat, S_battle_time), num_of(sevp)) == 0);
         }
     } else if (str_is_any_sid(vm, mv, condp, S_wait)) {              // 倒数

@@ -92,7 +92,7 @@ bool hot_card_destroy(Vm& vm) {
     if (!inst_get(self)) return true;                    // 没有当前实例：没什么可做
     if (iv_of(inst_var_sid(self, S_hp)) < iv_of(inst_var_sid(self, S_max_hp))
             && !iv_of(inst_var_sid(self, S_invincible))) {
-        int tm = inst_at(str_at(S_obj_task_manager), 0);          // 找到那个唯一的管理器实例
+        int tm = inst_at_sid(S_obj_task_manager, 0);          // 找到那个唯一的管理器实例
         if (tm > 0) add_iv_sid(tm, S_card_loss, 1);
     }
     call_fn_int_sid(vm, S_card_destroyed, &self, 1, -1);

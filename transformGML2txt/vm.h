@@ -128,8 +128,10 @@ class Vm;   // Instance 里要存 owner 指针，先声明一下（完整定义�
 // 对象名 → 拥有它的 VM（全局一张表，定义在 vm_instance.cpp）
 //   一个对象的块只装在它自己的 VM 里；跨对象派发（跑别人的块、run_event_user）
 //   就靠这张表找到"那个对象归谁管"。Vm::load_object 时登记，Vm 挂了自动摘掉。
-extern std::unordered_map<std::string, Vm*> g_vm_of_object;
-Vm* vm_of_object(const std::string& obj);     // 没有这个对象 → NULL
+// 对象名**池下标** → VM（运行时零哈希；文本→下标只在装载期做）
+extern std::unordered_map<int, Vm*> g_vm_of_object;
+Vm* vm_of_object(const std::string& obj);     // 没装载这个对象 → NULL（内部 str_find 一次）
+Vm* vm_of_object_sid(int sid);               // 名字池下标在手上时用它（零哈希）
 
 // 全局变量表：名字 → 值（全局一张，定义在 vm_instance.cpp）
 //   GML 的 global.x 是进程级的，所有对象/实例共用一份，所以不放 Vm 里。
@@ -154,8 +156,10 @@ bool   global_exists(const std::string& name);
 //   mod 对象（obj_card_mod / obj_enemy_mod / obj_bullet_mod）的硬编码块靠它找到
 //   "这个实例属于哪个 mod 的 VM"，再去那个 VM 里跑 _OBJECT_STEP / _OBJECT_DRAW …
 //   谁注册：宿主装载 mod 的时候；Vm 析构时自动摘掉（不留悬空指针）。
-extern std::unordered_map<std::string, Vm*> g_mod_vms;
-Vm*  mod_vm(const std::string& mod_id);                      // 没有 → NULL
+// mod id 的**池下标** → VM（和 g_vm_of_object 统一：运行时零哈希）
+extern std::unordered_map<int, Vm*> g_mod_vms;
+Vm*  mod_vm_sid(int sid);                                   // mod id 池下标 → VM（零哈希）
+Vm*  mod_vm(const std::string& mod_id);                      // 文本版（内部 str_find 一次）
 void mod_vm_register(const std::string& mod_id, Vm* vm);
 
 // 函数表条数：要和 kNativeFns / kGameFns 的实际长度一致
@@ -194,7 +198,6 @@ struct Instance {
     //   id   ：实例的身份，**只增不减**（永不复用）→ 旧引用不会撞上新实例
     //   槽位 ：在 g_instances 里的位置，**可复用**（死了进 g_inst_free）
     int                          id;
-    std::string                  obj;    // 对象名，例如 "obj_cloud"
     Vm*                          vm;     // 属于哪个 VM（VM 死的时候要把名下的都收掉）
 
     // ── 常用内置变量（19 个）──
@@ -237,14 +240,14 @@ extern std::vector<Instance> g_instances;
 // 活着的实例：实例 id（只增不减） → 槽位索引（可复用）
 extern std::unordered_map<int, int> g_inst_alive;
 
-int       inst_new(Vm* vm, const std::string& obj);    // 建一个实例（记在 vm 名下），返回 id
+int       inst_new(Vm* vm, int obj_sid);               // 建一个实例（对象名用**池下标**），返回 id
 Instance* inst_get(int id);                            // 按 **实例 id** 取（没有 / 已销毁 → NULL）
 void      inst_kill(int id);                           // 只回收（不跑事件）：移除 + 槽位进复用队列
 void      inst_destroy(int id);                        // 销毁**唯一入口**：跑 Destroy 事件 + inst_kill
-int       inst_count(const std::string& obj);          // 某对象还活着几个
+int       inst_count_sid(int sid);                     // 某对象还活着几个（名字池下标）
+int       inst_at_sid(int sid, int k);                 // 某对象的第 k 个活实例 id
+int       inst_count(const std::string& obj);          // 同上，文本版（内部转一次下标）
 int       inst_at(const std::string& obj, int k);      // 某对象的第 k 个活实例 id（没有 → -1）
-Value*    inst_var(int id, const std::string& name);   // 取变量（没有 → NULL）
-void      inst_var_set(int id, const std::string& name, Value v);  // 写变量（没有就建）
 Value*    inst_var_sid(int id, int sid);               // 同上，池下标已经在手上（零哈希）
 void      inst_var_set_sid(int id, int sid, Value v);
 
@@ -656,16 +659,14 @@ void string_height_ext(Vm& vm, const uint8_t* args, int argc, int dst);
 void network_broadcast_active_skill(Vm& vm, const uint8_t* args, int argc, int dst);
 
 // ── 块（kernel.cpp）──
-//   跑某个实例的某个事件块：把 cur_instance 换成它 → run_named → 换回来。
-//   硬编码块和实例数组那些都要用它（instance_destroy 跑 Destroy、run_event_user 发事件）
-bool run_block_on(Vm& vm, const std::string& obj, int inst, const std::string& block);
+bool run_block_on(Vm& vm, int obj_sid, int inst, int block_sid);   // 全用池下标
 void run_event_user(Vm& vm, const uint8_t* args, int argc, int dst);
 
 // ============================================================
 // 块 / 文件
 // ============================================================
 struct Block {
-    std::string          name;
+    int name_sid;      // 块名的**池下标**
     std::vector<uint8_t> code;
 };
 
@@ -708,75 +709,43 @@ private:
     void to_map();                         // 数组 → map（带 hint 插入，摊还 O(n)）
 };
 
-class Vm {
-public:
+// 内层只记"错误码 + 参数"，**格式化文本在外层 log.cpp** ✓
+enum VmErrCode {
+    VM_OK = 0,
+    VM_E_BLOCK_NOT_FOUND,     // a1 = 块名池下标
+    VM_E_UNKNOWN_OPCODE,      // a1 = opcode，a2 = 块名池下标
+    VM_E_UNKNOWN_NATIVE,      // a1 = native id
+    VM_E_UNKNOWN_GAME_FN,     // a1 = game fn id
+    VM_E_NONINT_OPERAND,      // a1 = 块名池下标
+    VM_E_BIN_TOO_MANY_STRS,   // a1 = 上限
+    VM_E_BIN_HEAD,            // a1 = 文件名字符串池下标（外层给）
+    VM_E_BIN_BLOCK,           // a1 = 块序号, a2 = 偏移
+    VM_E_BIN_TRUNC            // a1 = 需要, a2 = 实际
+};
+
+struct Vm {
     // 字符串池是**全局**的（g_strings / g_str_map，见文件上面那一段）：
     //   Value.v 对字符串来说就是全局下标，任何一个 VM 里的字符串都能互相比、互相传。
     char*                    mem;       // 纯字节内存：每槽 8 字节 [type:int32][value:int32]
 
     // ── 一个 bin = 一个 Vm = 一个对象 ──
-    //   obj     这个 Vm 是哪个对象（bin 名；mod VM 是装载方定的伪对象名）
-    //   blocks  块名 → 块（这个对象的全部块）
-    //   ⚠ 一个 Vm 只装一个对象：要跑"别的对象"的块 = 跨 VM，用 vm_of_object(obj) 找过去
-    std::string                  obj;
     std::unordered_map<int, Block> blocks;   // 块名的池下标 → 块（整数 key，不用有序）
 
     // 这个 Vm 名下的实例（inst_new 插入、inst_kill 摘掉、析构时按它收尾）
     //   ⚠ 存**实例 id** 不是指针：全局实例表会扩容重分配，销毁的下标还会被复用
-    InstBox                      box;      // 这个 VM 名下的实例（数组/map 双模式，见 InstBox）
+    InstBox instances;      // 这个 VM 名下的实例（数组/map 双模式，见 InstBox）
 
-    int                          cur_instance; // 当前实例 id（宿主派发事件前设；0 = 没有/全局）
+
+    // 最近一次错误（**只存码和参数，文本在外层 log.cpp**）
 
     // 碰撞事件里的 other（GML 的 other / other.id）——宿主派发 _OBJECT_COLLISION_* 之前设好。
-    //   硬编码的碰撞块直接读它；翻译出来的代码走 collision_other() 内部函数（那个还是空壳）。
-    //   0 = 没有（不在碰撞事件里）
-    int                                       collision_other;
-
-    // 这个 VM 管的对象属于哪一类："card" / "enemy" / "bullet" / "effect" / "gem" /
-    // "weapon" / "mapobj" / 其它，空 = 不知道。
-    //   bin 里没存这个信息，由装载方填：vm.exe 按 bin 的目录名猜（bin/card/… → "card"），
-    //   宿主（平台侧）自己知道自己装的是哪类，直接赋 vm.kind 就行。
-    std::string                               kind;
-
-    // 命名数组：数组名（**池下标**）→ 数组。给 VM_ArrayGet/Set/ADD/Del/Size/Clear/ClearAll/
-    // Exists/Contains 那批游戏 API 用（原版是 vm.arrays 那个 ds_map），和 GM 转 bin 无关。
-    std::unordered_map<int, std::vector<Value>> named_arrays;
-
-    // ── mod 单位账本（obj_card_mod / obj_enemy_mod / obj_bullet_mod 用）──
-    //   平台那边的 mod VM 是个结构体，字段就是这几个（src_mod.gml:2052 mod_inst_add /
-    //   2060 mod_inst_del / 2071 mod_inst_count）：
-    //     mod_id      注册这个 mod 用的 id（enemy_id / card_id / bullet_id…）
-    //     （个数不另存 —— 就是这个 Vm 的 box.count()）
-    //   ⚠ "哪些单位"不用另记一份 —— 就是这个 Vm 名下的 `box`（含子弹）。
-    //     GML 那边给子弹开的后门（只计数、不进列表）在我们这儿是多余的：
-    //     box 由实例生命周期维护，跟 mod 账本没关系。
-    std::string          mod_id;
-
-    // 卡 JSON 解析出来的结构体（平台那边是 _vm[$ "card_data"]）。
-    //   宿主装卡时填（VM 不知道怎么读 JSON）；没填 = undefined。
-    //   目前只有 obj_card_mod 的 Create 用它取 plant_type
-    Value                mod_card_data;
-
-    // 这个 Vm 代表的对象名（一个 Vm 一个对象）；没装东西 → 空串
-    std::string primary_object() const {
-        return obj;
-    }
-
-    // mem 这片内存归不归我（callbin 借用共享内存的一段 → false，析构时不许 delete）
     bool owns_mem;
 
     // 全 0 = MEM_INT + 值 0，和 GML 的槽初值一致
-    //   cur_instance 必须显式初始化：不初始化就是不确定值，读它是 UB
-    //   no_mem = true：**不自己分配 mem**（callbin 用——它的 mem 每次调用时指向
-    //   共享内存里自己的那一帧，owns_mem 记着"这片内存不归我 free"）
     explicit Vm(bool no_mem) {
         mem = no_mem ? NULL : new char[MEM_SIZE * 8]();
         owns_mem = !no_mem;
         if (!g_game_fns_patched) { g_game_fns_patched = true; patch_game_fns(); }
-        cur_instance = 0;
-        collision_other = 0;
-        mod_card_data.t = MEM_UNDEFINED;
-        mod_card_data.v = 0;
     }
     Vm() : Vm(false) {}
     ~Vm() { destroy_owned_instances(); unregister_objects(); if (owns_mem) delete[] mem; }
@@ -790,14 +759,14 @@ public:
     // 装一个 bin：定下"这个 Vm 是哪个对象"，把它的块表灌进来
     //   同时登记到"对象名 → VM"那张全局表（跨对象的派发靠它找过来）
     void load_object(const std::string& object_name, const std::vector<Block>& blks) {
-        std::unordered_map<std::string, Vm*>::iterator it = g_vm_of_object.find(object_name);
-        if (it != g_vm_of_object.end() && it->second != this)
-            printf("[vm] object '%s' already belongs to another VM, taking it over\n", object_name.c_str());
-        g_vm_of_object[object_name] = this;
-        obj = object_name;
+        int sid = intern_str(object_name);            // 装载期把名字进池，运行时只用下标
+        std::unordered_map<int, Vm*>::iterator it = g_vm_of_object.find(sid);
+        if (it != g_vm_of_object.end() && it->second != this) { /* 名字已被别的 Vm 占了 */ }
+        g_vm_of_object[sid] = this;
+        obj = sid;                            // 直接用上面 intern 出来的下标
         blocks.clear();
         for (size_t i = 0; i < blks.size(); i++)
-            blocks[intern_str(blks[i].name)] = blks[i];     // key = 块名的池下标
+            blocks[str_at(blks[i].name_sid)] = blks[i];     // key = 块名的池下标
     }
 
     // 查块：没有就返回 NULL（一个 Vm 只有一个对象，所以不用给对象名）

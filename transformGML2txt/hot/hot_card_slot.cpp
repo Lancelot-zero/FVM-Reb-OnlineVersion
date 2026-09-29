@@ -99,7 +99,7 @@ bool hot_cardslot_func_select_slot(Vm& vm) {
     set_num_sid(s, S_is_selected, 1);
 
     // GML: instance_find(obj_shovel_slot, 0) —— 我们这边 inst_at 就是"第 0 个活实例"
-    int shovel = inst_at(str_at(S_obj_shovel_slot), 0);
+    int shovel = inst_at_sid(S_obj_shovel_slot, 0);
     if (inst_get(shovel) && truthy(inst_var_sid(shovel, S_is_selected)))
         call_fn_int_sid(vm, S_deselect_shovel, NULL, 0, -1);          // 项目脚本（宿主实现）
 

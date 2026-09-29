@@ -89,7 +89,7 @@ Value v_map(Vm& vm, const Value& m, const Value& key);
 Value v_struct(Vm& vm, const Value& s, const char* key);
 Value v_grid(Vm& vm, const Value& g, const Value& c, const Value& r);
 bool hot_inherited(Vm& vm, const char* obj, const char* block);
-bool inst_is(int id, const char* base);
+bool inst_is(int id, int base_sid);
 Value array_v(Vm& vm, const Value& arr, int i);
 void array_setv(Vm& vm, const Value& arr, int i, const Value& v);
 double array_n(Vm& vm, const Value& arr, int i);

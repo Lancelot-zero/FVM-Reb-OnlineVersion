@@ -1,0 +1,7 @@
+  11              printf("[vm] 全局字符串池已超过 65535，OP_ASSIGN 的 u16 装不下\n");
+  23                  if (p + 5 > n) { printf("[vm] 块 %s：指令被截断\n", blocks[bi].name.c_str()); return false; }
+  27                      if (p + 2 > n) { printf("[vm] 块 %s：字符串下标被截断\n", blocks[bi].name.c_str()); return false; }
+  30                          printf("[vm] 块 %s：字符串下标 %d 越界（本 bin 池只有 %zu 条）\n",
+  42                  if (p + 3 > n) { printf("[vm] 块 %s：调用指令被截断\n", blocks[bi].name.c_str()); return false; }
+  46                      printf("[vm] 块 %s：调用指令的实参被截断\n", blocks[bi].name.c_str());
+  53                      printf("[vm] 块 %s：未知操作码 %d（字符串下标重写中止）\n",

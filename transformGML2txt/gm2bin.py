@@ -506,7 +506,115 @@ def load_consts():
     return macros, consts
 
 
+BUILTIN_CONST_CACHE = os.path.join(HERE, "gm_builtin_consts.json")
+
+# ── 不编的名单（小写、不带 .gml）──
+#   平台侧那台 GML VM 自己：解释器 / 执行器 / 调试器 / 编译出来的中间产物 ——
+#   C++ 这边用不着（我们就是那台 VM），而且它们的语法翻译器也吃不下。
+#   放进这儿 = **不算失败**，递归翻译时直接跳过（不然会在 stop 计数里一直挂着）。
+SKIP_CALLBIN = {
+    "vm_decode", "vm_execute", "vm_execute_debug", "vm_execute_code",
+    "vm_execute_code_opt", "vm_store_result", "vm_read_mem", "vm_write_mem",
+    "vm_arg", "vm_register_function",
+}
+
+
+# ── 函数参数默认值：function f(a, b = 1) ──
+#   GML 的语义是"调用方没给就填默认值"。我们不往 VM 里加东西，
+#   而是在**调用点**把缺的实参补成默认字面量（编译期就能定）。
+#   只支持字面量默认值（数字 / 字符串 / true / false / undefined）；复杂表达式照旧响亮报错。
+PARAM_DEFAULTS = {}          # 函数名 → [默认值节点 or None]（按参数位置）
+
+
+def parse_lit_node(txt):
+    """默认值的文本 → 表达式节点（只认字面量）"""
+    t = txt.strip()
+    if re.fullmatch(r'-?\d+', t):
+        return ("num", int(t))
+    if re.fullmatch(r'-?\d*\.\d+(?:[eE][-+]?\d+)?', t) or re.fullmatch(r'-?\d+[eE][-+]?\d+', t):
+        return ("float", float(t))
+    if len(t) >= 2 and t[0] == t[-1] and t[0] in ('"', "'"):
+        return ("str", t[1:-1])
+    if t == "true":
+        return ("num", 1)
+    if t == "false":
+        return ("num", 0)
+    if t == "undefined":
+        return ("undef",)
+    return None              # 复杂表达式：不认（调用点就不会替它补，缺参照旧 = undefined）
+
+
+def scan_param_defaults():
+    roots = [os.path.join(HERE, "..", "objects"), os.path.join(HERE, "..", "scripts"),
+             os.path.join(HERE, "..", "kernel")]
+    n = 0
+    for r in roots:
+        if not os.path.isdir(r):
+            continue
+        for base, _d, fs in os.walk(r):
+            for fn in fs:
+                if not fn.endswith(".gml"):
+                    continue
+                try:
+                    src = open(os.path.join(base, fn), "r", encoding="utf-8", errors="replace").read()
+                except OSError:
+                    continue
+                for m in re.finditer(r"(?m)^\s*function\s+(\w+)\s*\(([^)]*)\)", src):
+                    name, plist = m.group(1), m.group(2)
+                    if "=" not in plist:
+                        continue
+                    d = []
+                    ok = True
+                    for part in plist.split(","):
+                        if "=" in part:
+                            lit = parse_lit_node(part.split("=", 1)[1])
+                            if lit is None:
+                                ok = False
+                                break
+                            d.append(lit)
+                        else:
+                            d.append(None)
+                    if ok and d and any(x is not None for x in d):
+                        PARAM_DEFAULTS[name] = d
+                        n += 1
+    return n
+
+
+def load_builtin_consts():
+    """GM **内建常量**（buffer_u8 / vk_left / c_white …）→ 值
+
+    为什么要这张表：这些常量是**引擎自带**的，项目 GML 里根本没有定义
+    （scan_consts 只扫项目自己的 #macro / enum）→ 翻译器不认识它们，
+    就会把 `buffer_u8` 编成"读一个变量"，运行时读到 undefined(0)。
+    GM 编译器本来是把它们**直接内联成数字**的 —— 这张表就是补这一手。
+
+    ⚠ 项目自己定义的常量（MACROS / CONSTS）优先级更高，这里只兜"项目没定义"的。
+    """
+    try:
+        import json
+        with open(BUILTIN_CONST_CACHE, "r", encoding="utf-8") as f:
+            return json.load(f).get("consts", {})
+    except Exception:
+        return {}
+
+
+BUILTIN_CONSTS = load_builtin_consts()
+
+
+def const_value(name):
+    """一个标识符是不是常量 → 返回它的值；不是 → None
+
+    查找顺序：项目自己的宏 → 项目自己的 enum 常量 → GM 内建常量
+    """
+    if name in MACROS:
+        return MACROS[name]
+    if name in CONSTS:
+        return CONSTS[name]
+    return BUILTIN_CONSTS.get(name)
+
+
 MACROS, CONSTS = load_consts()
+SCAN_DEFAULTS = scan_param_defaults()      # 函数参数默认值（调用点补字面量用）
 
 
 def load_object_names():
@@ -1050,6 +1158,11 @@ class Parser(object):
             if nm in MACROS:
                 self.adv()
                 return ("num", MACROS[nm])
+            # GM **内建常量**（buffer_u8 / vk_left / c_white …）：项目里没定义，
+            #   但 GM 编译器会直接内联成数字 → 我们也照做（不然会编成"读变量"，运行时读到 0）
+            if nm in BUILTIN_CONSTS:
+                self.adv()
+                return ("num", BUILTIN_CONSTS[nm])
             self.adv()
             if nm == "true":
                 return ("num", 1)
@@ -1303,20 +1416,22 @@ class Parser(object):
             self.adv()
             self.want("(")
             params = []
+            defaults = []                     # [(参数位置, 默认值节点)]：见 PARAM_DEFAULTS
             if not self.isP(")"):
                 while True:
                     if self.cur().k != TK_ID:
                         bail("function parameter must be a name", "got '%s'" % self.cur().s)
                     params.append(self.cur().s)
                     self.adv()
-                    if self.isP("="):
-                        bail("function parameter with a default value", "not supported")
+                    if self.isP("="):         # 参数默认值：function f(a, b = 1)
+                        self.adv()
+                        defaults.append((len(params) - 1, self.expr()))
                     if self.isP(","):
                         self.adv()
                         continue
                     break
             self.want(")")
-            return ("func", nm, params, self.body())
+            return ("func", nm, params, self.body(), defaults)
 
         if self.isK("try") or self.isK("catch"):
             bail("try/catch", "GML exceptions have no counterpart")
@@ -1328,7 +1443,10 @@ class Parser(object):
 
         if self.isK("return"):
             self.adv()
-            e = None if (self.cur().k == TK_NL or self.isP(";")) else self.expr()
+            # 裸 return（后面是换行 / ; / **右花括号**）→ GML 里就是"返回 undefined"。
+            #   ⚠ 别忘了 `}`：`if (...) { return }` 这种就没带换行，
+            #     少了这个判据会报 "unparsable expression start '}'"
+            e = None if (self.cur().k == TK_NL or self.isP(";") or self.isP("}")) else self.expr()
             self.end_stmt()
             return ("return", e)
 
@@ -1694,11 +1812,18 @@ class Cg(object):
             if nm in FUNC_BLOCKS:
                 self.nat_void("run_block", [self.g.lit_str("_FUNC_" + nm)])
                 return self.copy(RET_SLOT)
-            # ── callbin（外部函数）：编成 VM_CallFunc("名字", 实参…) ──
-            #   名字来自 CALLBIN_NAMES（扫 --callbins 目录下的 .callbin）
-            if nm in CALLBIN_NAMES:
-                return self.game_call(GAME_ID["VM_CallFunc"],
-                                      [self.g.lit_str(nm)] + [self.ex(a) for a in n[2]])
+            # ── 按名字调用：编成 VM_CallFunc("名字", 实参…)，不进 native 表 ──
+            #   两张来源：CALL_BY_NAME（脚本里写死的）+ CALLBIN_NAMES（扫 --callbins 扫到的）
+            if nm in CALL_BY_NAME or nm in CALLBIN_NAMES:
+                args = [self.ex(a) for a in n[2]]
+                # 缺的实参按"函数参数默认值"补上（编译期补字面量，VM 不用动）
+                d = PARAM_DEFAULTS.get(nm)
+                if d:
+                    for i in range(len(args), len(d)):
+                        if d[i] is None:
+                            break
+                        args.append(self.ex(d[i]))
+                return self.game_call(GAME_ID["VM_CallFunc"], [self.g.lit_str(nm)] + args)
             # ── 数组函数：目标是"实例/全局变量上的数组"就走实例那套 ──
             if nm in ARRAY_FNS and n[2]:
                 base = self.inst_array_ref(n[2][0])
@@ -2232,6 +2357,35 @@ CALLBIN_ENTRY = "_CALL_ENTRY"
 
 CALLBIN_NAMES = set()                   # 已知的 callbin 函数名（调用点按它编成 VM_CallFunc）
 
+# ── 按名字调用（**不进 native 表**）──
+#   命中就编成  OP_CALL VM_CallFunc("名字", 实参…)  —— 名字作为字符串常量进 _VM_CONST_INIT。
+#   运行时由 C++ 侧接住：① VM_RegisterFunc 注册的 DLL 函数表 ② 扫到的 callbin 表（DLL 表优先）。
+#   好处：**native 表不用再加条目** → 已编译 bin 的 fid 顺序永远不会被新函数挤动。
+#   ⚠ 只影响**新编**的 bin；老 bin 里烘的还是 OP_NATIVE + fid，照旧能跑。
+#   ⚠ 加名字之前先确认那个名字"运行时真能被接住"（有同名 callbin，或插件会 RegisterFunc），
+#     否则它从"响亮报 no builtin"变成"运行时响亮报 VM_E_FN_NOT_FOUND"（两种都是响亮失败）。
+CALL_BY_NAME = set([
+    "VM_FlushHooks", "VM_HostPush", "add_material_amount", "add_net_id", "add_task_progress",
+    "calculate_plant_depth", "clear_deck", "complete_level", "create_battle_slots",
+    "damage_enemy", "deck_ensure_size",
+    "deck_slot_count", "deck_slot_is_empty", "deck_slot_max", "deselect_shovel",
+    "edit_gem_level", "edit_gem_max_level", "edit_task_progress", "edit_task_state",
+    "equip_cookbook", "get_card_attire_list", "get_card_craft_rule", "get_cookbook_data",
+    "get_gem_craft_rule", "get_gem_max_level", "get_grid_position_from_world",
+    "get_load_audio", "get_map_object_data",
+    "get_material_amount", "get_material_info", "get_plant_shape_data", "get_task_data",
+    "get_task_progress", "get_task_state", "get_world_position_from_grid",
+    "gui_stack_pop", "gui_stack_to",
+    "is_attire_unlocked", "is_card_unlocked", "is_gem_unlocked", "is_level_completed",
+    "is_task_unlocked", "is_weapon_unlocked", "load_custom_deck", "mod_card_vm_deck_refresh",
+    "mod_sync_props_tick", "network_broadcast_shovel_remove", "remove_from_deck", "remove_task",
+    "save_file", "save_to_custom_deck", "select_shovel", "send_message",
+    "sh_disconnect", "sort_plants_in_grid", "unequip_cookbook", "unlock_attire",
+    "unlock_card", "unlock_gem", "unlock_task", "unlock_weapon",
+    "update_notices", "upgrade_card", "upgrade_card_shape", "version_greater",
+])
+
+
 
 def callbin_scan_dir(dirpath):
     """扫一个目录下的 *.callbin，把函数名（文件名去掉后缀）收进 CALLBIN_NAMES"""
@@ -2537,7 +2691,7 @@ def recursive_mode(root, out_root):
     log = ["=" * 72,
            "%s  RECURSIVE  %s -> %s" % (time.strftime("%Y-%m-%d %H:%M:%S"), root, out_root),
            "-" * 72]
-    n_bin = n_cb = n_stop = 0
+    n_bin = n_cb = n_stop = n_skip = 0
     for dirpath, dirnames, filenames in os.walk(root):
         gmls = sorted(f for f in filenames if f.endswith(".gml"))
         if not gmls:
@@ -2548,6 +2702,21 @@ def recursive_mode(root, out_root):
         # ① 含"单个 function"的 .gml（平铺也行）→ callbin，文件名就是函数名
         for f in gmls:
             p = os.path.join(dirpath, f)
+            base = f[:-4].lower()
+            # 跳过名单：这些是**平台侧那台 GML VM 自己**的东西（解释器/执行器/调试器），
+            #   C++ 这边用不着，编也编不出来 → 不算失败，直接不编
+            if base in SKIP_CALLBIN:
+                log.append("  skip     %-44s （平台侧 GML VM 自己的东西，不编）" % os.path.join(rel, f))
+                print("  skip     %-44s （平台侧 GML VM 的，不编）" % os.path.join(rel, f))
+                n_skip += 1
+                continue
+            # 名字已经是 **C++ 实现好的 game API**（GAME_ID 那张表）：GML 这份是平台侧镜像。
+            #   bin 里发的是 OP_CALL fid → 直接进 kGameFns[fid]，永远走不到 callbin → 编了也没用
+            if f[:-4] in GAME_ID:
+                log.append("  skip     %-44s （已是 C++ 的 game API，GML 这份是镜像）" % os.path.join(rel, f))
+                print("  skip     %-44s （已是 C++ 的 game API，跳过）" % os.path.join(rel, f))
+                n_skip += 1
+                continue
             src = open(p, "rb").read().decode("utf-8", "replace")
             if not re.search(r"(?m)^\s*function\s+\w+\s*\(", src):
                 continue
@@ -2581,9 +2750,9 @@ def recursive_mode(root, out_root):
             print("  STOP     %-44s %s:%d  %s" % (rel, os.path.basename(LAST_BAIL[0]), LAST_BAIL[1], LAST_BAIL[2]))
             n_stop += 1
     log.append("-" * 72)
-    log.append("  total: bin %d, callbin %d, stop %d" % (n_bin, n_cb, n_stop))
+    log.append("  total: bin %d, callbin %d, stop %d, skip %d" % (n_bin, n_cb, n_stop, n_skip))
     dump_log(log)
-    print("\n  total: bin %d, callbin %d, stop %d   -> %s" % (n_bin, n_cb, n_stop, out_root))
+    print("\n  total: bin %d, callbin %d, stop %d, skip %d   -> %s" % (n_bin, n_cb, n_stop, n_skip, out_root))
     return 0
 
 
