@@ -177,6 +177,8 @@ if (global.network.mode == "server" && !global.is_paused) {
 }
 
 
+
+//if(global._VM_battle_start_done){
 // 帧 VM 块：每帧执行
 // 两个 VM 各跑各的：地图脚本走原来的 buffer_exists 判断，mod 走 vm_hook_run（自己查块）
 if (buffer_exists(global._VM_FRAME)) {
@@ -205,3 +207,4 @@ if (battle_time mod 60 == 0 && buffer_exists(global._VM_TIMER_60f)) {
     VM_Execute(global.__vm, global._VM_TIMER_60f, "_VM_TIMER_60f");
 }
 if (battle_time mod 60 == 0) vm_hook_run("_VM_TIMER_60f");
+//}
