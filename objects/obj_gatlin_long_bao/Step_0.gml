@@ -10,13 +10,27 @@ if is_slowdown{
 	current_flash_speed *= 2
 }
 //检测自身右方是否有敌人
+/*
 var has_enemy = false
 with(obj_enemy_parent){
 	if (grid_row == other.grid_row && grid_col >= other.grid_col && grid_col <= (global.grid_cols + 1) && can_target_on(other.target_type,target_type)){
 		has_enemy = true
 		break
 	}
+}*/
+var has_enemy = false
+var stride = global.grid_cols + 2;
+var col_end = stride - 1;
+var left_idx = grid_col > 0 ? grid_col - 1 : -1;
+var r = grid_row * stride;
+var sum_n = global.has_enemy_normal[r + col_end] - (left_idx >=0 ? global.has_enemy_normal[r + left_idx] : 0);
+var sum_o = global.has_enemy_obstacle[r + col_end] - (left_idx >=0 ? global.has_enemy_obstacle[r + left_idx] : 0);
+enemy_number = sum_n + sum_o;
+if(enemy_number>0){
+	has_enemy = true
 }
+	
+	
 //攻击逻辑
 if (has_enemy) {
     if (attack_timer <= cycle - attack_anim * current_flash_speed) {
