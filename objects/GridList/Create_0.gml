@@ -18,10 +18,11 @@ self.state = {
 
     grid_x: 3,
     grid_gap: 10,
-    scrollbar_width: 14,
     scrollbar_dragging: false,
     scrollbar_drag_offset: 0,
     show_scrollbar: false,
+    scrollbar_offset_x: 0,
+    scrollbar_scale: 2.2,
 
     /// @type {function} 
     should_correspond: function () {return true},
@@ -50,6 +51,27 @@ function set_wheel_step(_pixels) {
 /// @param {real} _k
 function set_scroll_lerp(_k) {
     self.state.scroll_lerp = clamp(_k, 0.01, 1)
+    return self
+}
+
+/// @description 设置滚动条水平方向偏移（正数向右）
+/// @param {real} _offset
+function set_scrollbar_offset_x(_offset) {
+    self.state.scrollbar_offset_x = _offset
+    return self
+}
+
+/// @description 设置滚动条整体缩放（宽高一起缩放，不会随内容变化）
+/// @param {real} _scale
+function set_scrollbar_scale(_scale) {
+    self.state.scrollbar_scale = max(0.1, _scale)
+    return self
+}
+
+/// @description 是否显示滚动条
+/// @param {bool} _show
+function set_show_scrollbar(_show) {
+    self.state.show_scrollbar = _show
     return self
 }
 
@@ -201,6 +223,11 @@ function layout_items() {
         }
         method(inst, _set_position)(_x, _y)
         variable_instance_set(inst, "visible", _in_view)
+        // 把视口裁剪后的可见范围告知子项，供鼠标命中判定使用
+        variable_instance_set(inst, "clip_left", max(_x, _vleft))
+        variable_instance_set(inst, "clip_top", max(_y, _vtop))
+        variable_instance_set(inst, "clip_right", min(_cell_right, _vright))
+        variable_instance_set(inst, "clip_bottom", min(_cell_bottom, _vbottom))
     }
 }
 
@@ -219,16 +246,22 @@ function scrollbar_needed() {
 }
 
 function get_scrollbar_metrics() {
-    var _track_x = self.state.viewport_left + self.state.viewport_width - self.state.scrollbar_width
+    // 滑块尺寸固定为精灵尺寸 × 缩放，不随内容变化
+    var _scale = self.state.scrollbar_scale
+    var _thumb_w = sprite_get_width(spr_info_island_scroll_bar) * _scale
+    var _thumb_h = sprite_get_height(spr_info_island_scroll_bar) * _scale
+
+    var _track_x = self.state.viewport_left + self.state.viewport_width - _thumb_w + self.state.scrollbar_offset_x
     var _track_y = self.state.viewport_top
-    var _track_w = self.state.scrollbar_width
-    var _track_h = self.state.viewport_height
+    var _track_w = _thumb_w
+    var _track_h = max(_thumb_h, self.state.viewport_height)
+
     var _max = get_max_scroll()
-    var _ratio = (_max <= 0) ? 1 : clamp(self.state.viewport_height / self.state.content_height, 0.12, 1)
-    var _thumb_h = max(28, _track_h * _ratio)
+    // 轨道可移动距离固定，同样拖动距离下内容越多滚动越快
+    var _travel = max(1, _track_h - _thumb_h)
     var _thumb_y = _track_y
     if (_max > 0) {
-        _thumb_y = _track_y + (self.state.scroll_y / _max) * (_track_h - _thumb_h)
+        _thumb_y = _track_y + (self.state.scroll_y / _max) * _travel
     }
     return {
         track_x: _track_x,
@@ -237,8 +270,9 @@ function get_scrollbar_metrics() {
         track_h: _track_h,
         thumb_x: _track_x,
         thumb_y: _thumb_y,
-        thumb_w: _track_w,
+        thumb_w: _thumb_w,
         thumb_h: _thumb_h,
+        travel: _travel,
     }
 }
 
@@ -268,18 +302,17 @@ function apply_scrollbar_input() {
             self.state.scrollbar_dragging = true
             self.state.scrollbar_drag_offset = _my - _m.thumb_y
         } else {
+            // 点击轨道快速跳跃，滑块中心对齐点击位置
             var _max = get_max_scroll()
-            var _travel = max(1, _m.track_h - _m.thumb_h)
-            self.state.scroll_target_y = clamp((_my - _m.track_y - _m.thumb_h * 0.5) / _travel * _max, 0, _max)
+            self.state.scroll_target_y = clamp((_my - _m.track_y - _m.thumb_h * 0.5) / _m.travel * _max, 0, _max)
         }
     }
 
     if (self.state.scrollbar_dragging) {
         if (mouse_check_button(mb_left)) {
             var _max = get_max_scroll()
-            var _travel = max(1, _m.track_h - _m.thumb_h)
-            var _thumb_y = clamp(_my - self.state.scrollbar_drag_offset, _m.track_y, _m.track_y + _travel)
-            self.state.scroll_target_y = ((_thumb_y - _m.track_y) / _travel) * _max
+            var _thumb_y = clamp(_my - self.state.scrollbar_drag_offset, _m.track_y, _m.track_y + _m.travel)
+            self.state.scroll_target_y = ((_thumb_y - _m.track_y) / _m.travel) * _max
             self.state.scroll_y = self.state.scroll_target_y
         } else {
             self.state.scrollbar_dragging = false
@@ -292,14 +325,8 @@ function draw_scrollbar() {
         return
     }
     var _m = get_scrollbar_metrics()
-    draw_set_alpha(0.35)
-    draw_set_color(make_color_rgb(70, 52, 36))
-    draw_roundrect(_m.track_x, _m.track_y, _m.track_x + _m.track_w, _m.track_y + _m.track_h, false)
-    draw_set_alpha(0.85)
-    draw_set_color(make_color_rgb(210, 176, 120))
-    draw_roundrect(_m.thumb_x, _m.thumb_y, _m.thumb_x + _m.thumb_w, _m.thumb_y + _m.thumb_h, false)
-    draw_set_alpha(1)
-    draw_set_color(c_white)
+    var _scale = self.state.scrollbar_scale
+    draw_sprite_ext(spr_info_island_scroll_bar, 0, _m.thumb_x, _m.thumb_y, _scale, _scale, 0, c_white, 1)
 }
 
 function apply_wheel() {
