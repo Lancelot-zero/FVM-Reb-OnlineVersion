@@ -14,4 +14,4 @@ else{
 		obj_edit_menu.selected_attire_index = -1
 	}
 }
-audio_play_sound(snd_button,0,0)
+global.audio.play(snd_button,0,0)
