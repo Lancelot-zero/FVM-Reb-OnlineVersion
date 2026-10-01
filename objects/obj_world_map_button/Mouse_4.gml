@@ -5,7 +5,7 @@ if global.menu_screen{
 				exit
 			}
 		}
-		audio_play_sound(snd_button,0,0)
+		global.audio.play(snd_button,0,0)
 		world_map = 1
 		instance_create_depth(room_width/2,room_height/2,-5,obj_world_map_menu)
 		if instance_exists(obj_player_info_ui){

@@ -3,7 +3,7 @@
         // 停止可能存在的暂停实例
         audio_stop_sound(readyroom_music);
         // 从头开始播放新实例
-        audio_play_sound(readyroom_music, 0, 0);
+        global.audio.play(readyroom_music, 0, 0);
     }
 if keyboard_check_pressed(vk_escape) || mouse_check_button_pressed(mb_right){
 	if instance_exists(obj_quit_confirm){

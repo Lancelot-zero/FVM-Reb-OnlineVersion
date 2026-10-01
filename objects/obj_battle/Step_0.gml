@@ -55,7 +55,7 @@ if global.debug{
 		global.game_over = true
 		var inst = instance_create_depth(room_width/2,room_height/2,-3001,obj_game_over)
 		inst.sprite_index = spr_win
-		audio_play_sound(snd_win,0,0)
+		global.audio.play(snd_win,0,0)
 	}
 
 	//if keyboard_check_pressed(ord("R")){
@@ -104,7 +104,7 @@ if time_limit > 0{
 		global.is_paused = true
 		global.game_over = true
 		instance_create_depth(room_width/2,room_height/2,-3001,obj_game_over)
-		audio_play_sound(snd_lose,0,0)
+		global.audio.play(snd_lose,0,0)
 	}
 }
 
@@ -122,7 +122,7 @@ if keyboard_check_pressed(vk_shift) || keyboard_check_pressed(vk_lshift){
 if battle_time >= (global.level_file.first_wave_delay * 60) && level_stage == "ready" {
     
     level_stage = "pre"
-    audio_play_sound(snd_mouse_wave_attack, 0, 0)
+    global.audio.play(snd_mouse_wave_attack, 0, 0)
     
     enemy_subwave_summon()
     
@@ -173,7 +173,7 @@ if wave_timer <= 0 && level_stage == "pre"{
 		else if current_wave < total_wave{
 			current_wave += 1
 			current_subwave = 0
-			audio_play_sound(snd_mouse_wave_attack,0,0)
+			global.audio.play(snd_mouse_wave_attack,0,0)
 			instance_create_depth(room_width/2,room_height/2,-300,obj_huge_wave_text)
 		}
 	}
@@ -201,11 +201,94 @@ if global.debug{
 			global.game_over = true
 			var inst = instance_create_depth(room_width/2,room_height/2,-3001,obj_game_over)
 			inst.sprite_index = spr_win
-			audio_play_sound(snd_win,0,0)
+			global.audio.play(snd_win,0,0)
 		}
 		else if current_wave < total_wave{
 			current_wave += 1
 			current_subwave = 0
 		}
+	}
+}
+
+
+
+/***********下述代码为每帧的预处理，后续卡片索敌直接通过前缀和做差O(1)查询**************/
+
+
+var size = global.grid_rows * (global.grid_cols + 2);
+if (!variable_global_exists("has_enemy_normal") || array_length(global.has_enemy_normal) != size) {
+	global.has_enemy_normal      = array_create(size, 0);
+	global.has_enemy_obstacle    = array_create(size, 0);
+	global.has_enemy_diver       = array_create(size, 0);
+	global.has_enemy_air         = array_create(size, 0);
+	global.has_enemy_dance       = array_create(size, 0);
+	global.has_enemy_underground = array_create(size, 0);
+	global.enemy_array = array_create(size);
+	for(var _e = 0; _e < size; _e++){
+		global.enemy_array[_e] = [];
+	}
+}
+if (!variable_global_exists("enemy_array_left") || array_length(global.enemy_array_left) != global.grid_rows) {
+	global.enemy_array_left = array_create(global.grid_rows);
+	for(var _e = 0; _e < global.grid_rows; _e++){
+		global.enemy_array_left[_e] = [];
+	}
+}
+
+for(var i = 0; i < size; i++){
+	global.has_enemy_normal[i]      = 0;
+	global.has_enemy_obstacle[i]    = 0;
+	global.has_enemy_diver[i]       = 0;
+	global.has_enemy_air[i]         = 0;
+	global.has_enemy_dance[i]       = 0;
+	global.has_enemy_underground[i] = 0;
+	array_resize(global.enemy_array[i], 0);
+}
+for(var _e = 0; _e < global.grid_rows; _e++){
+	array_resize(global.enemy_array_left[_e], 0);
+}
+var stride = global.grid_cols + 2;
+
+with obj_enemy_parent{
+	if(grid_row >= 0 && grid_row < global.grid_rows && grid_col >= 0 && grid_col < stride)
+	{
+		var idx = grid_row * stride + grid_col;
+		switch(target_type)
+		{
+			case "normal":
+				global.has_enemy_normal[idx] += 1;
+				break;
+			case "obstacle":
+				global.has_enemy_obstacle[idx] += 1;
+				break;
+			case "diver":
+				global.has_enemy_diver[idx] += 1;
+				break;
+			case "air":
+				global.has_enemy_air[idx] += 1;
+				break;
+			case "dance":
+				global.has_enemy_dance[idx] += 1;
+				break;
+			case "underground":
+				global.has_enemy_underground[idx] += 1;
+				break;
+		}
+		array_push(global.enemy_array[idx],id)
+	}
+	if(grid_row >= 0 && grid_row < global.grid_rows && grid_col < 0 ){
+		array_push(global.enemy_array_left[grid_row],id)
+	}
+}
+
+for(var i = 0; i < global.grid_rows; i++){
+	var row_base = i * stride;
+	for(var j = 1; j < stride; j++){
+		global.has_enemy_normal[row_base + j] += global.has_enemy_normal[row_base + j - 1];
+		global.has_enemy_obstacle[row_base + j] += global.has_enemy_obstacle[row_base + j - 1];
+		global.has_enemy_diver[row_base + j] += global.has_enemy_diver[row_base + j - 1];
+		global.has_enemy_air[row_base + j] += global.has_enemy_air[row_base + j - 1];
+		global.has_enemy_dance[row_base + j] += global.has_enemy_dance[row_base + j - 1];
+		global.has_enemy_underground[row_base + j] += global.has_enemy_underground[row_base + j - 1];
 	}
 }

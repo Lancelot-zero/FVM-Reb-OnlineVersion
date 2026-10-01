@@ -118,6 +118,40 @@ global.sound_volume_before_mute = 0.7;
 
 // 读取配置到全局变量
 ini_open("config.ini");
+
+// 音效播放管理器配置（Issue #79）：全项目音效统一走 global.audio.play，见 scripts/Music_Init
+// ⚠️ 必须在 ini_open / ini_close 区间内读取，否则会报 INI 文件未定义。
+// ⚠️ 优先级：config.ini 里已有的值 > 这里的默认值（默认值只在 ini 缺键时才写入）。
+//    所以改 scripts/Music_Init 里的默认值对已有配置无效 —— 要么直接改 config.ini，
+//    要么把 config.ini 里对应的 audio_* 行删掉，让这里重新写一遍。
+global.audio.enable     = ini_read_bool("settings", "audio_opt_enable", true);
+global.audio.gap_ms     = ini_read_real("settings", "audio_snd_gap_ms", 20);   // 同一音效最小间隔ms（地板）
+global.audio.gap_ratio  = ini_read_real("settings", "audio_gap_ratio", 0.25);  // 间隔 = 音效时长×该比例
+global.audio.gap_max    = ini_read_real("settings", "audio_gap_max", 400);     // 间隔上限ms
+global.audio.same_max   = ini_read_real("settings", "audio_same_max", 8);      // 同音并发上限
+global.audio.duck       = ini_read_bool("settings", "audio_duck", true);       // 同音叠加增益
+global.audio.jitter     = ini_read_real("settings", "audio_jitter", 0.25);     // 间隔抖动 ±比例
+global.audio.density_ms = ini_read_real("settings", "audio_density_ms", 300);  // 增益密度窗口ms
+global.audio.vary_pitch = ini_read_real("settings", "audio_vary_pitch", 0.06); // 音高随机 ±比例
+// 键缺失时补写默认值，玩家可直接手改 config.ini
+if (ini_read_string("settings", "audio_snd_gap_ms", "") == "") {
+    ini_write_bool("settings", "audio_opt_enable", true);
+    ini_write_real("settings", "audio_snd_gap_ms", 20);
+    ini_write_real("settings", "audio_same_max", 8);
+    ini_write_bool("settings", "audio_duck", true);
+}
+if (ini_read_string("settings", "audio_gap_ratio", "") == "") {
+    ini_write_real("settings", "audio_gap_ratio", 0.25);
+}
+if (ini_read_string("settings", "audio_gap_max", "") == "") {
+    ini_write_real("settings", "audio_gap_max", 400);
+}
+if (ini_read_string("settings", "audio_jitter", "") == "") {
+    ini_write_real("settings", "audio_jitter", 0.25);
+    ini_write_real("settings", "audio_density_ms", 300);
+    ini_write_real("settings", "audio_vary_pitch", 0.06);
+}
+
 global.screen_shake = ini_read_bool("settings", "screen_shake", true);
 global.screen_flash = ini_read_bool("settings", "screen_flash", true);
 global.fullscreen = ini_read_bool("settings", "fullscreen", false);
@@ -136,6 +170,14 @@ global.ime_block = ini_read_bool("settings", "ime_block", true); // 输入法屏
 // 兼容旧配置：键缺失时补写，玩家可手改 %LOCALAPPDATA%\FVM_Reborn\config.ini 关闭
 if (ini_read_string("settings", "ime_block", "") == "") {
     ini_write_bool("settings", "ime_block", true);
+}
+
+// 鼠标输入限频频率（Hz）：默认 500，设 0 = 完全关闭。
+// 兼容旧配置：键缺失时补写，玩家可手改 %LOCALAPPDATA%\FVM_Reborn\config.ini 调整。
+// 注意：必须在 ini_open / ini_close 区间内读取，否则会报 INI 文件未定义。
+global.mouse_limit_hz = ini_read_real("settings", "mouse_limit_hz", 500);
+if (ini_read_string("settings", "mouse_limit_hz", "") == "") {
+    ini_write_real("settings", "mouse_limit_hz", 500);
 }
 for (var i = 0; i < array_length(global.keybind_config); i++) {
 	    var kb = global.keybind_config[i];
@@ -162,3 +204,16 @@ show_debug_message(working_directory)
 if (global.ime_block && native_disable_ime != undefined) {
     native_disable_ime(window_handle());
 }
+
+// ═══ 鼠标输入限频 ══════════════════════════════════════════════════════════
+// 做法：native 侧（mouse_limit.h）用系统级 WH_MOUSE_LL 钩子，跑在独立线程上；快于目标
+//       频率的移动被吞掉，被吞掉的位移以"上次注入位置"为基准累加，到时间点再以绝对
+//       坐标一次性补发 —— 补回的是 100% 位移，与注入频率无关。
+// 范围：只对快于目标频率的输入生效；等于或低于目标频率的鼠标逐条通过，不会变顿。
+// 安全：① 启停由 GML 按 window_has_focus() 决定（native 不做任何前台/几何判断）；
+//       ② 注入线程心跳超过 300 ms 未刷新则全部放行，不会冻结系统鼠标。
+// 开关：[settings] mouse_limit_hz（默认 500，0 = 关闭）。该值已在上方
+//       ini_open / ini_close 区间读取，此处仅负责启用。
+// ═════════════════════════════════════════════════════════════════════════════
+// 启停统一由 obj_file_manager/Step_0.gml 管：此处不要直接调 native_start_mouse_limit，
+// 以保证 ml_on 与 native 状态一致。
