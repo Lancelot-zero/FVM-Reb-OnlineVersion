@@ -9,6 +9,7 @@ var current_flash_speed = flash_speed
 if is_slowdown{
 	current_flash_speed *= 2
 }
+/*
 //检测自身右方是否有敌人
 var has_enemy = false
 with(obj_enemy_parent){
@@ -16,7 +17,32 @@ with(obj_enemy_parent){
 		has_enemy = true
 		break
 	}
+}*/
+
+
+//检测自身行是否有敌人（左侧场外 + 右侧场内）
+var has_enemy = false
+if (grid_row >= 0 && grid_row < global.grid_rows) {
+	// 左侧场外（col<0）敌人
+	var _left_arr = global.enemy_array_left[grid_row]
+	for(var _i = 0; _i < array_length(_left_arr); _i++){
+		var _e = _left_arr[_i]
+		if (instance_exists(_e) && can_target_on(target_type, _e.target_type)){
+			has_enemy = true
+			break
+		}
+	}
+	// 右侧场内（col 0..cols+1）敌人用前缀和查询
+	if (!has_enemy) {
+		var _row_base = grid_row * (global.grid_cols + 2);
+		var _col_end = global.grid_cols + 1;
+		if (global.has_enemy_normal[_row_base + _col_end] > 0 || global.has_enemy_obstacle[_row_base + _col_end] > 0){
+			has_enemy = true
+		}
+	}
 }
+
+
 //攻击逻辑
 if (has_enemy) {
     if (attack_timer <= cycle - attack_anim * current_flash_speed) {

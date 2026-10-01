@@ -26,7 +26,7 @@ function find_priority_enemy() {
     var closest_left_enemy = noone;
     var min_x = room_width; // 初始化为房间宽度
     var max_hp = 0;
-    
+/*    
     // 检查右边一格内是否有敌人（假设一格为80像素）
     with (obj_enemy_parent) {
         if (hp > 0 && can_hit(other.target_type,target_type) && y > 0) { // 只考虑存活的敌人
@@ -39,5 +39,28 @@ function find_priority_enemy() {
             }
         }
     }
+*/
+
+	if (!variable_global_exists("_tanghulu_scan_frame")) {
+	    global._tanghulu_scan_frame = -1;
+	    global._tanghulu_best_id = noone;
+	}
+	if (global._tanghulu_scan_frame != obj_battle.battle_time) {
+	    global._tanghulu_scan_frame = obj_battle.battle_time;
+	    global._tanghulu_best_id = noone;
+	    var _best_x = room_width;
+	    var _best_hp = 0;
+	    with (obj_enemy_parent) {
+	        if (hp > 0 && can_hit(other.target_type,target_type) && y > 0) {
+	            if (x < _best_x || (x == _best_x && hp > _best_hp)) {
+	                _best_x = x;
+	                _best_hp = hp;
+	                global._tanghulu_best_id = id;
+	            }
+	        }
+	    }
+
+	}
+	closest_left_enemy = global._tanghulu_best_id;
     return closest_left_enemy;
 }

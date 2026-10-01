@@ -1,4 +1,4 @@
-audio_play_sound(snd_button,0,0)
+global.audio.play(snd_button,0,0)
 if btn_type == "confirm"{
 	var card_id = global.player_deck[| obj_card_edit_menu.target_card_index*2];
 	var length = array_length(global.save_data.unlocked_cards)

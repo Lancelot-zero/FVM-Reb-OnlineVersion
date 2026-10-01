@@ -68,7 +68,7 @@ for (var i = 0; i < array_length(buttons); i++) {
 					instance_destroy()
                     break;
             }
-			audio_play_sound(snd_button,0,0)
+			global.audio.play(snd_button,0,0)
         }
         break;
     }

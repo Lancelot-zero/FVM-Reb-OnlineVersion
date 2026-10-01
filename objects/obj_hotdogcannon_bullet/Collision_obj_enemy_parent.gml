@@ -6,7 +6,7 @@
 				ice_timer = 600
 			}
 			
-			audio_play_sound(hit_sound,0,0)
+			global.audio.play(hit_sound,0,0)
 			
 			damage_amount = other.damage
 			damage_type = other.damage_type

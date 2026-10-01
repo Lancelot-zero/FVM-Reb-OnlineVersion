@@ -11,7 +11,7 @@ var _x = x;
 		        
 		            hp -= other.atk;
 					event_user(0)
-		            audio_play_sound(snd_hit1,0,0)
+		            global.audio.play(snd_hit1,0,0)
 		    }
 		
 	}

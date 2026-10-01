@@ -43,7 +43,7 @@ if (!submenu_open) {
 						instance_create_depth(menu_x, menu_y, depth-1, obj_restart_confirm);
                         break;
                 }
-				audio_play_sound(snd_button,0,0)
+				global.audio.play(snd_button,0,0)
             }
             break;
         }

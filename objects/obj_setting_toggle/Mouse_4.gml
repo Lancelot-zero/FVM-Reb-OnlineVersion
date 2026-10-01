@@ -1,6 +1,6 @@
 // 切换状态
 state = !state;
-audio_play_sound(snd_button,0,0)
+global.audio.play(snd_button,0,0)
 // 保存到配置文件
 if (config_key != "") {
     ini_open("config.ini");
