@@ -55,7 +55,7 @@ if global.debug{
 		global.game_over = true
 		var inst = instance_create_depth(room_width/2,room_height/2,-3001,obj_game_over)
 		inst.sprite_index = spr_win
-		audio_play_sound(snd_win,0,0)
+		global.audio.play(snd_win,0,0)
 	}
 
 	if keyboard_check_pressed(ord("R")){
@@ -70,7 +70,7 @@ if global.debug{
 			new_plant.flame_produce = 15000
 			new_plant.ice_timer = 600
 			instance_create_depth(grid_pos.x,grid_pos.y,-2,obj_place_effect)        
-			audio_play_sound(snd_place1,0,0)
+			global.audio.play(snd_place1,0,0)
 		}
 	}
 
@@ -87,7 +87,7 @@ if global.debug{
 			new_plant.ice_timer = 600
 			new_plant.frozen_timer = 240
 			instance_create_depth(grid_pos.x,grid_pos.y,-2,obj_place_effect)        
-			audio_play_sound(snd_place1,0,0)
+			global.audio.play(snd_place1,0,0)
 		}
 	}
 }
@@ -104,7 +104,7 @@ if time_limit > 0{
 		global.is_paused = true
 		global.game_over = true
 		instance_create_depth(room_width/2,room_height/2,-3001,obj_game_over)
-		audio_play_sound(snd_lose,0,0)
+		global.audio.play(snd_lose,0,0)
 	}
 }
 
@@ -122,7 +122,7 @@ if keyboard_check_pressed(vk_shift) || keyboard_check_pressed(vk_lshift){
 if battle_time >= (global.level_file.first_wave_delay * 60) && level_stage == "ready" {
     
     level_stage = "pre"
-    audio_play_sound(snd_mouse_wave_attack, 0, 0)
+    global.audio.play(snd_mouse_wave_attack, 0, 0)
     
     enemy_subwave_summon()
     
@@ -173,7 +173,7 @@ if wave_timer <= 0 && level_stage == "pre"{
 		else if current_wave < total_wave{
 			current_wave += 1
 			current_subwave = 0
-			audio_play_sound(snd_mouse_wave_attack,0,0)
+			global.audio.play(snd_mouse_wave_attack,0,0)
 			instance_create_depth(room_width/2,room_height/2,-300,obj_huge_wave_text)
 		}
 	}
@@ -201,7 +201,7 @@ if global.debug{
 			global.game_over = true
 			var inst = instance_create_depth(room_width/2,room_height/2,-3001,obj_game_over)
 			inst.sprite_index = spr_win
-			audio_play_sound(snd_win,0,0)
+			global.audio.play(snd_win,0,0)
 		}
 		else if current_wave < total_wave{
 			current_wave += 1

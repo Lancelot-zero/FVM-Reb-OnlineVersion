@@ -1,5 +1,5 @@
 if unlocked{
-	audio_play_sound(snd_button,0,0)
+	global.audio.play(snd_button,0,0)
 	obj_world_map_button.world_map = 0
 	instance_destroy(obj_world_map_menu)
 	if map_id == "undersea_vortex"{
