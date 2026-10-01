@@ -16,6 +16,7 @@ self.state = {
     mouse_status: MouseStatus.NONE,
     /// @type {Enum.MouseStatus} 
     prev_mouse_status: MouseStatus.NONE,
+    click_armed: false,
 
     /// @type {function ():Bool} 
     should_correspond: function(){return true},
@@ -87,6 +88,21 @@ function clear_mouse_status() {
     if (self.state.mouse_status != MouseStatus.NONE) {
         self.state.mouse_status = MouseStatus.NONE
     }
+    self.state.click_armed = false
+}
+
+/// @description 鼠标是否位于外部（GridList）给出的裁剪范围内；无裁剪信息时默认通过
+function is_mouse_in_clip_rect(_mx, _my) {
+    if (!variable_instance_exists(self, "clip_left")) {
+        return true
+    }
+    return point_in_rectangle(
+        _mx, _my,
+        variable_instance_get(self, "clip_left"),
+        variable_instance_get(self, "clip_top"),
+        variable_instance_get(self, "clip_right"),
+        variable_instance_get(self, "clip_bottom")
+    )
 }
 
 function update_mouse() {
@@ -95,23 +111,32 @@ function update_mouse() {
     var _my = device_mouse_y_to_gui(0)
     
     var _in_bound = point_in_rectangle(_mx, _my, _s.left, _s.top, _s.left + _s.width, _s.top + _s.height)
+    if (_in_bound) {
+        _in_bound = is_mouse_in_clip_rect(_mx, _my)
+    }
     
     var _old_status = _s.mouse_status
+    var _mouse_press = mouse_check_button(mb_left)
+    var _mouse_down = mouse_check_button_pressed(mb_left)
+    var _mouse_up = mouse_check_button_released(mb_left)
 
     if (!_in_bound) {
         _s.mouse_status = MouseStatus.NONE
+    } else if (_mouse_press) {
+        _s.mouse_status = MouseStatus.PRESS
+        // 只在本 item 内按下时才武装点击
+        if (_mouse_down) _s.click_armed = true
     } else {
-        if (mouse_check_button(mb_left)) {
-            _s.mouse_status = MouseStatus.PRESS
+        if (_mouse_up && _s.click_armed) {
+            _s.mouse_status = MouseStatus.RELEASE
+            if (!is_undefined(_s.on_click)) _s.on_click()
         } else {
-            if (_old_status == MouseStatus.PRESS) {
-                _s.mouse_status = MouseStatus.RELEASE
-                if (!is_undefined(_s.on_click)) _s.on_click()
-            } else {
-                _s.mouse_status = MouseStatus.HOVER
-            }
+            _s.mouse_status = MouseStatus.HOVER
         }
     }
+
+    // 松开后无论是否命中都解除武装，确保按下与释放都在同一 item 内
+    if (_mouse_up) _s.click_armed = false
 
     if (_s.mouse_status != _old_status) {
         switch (_s.mouse_status) {
