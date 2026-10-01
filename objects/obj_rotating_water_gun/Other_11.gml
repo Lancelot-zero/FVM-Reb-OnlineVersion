@@ -12,3 +12,4 @@ with (obj_enemy_parent) {
 
 var inst = instance_create_depth(x,y+45,-800,obj_coke_bomb_explode)
 inst.sprite_index = spr_rotating_water_gun_bullet
+audio_play_sound(snd_coffee_pot_attack,0,0)

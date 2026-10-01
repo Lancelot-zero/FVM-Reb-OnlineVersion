@@ -115,6 +115,8 @@ load_file(global.save_slot)
 //	unlock_card("pizza_oven",13,2,8)
 //	unlock_card("rabbit_lantern",13,2,8)
 //	unlock_card("delicacy_firework",13,2,8)
+//	unlock_card("sugar_roxburghii",13,2,8)
+//	unlock_card("nut_frier",13,2,8)
 	
 //	global.save_data.player.gold = 99000000
 //	global.save_data.player.level = 60
