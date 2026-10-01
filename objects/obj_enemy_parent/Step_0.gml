@@ -144,7 +144,7 @@ switch(state) {
 		
 		var plant_order_list = [noone,noone,noone,noone]
         
-		
+			/*
         // 使用碰撞检测查找攻击范围内的植物
         with (obj_card_parent) {
 			var dx = x - other.x;
@@ -156,23 +156,68 @@ switch(state) {
 			else{
 				is_in_front = (dx > 0 && dx < -other.attack_range);
 			}
-				
+
             // 检查是否在攻击范围内
             if (is_in_front && zombie_grid.row == grid_row && (feature_type!="dwarf" || (feature_type=="dwarf" && other.giant_type))) {
                 // 按铲除顺序优先选择
                 for (var i = 0; i < ds_list_size(global.eat_order); i++) {
                     var tar_type = ds_list_find_value(global.eat_order, i);
-                    
+
                     if (plant_type == tar_type) {
                         plant_order_list[i] = id;
                         break;
                     }
                 }
-				
-                
+
+
                 if (plant_in_range != noone) break;
             }
         }
+		*/
+		
+		// 限制老鼠索敌只在左右合起来5个格子内部
+		if (variable_global_exists("grid_plants") && ds_exists(global.grid_plants, ds_type_grid)) {
+			// 左右±2列范围
+			var start_c = max(grid_col - 2, 0);
+			var end_c = min(grid_col + 2, global.grid_cols - 1);
+
+			for(var _c = start_c; _c <= end_c; _c++)
+			{
+				
+				if(grid_row<0||grid_row>=global.grid_rows)continue;
+				var _list = ds_grid_get(global.grid_plants, _c, grid_row);
+				for(var _item = 0; _item < ds_list_size(_list); _item++)
+				{
+					var plant_inst = ds_list_find_value(_list, _item);
+					if (!instance_exists(plant_inst)) continue;
+
+					var dx = plant_inst.x - x;
+					var dy = plant_inst.y - y;
+					var is_in_front = false;
+
+					if (attack_range > 0) {
+						is_in_front = (dx < 0 && dx > -attack_range);
+					} else {
+						is_in_front = (dx > 0 && dx < -attack_range);
+					}
+
+					if (is_in_front && plant_inst.grid_row == grid_row && (plant_inst.feature_type != "dwarf" || (plant_inst.feature_type == "dwarf" && giant_type)))
+					{
+						// 按eat_order优先级填充
+						for (var i = 0; i < ds_list_size(global.eat_order); i++)
+						{
+							var tar_type = ds_list_find_value(global.eat_order, i);
+							if (plant_inst.plant_type == tar_type)
+							{
+								plant_order_list[i] = plant_inst;
+								break;
+							}
+						}
+
+					}
+				}
+			}
+		}
 		
 		for(var i = 0 ; i < 4 ; i++){
 			if plant_order_list[i] != noone{
@@ -252,6 +297,7 @@ switch(state) {
         
 		var plant_order_list = [noone,noone,noone,noone]
 		
+/*
         // 使用碰撞检测查找攻击范围内的植物
         with (obj_card_parent) {
 			var dx = x - other.x;
@@ -279,6 +325,52 @@ switch(state) {
                 if (plant_in_range != noone) break;
             }
         }
+		*/
+		
+		// 限制老鼠索敌只在左右合起来5个格子内部
+		if (variable_global_exists("grid_plants") && ds_exists(global.grid_plants, ds_type_grid)) {
+			
+			// 左右±2列范围
+			var start_c = max(grid_col - 2, 0);
+			var end_c = min(grid_col + 2, global.grid_cols - 1);
+	
+			for(var _c = start_c; _c <= end_c; _c++)
+			{
+				if(grid_row<0||grid_row>=global.grid_rows)continue;
+				var _list = ds_grid_get(global.grid_plants, _c, grid_row);
+				for(var _item = 0; _item < ds_list_size(_list); _item++)
+				{
+					var plant_inst = ds_list_find_value(_list, _item);
+					if (!instance_exists(plant_inst)) continue;
+
+					var dx = plant_inst.x - x;
+					var dy = plant_inst.y - y;
+					var is_in_front = false;
+			
+					if (attack_range > 0) {
+						is_in_front = (dx < 0 && dx > -attack_range);
+					} else {
+						is_in_front = (dx > 0 && dx < -attack_range);
+					}
+			
+					if (is_in_front && plant_inst.grid_row == grid_row && (plant_inst.feature_type != "dwarf" || (plant_inst.feature_type == "dwarf" && giant_type)))
+					{
+						// 按eat_order优先级填充
+						for (var i = 0; i < ds_list_size(global.eat_order); i++)
+						{
+							var tar_type = ds_list_find_value(global.eat_order, i);
+							if (plant_inst.plant_type == tar_type)
+							{
+								plant_order_list[i] = plant_inst;
+								break;
+							}
+						}
+				
+					}
+				}
+			}
+		}
+
 		for(var i = 0 ; i < 4 ; i++){
 			if plant_order_list[i] != noone{
 				plant_in_range = plant_order_list[i]
