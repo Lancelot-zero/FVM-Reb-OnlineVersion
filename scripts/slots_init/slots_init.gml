@@ -328,8 +328,8 @@ function slots_init(){
 		{"shape":2, "sprite":spr_coal_starfish_2_icon, "cost":225, "cooldown":7*60, "description":"芥末海星刺身：向五个方向发射两颗星星","plant_type":"normal","feature_type":"amphi","target_card":"none","place_preview":spr_coal_starfish_2}
 	]);
 	register_card("horseshoe_crab_bread",obj_horseshoe_crab_bread,[
-		{"shape":0,"sprite":spr_horseshoe_crab_bread_0_0,"cost":150,"cooldown":30*60,"description":"老虎蟹面包：阻挡剑鱼鼠冲刺","plant_type":"normal","feature_type":"normal","target_card":"none"},
-		{"shape":1,"sprite":spr_horseshoe_crab_bread_1_0,"cost":150,"cooldown":30*60,"description":"帝王蟹面包：阻挡剑鱼鼠冲刺","plant_type":"normal","feature_type":"normal","target_card":"none"}
+		{"shape":0,"sprite":spr_horseshoe_crab_bread_0_0,"cost":150,"cooldown":30*60,"description":"老虎蟹面包：阻挡剑鱼鼠冲刺","plant_type":"normal","feature_type":"amphi","target_card":"none"},
+		{"shape":1,"sprite":spr_horseshoe_crab_bread_1_0,"cost":150,"cooldown":30*60,"description":"帝王蟹面包：阻挡剑鱼鼠冲刺","plant_type":"normal","feature_type":"amphi","target_card":"none"}
 	])
 	register_card("curry_lobster_cannon", obj_curry_lobster_cannon, [
 	    {"shape":0, "sprite":spr_curry_lobster_cannon_icon, "cost":275, "cooldown":20*60, "description":"咖喱龙虾炮：发射两个追踪咖喱炮弹，陆地窒息","plant_type":"normal","feature_type":"amphi","target_card":"none","place_preview":spr_curry_lobster_cannon},
@@ -356,6 +356,16 @@ function slots_init(){
 	    {"shape":1, "sprite":spr_delicacy_firework_1, "cost":200, "cooldown":60*60, "description":"美食爆竹：3*4范围爆炸，命中老鼠产生火苗","plant_type":"normal","feature_type":"normal","target_card":"none","place_preview":spr_delicacy_firework_1},
 		{"shape":2, "sprite":spr_delicacy_firework_2, "cost":250, "cooldown":60*60, "description":"美食礼花：5*5范围爆炸，命中老鼠产生火苗","plant_type":"normal","feature_type":"normal","target_card":"none","place_preview":spr_delicacy_firework_2}
 	]);
+	//register_card("sugar_roxburghii", obj_sugar_roxburghii, [
+	//    {"shape":0, "sprite":spr_sugar_roxburghii, "cost":125, "cooldown":7*60, "description":"糖渍刺梨：伤害接触到的老鼠，概率眩晕","plant_type":"normal","feature_type":"dwarf","target_card":"none","place_preview":spr_sugar_roxburghii},
+	//    {"shape":1, "sprite":spr_sugar_roxburghii_1, "cost":125, "cooldown":7*60, "description":"烟熏刺梨：伤害接触到的老鼠，概率眩晕","plant_type":"normal","feature_type":"dwarf","target_card":"none","place_preview":spr_sugar_roxburghii_1},
+	//	{"shape":2, "sprite":spr_sugar_roxburghii_2, "cost":125, "cooldown":7*60, "description":"生腌酸刺梨：伤害接触到的老鼠，概率眩晕","plant_type":"normal","feature_type":"dwarf","target_card":"none","place_preview":spr_sugar_roxburghii_2}
+	//]);
+	//register_card("nut_frier", obj_nut_frier, [
+	//    {"shape":0, "sprite":spr_nut_frier, "cost":225, "cooldown":7*60, "description":"坚果爆炒机：向前方5个方向发射子弹","plant_type":"normal","feature_type":"normal","target_card":"none","place_preview":spr_nut_frier},
+	//    {"shape":1, "sprite":spr_nut_frier_1, "cost":225, "cooldown":7*60, "description":"橡子搅拌机：向前方5个方向发射子弹","plant_type":"normal","feature_type":"normal","target_card":"none","place_preview":spr_nut_frier_1},
+	//	{"shape":2, "sprite":spr_nut_frier_2, "cost":225, "cooldown":7*60, "description":"松塔爆破机：向前方5个方向发射子弹","plant_type":"normal","feature_type":"normal","target_card":"none","place_preview":spr_nut_frier_2}
+	//]);
 	//register_card("fruit_tart", obj_fruit_tart, [
 	//    {"shape":0, "sprite":spr_fruit_tart, "cost":150, "cooldown":14*60, "description":"美味水果塔：为本行左侧的投掷类卡片增加伤害","plant_type":"normal","feature_type":"normal","target_card":"none","place_preview":spr_fruit_tart},
 	//    {"shape":1, "sprite":spr_fruit_tart_1, "cost":150, "cooldown":7*60, "description":"风车水果塔：为本行左侧的投掷类卡片增加伤害","plant_type":"normal","feature_type":"normal","target_card":"none","place_preview":spr_fruit_tart_1},
