@@ -141,6 +141,26 @@ if (climb_stage == 0 && (state == ENEMY_STATE.NORMAL|| state ==ENEMY_STATE.ATTAC
 	}
 }
 
+// 障碍物：**不用有梯子**，同行前方够近就翻过去
+//   ⚠ 门槛和上面那批一样（state / move_speed / can_use_ladder / target_type），否则车辆、飞行、
+//     鼹鼠之类也会来翻障碍物
+if (climb_stage == 0 && (state == ENEMY_STATE.NORMAL || state == ENEMY_STATE.ATTACK) && move_speed > 0 && can_use_ladder
+	&& target_type == "normal") {
+	with (obj_obstacle) {
+		var _odx = other.x - x;                       // >0 = 障碍物在老鼠左边（前方）
+		if (row == other.grid_row && _odx > 0 && _odx <= 60) {
+			other.climb_end_x = x - global.grid_cell_size_x * 0.5 - 2;
+			other.climb_base_y = other.y;
+			other.climb_y = other.y;
+			other.climb_total_dist = max(1, abs(other.climb_end_x - other.x));
+			other.target_plant = noone;
+			other.state = ENEMY_STATE.IDLE;
+			other.climb_stage = 1;
+			break;
+		}
+	}
+}
+
 if (climb_stage == 1) {
 	// 越过：沿本行水平向左推进到落点，并叠一条小弧线（爬升感）
 	//   弧线最高 climb_arc_h(40px)，远小于一格(116px)，grid_row 不会变
