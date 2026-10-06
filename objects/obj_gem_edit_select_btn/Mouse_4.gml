@@ -1,4 +1,4 @@
-audio_play_sound(snd_button,0,0)
+global.audio.play(snd_button,0,0)
 if btn_type == "confirm"{
 	var info_index = obj_gem_edit_menu.target_card_index
 	var egg = irandom_range(1,100)

@@ -3,7 +3,7 @@ if ds_list_find_index(hitted_enemy,other.id) == -1 && !disabled{
 	if other.hp > 0 and abs(row - other.grid_row) <= 1  and can_hit(target_type,other.target_type){
 		with(other){
 			if hp > other.damage{
-				audio_play_sound(snd_fire_hit,0,0)
+				global.audio.play(snd_fire_hit,0,0)
 				damage_amount = other.damage
 				damage_type = other.damage_type
 				event_user(0)

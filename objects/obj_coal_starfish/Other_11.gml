@@ -36,8 +36,8 @@ if shape == 2{
 
 var inst4 = instance_create_depth(x+40,y-45,depth-500,obj_coalstarfish_bullet)
 inst4.damage = atk
-inst4.move_speed = 5
-inst4.y_move_speed = -3
+inst4.move_speed = 6
+inst4.y_move_speed = -4.5
 inst4.image_angle = -145
 if shape == 1{
 	inst4.sprite_index = spr_coalstarfish_bullet_1
@@ -48,8 +48,8 @@ if shape == 2{
 
 var inst5 = instance_create_depth(x+40,y-45,depth-500,obj_coalstarfish_bullet)
 inst5.damage = atk
-inst5.move_speed = 5
-inst5.y_move_speed = 3
+inst5.move_speed = 6
+inst5.y_move_speed = 4.5
 inst5.image_angle = 145
 if shape == 1{
 	inst5.sprite_index = spr_coalstarfish_bullet_1
