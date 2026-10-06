@@ -23,9 +23,14 @@ if (!variable_instance_exists(id, "ime_was_typing")) {
 // v7.3：屏蔽按「游戏内输入框是否获得焦点」动态开关——获焦则放开（能打中文），否则屏蔽。
 // 判定集中在这里：Mouse_53 是全局鼠标事件，多输入框时各实例执行顺序不确定，
 // 若把 native_enable/disable 散在各实例里会互相覆盖（点 B 框被离开 A 框的分支关掉）。
+// 游戏里的输入框有两套：obj_text_input（关卡编辑器）与 SearchBox（实验室 / 在线地图搜索框）。
+// 只认前者时，搜索框获焦会被算成「没人在打字」，下面每 60 帧的心跳随即把 IME 屏蔽回去。
 var _ime_typing_count = 0;
 with (obj_text_input) {
     if (active) _ime_typing_count += 1;
+}
+with (SearchBox) {
+    if (state.focused) _ime_typing_count += 1;
 }
 var _ime_typing = (_ime_typing_count > 0);
 
@@ -51,5 +56,44 @@ if (!_ime_typing && ime_tick >= 60) {
     ime_tick = 0;
     if (global.ime_block && native_disable_ime != undefined) {
         native_disable_ime(window_handle());
+    }
+}
+
+// ═══ 鼠标限频的「玩家在游戏里」开关（每 10 帧）═══════════════════════════════════
+// 由游戏自己判断是否有焦点，native 侧不做任何前台/几何判断：有焦点才限频，失去焦点
+// 立刻停，桌面和其它程序的鼠标完全不受影响。
+// 去抖：无边框窗口下 window_has_focus() 会抖动，连续 3 次同向才切换（约 0.2~0.5 秒），
+// 避免模块被反复启停。
+if (!variable_instance_exists(id, "ml_tick")) {
+    ml_tick = 10;               // 首次立刻评估，不等 10 帧
+    ml_on = false;
+    ml_focus_stable = false;
+    ml_focus_count = 0;
+    // 起手把 native 侧归零，保证 ml_on 与 native 的真实状态一致（Stop 分支依赖这个一致性）。
+    if (native_stop_mouse_limit != undefined) {
+        native_stop_mouse_limit();
+    }
+}
+ml_tick++;
+if (ml_tick >= 10) {
+    ml_tick = 0;
+    if (global.mouse_limit_hz > 0 && native_start_mouse_limit != undefined) {
+        var _ml_focus = window_has_focus();
+        if (_ml_focus != ml_focus_stable) {
+            ml_focus_count += 1;
+            if (ml_focus_count >= 3) {
+                ml_focus_stable = _ml_focus;
+                ml_focus_count = 0;
+            }
+        } else {
+            ml_focus_count = 0;
+        }
+        if (ml_focus_stable && !ml_on) {
+            native_start_mouse_limit(global.mouse_limit_hz, window_handle());
+            ml_on = true;
+        } else if (!ml_focus_stable && ml_on) {
+            native_stop_mouse_limit();
+            ml_on = false;
+        }
     }
 }

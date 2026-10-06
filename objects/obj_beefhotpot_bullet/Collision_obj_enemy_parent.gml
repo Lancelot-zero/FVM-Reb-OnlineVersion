@@ -6,7 +6,7 @@ if attack_timer mod 12 == 1{
 	((shape <= 1 && other.x - x <= 4.5*global.grid_cell_size_x) or (shape >= 1 && other.x - x <= 5.5*global.grid_cell_size_x)){
 		with(other){
 			if hp > other.damage{
-				audio_play_sound(snd_fire_hit,0,0)
+				global.audio.play(snd_fire_hit,0,0)
 				damage_amount = other.damage
 				damage_type = other.damage_type
 				event_user(0)

@@ -1365,7 +1365,7 @@ function maps_init(){
 				},
 				{
 					"id":"snowcap_volcano_warrior",
-					"name":"熔岩炼狱",
+					"name":"炽焰炎山",
 					"button_spr":spr_levelselect_button_volcanic,
 					"button_index":17,
 					"button_x":790,
@@ -1721,7 +1721,7 @@ function maps_init(){
 				},
 				{
 					"id":"arctic_bay_turbulence_warrior",
-					"name":"深海涟漪",
+					"name":"激流险湍",
 					"button_spr":spr_levelselect_button_undersea,
 					"button_index":7,
 					"button_x":740,
@@ -1769,7 +1769,7 @@ function maps_init(){
 				},
 				{
 					"id":"tempura_vortex",
-					"name":"天妇罗旋涡",
+					"name":"天妇罗漩涡",
 					"button_spr":spr_levelselect_button_undersea,
 					"button_index":6,
 					"button_x":1500,
@@ -1785,7 +1785,7 @@ function maps_init(){
 				},
 				{
 					"id":"tempura_vortex_warrior",
-					"name":"怒海澜涛",
+					"name":"萨尔特漩涡",
 					"button_spr":spr_levelselect_button_undersea,
 					"button_index":8,
 					"button_x":1420,
@@ -1919,6 +1919,111 @@ function maps_init(){
 					"boss_music":mus_volcanic_tower_boss,
 					"player_level_require":55,
 					"pre_level_require":["milkshake_base"]
+				},
+			]
+		}
+	)
+	register_map(
+		"explore_camp",
+		{
+			"map_name":"探险营地",
+			"map_sprite":spr_explore_camp,
+			"levels_data":[
+				{
+					"id":"chiffon_camp_daytime",
+					"name":"戚风营地（日）",
+					"button_spr":spr_levelselect_button_camp,
+					"button_index":0,
+					"button_x":630,
+					"button_y":580,
+					"level_file":"camp/chiffon_camp_daytime.json",
+					"hard_level_file":"camp/chiffon_camp_daytime_hard.json",
+					"level_sprite":spr_chiffon_camp_daytime,
+					"pre_music":mus_explore_camp_pre,
+					"elite_music":mus_explore_camp_pre,
+					"boss_music":mus_explore_camp_boss,
+					"player_level_require":20,
+					"pre_level_require":[]
+				},
+				{
+					"id":"chiffon_camp_night",
+					"name":"戚风营地（夜）",
+					"button_spr":spr_levelselect_button_camp,
+					"button_index":1,
+					"button_x":560,
+					"button_y":360,
+					"level_file":"camp/chiffon_camp_night.json",
+					"hard_level_file":"camp/chiffon_camp_night_hard.json",
+					"level_sprite":spr_chiffon_camp_night,
+					"pre_music":mus_explore_camp_pre,
+					"elite_music":mus_explore_camp_pre,
+					"boss_music":mus_explore_camp_boss,
+					"player_level_require":20,
+					"pre_level_require":["chiffon_camp_daytime"]
+				},
+				{
+					"id":"ice_beer_bar_daytime",
+					"name":"冰啤酒吧（日）",
+					"button_spr":spr_levelselect_button_camp,
+					"button_index":2,
+					"button_x":730,
+					"button_y":250,
+					"level_file":"camp/ice_beer_bar_daytime.json",
+					"hard_level_file":"camp/ice_beer_bar_daytime_hard.json",
+					"level_sprite":spr_ice_beer_bar_daytime,
+					"pre_music":mus_explore_camp_pre,
+					"elite_music":mus_explore_camp_pre,
+					"boss_music":mus_explore_camp_boss,
+					"player_level_require":40,
+					"pre_level_require":["chiffon_camp_night"]
+				},
+				{
+					"id":"ice_beer_bar_night",
+					"name":"冰啤酒吧（夜）",
+					"button_spr":spr_levelselect_button_camp,
+					"button_index":3,
+					"button_x":1000,
+					"button_y":230,
+					"level_file":"camp/ice_beer_bar_night.json",
+					"hard_level_file":"camp/ice_beer_bar_night_hard.json",
+					"level_sprite":spr_ice_beer_bar_night,
+					"pre_music":mus_explore_camp_pre,
+					"elite_music":mus_explore_camp_pre,
+					"boss_music":mus_explore_camp_boss,
+					"player_level_require":40,
+					"pre_level_require":["ice_beer_bar_daytime"]
+				},
+				{
+					"id":"nut_platform_daytime",
+					"name":"坚果高台（日）",
+					"button_spr":spr_levelselect_button_camp,
+					"button_index":4,
+					"button_x":1170,
+					"button_y":210,
+					"level_file":"camp/nut_platform_daytime.json",
+					"hard_level_file":"camp/nut_platform_daytime_hard.json",
+					"level_sprite":spr_nut_platform_daytime,
+					"pre_music":mus_explore_camp_pre,
+					"elite_music":mus_explore_camp_pre,
+					"boss_music":mus_explore_camp_boss,
+					"player_level_require":50,
+					"pre_level_require":["ice_beer_bar_night"]
+				},
+				{
+					"id":"nut_platform_night",
+					"name":"坚果高台（夜）",
+					"button_spr":spr_levelselect_button_camp,
+					"button_index":5,
+					"button_x":1350,
+					"button_y":250,
+					"level_file":"camp/nut_platform_night.json",
+					"hard_level_file":"camp/nut_platform_night_hard.json",
+					"level_sprite":spr_nut_platform_night,
+					"pre_music":mus_explore_camp_pre,
+					"elite_music":mus_explore_camp_pre,
+					"boss_music":mus_explore_camp_boss,
+					"player_level_require":50,
+					"pre_level_require":["nut_platform_daytime"]
 				},
 			]
 		}

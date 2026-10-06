@@ -31,7 +31,7 @@ for (var i = 0; i < array_length(buttons); i++) {
 					global.gui_stack.to(room_ready)
                     break;
             }
-			audio_play_sound(snd_button,0,0)
+			global.audio.play(snd_button,0,0)
         }
         break;
     }

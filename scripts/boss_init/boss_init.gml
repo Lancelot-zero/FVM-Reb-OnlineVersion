@@ -31,4 +31,5 @@ function boss_init(){
 	register_boss("war_god",{"name":"战神","hp":250000,"icon":spr_mario_mouse_icon})
 	register_boss("hercules",{"name":"大力神","hp":400000,"icon":spr_rumble_icon})
 	register_boss("thor",{"name":"雷神","hp":800000,"icon":spr_rumble_icon})
+	register_boss("travel_record",{"name":"旅行唱机","hp":50000,"icon":spr_mario_mouse_icon})
 }
