@@ -119,43 +119,23 @@ for(var i = 0 ; i < slot_rows ; i++){
 }
 draw_surface(slot_surface,x-25+803-42,y+ 375-48)
 {// 绘制悬停提示
-    if (hover_card_index != -1 && !is_submenu_open) {
-		var card_id = global.player_deck[| hover_card_index*2];
-        var deck_entry = global.player_deck[| hover_card_index*2+1];
-		var card_data_shapes = deck_entry[? "shapes"]
-		var card_data = {}
-		var card_shape = 0
-		var tooltip_text = "点击选中"
-		//view_max_shapes = ds_list_size(card_data_shapes)-1
-           
-            
-            for(var k = 0; k < array_length(global.save_data.unlocked_cards); k++) {
-                if (global.save_data.unlocked_cards[k].id == card_id) {
-					card_shape = global.save_data.unlocked_cards[k].shape
-					card_data = card_data_shapes[| card_shape]
-					tooltip_text = card_data[? "description"]
-                    break;
-                }
-            }
-        // 获取鼠标位置
-        var tooltip_x = mouse_x - 15;
-        var tooltip_y = mouse_y - 25;
-		
-		
-        draw_set_font(font_yuan)
-        // 绘制提示背景
-        draw_set_color(c_black);
-        draw_set_alpha(0.7);
-        draw_rectangle(tooltip_x + 5, tooltip_y - 5, 
-                      tooltip_x - string_width(tooltip_text)-5, tooltip_y + string_height(tooltip_text)+5, false);
-        
-        // 绘制提示文本
-		draw_set_halign(fa_left);
-		draw_set_valign(fa_top);
-        draw_set_alpha(1);
-        draw_set_color(c_white);
-		
-        draw_text(tooltip_x- string_width(tooltip_text), tooltip_y, tooltip_text);
+    if (hover_card_index != -1 && !is_submenu_open && !instance_exists(obj_package_bg)) {
+    	var card_id = global.player_deck[| hover_card_index*2];
+    	var deck_entry = global.player_deck[| hover_card_index*2+1];
+    	var card_data_shapes = deck_entry[? "shapes"]
+    	var card_data = {}
+    	var card_shape = 0
+    	var tooltip_text = "点击选中"
+    	for(var k = 0; k < array_length(global.save_data.unlocked_cards); k++) {
+    		if (global.save_data.unlocked_cards[k].id == card_id) {
+    			card_shape = global.save_data.unlocked_cards[k].shape
+    			card_data = card_data_shapes[| card_shape]
+    			tooltip_text = card_data[? "description"]
+    			break;
+    		}
+    	}
+    	draw_set_font(font_yuan);
+    	tooltip_set(mouse_x - 15, mouse_y - 25, tooltip_text, -1);
     }
 }	
 {//绘制已选择的卡组
@@ -357,33 +337,13 @@ for(var i = deck_first_slot_index; i < deck_first_slot_index+11;i++){
 		}
 	}
 	//打开关卡详情位置检测
-	if(mouse_x > 785 && mouse_x < 1546 && mouse_y > 762 && mouse_y < 980) && !is_submenu_open{
+	if (mouse_x > 785 && mouse_x < 1546 && mouse_y > 762 && mouse_y < 980 && !is_submenu_open && !instance_exists(obj_package_bg)) {
 		draw_set_alpha(0.5)
 		draw_set_colour(c_white)
 		draw_roundrect(785,762,1546,980,0)
 		draw_set_alpha(1)
-		var tooltip_text = "点击打开关卡详情"
-		// 获取鼠标位置
-	    var tooltip_x = mouse_x - 15;
-	    var tooltip_y = mouse_y - 25;
-		
-		
-	    draw_set_font(font_yuan)
-	    // 绘制提示背景
-	    draw_set_color(c_black);
-	    draw_set_alpha(0.7);
-	    draw_rectangle(tooltip_x + 5, tooltip_y - 5, 
-	                    tooltip_x - string_width(tooltip_text)-5, tooltip_y + string_height(tooltip_text)+5, false);
-        
-	    // 绘制提示文本
-		draw_set_halign(fa_left);
-		draw_set_valign(fa_top);
-	    draw_set_alpha(1);
-	    draw_set_color(c_white);
-		
-	    draw_text(tooltip_x- string_width(tooltip_text), tooltip_y, tooltip_text);
-	
-		draw_set_valign(fa_top)
+		draw_set_font(font_yuan);
+			tooltip_set(mouse_x - 15, mouse_y - 25, "点击打开关卡详情", -1);
 	}
 	
 }
@@ -435,3 +395,6 @@ draw_text(1820,1080,"右键点击或按ESC退出")
         if (mouse_check_button_released(mb_left)) sb_dragging = false
     }
 }
+
+// 提示框：推进尺寸/消失动画并绘制（每帧一次）
+tooltip_draw();

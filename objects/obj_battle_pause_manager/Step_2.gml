@@ -136,7 +136,7 @@ if (keyboard_check_pressed(vk_escape)) {
 if (keyboard_check_pressed(ord("R"))) {
 	if global.game_over{
 		if obj_game_over.sprite_index == spr_lose{
-			room_restart()
+			room_transition_start(room)   // 重开本局也走淡出淡入
 		}
 	}
 }
