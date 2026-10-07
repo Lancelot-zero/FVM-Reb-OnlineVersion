@@ -392,3 +392,46 @@ draw_set_halign(fa_right);
 draw_set_valign(fa_bottom);
 draw_set_font(font_yuan)
 draw_text(1820,1080,"右键点击或按ESC退出")
+
+// ── 卡片网格滚动条（与 obj_info_island_bg / GridList 用同一个精灵和同一套交互）──────
+// 格子画进 slot_surface（2200×420）、贴回在 (x-25+803-42, y+375-48)，所以这里用
+// 「贴回偏移 + 内容内边距」算屏幕坐标。上限与 Mouse_60/61 用同一个式子，
+// 保证滑块行程和滚轮能到的范围完全一致。
+{
+    var _sb_scl = 2.2
+    var _sb_w   = sprite_get_width(spr_info_island_scroll_bar)  * _sb_scl
+    var _sb_h   = sprite_get_height(spr_info_island_scroll_bar) * _sb_scl
+    var _sb_l   = x - 25 + 803 - 42
+    var _sb_t   = y + 375 - 48
+    var _sb_x   = _sb_l + (x + 42 + slot_rows * 84) + 6 + _sb_w * 0.5
+    //            ↑ 精灵原点是左上角，所以 x 是「按钮左边缘」；再补半个按钮宽，按钮中心才落在凹槽线上
+    var _sb_vh  = 420                                    // 视口高 = slot_surface 高度
+    var _sb_max = 96 * slot_rows - 515                   // 与 Mouse_61 同一上限
+    // 滚动平滑趋近：滚轮与点轨道只改目标值，这里每帧非线性逼近（等级 1；等级 0 直接到位）
+    if (ui_anim_on(1)) {
+        y_offset += (y_offset_target - y_offset) * 0.28
+        if (abs(y_offset_target - y_offset) < 0.5) y_offset = y_offset_target
+    } else {
+        y_offset = y_offset_target
+    }
+
+    if (_sb_max > 0 && _sb_vh > _sb_h) {
+        var _sb_travel = _sb_vh - _sb_h
+        var _sb_y = _sb_t + clamp(y_offset / _sb_max, 0, 1) * _sb_travel
+        draw_sprite_ext(spr_info_island_scroll_bar, 0, _sb_x, _sb_y, _sb_scl, _sb_scl, 0, c_white, 1)
+        if (mouse_check_button_pressed(mb_left)) {
+            if (point_in_rectangle(mouse_x, mouse_y, _sb_x, _sb_y, _sb_x + _sb_w, _sb_y + _sb_h)) {
+                sb_dragging = true
+                sb_drag_y = mouse_y
+                sb_drag_offset = y_offset
+            } else if (point_in_rectangle(mouse_x, mouse_y, _sb_x, _sb_t, _sb_x + _sb_w, _sb_t + _sb_vh)) {
+                y_offset_target = clamp((mouse_y - _sb_t - _sb_h * 0.5) / _sb_travel * _sb_max, 0, _sb_max)
+            }
+        }
+        if (sb_dragging && mouse_check_button(mb_left)) {
+            y_offset = clamp(sb_drag_offset + (mouse_y - sb_drag_y) * (_sb_max / _sb_travel), 0, _sb_max)
+            y_offset_target = y_offset
+        }
+        if (mouse_check_button_released(mb_left)) sb_dragging = false
+    }
+}

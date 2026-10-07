@@ -23,6 +23,7 @@ hover_gem_index = -1
 close_timer = -1
 
 y_offset = 0
+y_offset_target = 0
 // 滚动条状态（绘制与拖动都在 Draw_0 末尾，与滚轮共用 y_offset）
 sb_dragging = false
 sb_drag_y = 0

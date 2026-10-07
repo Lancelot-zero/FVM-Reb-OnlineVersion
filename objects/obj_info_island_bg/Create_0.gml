@@ -32,6 +32,7 @@ surface_width = 900
 surface_height = 780
 
 y_offset = 0
+y_offset_target = 0
 
 // 滚动条状态
 scrollbar_dragging = false

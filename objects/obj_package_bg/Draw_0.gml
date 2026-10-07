@@ -528,6 +528,14 @@ tooltip_draw();
     var _sb_x   = _sb_l + 756 - _sb_w + 28 + _sb_w * 0.5
     var _sb_vh  = 775                                    // 视口高 = package_surface 高度
     var _sb_max = (package_button_select == 1) ? (package_rows - 8) * 96 : (package_rows - 9) * 88
+    // 滚动平滑趋近：滚轮与点轨道只改目标值，这里每帧非线性逼近（等级 1；等级 0 直接到位）
+    if (ui_anim_on(1)) {
+        y_offset += (y_offset_target - y_offset) * 0.28
+        if (abs(y_offset_target - y_offset) < 0.5) y_offset = y_offset_target
+    } else {
+        y_offset = y_offset_target
+    }
+
     if (_sb_max > 0 && _sb_vh > _sb_h) {
         var _sb_travel = _sb_vh - _sb_h
         var _sb_y = _sb_t + clamp(y_offset / _sb_max, 0, 1) * _sb_travel
@@ -538,11 +546,12 @@ tooltip_draw();
                 sb_drag_y = mouse_y
                 sb_drag_offset = y_offset
             } else if (point_in_rectangle(mouse_x, mouse_y, _sb_x, _sb_t, _sb_x + _sb_w, _sb_t + _sb_vh)) {
-                y_offset = clamp((mouse_y - _sb_t - _sb_h * 0.5) / _sb_travel * _sb_max, 0, _sb_max)
+                y_offset_target = clamp((mouse_y - _sb_t - _sb_h * 0.5) / _sb_travel * _sb_max, 0, _sb_max)
             }
         }
         if (sb_dragging && mouse_check_button(mb_left)) {
             y_offset = clamp(sb_drag_offset + (mouse_y - sb_drag_y) * (_sb_max / _sb_travel), 0, _sb_max)
+            y_offset_target = y_offset
         }
         if (mouse_check_button_released(mb_left)) sb_dragging = false
     }

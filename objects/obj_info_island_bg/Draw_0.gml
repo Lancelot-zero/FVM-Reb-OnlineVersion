@@ -364,6 +364,14 @@ else if info_button_select == 3 {
 
 
 // ===== 滚动条参数 =====
+    // 滚动平滑趋近：滚轮与点轨道只改目标值，这里每帧非线性逼近（等级 1；等级 0 直接到位）
+    if (ui_anim_on(1)) {
+        y_offset += (y_offset_target - y_offset) * 0.28
+        if (abs(y_offset_target - y_offset) < 0.5) y_offset = y_offset_target
+    } else {
+        y_offset = y_offset_target
+    }
+
 var sb_x       = x - 1388 + surface_width + 10;  // 起始位置 x（左边界）
 var sb_y_start = y - 352;                          // 起始位置 y（顶部）
 var sb_y_end   = y - 384 + surface_height;         // 结束位置 y（底部）
@@ -400,7 +408,7 @@ if (scroll_max > 0) {
             scrollbar_drag_start_offset = y_offset;
         } else if (point_in_rectangle(mouse_x, mouse_y, scrollbar_x, sb_y_start,
                                       scrollbar_x + scrollbar_w, sb_y_start + track_h)) {
-            y_offset = clamp((mouse_y - sb_y_start - bar_height * 0.5) / (track_h - bar_height) * scroll_max, 0, scroll_max);
+            y_offset_target = clamp((mouse_y - sb_y_start - bar_height * 0.5) / (track_h - bar_height) * scroll_max, 0, scroll_max);
         }
     }
 
@@ -408,6 +416,7 @@ if (scroll_max > 0) {
         var dy = mouse_y - scrollbar_drag_start_y;
         y_offset = scrollbar_drag_start_offset + dy * (scroll_max / (track_h - bar_height));
         y_offset = clamp(y_offset, 0, scroll_max);
+				y_offset_target = y_offset
     }
 
     if (mouse_check_button_released(mb_left)) {
