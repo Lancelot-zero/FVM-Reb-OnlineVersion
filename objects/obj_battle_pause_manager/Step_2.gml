@@ -126,7 +126,7 @@ if (keyboard_check_pressed(vk_escape)) {
         // 尝试关闭菜单（菜单自身会处理ESC关闭）
         var menu = instance_find(obj_pause_menu, 0);
         if (menu != noone && !menu.submenu_open) {
-            instance_destroy(menu);
+            panel_anim_close(menu);          // 淡出后再销毁（原来是瞬间销毁）
             global.is_paused = false;
             global.show_menu = false;
         }
