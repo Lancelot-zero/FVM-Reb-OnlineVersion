@@ -735,9 +735,14 @@ switch state{
 				state = BOSS_STATE.DISAPPEAR
 				timer = 1
 			}
+			/*
 			skill_4_erase_row[0] = boss_random(self, 4,5)
 			skill_4_erase_row[1] = boss_random(self, 2,3)
 			skill_4_erase_row[2] = boss_random(self, 0,1)
+			*/
+			skill_4_erase_row[0] = 4 + (skill_turn mod 2)
+			skill_4_erase_row[1] = 2 + (skill_turn mod 2)
+			skill_4_erase_row[2] = 0 + (skill_turn mod 2)
 		}
 		
 		if grid_col > 0{
@@ -806,6 +811,7 @@ switch state{
 				skill_group = skill_group_list[boss_random(self, 0,array_length(skill_group_list)-1)]
 				//skill_group = array_shuffle(skill_group)
 				skill_count = 0
+				skill_turn ++
 			}
 			var enemy_row = boss_random(self, 0,global.grid_rows-1)
 			var enemy_pos = {}
