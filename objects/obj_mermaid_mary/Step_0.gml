@@ -207,6 +207,7 @@ switch state{
 
 
 timer ++
+frame_count++;
 
 if awake_timer > -1{
 	awake_timer --
