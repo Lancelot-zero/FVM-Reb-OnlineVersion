@@ -246,6 +246,7 @@ switch state{
 
 
 timer ++
+frame_count++;
 
 // 透明度处理
 if (image_alpha <= 0 && state == BOSS_STATE.DEATH) {
