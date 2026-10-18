@@ -8,5 +8,6 @@ if surface_exists(package_surface){
 	surface_free(package_surface)
 }
 
-
 global.room_battle_front = false
+
+panel_anim_free(id)

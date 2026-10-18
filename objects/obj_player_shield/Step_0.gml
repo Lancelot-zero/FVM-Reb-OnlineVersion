@@ -30,7 +30,7 @@ if produce_gem{
 if slow_down_gem{
 	if timer mod slow_down_cycle == 0{
 		var start_pos_x = x + 10 - global.grid_cell_size_x
-		var start_pos_y = y - 35 - global.grid_cell_size_y
+		var start_pos_y = y + 100 - global.grid_cell_size_y   // 盾的 y = 玩家上方100，这里补偿回玩家身上（原来写的 -35 会让特效高 135px）
 		for(var i = 0; i < 3;i++){
 			for(var j= 0 ; j < 3;j++){
 				var grid_pos = get_grid_position_from_world(start_pos_x + j * global.grid_cell_size_x,start_pos_y + i * global.grid_cell_size_y)

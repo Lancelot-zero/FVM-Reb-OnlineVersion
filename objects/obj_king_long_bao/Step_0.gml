@@ -48,6 +48,12 @@ with obj_card_parent{
 								_added++
 						}
 					}
+					if other.shape >= 2{
+						if other.bun_count < other.max_bun{
+							other.bun_count++
+							array_push(other.bullet_list,{"bullet_type":other.bun_card_info[i].bullet_type,"damage":atk})
+						}
+					}
 					if can_absorb{
 						other.state = CARD_STATE.GROW
 						instance_destroy()

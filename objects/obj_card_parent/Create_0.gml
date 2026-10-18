@@ -63,3 +63,6 @@ plant_id = ""  // 植物唯一标识符
 current_level = 0  // 当前等级
 
 pre_hp=-1
+// ========= 是否有梯子 ========
+have_loder = false
+

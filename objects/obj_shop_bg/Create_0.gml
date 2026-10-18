@@ -39,9 +39,9 @@ shop_list_recharge()
 function shop_list_recharge(){
 	ds_list_clear(goods_list)
 	
-	var map_array = []
+	var map_array = global.goods_id_pool
 
-	ds_map_keys_to_array(global.goods_map,map_array)
+	//ds_map_keys_to_array(global.goods_map,map_array)
 
 	var goods_array_size = array_length(map_array)
 
@@ -168,5 +168,14 @@ function shop_list_recharge(){
 	}
 }
 
+// 整块面板的进出场过渡（实现在 scripts/GuiStack/GuiStack.gml）
+panel_anim_init(id, 0.28, 0.18, 260)
+panel_anim_kids(id, [obj_closeshop_btn, obj_shop_select_btn, obj_shop_page_btn, obj_shop_buy_btn, obj_shop_buy_confirm])
 
-global.room_battle_front = true
+// ── 页签/翻页切换：Crossfade + Stagger（旧内容原地淡出，新内容逐格浮现）──
+pg_t      = -1;    // -1 = 无动画；>=0 = 动画进行到第几帧（0 = 刚开始）
+pg_frames = 17;    // 时长（帧），60fps ≈ 0.28s
+pg_dir    = 1;     // 方向：+1 = 往后翻，-1 = 往前翻（目前只用于预留/调试）
+pg_surf   = -1;    // 商品格内容的录制面（只在切页那 0.22s 里存在）
+pg_old_surf = -1;  // 上一帧内容的拷贝（交叉淡出用）
+pg_switch   = false; // 本帧刚切了页签/翻页 -> 先把旧内容拷进 pg_old_surf

@@ -1,7 +1,10 @@
-draw_set_alpha(0.5);
+panel_anim_step(id)                      // 推进过渡（关闭播完会销毁自己）
+if (!instance_exists(id)) { exit }        // 已被销毁：这一帧不再画
+draw_set_alpha(0.5 * ui_anim_alpha(id));   // 遮罩跟着面板一起淡
 // 绘制半透明遮罩
 draw_rectangle_color(0, 0, room_width, room_height, c_black, c_black, c_black, c_black, false);
 draw_set_alpha(1);
+panel_anim_begin(id)
 draw_self()
 
 if target_task_index != -1{
@@ -29,11 +32,11 @@ if target_task_index != -1{
 	}
 	if current_task_info.single_game{
 		draw_set_colour(c_red)
-		draw_text(x+60,y-70,"!单局游戏内完成全部任务目标否则重置进度")
+		draw_text(x+60,y-75,"!单局游戏内完成全部任务目标否则重置进度")
 	}
 	else if current_task_info.oneshot{
 		draw_set_colour(c_red)
-		draw_text(x+60,y-70,"!任务过程中如果中途退出或游戏失败则重置进度")
+		draw_text(x+60,y-75,"!任务过程中如果中途退出或游戏失败则重置进度")
 	}
 }
 else{
@@ -46,3 +49,5 @@ else{
 	draw_set_valign(fa_top)
 	draw_text(x-50,y-310,"点击左侧选项卡以查看任务。")
 }
+
+panel_anim_end_slide(id, 260)   // 整块从下方滑入 + 淡入

@@ -14,3 +14,10 @@ selected_button = -1;
 // 定位到屏幕中心
 x = room_width / 2;
 y = room_height / 2;
+
+// 三级菜单淡入淡出（等级 1 起）
+panel_anim_init(id, 0.18, 0.14, 0, 3)
+panel_anim_kids(id, [])
+
+// 弹窗弹出/回缩：GuiStack pop_anim_*（0.20s，ease-out back），关闭时反向缩回
+pop_anim_init(id, [])

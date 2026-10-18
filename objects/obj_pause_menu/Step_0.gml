@@ -12,8 +12,8 @@ if (!submenu_open) {
     
     for (var i = 0; i < array_length(buttons); i++) {
         var btn = buttons[i];
-        var btn_x = menu_x + btn[0];
-        var btn_y = menu_y + 120 + btn[4];
+        var btn_x = menu_x + btn[0] * pop_s;
+        var btn_y = menu_y + (120 + btn[4]) * pop_s;
         var btn_width = btn[2];
         var btn_height = btn[3];
         
@@ -27,7 +27,7 @@ if (!submenu_open) {
             if (mouse_check_button_released(mb_left)) {
                 switch (i) {
                     case 0: // 继续游戏
-                        instance_destroy();
+                        panel_anim_close(id);   // 淡出后再销毁
                         global.is_paused = false;
                         global.show_menu = false;
 						if (global.network.mode == "server") {
@@ -49,7 +49,7 @@ if (!submenu_open) {
 						instance_create_depth(menu_x, menu_y, depth-1, obj_restart_confirm);
                         break;
                 }
-				audio_play_sound(snd_button,0,0)
+				global.audio.play(snd_button,0,0)
             }
             break;
         }
@@ -57,3 +57,6 @@ if (!submenu_open) {
     
     
 }
+
+// 弹出/回缩推进
+pop_anim_step(id)

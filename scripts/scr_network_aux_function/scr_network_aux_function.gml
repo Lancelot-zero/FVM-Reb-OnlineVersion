@@ -259,6 +259,7 @@ function network_active_skill(_type, _col, _row, _level, _coords = "") {
         case "freeze_gem": _text.sprite_index = spr_freeze_gem_text; break;
         case "cateye_gem": _text.sprite_index = spr_cateye_gem_text; break;
         case "starlight_gem": _text.sprite_index = spr_starlight_gem_text; break;
+        case "holy_gem": _text.sprite_index = spr_holy_gem_text; break;
     }
 
     switch (_type) {
@@ -319,6 +320,13 @@ function network_active_skill(_type, _col, _row, _level, _coords = "") {
                 _inst.row = _arr[i][1];
             }
             return _coords;
+
+        case "holy_gem":
+            // 全屏锁血光环：位置固定在 (4,3) 上方，持续时间按等级取表
+            var _hp_pos = get_world_position_from_grid(4, 3);
+            var _hinst = instance_create_depth(_hp_pos.x, _hp_pos.y-200, -800, obj_holy_gem_effect);
+            _hinst.max_time = _gi.max_time[_level] * 60;
+            break;
     }
     return "";
 }

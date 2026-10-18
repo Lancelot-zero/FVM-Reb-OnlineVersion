@@ -7,8 +7,8 @@ var my = device_mouse_y_to_gui(0);
 
 for (var i = 0; i < array_length(buttons); i++) {
     var btn = buttons[i];
-    var btn_x = x + btn[0];
-    var btn_y = y + 70;
+    var btn_x = x + btn[0] * pop_s;
+    var btn_y = y + 70 * pop_s;
     var btn_width = btn[2];
     var btn_height = btn[3];
     
@@ -22,12 +22,18 @@ for (var i = 0; i < array_length(buttons); i++) {
             switch (i) {
                 case 1: // 取消
 					obj_shop_bg.is_submenu_opened = false
-                    instance_destroy();
+                    panel_anim_close(id);   // 淡出后再销毁
                     break;
                     
                 case 0: // 确定
                     // 购买逻辑
 					obj_shop_bg.is_submenu_opened = false
+					// 商品按钮可能已被 shop_list_recharge() 销毁（换页或刷新），读取其字段前先判存在
+					if (!instance_exists(banding_buy_btn)) {
+						show_notice("商品已刷新，请重新选择", 60)
+						panel_anim_close(id)
+						break
+					}
 					with banding_buy_btn{
 						if btn_type == "card"{
 							global.save_data.player.gold -= cost
@@ -65,10 +71,10 @@ for (var i = 0; i < array_length(buttons); i++) {
 						with obj_shop_bg{
 							shop_list_recharge()
 						}
-					instance_destroy()
+					panel_anim_close(id)   // 淡出后再销毁
                     break;
             }
-			audio_play_sound(snd_button,0,0)
+			global.audio.play(snd_button,0,0)
         }
         break;
     }
@@ -76,5 +82,8 @@ for (var i = 0; i < array_length(buttons); i++) {
 
 // ESC键关闭确认窗口
 if (keyboard_check_pressed(vk_escape)) {
-    instance_destroy();
+    panel_anim_close(id);   // 淡出后再销毁
 }
+
+// 推进弹出/回缩（GuiStack pop_anim_step）
+pop_anim_step(id)

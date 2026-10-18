@@ -21,4 +21,4 @@ if b_count == 1 || (b_count >= 2 && shape >= 1){
 bullet_screen_add_Ex(_spr, _fr, 0, 1.6, 1, x - 40, _by, -8, 0, atk, 1, -1,
                      "normal", _eob, "", "normal", 5, 180);
 
-audio_play_sound(snd_shot, 0, 0);
+global.audio.play(snd_shot, 0, 0);

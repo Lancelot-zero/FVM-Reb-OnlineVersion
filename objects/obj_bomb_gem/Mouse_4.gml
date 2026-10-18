@@ -1,11 +1,11 @@
 if cooldown_timer <= 0{
 	if (global.network.mode == "client") {
 		send_message(global.network.server_socket, MSG_ACTIVE_SKILL_REQUEST, gem_id, obj_player_character.grid_col, obj_player_character.grid_row, gem_level);
-		audio_play_sound(snd_button,0,0)
+		global.audio.play(snd_button,0,0)
 		cooldown_timer = cooldown
 		return;
 	}
-	audio_play_sound(snd_button,0,0)
+	global.audio.play(snd_button,0,0)
 	
 	var text = instance_create_depth(room_width/2+80,room_height/3-100,-500,obj_gem_text)
 	text.sprite_index = spr_bomb_gem_text

@@ -1,9 +1,8 @@
 var target = find_priority_enemy()
 if target != noone{
 	var inst = instance_create_depth(x,y-90,depth-1,obj_currylobstercannon_bullet)
-	inst.target_col = target.grid_col
-	inst.target_row = target.grid_row
-	inst.target_enemy = target
+	inst.target_col = target.col
+	inst.target_row = target.row
 	inst.damage = atk
 	inst.b_shape = shape
 

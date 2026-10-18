@@ -137,4 +137,4 @@ if shape == 2{
 	}
 }
 }*/
-audio_play_sound(snd_throw,0,0)
+global.audio.play(snd_throw,0,0)

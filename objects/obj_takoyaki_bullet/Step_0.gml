@@ -37,31 +37,11 @@ if (global._takoyaki_scan_frame != obj_battle.battle_time) {
 		}
 	}
 }
-/*
+
 // 卡片右一格内寻找敌人（取血最高），查本列+右列网格数组
 var _find_right_cell = function(_range) {
 	return noone
-	var _found = noone;
-	if (instance_exists(banding_card_obj)) {
-		var _c0 = banding_card_obj.grid_col;
-		if (_c0 >= 0) {
-			var _row_base = row * (global.grid_cols + 2);
-			var _c_end = min(_c0 + 1, global.grid_cols + 1);
-			for(var _c = _c0; _c <= _c_end; _c++){
-				var _arr = global.enemy_array[_row_base + _c];
-				for(var _k = 0; _k < array_length(_arr); _k++){
-					var _e = _arr[_k];
-					if (instance_exists(_e) && _e.hp > 0 && _e.y > 0 && can_hit(target_type,_e.target_type) && _e.x >= banding_card_obj.x && _e.x <= banding_card_obj.x + _range) {
-						if (_found == noone || _e.hp > _found.hp){
-							_found = _e;
-						}
-					}
-				}
-			}
-		}
-	}
-	return _found;
-}*/
+}
 
 // 子弹追踪逻辑
 if (instance_exists(target_enemy) && target_enemy.hp > 0  && can_hit(target_type,target_enemy.target_type)) {
@@ -89,7 +69,7 @@ if (instance_exists(target_enemy) && target_enemy.hp > 0  && can_hit(target_type
 	//show_debug_message(dir)
 
 	// 检查是否需要重新选择目标（有更高优先级的目标出现）
-	var new_target =noone;// _find_right_cell(150);
+	var new_target = _find_right_cell(150);
 
 	// 如果找到更高优先级的目标，切换目标
 	if (new_target != noone) {
@@ -102,7 +82,7 @@ if (instance_exists(target_enemy) && target_enemy.hp > 0  && can_hit(target_type
 
 } else {
 	// 目标不存在或已死亡，寻找新目标
-	var new_target = noone;//_find_right_cell(80);
+	var new_target = _find_right_cell(80);
 
 	// 优先选择右边一格内的敌人，如果没有则选择最左侧敌人
 	if (new_target != noone) {

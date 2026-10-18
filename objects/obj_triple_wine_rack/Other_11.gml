@@ -45,4 +45,4 @@ if shape == 1 {
 	                     "normal", _eob, "", "normal", 5, 0, -1, 0.15, _esp);
 }
 
-audio_play_sound(snd_shot, 0, 0);
+global.audio.play(snd_shot, 0, 0);

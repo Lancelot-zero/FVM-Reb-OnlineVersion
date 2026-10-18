@@ -37,11 +37,20 @@
 		}
 	}
 
+	// ===== 炸弹同时清除范围内（同一列）的梯子 =====
+	with (obj_ladder) {
+		if (host_plant != noone && instance_exists(host_plant)) {
+			if ( (abs(host_plant.x - other.x) <= 100 || (abs(host_plant.x - other.x) <= 200 && other.shape >= 2))) {
+				instance_destroy();
+			}
+		}
+	}
+
 	// 播放倭瓜攻击效果
 	//effect_create_above(ef_explosion, x, y, 2, c_white);
 
 	// 播放攻击声音
-	 audio_play_sound(snd_bottle_explode, 0, false);
+	 global.audio.play(snd_bottle_explode, 0, false);
 	 if global.screen_shake{
 		Camera_Shock(5,20)
 	}

@@ -43,10 +43,13 @@ function update_notices() {
         //notice.target_y = camera_y + camera_h / 3;
         //notice.pos_y = notice.target_y;
         
-        // 前20帧：淡入和缩放效果
+        // 前 10 帧淡入 + 缩放：toast 不受动效等级门控（等级 0 同样播放）——它是信息提示，
+        // 关掉动效不应退化成硬切
         if (notice.frames <= 10) {
-            notice.alpha = notice.frames / 10;
-            notice.scale = 2.2 - (0.2 * (notice.frames / 10));
+            
+                notice.alpha = notice.frames / 10;
+                notice.scale = 2.2 - (0.2 * (notice.frames / 10));
+            
         }
         // 生命周期结束前的阶段
         else if (notice.frames > notice.life) {
@@ -126,8 +129,8 @@ function draw_notices() {
         draw_set_halign(fa_center);
         draw_set_valign(fa_middle);
         draw_set_alpha(alpha);
-        draw_text_ext_transformed(
-            pos_x, pos_y-3, text,90,1920,scale,scale,0
+        draw_text_transformed(
+            pos_x, pos_y - (text_height*scale)/2 - padding*2, text,scale,scale,0
         );
         
         // 重置绘制设置

@@ -11,7 +11,7 @@ if(variable_instance_get(id, "_net_card_equipped_attire_id")==noone){
 	}
 }
 
-audio_play_sound(snd_throw, 0, 0)
+global.audio.play(snd_throw, 0, 0)
 
 // 基本属性
 inst.damage = atk

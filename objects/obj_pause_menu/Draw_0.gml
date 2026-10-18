@@ -1,8 +1,12 @@
 // obj_pause_menu - Draw Event
+panel_anim_step(id)                 // 自己的淡入淡出（关闭播完自己销毁）
+if (!instance_exists(id)) { exit }
+var _a = ui_anim_alpha(id)
+
 // 绘制半透明背景
-draw_set_alpha(0.5);
+draw_set_alpha(0.5 * _a);
 draw_rectangle_color(0, 0, room_width, room_height, c_black, c_black, c_black, c_black, false);
-draw_set_alpha(1);
+draw_set_alpha(_a);   // 后面的文字/按钮都用 _a（draw_self 走 image_alpha）
 
 // 绘制菜单背景
 //var bg = spr_pause_menu;
@@ -14,23 +18,23 @@ draw_set_color(c_white)
 draw_set_font(font_yuan); // 使用菜单字体
 draw_set_halign(fa_center);
 draw_set_valign(fa_middle);
-draw_text(menu_x, menu_y - 138, "游戏暂停");
+draw_text(menu_x, menu_y - 138 * pop_s, "游戏暂停");
 
 // 绘制关卡信息
 //var level_time = "通关时间: " + string_format(global.level_time, 1, 2) + "秒";
 //var level_name = "当前关卡: " + global.level_name;
 draw_set_color(c_black)
-draw_text(menu_x, menu_y - 65, global.level_data.name);
+draw_text(menu_x, menu_y - 65 * pop_s, global.level_data.name);
 var minute = floor(obj_battle.battle_time/3600)
 var second = floor(obj_battle.battle_time/60 - minute * 60)
-draw_text(menu_x, menu_y - 35, "耗时："+string(minute)+"分"+string(second)+"秒");
-draw_text(menu_x, menu_y - 5, "卡片损失："+string(obj_task_manager.card_loss));
+draw_text(menu_x, menu_y - 35 * pop_s, "耗时："+string(minute)+"分"+string(second)+"秒");
+draw_text(menu_x, menu_y - 5 * pop_s, "卡片损失："+string(obj_task_manager.card_loss));
 draw_set_color(c_white)
 // 绘制按钮
 for (var i = 0; i < array_length(buttons); i++) {
     var btn = buttons[i];
-    var btn_x = menu_x + btn[0];
-    var btn_y = menu_y + 120 + btn[4];
+    var btn_x = menu_x + btn[0] * pop_s;
+    var btn_y = menu_y + (120 + btn[4]) * pop_s;
     
     // 确定按钮状态
     var frame = button_normal;
@@ -39,9 +43,11 @@ for (var i = 0; i < array_length(buttons); i++) {
     }
     
     // 绘制按钮
-    draw_sprite_ext(spr_common_button,  frame,  btn_x,  btn_y, 0.75, 0.75,  0,  c_white,  1);
+    draw_sprite_ext(spr_common_button,  frame,  btn_x,  btn_y, 0.75 * pop_s, 0.75 * pop_s,  0,  c_white,  _a);
     
     // 绘制按钮文本
     draw_set_font(font_yuan);
     draw_text(btn_x, btn_y, btn[1]);
 }
+
+draw_set_alpha(1)                  // 复位，别把 alpha 漏给后面画的东西

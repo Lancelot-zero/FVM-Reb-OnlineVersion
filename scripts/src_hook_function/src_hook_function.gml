@@ -105,7 +105,9 @@ function instance_destroy_define() {
 
 
 
-// 链路：调用点 → global.audio.play（Music_Init 限流/爆音抑制）→ audio_play_sound_define（音量）→ 内置
+// 链路：调用点 → global.audio.play（Music_Init：限流/爆音抑制/音高）→ audio_play_sound_origfunc → GM 内置
+// 注意：管理器实现内部（scripts/Music_Init）必须写 audio_play_sound_origfunc，
+//       否则宏展开成 global.audio.play 会造成无限递归。
 #macro audio_play_sound_origfunc		audio_play_sound
 #macro audio_play_sound				global.audio.play
 

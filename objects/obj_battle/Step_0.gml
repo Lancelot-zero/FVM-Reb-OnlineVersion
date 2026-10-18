@@ -144,7 +144,7 @@ for (var _ei = 0; _ei < array_length(_env_objs); _ei++) {
 if global.debug{
 	if keyboard_check_pressed(ord("M")){
 		var grid_pos = get_grid_position_from_world(mouse_x,mouse_y)
-		var inst = instance_create_depth(grid_pos.x,grid_pos.y+38,0,obj_machine_beehive_mouse)
+		var inst = instance_create_depth(grid_pos.x,grid_pos.y+38,0,obj_barrel_mouse)
 		inst.grid_row = grid_pos.row
 		inst.grid_col = grid_pos.col
 		inst.frozen_timer = 0000
@@ -152,7 +152,7 @@ if global.debug{
 	if keyboard_check_pressed(ord("N")){
 		var enemy_row = irandom_range(0,global.grid_rows-1)
 		var enemy_pos = get_world_position_from_grid(10,enemy_row)
-		instance_create_depth(enemy_pos.x-80,enemy_pos.y+33,-200,obj_mouse_train_3_head)
+		instance_create_depth(enemy_pos.x-80,enemy_pos.y+33,-200,obj_beverage_machine)
 		boss_count++
 		//var grid_pos = get_grid_position_from_world(mouse_x,mouse_y)
 		//var inst = instance_create_depth(grid_pos.x,grid_pos.y+38,0,obj_mario_mouse)
@@ -162,21 +162,21 @@ if global.debug{
 	}
 	if keyboard_check_pressed(ord("L")){
 		var grid_pos = get_grid_position_from_world(mouse_x,mouse_y)
-		var inst = instance_create_depth(grid_pos.x,grid_pos.y+38,0,obj_war_god_soldier)
+		var inst = instance_create_depth(grid_pos.x,grid_pos.y+38,0,obj_face_cookie)
 		inst.grid_row = grid_pos.row
 		inst.grid_col = grid_pos.col
 		inst.frozen_timer = 0000
 	}
 	if keyboard_check_pressed(ord("K")){
 		var grid_pos = get_grid_position_from_world(mouse_x,mouse_y)
-		var inst = instance_create_depth(grid_pos.x,grid_pos.y+38,0,obj_war_god_summon)
+		var inst = instance_create_depth(grid_pos.x,grid_pos.y+38,0,obj_suv_mouse)
 		inst.grid_row = grid_pos.row
 		inst.grid_col = grid_pos.col
 		inst.frozen_timer = 0000
 	}
 	if keyboard_check_pressed(ord("B")){
 		var grid_pos = get_grid_position_from_world(mouse_x,mouse_y)
-		var inst = instance_create_depth(grid_pos.x,grid_pos.y+38,0,obj_snail_mouse)
+		var inst = instance_create_depth(grid_pos.x,grid_pos.y+38,0,obj_tire_mouse)
 		inst.grid_row = grid_pos.row
 		inst.grid_col = grid_pos.col
 		inst.frozen_timer = 0000
@@ -193,7 +193,7 @@ if global.debug{
 			global.game_over = true
 			var inst = instance_create_depth(room_width/2,room_height/2,-3001,obj_game_over)
 			inst.sprite_index = spr_win
-			audio_play_sound(snd_win,0,0)
+			global.audio.play(snd_win,0,0)
 		}
 	}
 
@@ -209,7 +209,7 @@ if global.debug{
 			new_plant.flame_produce = 15000
 			new_plant.ice_timer = 600
 			instance_create_depth(grid_pos.x,grid_pos.y,-2,obj_place_effect)
-			audio_play_sound(snd_place1,0,0)
+			global.audio.play(snd_place1,0,0)
 		}
 	}
 
@@ -226,7 +226,7 @@ if global.debug{
 			new_plant.ice_timer = 600
 			new_plant.frozen_timer = 240
 			instance_create_depth(grid_pos.x,grid_pos.y,-2,obj_place_effect)
-			audio_play_sound(snd_place1,0,0)
+			global.audio.play(snd_place1,0,0)
 		}
 	}
 }
@@ -250,7 +250,7 @@ if time_limit > 0{
 			global.is_paused = true
 			global.game_over = true
 			instance_create_depth(room_width/2,room_height/2,-3001,obj_game_over)
-			audio_play_sound(snd_lose,0,0)
+			global.audio.play(snd_lose,0,0)
 		}
 	}
 }
@@ -349,7 +349,7 @@ if (global._VM_prev_wave != current_wave) {
 if global._VM_wave_auto && battle_time >= (global.level_file.first_wave_delay * 60) && level_stage == "ready" {
 
 	level_stage = "pre"
-	audio_play_sound(snd_mouse_wave_attack, 0, 0)
+	global.audio.play(snd_mouse_wave_attack, 0, 0)
 
 	enemy_subwave_summon()
 
@@ -454,7 +454,7 @@ if wave_timer <= 0 && level_stage == "pre" && global._VM_wave_auto{
 		else if current_wave < total_wave{
 			current_wave += 1
 			current_subwave = 0
-			audio_play_sound(snd_mouse_wave_attack,0,0)
+			global.audio.play(snd_mouse_wave_attack,0,0)
 			instance_create_depth(room_width/2,room_height/2,-300,obj_huge_wave_text)
 		}
 	}
@@ -521,7 +521,7 @@ if global.debug{
 				global.game_over = true
 				var inst = instance_create_depth(room_width/2,room_height/2,-3001,obj_game_over)
 				inst.sprite_index = spr_win
-				audio_play_sound(snd_win,0,0)
+				global.audio.play(snd_win,0,0)
 			}
 		}
 		else{
@@ -530,11 +530,10 @@ if global.debug{
 		}
 	}
 }
+
+
+
 }
-
-
-
-
 
 // 鼠标/键盘输入 VM 块
 if (buffer_exists(global._VM_MOUSE_LEFT) && mouse_check_button_pressed(mb_left)) {
@@ -551,6 +550,7 @@ if (buffer_exists(global._VM_KEY_PRESSED) && keyboard_check_pressed(vk_anykey)) 
 }
 if (keyboard_check_pressed(vk_anykey)) vm_hook_run("_VM_KEY_PRESSED");
 
+/***********下述代码为每帧的预处理，后续卡片索敌直接通过前缀和做差O(1)查询**************/
 
 
 var size = global.grid_rows * (global.grid_cols + 2);
@@ -588,8 +588,6 @@ for(var _e = 0; _e < global.grid_rows; _e++){
 var stride = global.grid_cols + 2;
 
 with obj_enemy_parent{
-	// 命中位掩码 tbit / ice_ok 已改由 obj_enemy_parent 自己维护（Create + Step_2 每帧刷新），
-	// 这里不再写 —— 原来在这个遍历里写，刚生成的敌人和排在它之前执行的管理器会读到"未定义"
 	if(grid_row >= 0 && grid_row < global.grid_rows && grid_col >= 0 && grid_col < stride)
 	{
 		var idx = grid_row * stride + grid_col;
@@ -619,6 +617,7 @@ with obj_enemy_parent{
 	if(grid_row >= 0 && grid_row < global.grid_rows && grid_col < 0 ){
 		array_push(global.enemy_array_left[grid_row],id)
 	}
+
 	
 	if(is_boss==false)continue
 	if(pre_state==state)continue;

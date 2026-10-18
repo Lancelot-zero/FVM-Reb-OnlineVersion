@@ -28,6 +28,24 @@ deck_ensure_size();
 select_card_index = ds_list_create()
 hover_card_index = -1
 hover_slot_index = -1
+
+// 卡片飞入卡槽的动画状态（线性匀速）
+fly_active = false
+fly_add = true
+fly_t = 0
+fly_dur = 1
+fly_sx = 0
+fly_sy = 0
+fly_tx = 0
+fly_ty = 0
+fly_spr = -1
+fly_slot = -1
+fly_pool_i = -1
+// 点「清空」时整批飞回卡池的动画（每条 = 一张卡；与上面单张的 fly_* 互不干扰）
+fly_batch = []
+hover_card_x = 0
+hover_card_y = 0
+hover_card_spr = -1
 slot_rows = 11
 // 行数按已注册卡片数动态算（每行 slot_rows 张，末行不足也算一行），下限 10 行
 var _card_total = 0;
@@ -38,6 +56,11 @@ slot_cols = max(10, (_card_total + slot_rows - 1) div slot_rows);
 slot_surface = -1
 map_surface = -1
 y_offset = 0
+y_offset_target = 0
+// 滚动条状态（绘制与拖动都在 Draw_0 末尾，与滚轮共用 y_offset）
+sb_dragging = false
+sb_drag_y = 0
+sb_drag_offset = 0
 
 is_submenu_open = false
 

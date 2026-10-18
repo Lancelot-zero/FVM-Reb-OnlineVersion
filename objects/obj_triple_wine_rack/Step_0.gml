@@ -9,6 +9,7 @@ var current_flash_speed = flash_speed
 if is_slowdown{
 	current_flash_speed *= 2
 }
+
 //检测自身右方是否有敌人
 var has_enemy = false
 /*
@@ -19,7 +20,7 @@ with(obj_enemy_parent){
 	}
 }
 */
-
+/*O(1)查询索敌*/
 var stride = global.grid_cols + 2;
 var col_end = stride - 1;
 var left_idx = grid_col > 0 ? grid_col - 1 : -1;

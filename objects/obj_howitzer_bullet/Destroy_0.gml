@@ -11,6 +11,12 @@
 					event_user(0)
 		            // 受伤效果
 		            //effect_create_above(effect_smoke, x, y, 1, c_gray);
+					if get_gem_index("ice_gem")!= -1{
+						var f_value = get_gem_info("ice_gem").ice_time[get_gem_level("ice_gem")] * 60
+						if ice_timer < f_value{
+							ice_timer = f_value
+						}
+					}
 		        } else {
 		            // 直接摧毁非免疫敌人
 					if special_ash{
@@ -34,7 +40,7 @@
 	//effect_create_above(ef_explosion, x, y, 2, c_white);
 
 	// 播放攻击声音
-	 audio_play_sound(snd_bullet_explode, 0, false);
+	 global.audio.play(snd_bullet_explode, 0, false);
 	 
 var effect_inst = instance_create_depth(x,y,depth,obj_coke_bomb_explode)
 

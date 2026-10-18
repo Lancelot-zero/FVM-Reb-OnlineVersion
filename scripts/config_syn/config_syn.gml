@@ -200,4 +200,14 @@ global.boss_spawn_sync_list = [
 	obj_thor_body,
 	obj_wrestler_mouse,
 	obj_coke_bomb_explode,
+	// 饮料贩卖机 BOSS 产物
+	obj_beverage_skill_1_bullet,
+	obj_beverage_skill_2_bullet,
+	obj_beverage_skill_3_bullet,
+	// 营地新敌人产物
+	obj_carpet_mouse_shield,
+	obj_tire_mouse_tire,
+	// 旅行记录 / 神圣宝石
+	obj_travel_record_moon,
+	obj_holy_gem_effect,
 ];

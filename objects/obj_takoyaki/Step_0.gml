@@ -19,6 +19,7 @@ if instance_exists(obj_enemy_parent){
 		}
 	}
 }
+
 //攻击逻辑
 if (has_enemy) {
     if (attack_timer <= cycle - attack_anim * current_flash_speed) {

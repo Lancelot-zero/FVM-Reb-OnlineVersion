@@ -54,6 +54,12 @@ function load_file(file_slot) {
 				global.save_data.equipped_cookbook = [[],[],[]]
 				global.save_data.version = 1.8
 			}
+			if global.save_data.version == 1.8{
+				if array_get_index(global.save_data.completed_levels,"cheese_castle") != -1{
+					unlock_gem("holy_gem")
+				}
+				global.save_data.version = 1.9
+			}
 		}
 		// 卡池里已不存在的卡（mod 卡被删掉或改名后留下的孤儿记录）不进卡表：
 		// 它们会在强化实验室/包裹等界面画成空框幽灵——点得中、能强化，但没有图没花费。
@@ -194,7 +200,7 @@ function reset_file(file_slot){
 	global.save_orphan_attires = [];   // 时装同理
 	global.save_orphan_equipped_weapons = {};
 	global.save_data = {
-            "version": 1.8,
+            "version": 1.9,
             "player": {
                 "gold": 0,
                 "level": 1,

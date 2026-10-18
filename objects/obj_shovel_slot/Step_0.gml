@@ -10,14 +10,14 @@ if (mouse_check_button_pressed(mb_left)) {
     
     if (point_in_rectangle(mx, my, x, y, x+150, y+150)) {
         select_shovel();
-		audio_play_sound(snd_shovel,0,0)
+		global.audio.play(snd_shovel,0,0)
     }
 }
 if keyboard_check_pressed(slot_key){
 	if !is_selected{
 		select_shovel();
 		hotkey_pressed = true
-		audio_play_sound(snd_shovel,0,0)
+		global.audio.play(snd_shovel,0,0)
 	}
 	else{
 		deselect_shovel();
@@ -117,6 +117,7 @@ if ((is_selected && mouse_check_button_pressed(mb_left)) or (is_selected && glob
             var _cost = get_plant_data_with_skill(plant_to_remove.plant_id, plant_to_remove.shape, plant_to_remove.current_level, plant_to_remove.skill)[? "cost"];
             _flame_amount = round(_cost * _rate);
         }
+
     }
 
     // 客户端：拦截本地执行，发送请求给服务端，等待广播回来再执行

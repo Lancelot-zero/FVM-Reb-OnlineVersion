@@ -490,6 +490,9 @@ function create_widgets() {
         .set_should_correspond(method({gui_state: self.state}, function() {
             return is_undefined(gui_state.detail) || !instance_exists(gui_state.detail)
         }))
+		.set_show_scrollbar(true)
+		.set_scrollbar_offset_x(48)
+
     self.state.grid_list = _grid_list
 
     /// @type {Asset.GMObject.SearchBox}
