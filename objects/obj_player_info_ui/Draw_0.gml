@@ -13,10 +13,10 @@ draw_set_halign(fa_center)
 draw_set_valign(fa_middle)
 
 if(global.mod_enabled){
-	draw_text(x+290,y+38,"v3.0.0 mod插件版")
+	draw_text(x+290,y+38,"v3.0.1 mod插件版")
 }
 else{
-	draw_text(x+290,y+38,"v3.0.0")
+	draw_text(x+290,y+38,"v3.0.1")
 }
 
 draw_text(x+270,y+75,global.player_name)

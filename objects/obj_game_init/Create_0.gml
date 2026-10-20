@@ -68,7 +68,7 @@ global.mod_net_player_id = 0       // 联机：自己在房间里的 id（0 = �
 global.net_player_number = 1       // 联机：房间里的人数（中继随 net_player_id 一起发；断线时重置为 1）
 global._VM_cur_card = noone        // mod 卡 VM 块执行时的"当前实例"上下文
 global.laboretory_room = false
-global.game_version = "3.0.0"
+global.game_version = "3.0.1"
 global.tower_level_click = false
 global.sudo_authed = false
 global.tower_cake_page = 1
