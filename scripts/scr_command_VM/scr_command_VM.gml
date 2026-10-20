@@ -6201,6 +6201,9 @@ function VM_InitRoomEntry(buf) {
 	global._VM_last_damaged_enemy = -1;
 	global._VM_last_damaged_card  = -1;
 
+    // 上一份房间同步 bin 在这里删（StageDetail 创建房间时把 map bin 挂进来给客机同步，
+    // 那边不再删它——删了会悬空。进下一个房间时在这里清理上一份）
+    if (buffer_exists(global._sync_vm_bin_buf)) buffer_delete(global._sync_vm_bin_buf);
     global._sync_vm_bin_buf = undefined;
     global._VM_strings = [];
     global.__vm.strings = global._VM_strings;

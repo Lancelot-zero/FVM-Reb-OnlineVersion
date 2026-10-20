@@ -91,7 +91,11 @@ function on_create_room() {
     if (file_exists(_bin_path)) {
         _bin_buf = buffer_load(_bin_path);
         VM_InitRoomEntry(_bin_buf);
-		buffer_delete(_bin_buf);
+        // ⚠️ 不能在这里 buffer_delete：mode=="server" 时下面要把这份 bin 发给客机同步。
+        //    VM_InitRoomEntry 内部已逐字节拷贝、不留原 buffer 引用，但同步发送还要用它。
+        //    删掉后 buffer id 会被后续 buffer_create 复用（send_message 开包就会复用）→
+        //    buffer_exists 判活成真 → buffer_copy 自拷/拷错对象 → 原生访问违例闪退。
+        //    这份 buffer 的清理在 VM_InitRoomEntry 开头：进下一个房间时删上一份。
     } else {
         VM_InitRoomEntry(undefined);
     }
