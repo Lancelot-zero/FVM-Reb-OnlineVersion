@@ -6,6 +6,7 @@ info_rows = 30
 info_button_select = 1
 //package_button_select = 1
 is_submenu_opened = false
+global.room_battle_front = true   // 面板在前：拦掉背后选卡界面的点击（背包→情报岛切换时也靠它）
 //创建信息栏位选择按钮
 var btn1 = instance_create_depth(x-1130,y-455,depth-1,obj_info_island_select_btn)
 btn1.button_index = 1

@@ -5,4 +5,5 @@ obj_player_info_ui.menu_type = 0
 obj_world_map_button.world_map = 0
 surface_free(card_surface)
 
+global.room_battle_front = false
 panel_anim_free(id)

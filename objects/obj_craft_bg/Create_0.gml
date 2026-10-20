@@ -2,6 +2,7 @@ image_xscale = 0.9
 image_yscale = 0.9
 
 is_submenu_opened = false
+global.room_battle_front = true   // 面板在前：拦掉背后选卡界面的点击
 button_select = 0
 
 instance_create_depth(x+785,y-466,depth-1,obj_closecraft_btn)

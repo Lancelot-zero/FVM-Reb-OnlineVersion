@@ -2,6 +2,7 @@ image_xscale = 0.9
 image_yscale = 0.9
 
 is_submenu_opened = false
+global.room_battle_front = true   // 面板在前：拦掉背后选卡界面的点击
 shop_button_select = 1
 shop_screen_select = 1
 current_page = 1

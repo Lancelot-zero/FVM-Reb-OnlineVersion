@@ -3,6 +3,7 @@ image_yscale = 0.9
 image_speed = 0
 
 is_submenu_opened = false
+global.room_battle_front = true   // 面板在前：拦掉背后选卡界面的点击
 button_select = -1
 target_task_index = -1
 y_offset = 0
