@@ -288,8 +288,7 @@ if (global.game_over && global.network.mode == "server") {
 		for (var i = 0; i < array_length(_cl); i++) {
 			send_message(_cl[i], MSG_SERVER_ACTION, 5);
 		}
-		gui_stack_pop(global.gui_stack);
-		room_goto(room_battle);
+		room_restart();		// 重开＝原地重启战斗房：不切房不动栈
 	}
 }
 

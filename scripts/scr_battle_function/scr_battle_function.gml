@@ -725,7 +725,7 @@ function parse_network_message(buf, _sock) {
                 case 2: global.is_paused = true; break;
                 case 3: global.is_paused = false; break;
                 case 4: global.gui_stack.to(room_ready); break;
-                case 5: global.gui_stack.pop(); room_goto(room_battle); break;
+                case 5: room_restart(); global.__stop_msg_loop = true; break;    // 重开＝原地重启战斗房：不切房不动栈（pop 会启动转场把重启后的战斗房顶掉）；本帧收工，新战斗的消息留到下一帧
             }
             break;
         }
