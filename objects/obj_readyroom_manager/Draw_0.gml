@@ -415,7 +415,7 @@ draw_text(1820,1080,"右键点击或按ESC退出")
     var _sb_x   = _sb_l + (x + 42 + slot_rows * 84) + 6 + _sb_w * 0.5
     //            ↑ 精灵原点是左上角，所以 x 是「按钮左边缘」；再补半个按钮宽，按钮中心才落在凹槽线上
     var _sb_vh  = 420                                    // 视口高 = slot_surface 高度
-    var _sb_max = 96 * slot_rows - 515                   // 与 Mouse_61 同一上限
+    var _sb_max = 96 * slot_cols - 419                   // 与 Mouse_61 同一上限
     // 滚动平滑趋近：滚轮与点轨道只改目标值，这里每帧非线性逼近（等级 1；等级 0 直接到位）
     if (ui_anim_on(1)) {
         y_offset += (y_offset_target - y_offset) * 0.28
