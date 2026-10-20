@@ -108,7 +108,8 @@ global.keybind_config = [
     {"name": "卡槽18", "default1": ord("S"), "tooltip": ""},
 	{"name": "卡槽19", "default1": ord("D"), "tooltip": ""},
     {"name": "卡槽20", "default1": ord("F"), "tooltip": ""},
-    {"name": "卡槽21", "default1": ord("G"), "tooltip": ""}
+    {"name": "卡槽21", "default1": ord("G"), "tooltip": ""},
+    {"name": "shell打开", "default1": vk_f1, "tooltip": ""}
 ];
 //window_set_caption("FVM:Reborn")
 // 初始化全局设置（如果不存在配置文件）

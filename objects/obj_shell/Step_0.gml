@@ -52,7 +52,7 @@ if (saveHistory) {
 }
 
 if (!isOpen) {
-	if (self._key_combo_pressed(openModifiers, openKey)||keyboard_check_pressed(vk_f1)) {
+	if (keyboard_check_pressed(global.keybind_map[? "shell打开"])) {
 		self.open();
 	}
 } else {
@@ -68,7 +68,7 @@ if (!isOpen) {
 		metaMovedRight = false;
 	}
 	
-	if (keyboard_check_pressed(vk_escape)||self._key_combo_pressed(openModifiers, openKey)||keyboard_check_pressed(vk_f1)) {
+	if (keyboard_check_pressed(vk_escape)||keyboard_check_pressed(global.keybind_map[? "shell打开"])) {
 		if (isAutocompleteOpen) {
 			self._close_autocomplete();
 		} else {
