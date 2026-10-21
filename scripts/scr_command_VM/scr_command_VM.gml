@@ -5755,6 +5755,8 @@ function bullet_screen_add(spr, frames, range, scale, anim_speed, x, y, vx, vy, 
     _b.death_obj   = death_obj;
     _b.death_mod   = death_mod;
     _b.death_spr   = death_spr;
+    _b.draw_dx     = 0;     // 槽位复用，绘制偏移必须重置（个别卡会设 draw_dy）
+    _b.draw_dy     = 0;
     // ⚠️ 槽位是回收复用的，这两个必须每次重置，否则新弹会继承上一颗的渐变目标
     _b.ty          = ty;
     _b.lk          = lk;
