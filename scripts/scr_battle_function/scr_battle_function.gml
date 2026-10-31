@@ -1037,6 +1037,7 @@ function parse_network_message(buf, _sock) {
 			        if (_sz <= 0) continue;
 			        var _seg = buffer_create(_sz, buffer_fixed, 1);
 			        buffer_copy(buf, buffer_tell(buf), _sz, _seg, 0);
+			        buffer_seek(buf, buffer_seek_relative, _sz);   // buffer_copy 不动源位置，必须手动推进
 			        buffer_seek(_seg, buffer_seek_start, 0);
 			        if (is_struct(_e) && string(variable_struct_get(_e, "type") ?? "") == "map") {
 			            VM_InitRoomEntry(_seg);
