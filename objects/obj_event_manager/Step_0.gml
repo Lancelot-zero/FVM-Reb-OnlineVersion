@@ -1,20 +1,17 @@
 
+// ⚠️ 顺序要紧：**"战斗开始"必须排在 is_paused 检查前面**。
+//    原来它排在 `if global.is_paused { exit }` 后面，而开局那一刻 is_paused 就可能是 true：
+//      · 单机模式：obj_battle_pause_manager 的 End Step 里 `battle_time == 1` 会置 is_paused = true
+//        （开局第一帧的自动暂停）；
+//      · ESC 菜单暂停 / 空格暂停同理。
+//    于是 Begin Step 里的"战斗开始"被 exit 跳过，而帧 hook 在 obj_battle 的 **End Step**、
+//    完全不看 is_paused，照跑 —— 变成"帧先跑、战斗开始后补"，暂停持续多久就错多久。
+//    帧 hook 那边不能加 `_VM_battle_start_done` 闸（以前加过，跑起来结构会乱，已注释掉），
+//    所以顺序在这里保证：排到前面之后固定为 战斗开始 → 帧 → 帧 → …
+
+// 暂停时，后面的（波次推进、事件脚本…）照旧不跑
 if global.is_paused{
 	exit
-}
-
-if (!global._VM_battle_start_done) {
-	global._VM_battle_start_done = true;
-	global._VM_prev_wave         = -1;
-    global._VM_prev_subwave      = -1;
-	// 卡片 mod 专属属性：战斗开始的选择卡组里有这张卡 → 它的 VM 直接有效（挂载点不要求有实例）
-	mod_card_vm_deck_refresh();
-	// 进战斗：备战房期间播放中的 VM 音效/音乐轨全部停下（只停播放实例，不动已加载资产与缓存）
-	vm_audio_stop_playing();
-	if (buffer_exists(global._VM_BATTLE_START)) {
-		VM_Execute(global.__vm, global._VM_BATTLE_START, "_VM_BATTLE_START");
-	}
-	vm_hook_run("_VM_BATTLE_START");   // mod 侧：同一时机，各自查块
 }
 
 // 客户端跳过，服务端开启日志

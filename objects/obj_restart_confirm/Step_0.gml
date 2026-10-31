@@ -41,6 +41,7 @@ for (var i = 0; i < array_length(buttons); i++) {
                             send_message(_cl[i], MSG_SERVER_ACTION, 5);
                         }
                     }
+					global._VM_battle_start_done = false;
 					if ui_anim_level() >= 2{
 						room_transition_start(room)   // 重开本局也走淡出淡入
 					}

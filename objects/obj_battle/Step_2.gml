@@ -178,37 +178,6 @@ if (global.network.mode == "server" && !global.is_paused) {
 }
 
 
-
-//if(global._VM_battle_start_done){
-// 帧 VM 块：每帧执行
-// 两个 VM 各跑各的：地图脚本走原来的 buffer_exists 判断，mod 走 vm_hook_run（自己查块）
-if (buffer_exists(global._VM_FRAME)) {
-    VM_Execute(global.__vm, global._VM_FRAME, "_VM_FRAME");
-}
-vm_hook_run("_VM_FRAME");
-if (battle_time mod 5 == 0 && buffer_exists(global._VM_TIMER_5f)) {
-    VM_Execute(global.__vm, global._VM_TIMER_5f, "_VM_TIMER_5f");
-}
-if (battle_time mod 5 == 0) vm_hook_run("_VM_TIMER_5f");
-if (battle_time mod 10 == 0 && buffer_exists(global._VM_TIMER_10f)) {
-    VM_Execute(global.__vm, global._VM_TIMER_10f, "_VM_TIMER_10f");
-}
-if (battle_time mod 10 == 0) vm_hook_run("_VM_TIMER_10f");
-if (battle_time mod 15 == 0 && buffer_exists(global._VM_TIMER_15f)) {
-    VM_Execute(global.__vm, global._VM_TIMER_15f, "_VM_TIMER_15f");
-}
-if (battle_time mod 15 == 0) vm_hook_run("_VM_TIMER_15f");
-// mod 单位实例的声明字段同步：每 20 帧推一次变化量（服务器侧，见 mod_sync_props_tick）
-if (battle_time mod 20 == 0) mod_sync_props_tick();
-if (battle_time mod 30 == 0 && buffer_exists(global._VM_TIMER_30f)) {
-    VM_Execute(global.__vm, global._VM_TIMER_30f, "_VM_TIMER_30f");
-}
-if (battle_time mod 30 == 0) vm_hook_run("_VM_TIMER_30f");
-if (battle_time mod 60 == 0 && buffer_exists(global._VM_TIMER_60f)) {
-    VM_Execute(global.__vm, global._VM_TIMER_60f, "_VM_TIMER_60f");
-}
-if (battle_time mod 60 == 0) vm_hook_run("_VM_TIMER_60f");
-//}
 // mod 全局单例按下：帧末触发本帧记录的最上面 mod 实例的 _OBJECT_CLICK
 // （实例已销毁 = 丢这次点击；记录器每帧在这里清空）
 if (global._vm_click_pick != noone) {

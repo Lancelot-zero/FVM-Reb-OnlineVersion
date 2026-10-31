@@ -766,3 +766,59 @@ for(var i = 0; i < global.grid_rows; i++){
 		global.has_enemy_underground[row_base + j] += global.has_enemy_underground[row_base + j - 1];
 	}
 }
+
+
+
+// 帧 VM 块：每帧执行
+// 两个 VM 各跑各的：地图脚本走原来的 buffer_exists 判断，mod 走 vm_hook_run（自己查块）
+//
+//    "战斗开始 → 帧"的顺序在源头保证：obj_event_manager 里那段"战斗开始"已经排到
+//    `if global.is_paused { exit }` **前面**了，所以任何一帧的帧 hook 都必然在战斗开始之后。
+
+if(global._VM_battle_start_done){
+if(global._VM_cr !=undefined){
+	window_set_cursor(global._VM_cr);  
+}
+if (buffer_exists(global._VM_FRAME)) {
+    VM_Execute(global.__vm, global._VM_FRAME, "_VM_FRAME");
+}
+vm_hook_run("_VM_FRAME");
+if (battle_time mod 5 == 0 && buffer_exists(global._VM_TIMER_5f)) {
+    VM_Execute(global.__vm, global._VM_TIMER_5f, "_VM_TIMER_5f");
+}
+if (battle_time mod 5 == 0) vm_hook_run("_VM_TIMER_5f");
+if (battle_time mod 10 == 0 && buffer_exists(global._VM_TIMER_10f)) {
+    VM_Execute(global.__vm, global._VM_TIMER_10f, "_VM_TIMER_10f");
+}
+if (battle_time mod 10 == 0) vm_hook_run("_VM_TIMER_10f");
+if (battle_time mod 15 == 0 && buffer_exists(global._VM_TIMER_15f)) {
+    VM_Execute(global.__vm, global._VM_TIMER_15f, "_VM_TIMER_15f");
+}
+if (battle_time mod 15 == 0) vm_hook_run("_VM_TIMER_15f");
+// mod 单位实例的声明字段同步：每 20 帧推一次变化量（服务器侧，见 mod_sync_props_tick）
+if (battle_time mod 20 == 0) mod_sync_props_tick();
+if (battle_time mod 30 == 0 && buffer_exists(global._VM_TIMER_30f)) {
+    VM_Execute(global.__vm, global._VM_TIMER_30f, "_VM_TIMER_30f");
+}
+if (battle_time mod 30 == 0) vm_hook_run("_VM_TIMER_30f");
+if (battle_time mod 60 == 0 && buffer_exists(global._VM_TIMER_60f)) {
+    VM_Execute(global.__vm, global._VM_TIMER_60f, "_VM_TIMER_60f");
+}
+if (battle_time mod 60 == 0) vm_hook_run("_VM_TIMER_60f");
+//}
+}
+
+if (!global._VM_battle_start_done) {
+	global._VM_battle_start_done = true;
+	global._VM_prev_wave         = -1;
+    global._VM_prev_subwave      = -1;
+	global._VM_cr      = undefined;
+	// 卡片 mod 专属属性：战斗开始的选择卡组里有这张卡 → 它的 VM 直接有效（挂载点不要求有实例）
+	mod_card_vm_deck_refresh();
+	// 进战斗：备战房期间播放中的 VM 音效/音乐轨全部停下（只停播放实例，不动已加载资产与缓存）
+	vm_audio_stop_playing();
+	if (buffer_exists(global._VM_BATTLE_START)) {
+		VM_Execute(global.__vm, global._VM_BATTLE_START, "_VM_BATTLE_START");
+	}
+	vm_hook_run("_VM_BATTLE_START");
+}
