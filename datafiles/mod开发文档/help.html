@@ -696,6 +696,21 @@ VM_ArrayAdd(&quot;mod_sync&quot;, &quot;mod_phase&quot;)
 <td>0=否 1=是免疫煤渣</td>
 </tr>
 <tr>
+<td><code>is_friend</code></td>
+<td>int</td>
+<td>0=普通敌人（默认）1=友化敌人：全链路视为友军——植物/武器/弹幕的索敌与碰撞全部跳过它（网格索敌数组也会把它分流到友化容器），它不啃植物、倒戈攻击普通敌人；绘制时镜像朝向并叠一层纯色剪影</td>
+</tr>
+<tr>
+<td><code>friend_color_r</code> / <code>friend_color_g</code> / <code>friend_color_b</code></td>
+<td>int</td>
+<td>友化剪影颜色 RGB（0~255，默认 128/0/128 紫色），<code>is_friend = 1</code> 时生效</td>
+</tr>
+<tr>
+<td><code>friend_alpha</code></td>
+<td>float</td>
+<td>友化剪影透明度（0~1，默认 0.5），<code>is_friend = 1</code> 时生效</td>
+</tr>
+<tr>
 <td><code>x</code> / <code>y</code></td>
 <td>float</td>
 <td>世界坐标（像素）</td>
@@ -1147,7 +1162,11 @@ VM_ArrayAdd(&quot;mod_sync&quot;, &quot;mod_phase&quot;)
 </tr>
 <tr>
 <td><code>VM_PlaySound(&quot;音效名&quot;)</code></td>
-<td>播放声音：内置音效名（<code>&quot;snd_place1&quot;</code> 等）、本地音频路径（<code>&quot;xxx.ogg&quot;</code>/<code>&quot;xxx.wav&quot;</code>，自动加载），或 <code>VM_LoadSound</code> 返回的音频 ID</td>
+<td>播放声音：内置音效名（<code>&quot;snd_place1&quot;</code> 等）、本地音频路径（<code>&quot;xxx.ogg&quot;</code>/<code>&quot;xxx.wav&quot;</code>，自动加载），或 <code>VM_LoadSound</code> 返回的音频 ID；返回播放实例 ID（没播出来 -1）</td>
+</tr>
+<tr>
+<td><code>VM_SetSoundVolume(播放ID, 音量)</code></td>
+<td>设置某次播放的音量：播放ID 用 VM_PlaySound 的返回值（-1 不动），音量 0=静音 1=原音量，可 &gt;1 放大</td>
 </tr>
 <tr>
 <td><code>VM_Floor(值)</code></td>

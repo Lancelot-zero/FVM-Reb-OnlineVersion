@@ -323,6 +323,7 @@ global._vm_opt_run_funcs[18 + 205] = run_VM_GetPropDepth;        // depth
 global._vm_opt_run_funcs[18 + 206] = run_VM_GetPropImageAngle;   // image_angle
 global._vm_opt_run_funcs[18 + 207] = run_VM_GetPropImageAlpha;   // image_alpha
 global._vm_opt_run_funcs[18 + 208] = run_VM_GetPropImageIndex;   // image_index
+global._vm_opt_run_funcs[18 + 164] = run_VM_SetSoundVolume;       // 164
 
 function run_vm_read_mem(vm, addr) {
     var _type = vm.mem_type[addr];
@@ -2007,7 +2008,25 @@ function run_VM_PlaySound(vm, code, _ip) {
 	} else if (is_real(_name)) {
 		_snd = _name;
 	}
-	if (_snd != -1) audio_play_sound(_snd, 0, 0);
+	var _result = -1;
+	if (_snd != -1) _result = audio_play_sound(_snd, 0, 0);
+	if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+
+    return _ip;
+}
+
+
+function run_VM_SetSoundVolume(vm, code, _ip) {
+    var opt_number = code[_ip]; _ip += 1;
+    var _mt = vm.mem_type;
+    var _mv = vm.mem_val;
+    var _dst = code[_ip]; _ip += 1;
+    var _base = _ip;
+    _ip += opt_number;
+
+	var _id = run_vm_read_mem(vm, code[_base+0]);
+	var _vol = run_vm_read_mem(vm, code[_base+1]);
+	if (is_real(_id) && _id != -1 && is_real(_vol)) audio_sound_gain(_id, _vol, 0);
 
     return _ip;
 }

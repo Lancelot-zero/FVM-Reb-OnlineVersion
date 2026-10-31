@@ -294,6 +294,9 @@ _VM_BATTLE_START {
 | `is_frozen` | int | 0=否 1=是冻结 |
 | `is_stun` / `stun_timer` | int | 是否眩晕 / 眩晕剩余帧 |
 | `immune_to_ash` | int | 0=否 1=是免疫煤渣 |
+| `is_friend` | int | 0=普通敌人（默认）1=友化敌人：全链路视为友军——植物/武器/弹幕的索敌与碰撞全部跳过它（网格索敌数组也会把它分流到友化容器），它不啃植物、倒戈攻击普通敌人；绘制时镜像朝向并叠一层纯色剪影 |
+| `friend_color_r` / `friend_color_g` / `friend_color_b` | int | 友化剪影颜色 RGB（0~255，默认 128/0/128 紫色），`is_friend = 1` 时生效 |
+| `friend_alpha` | float | 友化剪影透明度（0~1，默认 0.5），`is_friend = 1` 时生效 |
 | `x` / `y` | float | 世界坐标（像素） |
 
 ### 查询
@@ -423,7 +426,8 @@ _VM_BATTLE_START {
 |---|---|
 | `VM_Random(min, max)` | 随机整数 [min, max] |
 | `VM_SetFlame(数量)` | 设置火苗数 |
-| `VM_PlaySound("音效名")` | 播放声音：内置音效名（`"snd_place1"` 等）、本地音频路径（`"xxx.ogg"`/`"xxx.wav"`，自动加载），或 `VM_LoadSound` 返回的音频 ID |
+| `VM_PlaySound("音效名")` | 播放声音：内置音效名（`"snd_place1"` 等）、本地音频路径（`"xxx.ogg"`/`"xxx.wav"`，自动加载），或 `VM_LoadSound` 返回的音频 ID；返回播放实例 ID（没播出来 -1） |
+| `VM_SetSoundVolume(播放ID, 音量)` | 设置某次播放的音量：播放ID 用 VM_PlaySound 的返回值（-1 不动），音量 0=静音 1=原音量，可 >1 放大 |
 | `VM_Floor(值)` | 对数字向下取整，非数字返回 undefined |
 | `VM_Ceil(值)` | 对数字向上取整，非数字返回 undefined |
 | `VM_GetTimeLimit()` | 获取关卡倒计时剩余帧数，无倒计时返回 undefined , 60 帧为1s|

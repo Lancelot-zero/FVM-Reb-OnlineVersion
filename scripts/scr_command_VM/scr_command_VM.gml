@@ -1995,6 +1995,7 @@ function VM_GetCardSlotCount() {
 
 /// @function VM_PlaySound(name)
 /// @param name 内置音效名 (如 "snd_place1")、本地音频路径 ("xxx.ogg"/"xxx.wav")，或 VM_LoadSound 返回的音频 ID
+/// @return 播放实例 ID（可传给 VM_SetSoundVolume 调音量）；没播出来返回 -1
 function VM_PlaySound(name_addr) {
 	var _name = vm_arg(name_addr);
 	// 字符串：内置音效名（snd_*）优先，查不到按本地音频路径加载（ogg/wav）
@@ -2006,7 +2007,17 @@ function VM_PlaySound(name_addr) {
 	} else if (is_real(_name)) {
 		_snd = _name;
 	}
-	if (_snd != -1) audio_play_sound(_snd, 0, 0);
+	if (_snd != -1) return audio_play_sound(_snd, 0, 0);
+	return -1;
+}
+
+/// @function VM_SetSoundVolume(id, volume)
+/// @param id VM_PlaySound 返回的播放实例 ID
+/// @param volume 音量（0=静音，1=原音量，可 >1 放大）
+function VM_SetSoundVolume(id_addr, volume_addr) {
+	var _id = vm_arg(id_addr);
+	var _vol = vm_arg(volume_addr);
+	if (is_real(_id) && _id != -1 && is_real(_vol)) audio_sound_gain(_id, _vol, 0);
 }
 
 /// @function VM_LoadSound(path)
@@ -6743,6 +6754,7 @@ VM_RegisterFunction(global.__vm, VM_ResetShader);          // 160 — 恢复默�
 VM_RegisterFunction(global.__vm, VM_GetShaderUniform);     // 161 — 取内置 shader 的 uniform 句柄（shader_get_uniform），没找到返回 -1
 VM_RegisterFunction(global.__vm, VM_SetShaderUniformF);    // 162 — 设 float uniform（1~4 个值，最多一个 vec4）
 VM_RegisterFunction(global.__vm, VM_SetShaderUniformI);    // 163 — 设 int uniform（1~4 个值，最多一个 ivec4）
+VM_RegisterFunction(global.__vm, VM_SetSoundVolume);       // 164 — 设置播放实例音量（id=VM_PlaySound 返回的播放实例 ID，-1 不动；0=静音 1=原音量，可 >1 放大）
 ds_map_add(global._VM_remote_funcs, "VM_SwapPlants", VM_SwapPlants);
 ds_map_add(global._VM_remote_funcs, "VM_SwapPlantRects", VM_SwapPlantRects);
 ds_map_add(global._VM_remote_funcs, "VM_CompactColumn", VM_CompactColumn);
