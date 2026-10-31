@@ -46,6 +46,8 @@ depth_group = 0  // 0=前景, 1=中景, 2=背景
 
 // ========== 动画控制 ==========
 image_speed = 0
+image_xscale = 1.8
+image_yscale = 1.8
 flash_speed = 6
 attack_anim = 0
 banding_star_obj = noone
