@@ -6469,6 +6469,114 @@ function VM_FixedBulletAdd(spr_addr, x_addr, y_addr, dmg_addr, radius_addr, targ
                             vm_arg(spawn_x_addr), vm_arg(spawn_y_addr), vm_arg(spd_addr));
 }
 
+/// @function VM_SetShader(shader名)
+/// @desc 按名字启用工程内置 shader（asset_get_index 查名字；mod 不能自带 shader，只能点内置的）。
+///       名字没找到 = 保持当前 shader 不动。返回 1=已设置 0=没找到
+function VM_SetShader(name_addr) {
+    var _name = vm_arg(name_addr);
+    if (!is_string(_name) || _name == "") return 0;
+    var _idx = asset_get_index(_name);
+    if (_idx == -1) return 0;
+    shader_set(_idx);
+    return 1;
+}
+
+/// @function VM_ResetShader()
+/// @desc 恢复默认 shader（= shader_reset()），返回 1
+function VM_ResetShader() {
+    shader_reset();
+    return 1;
+}
+
+/// @function vm_mod_click_execute(inst)
+/// @desc 执行 mod 实例的 _OBJECT_CLICK 块：按实例类别找 VM（卡/敌人/武器/宝石走各自全局表，子弹/特效走 _mod_vm）。
+///       块不存在返回 0，执行了返回 1。执行期间切 global.__vm / _VM_cur_card（同各 mod 对象 Mouse_4 的套路）。
+///       供两类入口调用：单例按下模式关时各对象 Mouse_4 立即执行；开时 obj_battle End Step 帧末统一触发
+function vm_mod_click_execute(inst) {
+    var _vm = noone;
+    if (variable_struct_exists(inst, "plant_id") && inst.plant_id != "" &&
+        variable_global_exists("mod_card_vms") && ds_map_exists(global.mod_card_vms, inst.plant_id)) {
+        _vm = global.mod_card_vms[? inst.plant_id];
+    } else if (variable_struct_exists(inst, "enemy_id") && inst.enemy_id != "" &&
+        variable_global_exists("mod_enemy_vms") && ds_map_exists(global.mod_enemy_vms, inst.enemy_id)) {
+        _vm = global.mod_enemy_vms[? inst.enemy_id];
+    } else if (variable_struct_exists(inst, "weapon_id") && inst.weapon_id != "" &&
+        variable_global_exists("mod_weapon_vms") && ds_map_exists(global.mod_weapon_vms, inst.weapon_id)) {
+        _vm = global.mod_weapon_vms[? inst.weapon_id];
+    } else if (variable_struct_exists(inst, "gem_id") && inst.gem_id != "" &&
+        variable_global_exists("mod_gem_vms") && ds_map_exists(global.mod_gem_vms, inst.gem_id)) {
+        _vm = global.mod_gem_vms[? inst.gem_id];
+    } else if (variable_struct_exists(inst, "_mod_initialized") && inst._mod_initialized &&
+        variable_struct_exists(inst, "_mod_vm")) {
+        _vm = inst._mod_vm;
+    }
+    if (_vm == noone || !ds_map_exists(_vm.blocks, "_OBJECT_CLICK")) return 0;
+    var _bak_cur = global._VM_cur_card;
+    global._VM_cur_card = inst;
+    var _bak_vm = global.__vm;
+    global.__vm = _vm;
+    VM_Execute(_vm, _vm.blocks[? "_OBJECT_CLICK"], "_OBJECT_CLICK");
+    global.__vm = _bak_vm;
+    global._VM_cur_card = _bak_cur;
+    return 1;
+}
+
+/// @function VM_GetShaderUniform(shader名, uniform名)
+/// @desc 取工程内置 shader 的 uniform 句柄（shader_get_uniform），配合 VM_SetShaderUniformF/I 设值。
+///       shader 或 uniform 没找到返回 -1
+function VM_GetShaderUniform(shader_name_addr, uniform_name_addr) {
+    var _sn = vm_arg(shader_name_addr);
+    var _un = vm_arg(uniform_name_addr);
+    if (!is_string(_sn) || !is_string(_un) || _sn == "" || _un == "") return -1;
+    var _idx = asset_get_index(_sn);
+    if (_idx == -1) return -1;
+    return shader_get_uniform(_idx, _un);
+}
+
+/// @function VM_SetShaderUniformF(句柄, 值1, 值2, 值3, 值4)
+/// @desc 设 float uniform：句柄来自 VM_GetShaderUniform，一次 1~4 个值（最多一个 vec4）。
+///       句柄无效或没传值返回 0，成功返回 1
+function VM_SetShaderUniformF(handle_addr, v1_addr, v2_addr, v3_addr, v4_addr) {
+    var _h = vm_arg(handle_addr);
+    if (!is_real(_h)) return 0;
+    var _ac = argument_count;
+    var _vals = [vm_arg(v1_addr)];
+    if (_ac >= 3) array_push(_vals, vm_arg(v2_addr));
+    if (_ac >= 4) array_push(_vals, vm_arg(v3_addr));
+    if (_ac >= 5) array_push(_vals, vm_arg(v4_addr));
+    var _n = array_length(_vals);
+    switch (_n) {
+        case 1: shader_set_uniform_f(_h, _vals[0]); break;
+        case 2: shader_set_uniform_f(_h, _vals[0], _vals[1]); break;
+        case 3: shader_set_uniform_f(_h, _vals[0], _vals[1], _vals[2]); break;
+        case 4: shader_set_uniform_f(_h, _vals[0], _vals[1], _vals[2], _vals[3]); break;
+        default: return 0;
+    }
+    return 1;
+}
+
+/// @function VM_SetShaderUniformI(句柄, 值1, 值2, 值3, 值4)
+/// @desc 设 int uniform：句柄来自 VM_GetShaderUniform，一次 1~4 个值（最多一个 ivec4）。
+///       句柄无效或没传值返回 0，成功返回 1
+function VM_SetShaderUniformI(handle_addr, v1_addr, v2_addr, v3_addr, v4_addr) {
+    var _h = vm_arg(handle_addr);
+    if (!is_real(_h)) return 0;
+    var _ac = argument_count;
+    var _vals = [vm_arg(v1_addr)];
+    if (_ac >= 3) array_push(_vals, vm_arg(v2_addr));
+    if (_ac >= 4) array_push(_vals, vm_arg(v3_addr));
+    if (_ac >= 5) array_push(_vals, vm_arg(v4_addr));
+    var _n = array_length(_vals);
+    switch (_n) {
+        case 1: shader_set_uniform_i(_h, _vals[0]); break;
+        case 2: shader_set_uniform_i(_h, _vals[0], _vals[1]); break;
+        case 3: shader_set_uniform_i(_h, _vals[0], _vals[1], _vals[2]); break;
+        case 4: shader_set_uniform_i(_h, _vals[0], _vals[1], _vals[2], _vals[3]); break;
+        default: return 0;
+    }
+    return 1;
+}
+
 global.__vm = VM_Create();
 global.__vm.rng_state = 0x9E3779B9;   // VM随机种子：服务器生成并随bin同步，客户端收到后覆盖
 VM_RegisterFunction(global.__vm, VM_BanCard);         // 0
@@ -6630,6 +6738,11 @@ VM_RegisterFunction(global.__vm, VM_InsertCardSlot);       // 155 — 在第 i �
 VM_RegisterFunction(global.__vm, VM_SpawnCardSlot);        // 156 — 创建一个游离卡槽（卡id,x,y 像素坐标）：不进卡槽组/重排/21 上限，没有组内快捷键，返回实例 id
 VM_RegisterFunction(global.__vm, VM_GetInstancesInRangeN); // 157 — VM_GetInstancesInRange 限量版：最多收 n 个（n<=0 不限），列优先满 n 提前停
 VM_RegisterFunction(global.__vm, VM_FixedBulletAdd);       // 158 — 定点弹：固定位置播贴图动画，最后一帧结算（指定敌人/范围攻击，普通/爆炸伤害，可减速/冻住，销毁可生成对象）
+VM_RegisterFunction(global.__vm, VM_SetShader);            // 159 — 按名字启用内置 shader（asset_get_index 查名字），没找到保持当前不动
+VM_RegisterFunction(global.__vm, VM_ResetShader);          // 160 — 恢复默认 shader（shader_reset）
+VM_RegisterFunction(global.__vm, VM_GetShaderUniform);     // 161 — 取内置 shader 的 uniform 句柄（shader_get_uniform），没找到返回 -1
+VM_RegisterFunction(global.__vm, VM_SetShaderUniformF);    // 162 — 设 float uniform（1~4 个值，最多一个 vec4）
+VM_RegisterFunction(global.__vm, VM_SetShaderUniformI);    // 163 — 设 int uniform（1~4 个值，最多一个 ivec4）
 ds_map_add(global._VM_remote_funcs, "VM_SwapPlants", VM_SwapPlants);
 ds_map_add(global._VM_remote_funcs, "VM_SwapPlantRects", VM_SwapPlantRects);
 ds_map_add(global._VM_remote_funcs, "VM_CompactColumn", VM_CompactColumn);

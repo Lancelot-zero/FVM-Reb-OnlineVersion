@@ -29,6 +29,13 @@ global.current_seed = noone;
 global._VM_battle_start_done = false;
 // 波次自动推进开关：1=自动（默认）；0=关闭，由插件脚本用 VM_SetWave 完全控制波次
 global._VM_wave_auto = true;
+// mod 全局单例按下模式：true（默认）= 一帧多个 mod 对象被点中时，帧末只触发最上面那个的
+// _OBJECT_CLICK（obj_battle End Step 统一触发）；false = 各对象 Mouse_4 立即各自触发
+global._vm_mod_click_singleton = true;
+// 单例按下记录器：本帧被点中最上面的 mod 实例 id（noone = 还没有）
+global._vm_click_pick = noone;
+// 房间级覆盖开关：每次进房间重置为 undefined；有值（mod 用 VM_SetProp 设置）以它为准，没值用全局默认
+global._vm_room_click_singleton = undefined;
 // mod 全局：背后灵数量（每局战斗开始都重置为 0）
 global.mod_spirit_count = 0
 //   读写：GML 侧 global.mod_spirit_count；插件侧 VM_GetProp(0, "mod_spirit_count") /

@@ -209,3 +209,12 @@ if (battle_time mod 60 == 0 && buffer_exists(global._VM_TIMER_60f)) {
 }
 if (battle_time mod 60 == 0) vm_hook_run("_VM_TIMER_60f");
 //}
+// mod 全局单例按下：帧末触发本帧记录的最上面 mod 实例的 _OBJECT_CLICK
+// （实例已销毁 = 丢这次点击；记录器每帧在这里清空）
+if (global._vm_click_pick != noone) {
+	var _pick = global._vm_click_pick;
+	global._vm_click_pick = noone;
+	if (instance_exists(_pick)) {
+		vm_mod_click_execute(_pick);
+	}
+}

@@ -23,12 +23,21 @@ if (enemy_id != "" && variable_global_exists("mod_enemy_vms") && ds_map_exists(g
 //   ⚠️ 不能用 draw_sprite_ext(..., c_white, a)：c_white 是不上色，等于把贴图再画一遍（只是变半透明）
 // ══════════════════════════════════════════════════════════════════════
 if (mod_hover_mask == 1) {
-	// position_meeting 靠碰撞遮罩；贴图没有遮罩（运行期加载的图等）时用 bbox 兜底
-	var _hovered = position_meeting(mouse_x, mouse_y, id);
-	if (!_hovered) _hovered = point_in_rectangle(mouse_x, mouse_y, bbox_left, bbox_top, bbox_right, bbox_bottom);
-	if (_hovered) {
-		shader_set(hit_effect_2);
-		draw_sprite_ext(sprite_index, image_index, x, y, image_xscale, image_yscale, image_angle, c_white, mod_hover_alpha);
-		shader_reset();
+	if (global._vm_click_singleton_eff) {
+		// 单例模式：Step 末尾各实例自判（遮罩 + bbox 兜底），只有最上面那个进 global._vm_hover_pick，这里只画它
+		if (global._vm_hover_pick == id) {
+			shader_set(hit_effect_2);
+			draw_sprite_ext(sprite_index, image_index, x, y, image_xscale, image_yscale, image_angle, c_white, mod_hover_alpha);
+			shader_reset();
+		}
+	} else {
+		// 开关关：各实例自己算自己画（旧逻辑）
+		var _hovered = position_meeting(mouse_x, mouse_y, id);
+		if (!_hovered) _hovered = point_in_rectangle(mouse_x, mouse_y, bbox_left, bbox_top, bbox_right, bbox_bottom);
+		if (_hovered) {
+			shader_set(hit_effect_2);
+			draw_sprite_ext(sprite_index, image_index, x, y, image_xscale, image_yscale, image_angle, c_white, mod_hover_alpha);
+			shader_reset();
+		}
 	}
 }

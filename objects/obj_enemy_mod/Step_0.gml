@@ -131,3 +131,15 @@ for (var _run_k = 0; _run_k < _run_total; _run_k++) {
 	}
 }
 }
+
+
+// 单例 hover（开关 global._vm_click_singleton_eff 开着才走）：Step 末尾自判是否被鼠标压中
+// （position_meeting 靠遮罩，没遮罩用 bbox 兜底），只留最上面（depth 越小越靠上）的进
+// global._vm_hover_pick；Draw_0 里只有命中该值的实例画白色遮罩
+if (global._vm_click_singleton_eff && mod_hover_mask == 1) {
+	var _hovered = position_meeting(mouse_x, mouse_y, id);
+	if (!_hovered) _hovered = point_in_rectangle(mouse_x, mouse_y, bbox_left, bbox_top, bbox_right, bbox_bottom);
+	if (_hovered && (global._vm_hover_pick == noone || !instance_exists(global._vm_hover_pick) || global._vm_hover_pick.depth > depth)) {
+		global._vm_hover_pick = id;
+	}
+}

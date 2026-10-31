@@ -14,13 +14,14 @@ if (clickable) {
 if (gem_id != "" && variable_global_exists("mod_gem_vms") && ds_map_exists(global.mod_gem_vms, gem_id)) {
 	var _vm = global.mod_gem_vms[? gem_id];
 	if (ds_map_exists(_vm.blocks, "_OBJECT_CLICK")) {
-		var _bak_cur = global._VM_cur_card;
-		global._VM_cur_card = id;
-		var _bak_vm = global.__vm;
-		global.__vm = _vm;
-		VM_Execute(_vm, _vm.blocks[? "_OBJECT_CLICK"], "_OBJECT_CLICK");
-		global.__vm = _bak_vm;
-		global._VM_cur_card = _bak_cur;
+		if (global._vm_click_singleton_eff) {
+			// 全局单例按下模式：先不执行，只记录最上面的实例（depth 越小越靠上），帧末 obj_battle End Step 统一触发
+			if (global._vm_click_pick == noone || !instance_exists(global._vm_click_pick) || global._vm_click_pick.depth > depth) {
+				global._vm_click_pick = id;
+			}
+		} else {
+			vm_mod_click_execute(id);
+		}
 	}
 }
 event_inherited();

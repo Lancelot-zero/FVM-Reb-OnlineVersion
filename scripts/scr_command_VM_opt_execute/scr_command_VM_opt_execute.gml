@@ -160,6 +160,11 @@ global._vm_opt_run_funcs[18 + 155] = run_VM_InsertCardSlot;      // 155
 global._vm_opt_run_funcs[18 + 156] = run_VM_SpawnCardSlot;       // 156
 global._vm_opt_run_funcs[18 + 157] = run_VM_GetInstancesInRangeN; // 157
 global._vm_opt_run_funcs[18 + 158] = run_VM_FixedBulletAdd;       // 158
+global._vm_opt_run_funcs[18 + 159] = run_VM_SetShader;            // 159
+global._vm_opt_run_funcs[18 + 160] = run_VM_ResetShader;          // 160
+global._vm_opt_run_funcs[18 + 161] = run_VM_GetShaderUniform;     // 161
+global._vm_opt_run_funcs[18 + 162] = run_VM_SetShaderUniformF;    // 162
+global._vm_opt_run_funcs[18 + 163] = run_VM_SetShaderUniformI;    // 163
 
 // ══════════════════════════════════════════════════════════════════════════
 // VM_GetProp 的"内置变量专用版"（函数 id 200~208，见 VM_FID_GETPROPX）
@@ -5507,6 +5512,117 @@ function run_VM_FixedBulletAdd(vm, code, _ip) {
         return _ip;
     }
 
+    return _ip;
+}
+
+function run_VM_SetShader(vm, code, _ip) {
+    var opt_number = code[_ip]; _ip += 1;
+    var _mt = vm.mem_type;
+    var _mv = vm.mem_val;
+    var _dst = code[_ip]; _ip += 1;
+    var _base = _ip;
+    _ip += opt_number;
+
+    var _result = 0;
+    if (opt_number >= 1) {
+        var _name = run_vm_read_mem(vm, code[_base]);
+        if (is_string(_name) && _name != "") {
+            var _idx = asset_get_index(_name);
+            if (_idx != -1) {
+                shader_set(_idx);
+                _result = 1;
+            }
+        }
+    }
+    if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+    return _ip;
+}
+
+function run_VM_ResetShader(vm, code, _ip) {
+    var opt_number = code[_ip]; _ip += 1;
+    var _mt = vm.mem_type;
+    var _mv = vm.mem_val;
+    var _dst = code[_ip]; _ip += 1;
+    var _base = _ip;
+    _ip += opt_number;
+
+    shader_reset();
+    if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, 1);
+    return _ip;
+}
+
+function run_VM_GetShaderUniform(vm, code, _ip) {
+    var opt_number = code[_ip]; _ip += 1;
+    var _mt = vm.mem_type;
+    var _mv = vm.mem_val;
+    var _dst = code[_ip]; _ip += 1;
+    var _base = _ip;
+    _ip += opt_number;
+
+    var _result = -1;
+    if (opt_number >= 2) {
+        var _sn = run_vm_read_mem(vm, code[_base]);
+        var _un = run_vm_read_mem(vm, code[_base + 1]);
+        if (is_string(_sn) && is_string(_un) && _sn != "" && _un != "") {
+            var _idx = asset_get_index(_sn);
+            if (_idx != -1) {
+                _result = shader_get_uniform(_idx, _un);
+            }
+        }
+    }
+    if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+    return _ip;
+}
+
+function run_VM_SetShaderUniformF(vm, code, _ip) {
+    var opt_number = code[_ip]; _ip += 1;
+    var _mt = vm.mem_type;
+    var _mv = vm.mem_val;
+    var _dst = code[_ip]; _ip += 1;
+    var _base = _ip;
+    _ip += opt_number;
+
+    var _result = 0;
+    if (opt_number >= 2) {
+        var _h = run_vm_read_mem(vm, code[_base]);
+        if (is_real(_h)) {
+            var _n = clamp(opt_number - 1, 1, 4);
+            var _v0 = run_vm_read_mem(vm, code[_base + 1]);
+            switch (_n) {
+                case 1: shader_set_uniform_f(_h, _v0); _result = 1; break;
+                case 2: shader_set_uniform_f(_h, _v0, run_vm_read_mem(vm, code[_base + 2])); _result = 1; break;
+                case 3: shader_set_uniform_f(_h, _v0, run_vm_read_mem(vm, code[_base + 2]), run_vm_read_mem(vm, code[_base + 3])); _result = 1; break;
+                case 4: shader_set_uniform_f(_h, _v0, run_vm_read_mem(vm, code[_base + 2]), run_vm_read_mem(vm, code[_base + 3]), run_vm_read_mem(vm, code[_base + 4])); _result = 1; break;
+            }
+        }
+    }
+    if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+    return _ip;
+}
+
+function run_VM_SetShaderUniformI(vm, code, _ip) {
+    var opt_number = code[_ip]; _ip += 1;
+    var _mt = vm.mem_type;
+    var _mv = vm.mem_val;
+    var _dst = code[_ip]; _ip += 1;
+    var _base = _ip;
+    _ip += opt_number;
+
+    var _result = 0;
+    if (opt_number >= 2) {
+        var _h = run_vm_read_mem(vm, code[_base]);
+        if (is_real(_h)) {
+            var _n = clamp(opt_number - 1, 1, 4);
+            var _v0 = run_vm_read_mem(vm, code[_base + 1]);
+            switch (_n) {
+                case 1: shader_set_uniform_i(_h, _v0); _result = 1; break;
+                case 2: shader_set_uniform_i(_h, _v0, run_vm_read_mem(vm, code[_base + 2])); _result = 1; break;
+                case 3: shader_set_uniform_i(_h, _v0, run_vm_read_mem(vm, code[_base + 2]), run_vm_read_mem(vm, code[_base + 3])); _result = 1; break;
+                case 4: shader_set_uniform_i(_h, _v0, run_vm_read_mem(vm, code[_base + 2]), run_vm_read_mem(vm, code[_base + 3]), run_vm_read_mem(vm, code[_base + 4])); _result = 1; break;
+            }
+        }
+    }
+    if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
     return _ip;
 }
 
