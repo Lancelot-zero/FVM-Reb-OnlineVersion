@@ -26,10 +26,10 @@ if (_has_grid) {
     _has_left = variable_global_exists("enemy_array_left");
 }
 
-// 范围结算的公共段：闭包只建一次（每帧一颗，不在子弹循环里重建），
-// 捕获的 _b 在每次结算前重新赋值。
-var _b = undefined;
-var _enemy_in_range = function(_e) {
+// 范围结算的公共段：闭包只建一次（每帧一颗，不在子弹循环里重建）。
+// ⚠️ 子弹 _b 必须当参数传进来，不能靠闭包捕获——GML 闭包捕获 var 局部变量不可靠
+//    （error_log 里报过 "Variable _b not set before reading it"，就是这个原因崩的）。
+var _enemy_in_range = function(_b, _e) {
     if (!instance_exists(_e)) return;
     if (_e.hp <= 0) return;
     if ((_b.ttype & _e.tbit) == 0) return;
@@ -42,7 +42,7 @@ var _enemy_in_range = function(_e) {
 var _i = _len - 1;
 while (_i >= 0) {
 
-    _b = list[_i];
+    var _b = list[_i];
 
     // 1. 动画推进
     _b.frame += _b.anim_speed;
@@ -65,11 +65,15 @@ while (_i >= 0) {
     if (_b.frame >= _b.frames) {
         if (_b.dmg > 0) {
             // ── 独立攻击：指定了敌人 id → 只打这一个（先判断存活且 hp>0），不看半径/命中掩码 ──
-            if (_b.target_id != noone && instance_exists(_b.target_id) && _b.target_id.hp > 0) {
-                var _t = _b.target_id;
-                damage_enemy(_t, _b.dmg, _b.damage_type);
-                if (_b.freeze > 0 && _t.ice_ok && _t.ice_timer < _b.freeze) _t.ice_timer = _b.freeze;
-                if (_b.frozen > 0 && _t.ice_ok && _t.frozen_timer < _b.frozen) _t.frozen_timer = _b.frozen;
+            //    目标死了/没了就**直接跳过**，绝不能掉进下面的范围分支：
+            //    范围扫描是为"没指定目标"的子弹准备的（会扫到别的敌人，还触发过闭包报错崩溃）
+            if (_b.target_id != noone) {
+                if (instance_exists(_b.target_id) && _b.target_id.hp > 0) {
+                    var _t = _b.target_id;
+                    damage_enemy(_t, _b.dmg, _b.damage_type);
+                    if (_b.freeze > 0 && _t.ice_ok && _t.ice_timer < _b.freeze) _t.ice_timer = _b.freeze;
+                    if (_b.frozen > 0 && _t.ice_ok && _t.frozen_timer < _b.frozen) _t.frozen_timer = _b.frozen;
+                }
             }
             // ── 范围攻击：没指定敌人 → 扫半径覆盖的格子，所有可命中敌人各打一下 ──
             else if (_has_grid) {
@@ -88,7 +92,7 @@ while (_i >= 0) {
                     if (_c1 < 0 && _has_left) {
                         var _celll = global.enemy_array_left[_r];
                         var _cnl   = array_length(_celll);
-                        for (var _k = 0; _k < _cnl; _k++) _enemy_in_range(_celll[_k]);
+                        for (var _k = 0; _k < _cnl; _k++) _enemy_in_range(_b, _celll[_k]);
                     }
                     var _base = _r * _stride;
                     var _cs = _c1;  if (_cs < 0) _cs = 0;
@@ -96,7 +100,7 @@ while (_i >= 0) {
                     for (var _c = _cs; _c <= _ce; _c++) {
                         var _cell = global.enemy_array[_base + _c];
                         var _cn   = array_length(_cell);
-                        for (var _k = 0; _k < _cn; _k++) _enemy_in_range(_cell[_k]);
+                        for (var _k = 0; _k < _cn; _k++) _enemy_in_range(_b, _cell[_k]);
                     }
                 }
             }
