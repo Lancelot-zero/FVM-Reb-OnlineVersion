@@ -99,6 +99,8 @@ function on_create_room() {
     } else {
         VM_InitRoomEntry(undefined);
     }
+    // 单机：加载完就地释放这份地图 bin（服务器端还要拼包/发送，见下面的发送后释放）
+    if (global.network.mode != "server" && buffer_exists(_bin_buf)) buffer_delete(_bin_buf);
 
     // 本图 mod bin：<同名>.<类型>.<名称>.bin，扫出来逐个装载（单机/房主都走这里；
     // 卸载在进下一张图时 VM_InitRoomEntry 开头按清单自动做）

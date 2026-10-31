@@ -58,6 +58,8 @@ if on_click && obj_player_info_ui.menu_type == 0 && unlock{
 		} else {
 			VM_InitRoomEntry(undefined);
 		}
+		// 单机：加载完就地释放地图 bin（服务器端还要拼包发送，见发送后释放）
+		if (global.network.mode != "server" && buffer_exists(_bin_buf)) buffer_delete(_bin_buf);
 
 		var _lab_mods = lab_mod_scan(_json_path);
 		for (var _lm = 0; _lm < array_length(_lab_mods); _lm++) {
