@@ -1147,7 +1147,7 @@ VM_ArrayAdd(&quot;mod_sync&quot;, &quot;mod_phase&quot;)
 </tr>
 <tr>
 <td><code>VM_PlaySound(&quot;音效名&quot;)</code></td>
-<td>播放内置音效: <code>&quot;snd_place1&quot;</code> <code>&quot;snd_card_lift&quot;</code> 等</td>
+<td>播放声音：内置音效名（<code>&quot;snd_place1&quot;</code> 等）、本地音频路径（<code>&quot;xxx.ogg&quot;</code>/<code>&quot;xxx.wav&quot;</code>，自动加载），或 <code>VM_LoadSound</code> 返回的音频 ID</td>
 </tr>
 <tr>
 <td><code>VM_Floor(值)</code></td>
@@ -1887,7 +1887,7 @@ VM_ArrayAdd(&quot;mod_sync&quot;, &quot;mod_phase&quot;)
 <tbody><tr>
 <td><code>VM_LoadSound(&quot;路径&quot;)</code></td>
 <td>1个</td>
-<td>加载本地音频文件（只支持 wav），返回音频ID，失败返回 -1（暂时不能使用，等待修复）</td>
+<td>加载本地音频文件，返回音频ID，失败返回 -1。支持 <code>.ogg</code>（流式）和 <code>.wav</code>（PCM/浮点，位深·采样率·声道数任意，自动转成 16 位 ≤48000Hz 单/双声道）；路径相对地图 json 所在目录。离开房间时自动卸载</td>
 </tr>
 </tbody></table>
 <hr>

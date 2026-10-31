@@ -1986,8 +1986,15 @@ function run_VM_PlaySound(vm, code, _ip) {
     _ip += opt_number;
 
 	var _name = run_vm_read_mem(vm, code[_base+0]);
-	var _snd = asset_get_index(_name);
-	if (_snd == -1 && is_real(_name)) _snd = _name;   
+	// 字符串：内置音效名（snd_*）优先，查不到按本地音频路径加载（ogg/wav）
+	// 数字：VM_LoadSound 返回的音频 ID
+	var _snd = -1;
+	if (is_string(_name)) {
+		_snd = asset_get_index(_name);
+		if (_snd == -1) _snd = vm_audio_load(_name);
+	} else if (is_real(_name)) {
+		_snd = _name;
+	}
 	if (_snd != -1) audio_play_sound(_snd, 0, 0);
 
     return _ip;
@@ -3333,40 +3340,156 @@ function run_VM_LoadSound(vm, code, _ip) {
     _ip += opt_number;
 
 	var _path = run_vm_read_mem(vm, code[_base+0]);
-	if (ds_map_exists(global._audio_cache, _path)) {
-        var _result = global._audio_cache[? _path];
-        if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
-        return _ip;
-    }
-	
-	var _paths = [];
-	if (variable_global_exists("_file_cache_json_path")) {
-		var _prefix = global._file_cache_json_path;
-		if (!string_ends_with(_prefix, "/") && !string_ends_with(_prefix, "\\")) _prefix += "/";
-		array_push(_paths, _prefix + "../" + _path);
-	}
-	array_push(_paths, _path);
-	for (var _i = 0; _i < array_length(_paths); _i++) {
-		if (file_exists(_paths[_i])) {
-			var _aud = audio_create_stream(_paths[_i]);
-			if (_aud != -1) {
-				ds_map_add(global._audio_cache, _path, _aud);
-				global._audio_reverse[? _aud] = _path;   
-				{
-        var _result = _aud;
-        if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
-        return _ip;
-    }
-			}
-		}
-	}
-	{
-        var _result = -1;
-        if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
-        return _ip;
-    }
+	var _result = vm_audio_load(_path);
+    if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
 
     return _ip;
+}
+
+// ── VM 本地音效：ogg 走流、wav 走 buffer 音 ──────────────────────────────
+// 统一入口：名字 → 音频 id，带缓存（_VM_audio_cache）；加载失败 -1
+// 候选路径：地图 json 同目录（json 文件路径/../ 即其所在目录）→ 裸名（工作目录）
+function vm_audio_load(_name) {
+    if (ds_map_exists(global._VM_audio_cache, _name)) return global._VM_audio_cache[? _name];
+    var _paths = [];
+    if (variable_global_exists("_file_cache_json_path")) {
+        var _prefix = global._file_cache_json_path;
+        if (!string_ends_with(_prefix, "/") && !string_ends_with(_prefix, "\\")) _prefix += "/";
+        array_push(_paths, _prefix + "../" + _name);
+    }
+    array_push(_paths, _name);
+    for (var _i = 0; _i < array_length(_paths); _i++) {
+        if (!file_exists(_paths[_i])) continue;
+        var _snd = -1;
+        var _kind = "";
+        if (string_ends_with(string_lower(_paths[_i]), ".wav")) {
+            var _raw = buffer_load(_paths[_i]);
+            if (buffer_exists(_raw)) {
+                _snd = vm_audio_wav_to_sound(_raw);
+                buffer_delete(_raw);
+                _kind = "sound";
+            }
+        } else {
+            _snd = audio_create_stream(_paths[_i]);
+            _kind = "stream";
+        }
+        if (_snd == -1) continue;
+        global._VM_audio_cache[? _name] = _snd;
+        global._VM_audio_kind[? _snd] = _kind;
+        global._audio_reverse[? _snd] = _name;   // 注册名称，音量钩子按 sound 处理
+        return _snd;
+    }
+    return -1;
+}
+
+// wav → 音频 id：解析 RIFF 头。audio_create_buffer_sound 只认 buffer_fixed + 16 位以内 + ≤48kHz，
+// 不满足的规格走"慢路径"逐样本转换：位深压 16 位、多声道取前两声道、超 48k 最近邻降采样。
+// 声音引用这份拷贝，卸载时先 free 声音再删 buffer。
+function vm_audio_wav_to_sound(_raw) {
+    var _size = buffer_get_size(_raw);
+    if (_size < 44) return -1;
+    buffer_seek(_raw, buffer_seek_start, 0);
+    if (buffer_read(_raw, buffer_u32) != 0x46464952) return -1;   // "RIFF"
+    buffer_seek(_raw, buffer_seek_start, 8);
+    if (buffer_read(_raw, buffer_u32) != 0x45564157) return -1;   // "WAVE"
+    var _fmt = -1, _ch = 0, _rate = 0, _bits = 0;
+    var _data_off = -1, _data_len = 0;
+    buffer_seek(_raw, buffer_seek_start, 12);
+    while (buffer_tell(_raw) + 8 <= _size) {
+        var _id = buffer_read(_raw, buffer_u32);
+        var _sz = buffer_read(_raw, buffer_u32);
+        if (_id == 0x20746D66) {                                  // "fmt "
+            _fmt  = buffer_read(_raw, buffer_u16);
+            _ch   = buffer_read(_raw, buffer_u16);
+            _rate = buffer_read(_raw, buffer_u32);
+            buffer_seek(_raw, buffer_seek_relative, 6);           // 跳过 byte_rate + block_align
+            _bits = buffer_read(_raw, buffer_u16);
+            buffer_seek(_raw, buffer_seek_relative, _sz - 16);    // 跳过 fmt 块剩余
+        } else if (_id == 0x61746164) {                           // "data"
+            _data_off = buffer_tell(_raw);
+            _data_len = _sz;
+            break;
+        } else {
+            buffer_seek(_raw, buffer_seek_relative, _sz);
+        }
+    }
+    if (_data_off < 0 || _ch == 0 || _rate == 0 || _bits == 0) return -1;
+    if (_fmt != 1 && _fmt != 3) return -1;                        // 只收 PCM / IEEE float
+
+    // 输出规格：16 位有符号、单/双声道、采样率压进 8000~48000
+    var _out_rate = clamp(_rate, 8000, 48000);
+    var _out_ch = (_ch == 1) ? 1 : 2;
+
+    var _in_bytes;
+    if (_bits == 8) _in_bytes = 1;
+    else if (_bits == 16) _in_bytes = 2;
+    else if (_bits == 24) _in_bytes = 3;
+    else if (_bits == 32) _in_bytes = 4;
+    else _in_bytes = 8;                                           // 64 位 float
+
+    var _pcm;
+    var _snd;
+    // 快路径：PCM 8/16 位、声道和采样率都达标 → PCM 段原样拷贝
+    if (_fmt == 1 && (_bits == 8 || _bits == 16) && _ch == _out_ch && _rate == _out_rate) {
+        _pcm = buffer_create(_data_len, buffer_fixed, 1);
+        buffer_copy(_raw, _data_off, _data_len, _pcm, 0);
+        var _format = (_bits == 8) ? buffer_u8 : buffer_s16;
+        _snd = audio_create_buffer_sound(_pcm, _format, _out_rate, 0, _data_len, (_out_ch == 1) ? audio_mono : audio_stereo);
+    } else {
+        // 慢路径：逐样本转 16 位（首次加载一次性成本，之后走缓存）
+        var _frames = floor(_data_len / (_in_bytes * _ch));
+        var _out_frames = floor(_frames * _out_rate / _rate);
+        var _out_len = _out_frames * _out_ch * 2;
+        _pcm = buffer_create(_out_len, buffer_fixed, 2);
+        var _step = _rate / _out_rate;                            // ≥1：降采样取最近邻
+        for (var _f = 0; _f < _out_frames; _f++) {
+            var _src = floor(_f * _step);
+            buffer_seek(_raw, buffer_seek_start, _data_off + _src * _in_bytes * _ch);
+            for (var _c = 0; _c < _out_ch; _c++) {
+                var _s16 = 0;
+                if (_fmt == 3) {
+                    var _fv = (_bits == 32) ? buffer_read(_raw, buffer_f32) : buffer_read(_raw, buffer_f64);
+                    _s16 = clamp(_fv, -1, 1) * 32767;
+                } else if (_bits == 8) {
+                    _s16 = (buffer_read(_raw, buffer_u8) - 128) * 256;
+                } else if (_bits == 16) {
+                    _s16 = buffer_read(_raw, buffer_s16);
+                } else if (_bits == 24) {
+                    var _v = buffer_read(_raw, buffer_u8) | (buffer_read(_raw, buffer_u8) << 8) | (buffer_read(_raw, buffer_u8) << 16);
+                    if (_v >= 8388608) _v -= 16777216;            // 符号扩展
+                    _s16 = _v / 256;
+                } else {
+                    _s16 = buffer_read(_raw, buffer_s32) / 65536;
+                }
+                buffer_write(_pcm, buffer_s16, _s16);
+            }
+        }
+        _snd = audio_create_buffer_sound(_pcm, buffer_s16, _out_rate, 0, _out_len, (_out_ch == 1) ? audio_mono : audio_stereo);
+    }
+    if (_snd == -1) { buffer_delete(_pcm); return -1; }
+    global._VM_audio_buf[? _snd] = _pcm;
+    return _snd;
+}
+
+// 离开房间：卸载 VM_LoadSound 载入的全部音频（音乐走 _audio_cache，不在这里动）
+function vm_audio_unload_all() {
+    if (!variable_global_exists("_VM_audio_cache")) return;
+    var _keys = ds_map_keys_to_array(global._VM_audio_cache);
+    for (var _i = 0; _i < array_length(_keys); _i++) {
+        var _aid = global._VM_audio_cache[? _keys[_i]];
+        if (ds_map_exists(global._VM_audio_kind, _aid)) {
+            if (global._VM_audio_kind[? _aid] == "sound") {
+                audio_free_buffer_sound(_aid);                    // 先 free 声音，再删它引用的缓冲
+                if (ds_map_exists(global._VM_audio_buf, _aid)) buffer_delete(global._VM_audio_buf[? _aid]);
+            } else {
+                audio_destroy_stream(_aid);
+            }
+        }
+        ds_map_delete(global._audio_reverse, _aid);
+    }
+    ds_map_clear(global._VM_audio_cache);
+    ds_map_clear(global._VM_audio_kind);
+    ds_map_clear(global._VM_audio_buf);
 }
 
 

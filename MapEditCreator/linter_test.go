@@ -692,7 +692,6 @@ func TestTypeCheck(t *testing.T) {
 	}{
 		{"_VM_BATTLE_START {\n    VM_SetFlame(\"x\")\n}\n", "应为 int，得到 string"},
 		{"_VM_BATTLE_START {\n    VM_SetFlame(1.5)\n}\n", "应为 int，得到 float"},
-		{"_VM_BATTLE_START {\n    VM_PlaySound(1)\n}\n", "应为 string，得到 int"},
 		{"_VM_BATTLE_START {\n    VM_ClearMapObjects(0, 0, 123)\n}\n", "应为 string，得到 int"},
 		// SpawnPlantsRandom 卡片槽位是 string 类型（编译器实测数字 -1 会报错）
 		{"_VM_BATTLE_START {\n    VM_SpawnPlantsRandom(0,0,1,1,0,0,0, \"small_fire\", -1,-1,-1,-1,-1,-1,-1,-1)\n}\n", "应为 string，得到 int"},
@@ -710,6 +709,8 @@ func TestTypeCheck(t *testing.T) {
     VM_SpawnPlantsRandom(0,0,1,1,0,0,0, "small_fire", "-1","-1","-1","-1","-1","-1","-1","-1")
     id = VM_GetLastCreatedCard()
     VM_SetProp(id, "atk", VM_GetProp(id, "atk") * 2)
+    VM_PlaySound("snd_place1")
+    VM_PlaySound(1)
 }
 `
 	for _, d := range lintScript(ok) {

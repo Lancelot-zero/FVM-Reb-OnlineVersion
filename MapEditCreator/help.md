@@ -423,7 +423,7 @@ _VM_BATTLE_START {
 |---|---|
 | `VM_Random(min, max)` | 随机整数 [min, max] |
 | `VM_SetFlame(数量)` | 设置火苗数 |
-| `VM_PlaySound("音效名")` | 播放内置音效: `"snd_place1"` `"snd_card_lift"` 等 |
+| `VM_PlaySound("音效名")` | 播放声音：内置音效名（`"snd_place1"` 等）、本地音频路径（`"xxx.ogg"`/`"xxx.wav"`，自动加载），或 `VM_LoadSound` 返回的音频 ID |
 | `VM_Floor(值)` | 对数字向下取整，非数字返回 undefined |
 | `VM_Ceil(值)` | 对数字向上取整，非数字返回 undefined |
 | `VM_GetTimeLimit()` | 获取关卡倒计时剩余帧数，无倒计时返回 undefined , 60 帧为1s|
@@ -705,7 +705,7 @@ lab 图自己的 bin 可以不属于以上任何类型：不带注册类型的 b
 
 | 函数 | 参数 / 返回 | 说明 |
 |---|---|---|
-| `VM_LoadSound("路径")` | 1个 | 加载本地音频文件（只支持 wav），返回音频ID，失败返回 -1（暂时不能使用，等待修复） |
+| `VM_LoadSound("路径")` | 1个 | 加载本地音频文件，返回音频ID，失败返回 -1。支持 `.ogg`（流式）和 `.wav`（PCM/浮点，位深·采样率·声道数任意，自动转成 16 位 ≤48000Hz 单/双声道）；路径相对地图 json 所在目录。离开房间时自动卸载 |
 
 ---
 

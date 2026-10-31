@@ -292,7 +292,7 @@ if (wave == 0) {
 |---|---|
 | `VM_Random(min, max)` | 随机整数 [min, max] |
 | `VM_SetFlame(数量)` | 设置火苗数 |
-| `VM_PlaySound("音效名")` | 播放内置音效: `"snd_place1"` `"snd_card_lift"` 等 |
+| `VM_PlaySound("音效名")` | 播放声音：内置音效名（`"snd_place1"` 等）、本地音频路径（`"xxx.ogg"`/`"xxx.wav"`，自动加载），或 `VM_LoadSound` 返回的音频 ID |
 | `VM_SetEventEnabled(0或1)` | 事件系统开关，默认 1 |
 | `VM_GameWin()` | 触发胜利 |
 | `VM_GameLose()` | 触发失败 |

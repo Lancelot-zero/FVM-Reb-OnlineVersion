@@ -265,7 +265,7 @@ static std::vector<FuncDef> FUNC_DEFS = {
     {"VM_GetEnemyCount",         0},                                                  // 52
     {"VM_GetPlantCount",         0},                                                  // 53
     {"VM_GetPlantCountAt",       3,  {PT_INT, PT_INT, PT_STRING}},                    // 54
-    {"VM_PlaySound",             1,  {PT_STRING}},                                    // 55
+    {"VM_PlaySound",             1,  {PT_ANY}},                                      // 55 — 音效名 / 本地音频路径 / 音频ID
     {"VM_GetPlantAt",            3,  {PT_INT, PT_INT, PT_STRING}},                   // 56
     {"VM_SwapPlants",            4,  {PT_INT, PT_INT, PT_INT, PT_INT}},              // 57
     {"VM_SwapPlantRects",        6,  {PT_INT, PT_INT, PT_INT, PT_INT, PT_INT, PT_INT}}, // 58

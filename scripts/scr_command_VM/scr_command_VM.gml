@@ -1030,6 +1030,10 @@ function VM_SetPlatformParams(plat_id_addr, axis_addr, distance_addr, idle_addr,
     vm_inst_broadcast_prop(_plat, "boundary_idle_duration", _plat.boundary_idle_duration);
     vm_inst_broadcast_prop(_plat, "move_distance", _plat.move_distance);
     vm_inst_broadcast_prop(_plat, "move_axis", _plat.move_axis);
+    // 「以当前位置为新起点」这三格也得发，不然客机原点还停在旧的格子上，会差一个 current_offset
+    vm_inst_broadcast_prop(_plat, "start_col", _plat.start_col);
+    vm_inst_broadcast_prop(_plat, "start_row", _plat.start_row);
+    vm_inst_broadcast_prop(_plat, "current_offset", _plat.current_offset);
 }
 
 /// @function VM_RefreshPlatformSnapshots()
@@ -1986,39 +1990,27 @@ function VM_GetCardSlotCount() {
 }
 
 /// @function VM_PlaySound(name)
-/// @param name 内置音效名 (如 "snd_place1")，也支持 VM_LoadSound 返回的音频 ID
+/// @param name 内置音效名 (如 "snd_place1")、本地音频路径 ("xxx.ogg"/"xxx.wav")，或 VM_LoadSound 返回的音频 ID
 function VM_PlaySound(name_addr) {
 	var _name = vm_arg(name_addr);
-	var _snd = asset_get_index(_name);
-	if (_snd == -1 && is_real(_name)) _snd = _name;   // 本地加载的音频 ID
+	// 字符串：内置音效名（snd_*）优先，查不到按本地音频路径加载（ogg/wav）
+	// 数字：VM_LoadSound 返回的音频 ID
+	var _snd = -1;
+	if (is_string(_name)) {
+		_snd = asset_get_index(_name);
+		if (_snd == -1) _snd = vm_audio_load(_name);
+	} else if (is_real(_name)) {
+		_snd = _name;
+	}
 	if (_snd != -1) audio_play_sound(_snd, 0, 0);
 }
 
 /// @function VM_LoadSound(path)
-/// @param path 本地音频文件路径，只支持 wav（相对地图 json 所在目录，如 "xxx.wav"）
-/// @return 音频 ID，加载失败返回 -1
+/// @param path 本地音频文件路径，支持 ogg（流式）和 wav（PCM 8/16 位，缓冲音）；相对地图 json 所在目录，如 "xxx.wav"
+/// @return 音频 ID，加载失败返回 -1；离开房间时自动卸载
 function VM_LoadSound(path_addr) {
 	var _path = vm_arg(path_addr);
-	if (ds_map_exists(global._audio_cache, _path)) return global._audio_cache[? _path];
-	// 与读贴图相同：优先 _file_cache_json_path/../ 下查找，回退原始相对路径
-	var _paths = [];
-	if (variable_global_exists("_file_cache_json_path")) {
-		var _prefix = global._file_cache_json_path;
-		if (!string_ends_with(_prefix, "/") && !string_ends_with(_prefix, "\\")) _prefix += "/";
-		array_push(_paths, _prefix + "../" + _path);
-	}
-	array_push(_paths, _path);
-	for (var _i = 0; _i < array_length(_paths); _i++) {
-		if (file_exists(_paths[_i])) {
-			var _aud = audio_create_stream(_paths[_i]);
-			if (_aud != -1) {
-				ds_map_add(global._audio_cache, _path, _aud);
-				global._audio_reverse[? _aud] = _path;   // 注册名称，音量钩子按 sound 处理
-				return _aud;
-			}
-		}
-	}
-	return -1;
+	return vm_audio_load(_path);
 }
 
 /// @function VM_Floor(value)
@@ -6542,6 +6534,8 @@ function VM_InitRoomEntry(buf) {
         if (sprite_exists(_spr)) { sprite_delete(_spr); ds_map_delete(global._pid_reverse, _spr); }
     }
     ds_map_clear(global._VM_sprite_temp_cache);
+    // 释放 VM 加载的本地音效（音乐走 _audio_cache，不受影响）
+    vm_audio_unload_all();
     global._VM_loaded_sprite_indices = [];
     global._VM_hook_queue = [];
     ds_map_clear(global._VM_dead_snaps);

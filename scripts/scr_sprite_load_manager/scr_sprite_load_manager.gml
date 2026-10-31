@@ -13,6 +13,9 @@ global._sprite_state = ds_map_create();		// name → state
 global._pending_map=ds_map_create();	// 等待队列
 global._audio_cache = ds_map_create();  // name → audio id
 global._audio_reverse = ds_map_create(); // audio id → name
+global._VM_audio_cache = ds_map_create();  // VM_LoadSound: name → audio id（音乐不在这，离房清空）
+global._VM_audio_kind  = ds_map_create();  // audio id → "stream" | "sound"
+global._VM_audio_buf   = ds_map_create();  // audio id → wav 缓冲（仅 "sound"）
 
 global._project_root = ""
 
