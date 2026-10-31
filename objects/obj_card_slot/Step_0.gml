@@ -70,6 +70,9 @@ if (is_hovered) {
 }
 
 // 检测鼠标点击（选中卡槽）
+// 这一次 Step 里"刚被选中"的标记：同一次左键按下不能既选卡又放卡
+//   （游离卡槽可能摆在地图格子上，不挡这一下就会直接种下去）
+var _just_selected = false;
 if (is_ready && mouse_check_button_pressed(mb_left)) {
     mx = mouse_x;
     my = mouse_y;
@@ -77,6 +80,7 @@ if (is_ready && mouse_check_button_pressed(mb_left)) {
     if (point_in_rectangle(mx, my, x-50, y-70, x+50, y+70)) {
 		
         select_slot()
+        _just_selected = true
         
         // 创建放置预览对象
         if (selected_preview == noone) {
@@ -151,8 +155,8 @@ if (is_selected) {
         global.selected_slot = noone;
     }
     
-    // 左键尝试放置植物
-    if (mouse_check_button_pressed(mb_left)) {
+    // 左键尝试放置植物（选卡那一下不种，松开再点才种）
+    if (!_just_selected && mouse_check_button_pressed(mb_left)) {
         // 检查是否在可种植区域
 		
         var card_shape = get_card_info_simple(card_id).shape

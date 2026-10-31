@@ -50,4 +50,8 @@ function create_battle_slots() {
 		//show_debug_message("植物卡槽已生成，id：" + inst.card_id)
         n++
     }
+
+	// 卡槽数量 → 长条宽度(obj_flame_manager 按它画) + 铲子位置
+	global.battle_slot_count = n;
+	battle_slots_place_shovel();
 }

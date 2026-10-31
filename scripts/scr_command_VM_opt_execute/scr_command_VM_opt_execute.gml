@@ -5779,6 +5779,26 @@ function run_VM_RemoveCardSlot(vm, code, _ip) {
     if (opt_number >= 1) {
         var _i = run_vm_read_mem(vm, code[_base]);
         if (is_real(_i)) {
+            // -1 = 删除全部战斗卡槽（只删组内槽，游离卡槽不动）
+            if (_i == -1) {
+                var _all = [];
+                with (obj_card_slot) { if (slot_grouped) array_push(_all, id); }
+                if (array_length(_all) > 0) {
+                    // 正在选中的槽也被一起删：先取消选中、销毁预览
+                    if (global.selected_slot != noone && instance_exists(global.selected_slot)) {
+                        var _pre0 = global.selected_slot.selected_preview;
+                        if (instance_exists(_pre0)) instance_destroy(_pre0);
+                        global.selected_slot.selected_preview = noone;
+                        global.selected_slot.is_selected = false;
+                        global.selected_slot = noone;
+                    }
+                    for (var _k = 0; _k < array_length(_all); _k++) {
+                        if (instance_exists(_all[_k])) instance_destroy(_all[_k]);
+                    }
+                    battle_slots_relayout();
+                    _result = 0;
+                }
+            } else {
             var _target = noone;
             with (obj_card_slot) {
                 if (slot_grouped && slot_index == _i + 1) _target = id;
@@ -5795,6 +5815,7 @@ function run_VM_RemoveCardSlot(vm, code, _ip) {
                 instance_destroy(_target);
                 battle_slots_relayout();
                 _result = 0;
+            }
             }
         }
     }

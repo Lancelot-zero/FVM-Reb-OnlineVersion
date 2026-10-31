@@ -4980,6 +4980,41 @@ function battle_slots_relayout(order) {
 		for (var k = 0; k < n; k++) if (instance_exists(slots[k])) array_push(arr, slots[k]);
 		global._VM_conveyor_belt_arr = arr;
 	}
+	// 布局变了 → 卡槽数量记下来，并重摆铲子（长条/侧边在 obj_flame_manager 里按这个数每帧画）
+	global.battle_slot_count = n;
+	battle_slots_place_shovel();
+}
+
+/// @function battle_slots_place_shovel()
+/// @desc 按当前卡槽数量（global.battle_slot_count）摆放铲子：没有就建，有就挪过去
+///       只在 create_battle_slots / battle_slots_relayout 之后调用
+function battle_slots_place_shovel() {
+	var n = variable_global_exists("battle_slot_count") ? real(global.battle_slot_count) : deck_slot_count();
+	if (n < 1) n = 1;
+
+	var _sx, _sy, _idx;
+	if (global._VM_conveyor_belt) {
+		_sx  = 350 + 83 * 1.8 + 80 + 90 * (14 - 1);
+		_sy  = 0;
+		_idx = 1;
+	} else if (n <= 14) {
+		_sx  = 350 + 83 * 1.8 + 80 + 90 * (n - 1);
+		_sy  = 0;
+		_idx = 0;
+	} else {
+		_sx  = 350 + 83 * 1.8 + 80 + 90 * (14 - 1) - 33;
+		_sy  = 118 * (n - 14) + 17;
+		_idx = 1;
+	}
+
+	if (!instance_exists(obj_shovel_slot)) {
+		var _s = instance_create_depth(_sx, _sy, -980, obj_shovel_slot);
+		if (instance_exists(_s)) _s.image_index = _idx;
+	} else {
+		obj_shovel_slot.x = _sx;
+		obj_shovel_slot.y = _sy;
+		obj_shovel_slot.image_index = _idx;
+	}
 }
 
 /// @function VM_RemoveCardSlot(i_addr)
@@ -4989,6 +5024,27 @@ function battle_slots_relayout(order) {
 function VM_RemoveCardSlot(i_addr) {
 	var _i = vm_arg(i_addr);
 	if (!is_real(_i)) return -1;
+
+	// -1 = 删除全部战斗卡槽（只删组内槽，游离卡槽不动）
+	if (_i == -1) {
+		var _all = [];
+		with (obj_card_slot) { if (slot_grouped) array_push(_all, id); }
+		if (array_length(_all) == 0) return -1;
+		// 正在选中的槽也被一起删：先取消选中、销毁预览
+		if (global.selected_slot != noone && instance_exists(global.selected_slot)) {
+			var _pre0 = global.selected_slot.selected_preview;
+			if (instance_exists(_pre0)) instance_destroy(_pre0);
+			global.selected_slot.selected_preview = noone;
+			global.selected_slot.is_selected = false;
+			global.selected_slot = noone;
+		}
+		for (var _k = 0; _k < array_length(_all); _k++) {
+			if (instance_exists(_all[_k])) instance_destroy(_all[_k]);
+		}
+		battle_slots_relayout();
+		return 0;
+	}
+
 	var _target = noone;
 	with (obj_card_slot) {
 		if (slot_grouped && slot_index == _i + 1) _target = id;

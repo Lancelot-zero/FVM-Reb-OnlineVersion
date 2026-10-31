@@ -45,7 +45,26 @@ if on_click && obj_player_info_ui.menu_type == 0 && unlock{
 		global.level_data_index = level_index
 		show_debug_message(global.level_data)
 		
-		VM_InitRoomEntry(undefined);
+		// ── 本图 bin：与实验室地图同一套规则 ──────────────────────────
+		//   ① 同名 .bin（地图 bin）有就读
+		//   ② 同目录 <json名>.<类型>.<名称>.bin 逐个装载（lab_mod_scan）
+		var _json_path = _file_path;
+		global._file_cache_json_path = _json_path;
+		var _bin_path = string_replace(_json_path, ".json", ".bin");
+		var _bin_buf = undefined;
+		if (file_exists(_bin_path)) {
+			_bin_buf = buffer_load(_bin_path);
+			VM_InitRoomEntry(_bin_buf);
+		} else {
+			VM_InitRoomEntry(undefined);
+		}
+
+		var _lab_mods = lab_mod_scan(_json_path);
+		for (var _lm = 0; _lm < array_length(_lab_mods); _lm++) {
+			if (file_exists(_lab_mods[_lm].path)) {
+				lab_mod_load_bin(buffer_load(_lab_mods[_lm].path), _lab_mods[_lm].type, _lab_mods[_lm].name);
+			}
+		}
 		if(global.network.mode == "server"){
 		var _ld_send = variable_clone(global.level_data);
 		var _rev = global._audio_reverse;
@@ -74,12 +93,49 @@ if on_click && obj_player_info_ui.menu_type == 0 && unlock{
 				"level_file": global.level_file
 			};
 
+			// 拼包：地图 bin 在前、mod bin 按装载顺序跟后；json 带 vm_bins 清单
+			//   （与实验室地图完全同一套协议；没有 mod bin 时 _send_buf 就是地图 bin 本身）
+			var _send_buf = _bin_buf;
+			var _vm_bins = [];
+			var _lab_lst = lab_mod_vm_list();
+			var _pack_n = 0;
+			for (var _lp0 = 0; _lp0 < array_length(_lab_lst); _lp0++) {
+				if (buffer_exists(_lab_lst[_lp0].buf)) _pack_n++;
+			}
+			if (_pack_n > 0) {
+				var _map_size = buffer_exists(_bin_buf) ? buffer_get_size(_bin_buf) : 0;
+				var _total = _map_size;
+				for (var _lp2 = 0; _lp2 < array_length(_lab_lst); _lp2++) {
+					if (buffer_exists(_lab_lst[_lp2].buf)) _total += buffer_get_size(_lab_lst[_lp2].buf);
+				}
+				_send_buf = buffer_create(_total, buffer_fixed, 1);
+				var _off = 0;
+				if (_map_size > 0) {
+					buffer_copy(_bin_buf, 0, _map_size, _send_buf, 0);
+					_off = _map_size;
+					_vm_bins[array_length(_vm_bins)] = { type: "map", name: "", size: _map_size };
+				}
+				for (var _lp3 = 0; _lp3 < array_length(_lab_lst); _lp3++) {
+					var _b3 = _lab_lst[_lp3].buf;
+					if (!buffer_exists(_b3)) continue;
+					var _sz3 = buffer_get_size(_b3);
+					buffer_seek(_b3, buffer_seek_start, 0);
+					buffer_copy(_b3, 0, _sz3, _send_buf, _off);
+					_off += _sz3;
+					_vm_bins[array_length(_vm_bins)] = { type: _lab_lst[_lp3].type, name: _lab_lst[_lp3].name, size: _sz3 };
+				}
+				json_struct[$ "vm_bins"] = _vm_bins;
+				if (buffer_exists(_bin_buf)) buffer_delete(_bin_buf);
+			}
+			global._sync_vm_bins = (array_length(_vm_bins) > 0) ? _vm_bins : undefined;
+			global._sync_vm_bin_buf = _send_buf;
+
 			var json_str = json_stringify(json_struct);
 			var _list = global.network.connected_clients;
 			var _size = array_length(_list);
 			for (var i = 0; i < _size; i++) {
 				var _socket = _list[i];
-				send_message(_socket, MSG_ENTER_ROOM_READY,json_str);
+				send_message(_socket, MSG_ENTER_ROOM_READY, json_str, _send_buf);
 			}
 		}
 		

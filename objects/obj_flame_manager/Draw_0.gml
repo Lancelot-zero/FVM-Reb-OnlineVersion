@@ -10,30 +10,26 @@ if(global._VM_conveyor_belt){
 	
 	draw_sprite_ext(spr_flame_indicator, 0, 350, 0, 0.9, 0.9, 0, c_white, 1)
 	draw_sprite_ext(spr_slot_top,0,350+83*1.8,0,65+45*(15-1),1.8,0,c_white,1)
-	if not instance_exists(obj_shovel_slot){
-		instance_create_depth(350+83*1.8+80+90*(14-1),0,-980,obj_shovel_slot)
-	}
+	if not instance_exists(obj_shovel_slot) battle_slots_place_shovel()
 	
 }
 else{
 	draw_sprite_ext(spr_flame_indicator, 0, 350, 0, 0.9, 0.9, 0, c_white, 1)
 
-	var slot_length = deck_slot_count()
+	// 卡槽数量：只由 create_battle_slots / battle_slots_relayout 更新（插槽、删槽后刷新）
+	//   这里只读，不自己算 —— 否则插槽/删槽后长条和铲子不会跟着变
+	var slot_length = variable_global_exists("battle_slot_count") ? real(global.battle_slot_count) : deck_slot_count()
+	if slot_length < 1 slot_length = 1
 	//show_debug_message("slot_length:"+string(slot_length))
 	if slot_length <= 14{
 		draw_sprite_ext(spr_slot_top,0,350+83*1.8,0,40+45*(slot_length-1),1.8,0,c_white,1)
-		if not instance_exists(obj_shovel_slot){
-			instance_create_depth(350+83*1.8+80+90*(slot_length-1),0,-980,obj_shovel_slot)
-		}
 	}
 	else{
 		draw_sprite_ext(spr_slot_top,0,350+83*1.8,0,40+45*(15-1),1.8,0,c_white,1)
 		draw_sprite_ext(spr_slot_corner, 0, 350+83*1.8+80+90*(15-1), 0, 0.9, 0.9, 0, c_white, 1)
 		draw_sprite_ext(spr_slot_right,0,350+83*1.8+80+90*(15-1)-1,18*1.8,0.9,59*(slot_length-14),0,c_white,1)
-		if not instance_exists(obj_shovel_slot){
-			instance_create_depth(350+83*1.8+80+90*(14-1)-33,118*(slot_length-14)+17,-980,obj_shovel_slot)
-		}
 	}
+	if not instance_exists(obj_shovel_slot) battle_slots_place_shovel()
 	draw_set_halign(fa_center)
 	draw_set_valign(fa_middle)
 	draw_set_font(font_hei)
