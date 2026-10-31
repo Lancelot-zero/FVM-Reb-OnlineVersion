@@ -6,8 +6,10 @@
 	var _y = y;
 
 	with (obj_enemy_parent) {
-		
-			if (grid_row == other.grid_row||(abs(x - other.x) <= 100 && other.shape >= 2)) {
+		// 友化敌人不算敌人：跳过，不结算伤害
+		if (variable_instance_exists(id, "is_friend") && is_friend) continue
+
+		if (grid_row == other.grid_row||(abs(x - other.x) <= 100 && other.shape >= 2)) {
 				if mouse_id == "ice_residue"{
 					if shape == "ice" && state == BOSS_STATE.SKILL2{
 						timer = 0

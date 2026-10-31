@@ -36,7 +36,9 @@ if is_hole && col > 1 && global.network.mode != "client"{
 		}
 	}
 	with obj_enemy_parent{
-		if grid_col == other.col && grid_row == other.row && 
+		// 友化敌人不算敌人：跳过，不结算伤害
+		if (variable_instance_exists(id, "is_friend") && is_friend) continue
+		if grid_col == other.col && grid_row == other.row &&
 		array_get_index(other.ignore_list,mouse_id) == -1 && (target_type == "normal" || target_type == "dance" || target_type == "obstacle"){
 			var inst = instance_create_depth(x,y,depth,obj_drop_death_effect)
 			inst.sprite_index = sprite_index

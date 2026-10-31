@@ -20,6 +20,8 @@ else{
 	timer ++
 	if timer <= 180 && timer mod 12 == 1{
 		with obj_enemy_parent{
+			// 友化敌人不算敌人：跳过，不结算伤害
+			if (variable_instance_exists(id, "is_friend") && is_friend) continue
 			if place_meeting(x,y,other){
 				if hp > 0 and other.row == grid_row  and can_hit(other.target_type,target_type){
 					//global.audio.play(hit_sound,0,0)

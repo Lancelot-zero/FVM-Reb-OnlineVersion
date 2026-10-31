@@ -13,8 +13,10 @@ if state != CARD_STATE.IDLE{
 	}
 
 	with (obj_enemy_parent) {
-		
-			if other.shape != 2{
+		// 友化敌人不算敌人：跳过，不结算伤害
+		if (variable_instance_exists(id, "is_friend") && is_friend) continue
+
+		if other.shape != 2{
 			    if (!(other.shape==0&&target_type=="air") && point_distance(x, y, _x, _y) < _range && grid_row == other.grid_row) {
 					if array_get_index(other.can_mouse_list,mouse_id) != -1 && !can_dropped{
 						into_act()

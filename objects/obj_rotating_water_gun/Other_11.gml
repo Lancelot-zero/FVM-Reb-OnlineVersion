@@ -4,6 +4,8 @@ var _range = 320
 var _row_range = 2
 
 with (obj_enemy_parent) {
+	// 友化敌人不算敌人：跳过，不结算伤害
+	if (variable_instance_exists(id, "is_friend") && is_friend) continue
 	if (abs(x - other.x) < _range && abs(grid_row-other.grid_row) <= _row_range){
 		hp -= other.atk;
 		event_user(0)

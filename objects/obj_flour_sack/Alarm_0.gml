@@ -12,6 +12,8 @@ else if shape == 2{
 }
 if !global.is_paused{
 	with (obj_enemy_parent) {
+		// 友化敌人不算敌人：跳过，不结算伤害
+		if (variable_instance_exists(id, "is_friend") && is_friend) continue
 		if (can_hit(other.target_type,target_type) && point_distance(x, y, _x, _y) < _range && grid_row == other.grid_row) {
 		    if (immune_to_ash) {
 		        // 对免疫灰烬的敌人只造成伤害

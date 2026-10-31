@@ -8,7 +8,6 @@
   "bbox_top":125,
   "collisionKind":1,
   "collisionTolerance":0,
-  
   "DynamicTexturePage":false,
   "edgeFiltering":false,
   "For3D":false,

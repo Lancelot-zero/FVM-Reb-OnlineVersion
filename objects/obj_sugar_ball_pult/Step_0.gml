@@ -14,13 +14,24 @@ var has_enemy = false
 var target_enemy = noone
 var min_distance = 10000 // 设置一个足够大的初始值
 
-with(obj_enemy_parent){
-    if (abs(grid_row - other.grid_row) <= 1 && grid_col >= other.grid_col && grid_col <= (global.grid_cols + 1) && can_target_on(other.target_type,target_type)){
-        var distance = grid_col - other.grid_col
-        if (distance < min_distance) {
-            min_distance = distance
-            target_enemy = id
-            has_enemy = true
+// 差分查询索敌：遍历网格数组单元格找最近敌人（上下各一行，友化敌人不在 enemy_array 中，自动排除）
+var _stride = global.grid_cols + 2
+var _col_end = _stride - 1
+var _row_min = max(grid_row - 1, 0)
+var _row_max = min(grid_row + 1, global.grid_rows - 1)
+for(var _r = _row_min; _r <= _row_max; _r++){
+    for(var _c = grid_col; _c <= _col_end; _c++){
+        var _cell = global.enemy_array[_r * _stride + _c]
+        for(var _i = 0; _i < array_length(_cell); _i++){
+            var _e = _cell[_i]
+            if (instance_exists(_e) && can_target_on(target_type, _e.target_type)){
+                var _dist = _e.grid_col - grid_col
+                if (_dist < min_distance) {
+                    min_distance = _dist
+                    target_enemy = _e
+                    has_enemy = true
+                }
+            }
         }
     }
 }

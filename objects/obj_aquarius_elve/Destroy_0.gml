@@ -6,8 +6,10 @@
 	var _y = y;
 
 	with (obj_enemy_parent) {
-		
-			if ((grid_row == other.grid_row && abs(x - other.x) <= 3*global.grid_cell_size_x)) {
+		// 友化敌人不算敌人：跳过，不结算伤害
+		if (variable_instance_exists(id, "is_friend") && is_friend) continue
+
+		if ((grid_row == other.grid_row && abs(x - other.x) <= 3*global.grid_cell_size_x)) {
 				if array_get_index(other.can_mouse_list,mouse_id) != -1 && !can_dropped{
 					into_act()
 				}

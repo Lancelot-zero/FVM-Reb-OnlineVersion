@@ -1,3 +1,6 @@
+﻿// 友化敌人不算敌人：跳过，不结算碰撞
+if (variable_instance_exists(other, "is_friend") && other.is_friend) exit
+
 if global.is_paused{
 	exit
 }

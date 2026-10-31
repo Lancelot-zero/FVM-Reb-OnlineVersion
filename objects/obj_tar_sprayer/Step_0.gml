@@ -12,21 +12,16 @@ if is_slowdown{
 
 //检测自身右方是否有敌人
 var has_enemy = false
-if shape < 1{	
-	with(obj_enemy_parent){
-		if (grid_row == other.grid_row && grid_col >= other.grid_col && grid_col <= (other.grid_col + 5) && can_target_on(other.target_type,target_type)){
-			has_enemy = true
-			break
-		}
-	}
-}
-else{
-	with(obj_enemy_parent){
-		if (grid_row == other.grid_row && grid_col >= other.grid_col && grid_col <= (other.grid_col + 7) && can_target_on(other.target_type,target_type)){
-			has_enemy = true
-			break
-		}
-	}
+// 差分查询索敌：本行右侧用前缀和查询（友化敌人不进 has_enemy_*，自动排除）
+var _stride = global.grid_cols + 2
+var _col_end = min(grid_col + (shape < 1 ? 5 : 7), _stride - 1)
+var _left_idx = grid_col > 0 ? grid_col - 1 : -1
+var _rb = grid_row * _stride
+var _sn = global.has_enemy_normal[_rb + _col_end] - (_left_idx >= 0 ? global.has_enemy_normal[_rb + _left_idx] : 0)
+var _sd = global.has_enemy_dance[_rb + _col_end] - (_left_idx >= 0 ? global.has_enemy_dance[_rb + _left_idx] : 0)
+var _so = global.has_enemy_obstacle[_rb + _col_end] - (_left_idx >= 0 ? global.has_enemy_obstacle[_rb + _left_idx] : 0)
+if (_sn + _sd + _so > 0){
+	has_enemy = true
 }
 //攻击逻辑
 if state != CARD_STATE.SLEEP && state != CARD_STATE.AWAKE{

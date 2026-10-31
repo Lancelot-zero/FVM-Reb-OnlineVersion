@@ -70,7 +70,14 @@ if state == ENEMY_STATE.APPEAR{
 	}
 	if timer == 7 * flash_speed - 1{
 		var inst = instance_create_depth(x+35,y-125,depth-1,obj_little_undersea_panda_mouse)
-		inst.target_col = irandom_range(2,3)
+		inst.is_friend = is_friend
+		if is_friend{
+			// 友化：往右（敌人方向）扔，前方 2~3 列，钳制在草坪内
+			inst.target_col = min(grid_col + irandom_range(2,3), global.grid_cols - 1)
+		}
+		else{
+			inst.target_col = irandom_range(2,3)
+		}
 		inst.target_row = grid_row
 		inst.grid_row = grid_row
 		

@@ -10,9 +10,10 @@
 	}
 
 	with (obj_enemy_parent) {
-		
-		
-		if (point_distance(x, y, _x, _y) < _range &&( 
+		// 友化敌人不算敌人：跳过，不结算伤害
+		if (variable_instance_exists(id, "is_friend") && is_friend) continue
+
+		if (point_distance(x, y, _x, _y) < _range &&(
 		(grid_row >= other.grid_row-1&&grid_row <= other.grid_row+1)||
 		(grid_row >= other.grid_row-2&&grid_row <= other.grid_row+2 && other.shape >= 2))) {
 			if array_get_index(other.can_mouse_list,mouse_id) != -1 && !can_dropped{

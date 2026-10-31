@@ -9,8 +9,9 @@ if state == CARD_STATE.IDLE{
 	audio_stop_sound(snd_kettle_bomb_explode)
 	
 	with (obj_enemy_parent) {
-		
-		
+		// 友化敌人不算敌人：跳过，不结算伤害
+		if (variable_instance_exists(id, "is_friend") && is_friend) continue
+
 		if (point_distance(x, y, _x, _y) < _range && grid_row >= other.grid_row-2&&grid_row <= other.grid_row+2) {
 			if array_get_index(other.can_mouse_list,mouse_id) != -1 && !can_dropped{
 		into_act()

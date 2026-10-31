@@ -1,4 +1,9 @@
 
+// 友化敌人：镜像朝向（开头翻转，结尾恢复）
+if (variable_instance_exists(id, "is_friend") && is_friend) {
+	image_xscale *= -1
+}
+
 if(climb_stage==1){
 	y = climb_y
 }
@@ -27,6 +32,12 @@ if flash_value >0{
     //shader_reset();
     //gpu_set_blendmode(bm_normal);
 }
+// 友化敌人：额外用 shader_hit 叠一层纯色剪影（RGB 三参数和透明度为创建时属性）
+if (variable_instance_exists(id, "is_friend") && is_friend) {
+	shader_set(shader_hit);
+	draw_sprite_ext(sprite_index,image_index,x,y,image_xscale,image_yscale,image_angle,make_color_rgb(friend_color_r,friend_color_g,friend_color_b),friend_alpha);
+	shader_reset();
+}
 if is_slowdown{
 	image_blend = merge_color(c_white,c_blue,0.5)
 	//draw_self()
@@ -47,4 +58,9 @@ if is_stun{
 }
 if(climb_stage==1){
 	y = climb_base_y
+}
+
+// 友化敌人：镜像朝向恢复
+if (variable_instance_exists(id, "is_friend") && is_friend) {
+	image_xscale *= -1
 }

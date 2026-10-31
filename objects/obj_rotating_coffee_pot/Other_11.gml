@@ -6,8 +6,10 @@ var _x = x;
 	}
 
 	with (obj_enemy_parent) {
-		
-			if (hp > 0 && point_distance(x, y, _x, _y) < _range && grid_row >= other.grid_row-other.range&&grid_row <= other.grid_row+other.range&&can_hit(other.target_type,target_type)) {
+		// 友化敌人不算敌人：跳过，不结算伤害
+		if (variable_instance_exists(id, "is_friend") && is_friend) continue
+
+		if (hp > 0 && point_distance(x, y, _x, _y) < _range && grid_row >= other.grid_row-other.range&&grid_row <= other.grid_row+other.range&&can_hit(other.target_type,target_type)) {
 		        
 		            hp -= other.atk;
 					event_user(0)

@@ -3,7 +3,9 @@ var _y = y;
 var _range = 200
 
 if shape < 1{
-	with (obj_enemy_parent) {	
+	with (obj_enemy_parent) {
+		// 友化敌人不算敌人：跳过，不结算伤害
+		if (variable_instance_exists(id, "is_friend") && is_friend) continue
 		if (hp > 0 && ((abs(x - other.x) <= 1.5 * global.grid_cell_size_x && grid_row == other.grid_row) || (abs(grid_row-other.grid_row) <= 1 && abs(x - other.x) <= 100)) and can_hit(other.target_type,target_type)) {
 			if hp > other.damage{
 				global.audio.play(snd_fire_hit,0,0)
@@ -27,7 +29,9 @@ if shape < 1{
 	}
 }
 else{
-	with (obj_enemy_parent) {	
+	with (obj_enemy_parent) {
+		// 友化敌人不算敌人：跳过，不结算伤害
+		if (variable_instance_exists(id, "is_friend") && is_friend) continue
 		if (hp > 0 && (abs(grid_row-other.grid_row) <= 1 && abs(x - other.x) <= 200) and can_hit(other.target_type,target_type)) {
 			if hp > other.damage{
 				global.audio.play(snd_fire_hit,0,0)

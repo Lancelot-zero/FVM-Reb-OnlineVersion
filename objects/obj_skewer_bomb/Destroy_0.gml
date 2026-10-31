@@ -7,7 +7,9 @@ var _y = y;
 var _range = 1.5*global.grid_cell_size_x;
 
 with (obj_enemy_parent) {
-		
+	// 友化敌人不算敌人：跳过，不结算伤害
+	if (variable_instance_exists(id, "is_friend") && is_friend) continue
+
 	if (target_type=="air" && point_distance(x, y, _x, _y) < _range && grid_row == other.grid_row) {
 		if (immune_to_ash && hp>other.atk) {
 		    // 对免疫灰烬的敌人只造成伤害

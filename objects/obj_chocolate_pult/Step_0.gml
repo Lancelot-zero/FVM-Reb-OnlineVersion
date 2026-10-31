@@ -26,13 +26,20 @@ var has_enemy = false
 var target_enemy = noone
 var min_distance = 10000 // 设置一个足够大的初始值
 
-with(obj_enemy_parent){
-    if (grid_row == other.grid_row && grid_col >= other.grid_col && grid_col <= (global.grid_cols + 1) && can_target_on(other.target_type,target_type)){
-        var distance = grid_col - other.grid_col
-        if (distance < min_distance) {
-            min_distance = distance
-            target_enemy = id
-            has_enemy = true
+// 差分查询索敌：遍历网格数组单元格找最近敌人（友化敌人不在 enemy_array 中，自动排除）
+var _stride = global.grid_cols + 2
+var _col_end = _stride - 1
+for(var _c = grid_col; _c <= _col_end; _c++){
+    var _cell = global.enemy_array[grid_row * _stride + _c]
+    for(var _i = 0; _i < array_length(_cell); _i++){
+        var _e = _cell[_i]
+        if (instance_exists(_e) && can_target_on(target_type, _e.target_type)){
+            var _dist = _e.grid_col - grid_col
+            if (_dist < min_distance) {
+                min_distance = _dist
+                target_enemy = _e
+                has_enemy = true
+            }
         }
     }
 }

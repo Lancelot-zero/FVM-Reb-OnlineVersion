@@ -15,6 +15,8 @@ if not can_destroy{
 	if timer == 20{
 	
 		with obj_enemy_parent{
+			// 友化敌人不算敌人：跳过，不结算伤害
+			if (variable_instance_exists(id, "is_friend") && is_friend) continue
 			if (grid_col == other.grid_pos.col && grid_row == other.grid_pos.row && can_hit(other.target_type,target_type)){
 				
 				hp -= other.damage

@@ -9,6 +9,8 @@ attack_timer ++
 //x += move_speed
 if attack_timer == 2{
 	with obj_enemy_parent{
+		// 友化敌人不算敌人：跳过，不结算伤害
+		if (variable_instance_exists(id, "is_friend") && is_friend) continue
 		if place_meeting(x,y,other){
 
 			if hp > 0 and ((other.shape < 2 && abs(other.row - grid_row)<=4)||(other.shape >= 2 && (grid_row == other.row || abs(x-other.x)<=150)))  and can_hit(other.target_type,target_type){

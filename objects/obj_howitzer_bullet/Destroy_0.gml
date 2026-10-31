@@ -3,8 +3,10 @@
 	var _range = 250
 
 	with (obj_enemy_parent) {
-		
-			if (point_distance(x, y, _x, _y) < _range && grid_row >= other.row-1&&grid_row <= other.row+1) {
+		// 友化敌人不算敌人：跳过，不结算伤害
+		if (variable_instance_exists(id, "is_friend") && is_friend) continue
+
+		if (point_distance(x, y, _x, _y) < _range && grid_row >= other.row-1&&grid_row <= other.row+1) {
 		        if (hp>other.damage) {
 		            // 对免疫灰烬的敌人只造成伤害
 		            hp -= other.damage;

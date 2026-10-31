@@ -24,6 +24,8 @@ if effect_timer == 4 * current_flash_speed{
 		blow_time = other.cycle
 	}
 	with obj_enemy_parent{
+		// 友化敌人不算敌人：跳过，不结算伤害
+		if (variable_instance_exists(id, "is_friend") && is_friend) continue
 		if target_type == "air" && array_get_index(other.ignore_list,mouse_id) == -1{
 			if !immune_to_ash{
 				var inst = instance_create_depth(x,y,-500,obj_mouse_blow_effect)

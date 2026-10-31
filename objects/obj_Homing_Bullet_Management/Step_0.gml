@@ -19,7 +19,8 @@ frame_id += 1;
         scan_hp[_t] = -1;
     }
     with (obj_enemy_parent) {
-        if (hp > 0 && y > 0) {
+        // 友化敌人不算敌人：不进索敌快照（和弹幕管理器同一口径，追踪弹打不到它们）
+        if (hp > 0 && y > 0 && !(variable_instance_exists(id, "is_friend") && is_friend)) {
             var _slot = -1;
             switch (target_type) {
                 case "normal":      _slot = 0; break;
@@ -105,7 +106,8 @@ while (_i >= 0) {
         }
 
         if (_best != noone) _b.target = _best;
-        else if (!instance_exists(_b.target) || _b.target.hp <= 0) _b.target = noone;
+        else if (!instance_exists(_b.target) || _b.target.hp <= 0
+              || (variable_instance_exists(_b.target, "is_friend") && _b.target.is_friend)) _b.target = noone;
 
         if (instance_exists(_b.target)) {
             // 不留惯性：每帧直接把朝向设成"正对目标"（同原版 point_direction 每帧重算）
@@ -143,7 +145,8 @@ while (_i >= 0) {
         //       锁定之后再改类型就不再是"可打"的了 —— 原版这里同样会重新判一次。
         //    ⚠️ 代价：子弹穿过"非目标"的敌人时不会掉血（原版也只认 target_enemy）；
         //       追踪弹本来就直奔目标，正常情况看不出来。
-        if (_b.hits != 0 && instance_exists(_b.target) && _b.target.hp > 0) {
+        if (_b.hits != 0 && instance_exists(_b.target) && _b.target.hp > 0
+         && !(variable_instance_exists(_b.target, "is_friend") && _b.target.is_friend)) {
             if ((_b.ttype & _b.target.tbit) != 0
              && abs(_b.target.x - _b.x) <= 90 && abs(_b.target.y - _b.y) <= 85) {
                 // 走敌人自己的受击事件（闪白 + 音效 + 护盾，含各敌人自己重写的 Other_10），

@@ -65,6 +65,10 @@ plant_id = ""  // 植物唯一标识符
 current_level = 0  // 当前等级
 
 pre_hp=-1
+
+// ========= 最后攻击者 ========
+last_attack_enemy_id = -1  // 最近一次攻击本卡的敌人实例 id（-1 = 无）
+
 // ========= 是否有梯子 ========
 have_loder = false
 

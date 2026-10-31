@@ -13,7 +13,9 @@ if global.is_paused || is_frozen || is_stun{
 var target_pos = get_world_position_from_grid(target_col,target_row)
 
 if state = ENEMY_STATE.ACTING{
-	if grid_col > target_col && y < target_pos.y+38{
+	// 友化：往右飞（grid_col < target_col 时仍在飞行）；正常：往左飞
+	var _flying = (is_friend) ? (grid_col < target_col) : (grid_col > target_col)
+	if _flying && y < target_pos.y+38{
 		x += chspeed
 		y -= cvspeed
 		cvspeed -= cgravity

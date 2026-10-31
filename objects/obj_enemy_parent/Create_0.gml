@@ -54,6 +54,12 @@ u_flashColor = shader_get_uniform(shader_hit, "u_flashColor");
 
 flash_color = #FFFFFF
 
+// 友化着色：创建时属性，友化敌人用专属颜色+透明度画纯色剪影（见 Draw_0），颜色为 RGB 三参数
+friend_color_r = 128
+friend_color_g = 0
+friend_color_b = 128
+friend_alpha = 0.5
+
 grid_col = 99
 grid_row = 99
 

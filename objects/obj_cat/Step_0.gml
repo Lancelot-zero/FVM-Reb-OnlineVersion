@@ -18,6 +18,8 @@ switch (state) {
 }
 
 with obj_enemy_parent{
+	// 友化敌人不算敌人：跳过，不结算伤害
+	if (variable_instance_exists(id, "is_friend") && is_friend) continue
 	if abs(x - other.x) <= 120{
 		if other.state == "idle" && other.row == grid_row && hp > 0 && (array_get_index(other.ignore_list,mouse_id) == -1)&& (array_get_index(other.target_ignore,mouse_id) == -1){
 			if (global.network.mode != "client"){

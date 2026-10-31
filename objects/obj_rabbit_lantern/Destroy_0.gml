@@ -26,8 +26,9 @@ if explode_timer <= 0{
 	
 
 	with (obj_enemy_parent) {
-		
-		
+		// 友化敌人不算敌人：跳过，不结算伤害
+		if (variable_instance_exists(id, "is_friend") && is_friend) continue
+
 		if (abs(x - other.x) < _range && grid_row >= other.grid_row-1&&grid_row <= other.grid_row+1) {
 			if array_get_index(other.can_mouse_list,mouse_id) != -1 && ! can_dropped{
 			

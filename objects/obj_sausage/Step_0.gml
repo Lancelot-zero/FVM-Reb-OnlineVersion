@@ -12,14 +12,18 @@ if is_slowdown{
 //检测自身右方是否有敌人
 var has_enemy = false
 has_air = false
-with(obj_enemy_parent){
-	if (grid_row == other.grid_row && grid_col >= other.grid_col && grid_col <= (global.grid_cols + 1) && can_target_on(other.target_type,target_type)){
-		has_enemy = true
-		if target_type == "air"{
-			other.has_air = true
-			break
-		}
-	}
+// 差分查询索敌：本行右侧用前缀和查询（友化敌人不进 has_enemy_*，自动排除）
+var _stride = global.grid_cols + 2
+var _col_end = _stride - 1
+var _left_idx = grid_col > 0 ? grid_col - 1 : -1
+var _rb = grid_row * _stride
+var _sn = global.has_enemy_normal[_rb + _col_end] - (_left_idx >= 0 ? global.has_enemy_normal[_rb + _left_idx] : 0)
+var _sa = global.has_enemy_air[_rb + _col_end] - (_left_idx >= 0 ? global.has_enemy_air[_rb + _left_idx] : 0)
+if (_sn + _sa > 0){
+	has_enemy = true
+}
+if (_sa > 0){
+	has_air = true
 }
 //攻击逻辑
 if (has_enemy) {

@@ -1,3 +1,6 @@
+﻿// 友化敌人不算敌人：跳过，不结算碰撞
+if (variable_instance_exists(other, "is_friend") && other.is_friend) exit
+
 if ds_list_find_index(hitted_enemy,other.id) == -1 && !disabled{
 
 	if other.hp > 0 and row == other.grid_row  and can_hit(target_type,other.target_type){
