@@ -6943,6 +6943,8 @@ function VM_InitRoomEntry(buf) {
         //    表现就是 _VM_BATTLE_START 把地图摆两遍、_VM_FRAME 每帧跑两次。
         //    走 vm_hook_register 的只有 mod 单位 VM（src_mod.gml 的 vm_hook_register_all）。
         if (variable_struct_exists(global.__vm, "blocks")
+            && buffer_exists(_bc_buf)   // 被 switch 删掉的块（_VM_CONST_INIT / default）不存：留悬空 id 会被
+                                        // 下一间房的 buffer_load 复用 → 开头旧块清理把新地图 bin 当旧块删掉
             && !ds_map_exists(global.__vm.blocks, _block_name)) {
             global.__vm.blocks[? _block_name] = _bc_buf;
         }
