@@ -34,6 +34,7 @@ if shape < 1{
 		}
 		if !has_bubble && !has_seawater{
 			hp -= 0.05*max_hp
+			last_attack_enemy_id = -1
 			event_user(2)
 		}
 	}

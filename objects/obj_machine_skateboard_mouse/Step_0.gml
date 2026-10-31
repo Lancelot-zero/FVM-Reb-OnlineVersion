@@ -226,6 +226,7 @@ switch(state) {
 					if !invincible{
 						hp -= other.atk;
 					}
+	                last_attack_enemy_id = other.id
 	                event_user(2)
 	                // 播放受击效果
 	                if (instance_exists(other)) {

@@ -32,6 +32,7 @@ function find_priority_enemy() {
     
 	    // 检查右边一格内是否有敌人（假设一格为80像素）
 	    with (obj_enemy_parent) {
+	        if (variable_instance_exists(id, "is_friend") && is_friend) continue
 	        if (hp > 0 && can_hit("track", target_type) && y > 0) { // 只考虑存活的敌人
 	            // 记录「这一格还有可打的敌人」，炮弹靠它判断当前目标格是否已经失效
 	            var _idx = grid_row * global.grid_cols + grid_col;

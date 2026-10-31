@@ -19,11 +19,13 @@ if state == ENEMY_STATE.ACTING{
 			if plant_id != "player"{
 				if !invincible{
 					hp -= 2000
+					last_attack_enemy_id = other.id
 					event_user(2)
 				}
 			}
 			else{
 				hp = 10
+				last_attack_enemy_id = other.id
 				event_user(2)
 			}
 		}

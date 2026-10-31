@@ -58,6 +58,7 @@ if hp > 0 && state != ENEMY_STATE.DEAD{
 				}
 				else{
 					hp -= 300
+					last_attack_enemy_id = other.id
 					event_user(2)
 					other.timer = 0
 					other.state = ENEMY_STATE.DIG

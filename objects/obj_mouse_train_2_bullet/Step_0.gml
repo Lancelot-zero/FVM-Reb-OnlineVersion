@@ -15,6 +15,7 @@ if b_type == 0{
 			}
 			if plant_id != "player" && plant_type != "coffee" && !invincible && plant_id != "cotton_candy"{
 				hp -= 0.5 * max_hp
+				last_attack_enemy_id = -1
 				event_user(2)
 			}
 		}
@@ -31,6 +32,7 @@ else if b_type == 1{
 			}
 			if plant_id != "player" && plant_type != "coffee" && !invincible && plant_id != "cotton_candy"{
 				hp -= 0.5 * max_hp
+				last_attack_enemy_id = -1
 				event_user(2)
 			}
 		}
@@ -48,6 +50,7 @@ else if b_type == 2{
 			}
 			if plant_id != "player" && plant_type != "coffee" && !invincible && plant_id != "cotton_candy"{
 				hp -= 0.5 * max_hp
+				last_attack_enemy_id = -1
 				event_user(2)
 			}
 		}

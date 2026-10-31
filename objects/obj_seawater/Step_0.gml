@@ -28,8 +28,9 @@ with obj_card_parent{
 	if is_in_front{
 		if (plant_type != "coffee" && !invincible && array_get_index(other.ignore_list,plant_id) == -1 && !(plant_id == "player" && hp <= 0.05*max_hp)){
 			other.non_undersea_card = true
-			if !other.has_bubble && other.timer mod 60 == 0{ 
+			if !other.has_bubble && other.timer mod 60 == 0{
 				hp -= 0.05*max_hp
+				last_attack_enemy_id = -1
 				event_user(2)
 			}
 		}
@@ -56,8 +57,9 @@ if(ds_exists(card_list,ds_type_list)){
 			with(it){
 				if (plant_type != "coffee" && !invincible && array_get_index(other.ignore_list,plant_id) == -1 && !(plant_id == "player" && hp <= 0.05*max_hp)){
 					other.non_undersea_card = true
-					if !other.has_bubble && other.timer mod 60 == 0{ 
+					if !other.has_bubble && other.timer mod 60 == 0{
 						hp -= 0.05*max_hp
+						last_attack_enemy_id = -1
 						event_user(2)
 					}
 				}

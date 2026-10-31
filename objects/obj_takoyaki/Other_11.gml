@@ -18,6 +18,7 @@ function find_priority_enemy() {
 	    global._takoyaki_air_enemy = noone;
 	    global._takoyaki_closest_left_enemy = noone;
 		with (obj_enemy_parent) {
+	        if (variable_instance_exists(id, "is_friend") && is_friend) continue
 	        if (hp > 0 && can_hit(other.target_type,target_type) && y > 0) { // 只考虑存活的敌人
 	            //检查是否有空中敌人
 				if target_type == "air"{

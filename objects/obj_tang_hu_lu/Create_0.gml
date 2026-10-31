@@ -51,6 +51,7 @@ function find_priority_enemy() {
 	    var _best_x = room_width;
 	    var _best_hp = 0;
 	    with (obj_enemy_parent) {
+	        if (variable_instance_exists(id, "is_friend") && is_friend) continue
 	        if (hp > 0 && can_hit(other.target_type,target_type) && y > 0) {
 	            if (x < _best_x || (x == _best_x && hp > _best_hp)) {
 	                _best_x = x;

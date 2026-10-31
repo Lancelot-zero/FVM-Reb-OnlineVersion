@@ -15,6 +15,7 @@ if (global._takoyaki_scan_frame != obj_battle.battle_time) {
 	var _min_x = room_width;
 	var _max_hp = 0;
 	with (obj_enemy_parent) {
+		if (variable_instance_exists(id, "is_friend") && is_friend) continue
 		if (hp > 0 && can_hit("track",target_type) && y > 0) { // 只考虑存活的敌人
 			//检查是否有空中敌人
 			if target_type == "air"{

@@ -28,11 +28,13 @@ if state == ENEMY_STATE.ACTING && hp > 0 && state != ENEMY_STATE.DEAD{
 			if plant_id != "player"{
 				if !invincible && plant_id != "cotton_candy"{
 					hp -= 2000
+					last_attack_enemy_id = -1
 					event_user(2)
 				}
 			}
 			else{
 				hp = 10
+				last_attack_enemy_id = -1
 				event_user(2)
 			}
 		}

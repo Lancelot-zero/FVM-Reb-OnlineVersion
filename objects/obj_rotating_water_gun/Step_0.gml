@@ -36,6 +36,7 @@ grid_col = parent_player.grid_col
 //检测自身右方是否有敌人
 var has_enemy = false
 with(obj_enemy_parent){
+	if (variable_instance_exists(id, "is_friend") && is_friend) continue
 	if (grid_row <= other.grid_row + 1 &&grid_row >= other.grid_row - 1 && grid_col <= (global.grid_cols + 1)){
 		has_enemy = true
 		other.target_enemy = id

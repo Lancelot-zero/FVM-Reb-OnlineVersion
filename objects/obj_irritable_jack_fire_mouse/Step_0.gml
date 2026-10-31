@@ -28,11 +28,13 @@ if state == ENEMY_STATE.ACTING && hp > 0 && state != ENEMY_STATE.DEAD{
 			if plant_id != "player"{
 				if !invincible && plant_id != "cotton_candy"{
 					hp -= 2000
+					last_attack_enemy_id = other.id
 					event_user(2)
 				}
 			}
 			else{
 				hp = 10
+				last_attack_enemy_id = other.id
 				event_user(2)
 			}
 			var effect = instance_create_depth(x-15,y+15,-800,obj_wine_bottle_bomb_explode)

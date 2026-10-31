@@ -49,6 +49,7 @@ if x >= target_x - 10 && x <= target_x + 10{
 			with plant_order_list[i]{
 				if plant_id != "player"{
 					hp -= other.damage
+					last_attack_enemy_id = -1
 					event_user(2)
 				}
 			}

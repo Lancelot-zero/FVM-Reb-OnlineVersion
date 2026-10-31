@@ -26,6 +26,7 @@ if shape < 1{
 		}
 		if !has_bubble && !has_seawater{
 			hp -= 0.05*max_hp
+			last_attack_enemy_id = -1
 			event_user(2)
 		}
 	}
@@ -38,6 +39,7 @@ if is_frozen || state == CARD_STATE.SLEEP{
 var has_enemy = false
 if instance_exists(obj_enemy_parent){
 	with obj_enemy_parent{
+		if (variable_instance_exists(id, "is_friend") && is_friend) continue
 		if can_target_on(other.target_type,target_type) && y > 0 && hp > 0{
 			has_enemy = true
 			break

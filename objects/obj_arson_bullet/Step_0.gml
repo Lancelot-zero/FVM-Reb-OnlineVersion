@@ -33,10 +33,12 @@ if x >= target_x - 10 && x <= target_x + 10{
             if !invincible && plant_type != "coffee"{
 				if plant_id != "player"{
 					hp -= 900
+					last_attack_enemy_id = -1
 					event_user(2)
 				}
 				else{
 					hp -= 300
+					last_attack_enemy_id = -1
 					event_user(2)
 				}
 			}

@@ -22,6 +22,7 @@ if state == "attack"{
 			}
 			if plant_id != "player" && plant_type != "coffee" && !invincible && plant_id != "cotton_candy"  && plant_id != "soda_bubble"{
 				hp -= 20
+				last_attack_enemy_id = -1
 				event_user(2)
 			}
 		}

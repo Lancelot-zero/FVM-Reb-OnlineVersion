@@ -67,6 +67,7 @@ with (obj_card_parent) {
 		}
 		else{
 			hp = 10
+			last_attack_enemy_id = -1
 			event_user(2)
 		}
     }

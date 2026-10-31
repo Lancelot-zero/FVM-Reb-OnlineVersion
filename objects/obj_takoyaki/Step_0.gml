@@ -13,6 +13,7 @@ if is_slowdown{
 var has_enemy = false
 if instance_exists(obj_enemy_parent){
 	with obj_enemy_parent{
+		if (variable_instance_exists(id, "is_friend") && is_friend) continue
 		if can_target_on(other.target_type,target_type){
 			has_enemy = true
 			break
