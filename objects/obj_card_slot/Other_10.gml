@@ -19,6 +19,10 @@ if (plant_data != undefined) {
             cooldown = ceil(cooldown * 1.5);
         }
     }
+	// 插件覆盖：vm_cost / vm_cooldown（-1 = 不覆盖）
+	//   这两项每帧都会按注册表重算，所以覆盖必须放在重算之后
+	if (variable_instance_exists(id, "vm_cost") && vm_cost >= 0)         cost     = vm_cost;
+	if (variable_instance_exists(id, "vm_cooldown") && vm_cooldown >= 0) cooldown = vm_cooldown;
 	//检查食谱
 	var cookbook_list = global.save_data.equipped_cookbook
 	for(var i = 0 ; i < array_length(cookbook_list) ; i++){

@@ -266,8 +266,15 @@ if (is_selected) {
 					}
 				}
 			}
-            if (card_obj == obj_card_mod) { global._mod_pending_card_id = card_id; }
-            var new_plant = instance_create_depth(logical_world.x + platform_shift_x, logical_world.y + platform_shift_y, 0,card_obj);
+            // 覆盖种植：槽里登记原卡，种下去换成 override_card_id 指定的卡（mod 卡走 obj_card_mod）
+            var _spawn_obj = card_obj;
+            var _pending_id = card_id;
+            if (variable_instance_exists(id, "override_card_id") && override_card_id != "") {
+                _spawn_obj  = obj_card_mod;
+                _pending_id = override_card_id;
+            }
+            if (_spawn_obj == obj_card_mod) { global._mod_pending_card_id = _pending_id; }
+            var new_plant = instance_create_depth(logical_world.x + platform_shift_x, logical_world.y + platform_shift_y, 0,_spawn_obj);
             global._mod_pending_card_id = "";
 			// 计算深度值
 			var depth_value = calculate_plant_depth(logical_col, logical_row, new_plant.plant_type);

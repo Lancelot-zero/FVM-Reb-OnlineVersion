@@ -19,9 +19,12 @@ else{
 	// 卡槽数量：只由 create_battle_slots / battle_slots_relayout 更新（插槽、删槽后刷新）
 	//   这里只读，不自己算 —— 否则插槽/删槽后长条和铲子不会跟着变
 	var slot_length = variable_global_exists("battle_slot_count") ? real(global.battle_slot_count) : deck_slot_count()
-	if slot_length < 1 slot_length = 1
+	if slot_length < 0 slot_length = 0
 	//show_debug_message("slot_length:"+string(slot_length))
-	if slot_length <= 14{
+	if slot_length <= 0{
+		// 0 槽：没有卡槽框，只剩铲子（它会贴在火焰区右边，见 battle_slots_place_shovel）
+	}
+	else if slot_length <= 14{
 		draw_sprite_ext(spr_slot_top,0,350+83*1.8,0,40+45*(slot_length-1),1.8,0,c_white,1)
 	}
 	else{

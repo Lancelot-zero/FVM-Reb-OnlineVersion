@@ -4951,7 +4951,7 @@ function VM_Slot_add(card_id_addr) {
 /// @function battle_slots_relayout(order)
 /// @desc 战斗卡槽重排：按 order 顺序（缺省按 slot_index 排序）重新编号 slot_index=1..n 并重摆位置；传送带模式重建传送带数组
 /// @param order 可选，槽实例 id 数组（插入新槽时传入指定顺序）
-function battle_slots_relayout(order) {
+function battle_slots_relayout(order = undefined) {
 	var slots;
 	if (argument_count > 0 && is_array(order)) {
 		slots = order;
@@ -4990,7 +4990,7 @@ function battle_slots_relayout(order) {
 ///       只在 create_battle_slots / battle_slots_relayout 之后调用
 function battle_slots_place_shovel() {
 	var n = variable_global_exists("battle_slot_count") ? real(global.battle_slot_count) : deck_slot_count();
-	if (n < 1) n = 1;
+	if (n < 0) n = 0;      // 允许 0 槽：铲子退到最左，而不是空出一格
 
 	var _sx, _sy, _idx;
 	if (global._VM_conveyor_belt) {
