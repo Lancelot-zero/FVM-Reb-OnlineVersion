@@ -5493,14 +5493,16 @@ function run_VM_FixedBulletAdd(vm, code, _ip) {
             var _real = ds_map_find_value(global._VM_id_to_real, -_target);
             _target = is_undefined(_real) ? noone : _real;
         }
+        // 注意：bullet_fixed_add 在 death_spr 后还有 frames/scale/angle 三个形参（VM 口径固定 0/1/0），
+        //       不占位的话 anim_speed 会错位成 frames（=1 → 第一步就结算删除，子弹画不出来）
         var _result = bullet_fixed_add(run_vm_read_mem(vm, code[_base+0]), run_vm_read_mem(vm, code[_base+1]),
                              run_vm_read_mem(vm, code[_base+2]), run_vm_read_mem(vm, code[_base+3]), run_vm_read_mem(vm, code[_base+4]),
                              _target, run_vm_read_mem(vm, code[_base+6]),
                              run_vm_read_mem(vm, code[_base+7]), run_vm_read_mem(vm, code[_base+8]),
                              run_vm_read_mem(vm, code[_base+9]), run_vm_read_mem(vm, code[_base+10]),
                              run_vm_read_mem(vm, code[_base+11]), run_vm_read_mem(vm, code[_base+12]),
-                             run_vm_read_mem(vm, code[_base+13]), run_vm_read_mem(vm, code[_base+14]),
-                             run_vm_read_mem(vm, code[_base+15]), run_vm_read_mem(vm, code[_base+16]));
+                             0, 1, run_vm_read_mem(vm, code[_base+13]), 0,
+                             run_vm_read_mem(vm, code[_base+14]), run_vm_read_mem(vm, code[_base+15]), run_vm_read_mem(vm, code[_base+16]));
         if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
         return _ip;
     }

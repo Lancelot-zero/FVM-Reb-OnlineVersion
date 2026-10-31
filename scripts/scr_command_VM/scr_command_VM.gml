@@ -6454,11 +6454,14 @@ function VM_FixedBulletAdd(spr_addr, x_addr, y_addr, dmg_addr, radius_addr, targ
         var _real = ds_map_find_value(global._VM_id_to_real, -_target);
         _target = is_undefined(_real) ? noone : _real;
     }
+    // 注意：bullet_fixed_add 的形参在 death_spr 后是 frames / scale / angle / anim_speed / spawn_x / spawn_y / spd，
+    //       VM 口径没有 frames/scale/angle（固定 0=贴图自身帧数 / 1 / 0），必须显式占位再传后面的
     return bullet_fixed_add(vm_arg(spr_addr), vm_arg(x_addr), vm_arg(y_addr), vm_arg(dmg_addr),
                             vm_arg(radius_addr), _target, vm_arg(type_addr),
                             vm_arg(damage_type_addr), vm_arg(freeze_addr), vm_arg(frozen_addr),
                             vm_arg(death_obj_addr), vm_arg(death_mod_addr), vm_arg(death_spr_addr),
-                            vm_arg(anim_speed_addr), vm_arg(spawn_x_addr), vm_arg(spawn_y_addr), vm_arg(spd_addr));
+                            0, 1, vm_arg(anim_speed_addr), 0,
+                            vm_arg(spawn_x_addr), vm_arg(spawn_y_addr), vm_arg(spd_addr));
 }
 
 global.__vm = VM_Create();

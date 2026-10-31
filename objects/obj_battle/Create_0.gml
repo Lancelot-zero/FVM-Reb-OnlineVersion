@@ -8,6 +8,7 @@ depth = 50
 instance_create_depth(0,0,-900,obj_flame_manager)
 instance_create_depth(0,0,-700,obj_Bullet_Screen_Management)   // 屏幕弹幕管理器：全场弹幕都塞它一个实例
 instance_create_depth(0,0,-700,obj_Homing_Bullet_Management)   // 追踪弹管理器：会拐弯/追目标的子弹塞它（homing_bullet_add 里还留了懒创建兜底）
+instance_create_depth(0,0,-700,obj_Fixed_Bullet_Management)     // 定点弹管理器：落点播动画末帧结算的子弹塞它（bullet_fixed_add 里也留懒创建兜底，和追踪弹一样）
 instance_create_depth(0,0,0,obj_event_manager)
 //instance_create_depth(450,1040,-900,obj_boss_hpbar)
 var mus_inst = instance_create_depth(0,0,0,obj_battle_music_controller)
