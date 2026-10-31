@@ -17,7 +17,8 @@ if (enemy_id != "" && mod_enemy_inited_id != enemy_id) {
 }
 
 // 父类处理移动/攻击/死亡等基础行为（同时刷新 target_plant / grid_col / grid_row）
-event_inherited();
+// mod_inherit_step = 0 时跳过：基础行为全由插件的 _OBJECT_STEP 接管
+if (mod_inherit_step) event_inherited();
 
 // ══════════════════════════════════════════════════════════════════════════
 // 进 VM 的入口闸门

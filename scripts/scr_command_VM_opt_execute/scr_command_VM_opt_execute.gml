@@ -324,6 +324,10 @@ global._vm_opt_run_funcs[18 + 206] = run_VM_GetPropImageAngle;   // image_angle
 global._vm_opt_run_funcs[18 + 207] = run_VM_GetPropImageAlpha;   // image_alpha
 global._vm_opt_run_funcs[18 + 208] = run_VM_GetPropImageIndex;   // image_index
 global._vm_opt_run_funcs[18 + 164] = run_VM_SetSoundVolume;       // 164
+global._vm_opt_run_funcs[18 + 165] = run_VM_PlayMusic;            // 165 — 循环音乐轨
+global._vm_opt_run_funcs[18 + 166] = run_VM_StopMusic;            // 166 — 停音乐轨
+global._vm_opt_run_funcs[18 + 167] = run_VM_PauseBGM;             // 167 — 暂停原版 BGM
+global._vm_opt_run_funcs[18 + 168] = run_VM_ResumeBGM;            // 168 — 恢复原版 BGM
 
 function run_vm_read_mem(vm, addr) {
     var _type = vm.mem_type[addr];
@@ -1999,17 +2003,27 @@ function run_VM_PlaySound(vm, code, _ip) {
     _ip += opt_number;
 
 	var _name = run_vm_read_mem(vm, code[_base+0]);
-	// 字符串：内置音效名（snd_*）优先，查不到按本地音频路径加载（ogg/wav）
-	// 数字：VM_LoadSound 返回的音频 ID
+	// 只收字符串：内置音效名（snd_*）优先，查不到按本地音频路径加载（ogg/wav）
 	var _snd = -1;
+	var _from_file = false;
 	if (is_string(_name)) {
 		_snd = asset_get_index(_name);
-		if (_snd == -1) _snd = vm_audio_load(_name);
-	} else if (is_real(_name)) {
-		_snd = _name;
+		if (_snd == -1) { _snd = vm_audio_load(_name); _from_file = true; }
 	}
 	var _result = -1;
-	if (_snd != -1) _result = audio_play_sound(_snd, 0, 0);
+	if (_snd != -1) {
+		_result = audio_play_sound(_snd, 0, 0);
+		// 运行时加载的音效不属于任何音频组，吃不到设置的音效音量，这里手动套；
+		// 内置 snd_* 在音效组里走组增益，再套会双重缩放
+		if (_result != -1 && _from_file) audio_sound_gain(_result, global.sound_volume);
+		// 登记播放实例：进战斗（vm_audio_stop_playing）要能把播到一半的 VM 音效停掉
+		if (_result != -1) {
+			if (!variable_global_exists("_VM_sound_instances")) {
+				global._VM_sound_instances = ds_list_create();
+			}
+			ds_list_add(global._VM_sound_instances, _result);
+		}
+	}
 	if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
 
     return _ip;
@@ -2026,7 +2040,113 @@ function run_VM_SetSoundVolume(vm, code, _ip) {
 
 	var _id = run_vm_read_mem(vm, code[_base+0]);
 	var _vol = run_vm_read_mem(vm, code[_base+1]);
-	if (is_real(_id) && _id != -1 && is_real(_vol)) audio_sound_gain(_id, _vol, 0);
+	if (!is_real(_id) || _id == -1 || !is_real(_vol)) return _ip;
+	if (variable_global_exists("_VM_music_gain") && ds_map_exists(global._VM_music_gain, _id)) {
+		// 音乐轨句柄：只记录本轨音量，实际增益 = 本轨音量 × 设置背景音乐音量（控制器每帧同步）
+		global._VM_music_gain[? _id] = _vol;
+		audio_sound_gain(_id, _vol * global.music_volume);
+		return _ip;
+	}
+	audio_sound_gain(_id, _vol, 0);
+
+    return _ip;
+}
+
+
+function run_VM_PlayMusic(vm, code, _ip) {
+    var opt_number = code[_ip]; _ip += 1;
+    var _mt = vm.mem_type;
+    var _mv = vm.mem_val;
+    var _dst = code[_ip]; _ip += 1;
+    var _base = _ip;
+    _ip += opt_number;
+
+	var _path = run_vm_read_mem(vm, code[_base+0]);
+	var _result = -1;
+	if (is_string(_path)) {
+		var _snd = vm_audio_load(_path);
+		if (_snd != -1) {
+			_result = audio_play_sound(_snd, 0, 1);   // loop=1 无限循环，限流器直接放行
+			if (_result != -1) {
+				if (!variable_global_exists("_VM_music_instances")) {
+					global._VM_music_instances = ds_list_create();
+					global._VM_music_gain = ds_map_create();
+				}
+				ds_list_add(global._VM_music_instances, _result);
+				global._VM_music_gain[? _result] = 1;
+				audio_sound_gain(_result, global.music_volume);
+			}
+		}
+	}
+	if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+
+    return _ip;
+}
+
+
+function run_VM_StopMusic(vm, code, _ip) {
+    var opt_number = code[_ip]; _ip += 1;
+    var _mt = vm.mem_type;
+    var _mv = vm.mem_val;
+    var _dst = code[_ip]; _ip += 1;
+    var _base = _ip;
+    _ip += opt_number;
+
+	var _id = run_vm_read_mem(vm, code[_base+0]);
+	var _result = -1;
+	// 句柄不在注册表 = 已随离房清理/失效（音频实例可能已不存在），直接拒绝，避免 stop 到死 id 报错
+	if (is_real(_id) && _id != -1 && variable_global_exists("_VM_music_instances")) {
+		var _p = ds_list_find_index(global._VM_music_instances, _id);
+		if (_p != -1) {
+			ds_list_delete(global._VM_music_instances, _p);
+			if (ds_map_exists(global._VM_music_gain, _id)) ds_map_delete(global._VM_music_gain, _id);
+			audio_stop_sound(_id);
+			_result = 0;
+		}
+	}
+	if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+
+    return _ip;
+}
+
+
+function run_VM_PauseBGM(vm, code, _ip) {
+    var opt_number = code[_ip]; _ip += 1;
+    var _mt = vm.mem_type;
+    var _mv = vm.mem_val;
+    var _dst = code[_ip]; _ip += 1;
+    var _base = _ip;
+    _ip += opt_number;
+
+	var _result = -1;
+	if (instance_number(obj_battle_music_controller) > 0) {
+		var _c = instance_find(obj_battle_music_controller, 0);
+		_c.music_enabled = false;
+		if (audio_is_playing(_c.battle_music)) audio_pause_sound(_c.battle_music);
+		_result = 0;
+	}
+	if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+
+    return _ip;
+}
+
+
+function run_VM_ResumeBGM(vm, code, _ip) {
+    var opt_number = code[_ip]; _ip += 1;
+    var _mt = vm.mem_type;
+    var _mv = vm.mem_val;
+    var _dst = code[_ip]; _ip += 1;
+    var _base = _ip;
+    _ip += opt_number;
+
+	var _result = -1;
+	if (instance_number(obj_battle_music_controller) > 0) {
+		var _c = instance_find(obj_battle_music_controller, 0);
+		_c.music_enabled = true;
+		if (audio_is_paused(_c.battle_music)) audio_resume_sound(_c.battle_music);
+		_result = 0;
+	}
+	if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
 
     return _ip;
 }
@@ -3502,6 +3622,25 @@ function vm_audio_wav_to_sound(_raw) {
     return _snd;
 }
 
+// 只停播放实例，不动已加载资产与缓存：进战斗时把备战房期间播放中的 VM 音效/音乐轨全部掐掉
+function vm_audio_stop_playing() {
+    if (variable_global_exists("_VM_music_instances")) {
+        for (var _i = 0; _i < ds_list_size(global._VM_music_instances); _i++) {
+            var _inst = global._VM_music_instances[| _i];
+            if (audio_is_playing(_inst) or audio_is_paused(_inst)) audio_stop_sound(_inst);
+        }
+        ds_list_clear(global._VM_music_instances);
+        ds_map_clear(global._VM_music_gain);
+    }
+    if (variable_global_exists("_VM_sound_instances")) {
+        for (var _i = 0; _i < ds_list_size(global._VM_sound_instances); _i++) {
+            var _inst = global._VM_sound_instances[| _i];
+            if (audio_is_playing(_inst) or audio_is_paused(_inst)) audio_stop_sound(_inst);
+        }
+        ds_list_clear(global._VM_sound_instances);
+    }
+}
+
 // 离开房间：卸载 VM_LoadSound 载入的全部音频（音乐走 _audio_cache，不在这里动）
 function vm_audio_unload_all() {
     if (!variable_global_exists("_VM_audio_cache")) return;
@@ -3521,6 +3660,23 @@ function vm_audio_unload_all() {
     ds_map_clear(global._VM_audio_cache);
     ds_map_clear(global._VM_audio_kind);
     ds_map_clear(global._VM_audio_buf);
+    // 音乐轨句柄引用的音频已释放，注册表一并清掉
+    if (variable_global_exists("_VM_music_instances")) {
+        ds_list_clear(global._VM_music_instances);
+        ds_map_clear(global._VM_music_gain);
+    }
+    // 音效播放实例列表同理（实例都随资产释放没了）
+    if (variable_global_exists("_VM_sound_instances")) {
+        ds_list_clear(global._VM_sound_instances);
+    }
+    // 插件卸载：恢复原版 BGM 启用状态（撤销 VM_PauseBGM 置的 music_enabled=false），
+    // 防止控制器实例跨房间存活时原版 BGM 永久失声；游戏暂停中不抢着恢复
+    if (instance_number(obj_battle_music_controller) > 0) {
+        var _c = instance_find(obj_battle_music_controller, 0);
+        _c.music_enabled = true;
+        // battle_music 还没转成音频 id（还是 json 里的名字字符串）时不碰它
+        if (!is_string(_c.battle_music) && audio_is_paused(_c.battle_music) && !global.is_paused) audio_resume_sound(_c.battle_music);
+    }
 }
 
 

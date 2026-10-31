@@ -5,6 +5,8 @@ event_inherited();
 enemy_id = variable_global_exists("_mod_pending_enemy_id") ? global._mod_pending_enemy_id : ""
 mod_enemy_inited_id = ""   // 已按哪个 id 初始化过（联机时 id 晚到，Step 里补跑）
 
+mod_inherit_step = 1   // 1 = Step 每帧调用父类 obj_enemy_parent 的 Step（移动/攻击/死亡等基础行为）；插件改成 0 = 不调，基础行为全由 _OBJECT_STEP 接管（target_plant / grid_col / grid_row 也停在原值）
+
 // ══════════════════════════════════════════════════════════════════════════
 // 进 VM 的入口条件（可选；不写 = 每帧进）
 //   mod_step_enter_condition

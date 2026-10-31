@@ -1994,38 +1994,113 @@ function VM_GetCardSlotCount() {
 }
 
 /// @function VM_PlaySound(name)
-/// @param name 内置音效名 (如 "snd_place1")、本地音频路径 ("xxx.ogg"/"xxx.wav")，或 VM_LoadSound 返回的音频 ID
+/// @param name 内置音效名 (如 "snd_place1") 或本地音频路径 ("xxx.ogg"/"xxx.wav"，走 VM_LoadSound 同一缓存)
 /// @return 播放实例 ID（可传给 VM_SetSoundVolume 调音量）；没播出来返回 -1
 function VM_PlaySound(name_addr) {
 	var _name = vm_arg(name_addr);
-	// 字符串：内置音效名（snd_*）优先，查不到按本地音频路径加载（ogg/wav）
-	// 数字：VM_LoadSound 返回的音频 ID
+	// 只收字符串：内置音效名（snd_*）优先，查不到按本地音频路径加载（ogg/wav）
 	var _snd = -1;
+	var _from_file = false;
 	if (is_string(_name)) {
 		_snd = asset_get_index(_name);
-		if (_snd == -1) _snd = vm_audio_load(_name);
-	} else if (is_real(_name)) {
-		_snd = _name;
+		if (_snd == -1) { _snd = vm_audio_load(_name); _from_file = true; }
 	}
-	if (_snd != -1) return audio_play_sound(_snd, 0, 0);
+	if (_snd != -1) {
+		var _inst = audio_play_sound(_snd, 0, 0);
+		// 运行时加载的音效不属于任何音频组，吃不到设置的音效音量，这里手动套；
+		// 内置 snd_* 在音效组里走组增益，再套会双重缩放
+		if (_inst != -1 && _from_file) audio_sound_gain(_inst, global.sound_volume);
+		// 登记播放实例：进战斗（vm_audio_stop_playing）要能把播到一半的 VM 音效停掉
+		if (_inst != -1) {
+			if (!variable_global_exists("_VM_sound_instances")) {
+				global._VM_sound_instances = ds_list_create();
+			}
+			ds_list_add(global._VM_sound_instances, _inst);
+		}
+		return _inst;
+	}
 	return -1;
 }
 
 /// @function VM_SetSoundVolume(id, volume)
-/// @param id VM_PlaySound 返回的播放实例 ID
-/// @param volume 音量（0=静音，1=原音量，可 >1 放大）
+/// @param id VM_PlaySound / VM_PlayMusic 返回的播放实例 ID
+/// @param volume 音量（0=静音，1=原音量，可 >1 放大）；音乐轨句柄只记录本轨音量，实际增益 = 本轨音量 × 设置背景音乐音量（每帧同步）
 function VM_SetSoundVolume(id_addr, volume_addr) {
 	var _id = vm_arg(id_addr);
 	var _vol = vm_arg(volume_addr);
-	if (is_real(_id) && _id != -1 && is_real(_vol)) audio_sound_gain(_id, _vol, 0);
+	if (!is_real(_id) || _id == -1 || !is_real(_vol)) return;
+	if (variable_global_exists("_VM_music_gain") && ds_map_exists(global._VM_music_gain, _id)) {
+		global._VM_music_gain[? _id] = _vol;
+		audio_sound_gain(_id, _vol * global.music_volume);
+		return;
+	}
+	audio_sound_gain(_id, _vol, 0);
 }
 
 /// @function VM_LoadSound(path)
 /// @param path 本地音频文件路径，支持 ogg（流式）和 wav（PCM 8/16 位，缓冲音）；相对地图 json 所在目录，如 "xxx.wav"
-/// @return 音频 ID，加载失败返回 -1；离开房间时自动卸载
+/// @return 音频 ID，加载失败返回 -1；离开房间时自动卸载（VM_PlaySound / VM_PlayMusic 播同一路径直接命中缓存）
 function VM_LoadSound(path_addr) {
 	var _path = vm_arg(path_addr);
 	return vm_audio_load(_path);
+}
+
+/// @function VM_PlayMusic(path)
+/// @param path 本地音频路径（ogg 流式 / wav 缓冲），相对地图 json 所在目录；走 VM_LoadSound 同一缓存
+/// @return 音乐轨句柄（= 播放实例 ID，给 VM_StopMusic / VM_SetSoundVolume 用）；加载或播放失败返回 -1
+///         无限循环；实际音量 = 本轨音量（默认 1）× 设置背景音乐音量；游戏暂停自动挂起
+function VM_PlayMusic(path_addr) {
+	var _path = vm_arg(path_addr);
+	if (!is_string(_path)) return -1;
+	var _snd = vm_audio_load(_path);
+	if (_snd == -1) return -1;
+	var _inst = audio_play_sound(_snd, 0, 1);   // loop=1 无限循环，限流器直接放行
+	if (_inst == -1) return -1;
+	if (!variable_global_exists("_VM_music_instances")) {
+		global._VM_music_instances = ds_list_create();
+		global._VM_music_gain = ds_map_create();
+	}
+	ds_list_add(global._VM_music_instances, _inst);
+	global._VM_music_gain[? _inst] = 1;
+	audio_sound_gain(_inst, global.music_volume);
+	return _inst;
+}
+
+/// @function VM_StopMusic(handle)
+/// @param handle VM_PlayMusic 返回的音乐轨句柄
+/// @return 0=已停止  -1=句柄无效
+function VM_StopMusic(handle_addr) {
+	var _id = vm_arg(handle_addr);
+	if (!is_real(_id) || _id == -1) return -1;
+	// 句柄不在注册表 = 已随离房清理/失效（音频实例可能已不存在），直接拒绝，避免 stop 到死 id 报错
+	if (!variable_global_exists("_VM_music_instances") || ds_list_find_index(global._VM_music_instances, _id) == -1) return -1;
+	audio_stop_sound(_id);
+	var _p = ds_list_find_index(global._VM_music_instances, _id);
+	if (_p != -1) ds_list_delete(global._VM_music_instances, _p);
+	if (ds_map_exists(global._VM_music_gain, _id)) ds_map_delete(global._VM_music_gain, _id);
+	return 0;
+}
+
+/// @function VM_PauseBGM()
+/// @desc 暂停原版 BGM（保留进度，VM_ResumeBGM 从原位置继续），并关掉控制器的自动续播
+/// @return 0=成功  -1=当前房间没有 BGM 控制器（如备战房）
+function VM_PauseBGM() {
+	if (instance_number(obj_battle_music_controller) == 0) return -1;
+	var _c = instance_find(obj_battle_music_controller, 0);
+	_c.music_enabled = false;
+	if (audio_is_playing(_c.battle_music)) audio_pause_sound(_c.battle_music);
+	return 0;
+}
+
+/// @function VM_ResumeBGM()
+/// @desc 恢复原版 BGM（从暂停位置继续；没暂停过就从控制器自动续播）
+/// @return 0=成功  -1=当前房间没有 BGM 控制器（如备战房）
+function VM_ResumeBGM() {
+	if (instance_number(obj_battle_music_controller) == 0) return -1;
+	var _c = instance_find(obj_battle_music_controller, 0);
+	_c.music_enabled = true;
+	if (audio_is_paused(_c.battle_music)) audio_resume_sound(_c.battle_music);
+	return 0;
 }
 
 /// @function VM_Floor(value)
@@ -6755,6 +6830,10 @@ VM_RegisterFunction(global.__vm, VM_GetShaderUniform);     // 161 — 取内置 
 VM_RegisterFunction(global.__vm, VM_SetShaderUniformF);    // 162 — 设 float uniform（1~4 个值，最多一个 vec4）
 VM_RegisterFunction(global.__vm, VM_SetShaderUniformI);    // 163 — 设 int uniform（1~4 个值，最多一个 ivec4）
 VM_RegisterFunction(global.__vm, VM_SetSoundVolume);       // 164 — 设置播放实例音量（id=VM_PlaySound 返回的播放实例 ID，-1 不动；0=静音 1=原音量，可 >1 放大）
+VM_RegisterFunction(global.__vm, VM_PlayMusic);            // 165 — 起一条循环音乐轨（本地音频路径），返回句柄；音量 = 本轨音量 × 设置背景音乐音量，暂停联动
+VM_RegisterFunction(global.__vm, VM_StopMusic);            // 166 — 停掉 VM_PlayMusic 的音乐轨
+VM_RegisterFunction(global.__vm, VM_PauseBGM);             // 167 — 暂停原版 BGM（保留进度）
+VM_RegisterFunction(global.__vm, VM_ResumeBGM);            // 168 — 恢复原版 BGM
 ds_map_add(global._VM_remote_funcs, "VM_SwapPlants", VM_SwapPlants);
 ds_map_add(global._VM_remote_funcs, "VM_SwapPlantRects", VM_SwapPlantRects);
 ds_map_add(global._VM_remote_funcs, "VM_CompactColumn", VM_CompactColumn);
