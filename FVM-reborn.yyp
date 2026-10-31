@@ -1349,6 +1349,7 @@
     {"id":{"name":"obj_fire_bullet_effect","path":"objects/obj_fire_bullet_effect/obj_fire_bullet_effect.yy",},},
     {"id":{"name":"obj_firework_dragon","path":"objects/obj_firework_dragon/obj_firework_dragon.yy",},},
     {"id":{"name":"obj_fishbone","path":"objects/obj_fishbone/obj_fishbone.yy",},},
+    {"id":{"name":"obj_Fixed_Bullet_Management","path":"objects/obj_Fixed_Bullet_Management/obj_Fixed_Bullet_Management.yy",},},
     {"id":{"name":"obj_flagship_mouse","path":"objects/obj_flagship_mouse/obj_flagship_mouse.yy",},},
     {"id":{"name":"obj_flame_manager","path":"objects/obj_flame_manager/obj_flame_manager.yy",},},
     {"id":{"name":"obj_flame","path":"objects/obj_flame/obj_flame.yy",},},
