@@ -8,6 +8,8 @@
 4. 进入对应地图，`.bin` 自动加载
 5. 修改脚本后替换 `.bin`，重新建房即可
 
+**多 bin（一个地图带多个 mod 脚本）**：地图 `.json` 同目录下可以放多个 `<图名>.<类型>.<名称>.bin`，进图时和地图 bin 一起全部自动装载，回主菜单/进新图自动卸载。类型：`card` / `enemy` / `weapon` / `gem` / `bullet` / `effect`（名称部分可以自己带点）。名字和已有 mod 重名时本图这份**同名覆盖**（离图还原旧条目）；类型不认识也能装载，写 `__hookall__` 块照样挂事件跑。联机时房主自动把全部 bin 拼在地图 bin 后发给客机，客机按清单切段加载，不用手动处理。
+
 ---
 
 ## 语法
@@ -214,8 +216,8 @@ _VM_BATTLE_START {
 | 函数 | 参数 | 说明 |
 |---|---|---|
 | `VM_CreatePlatform(列,行,宽,高,轴向,距离,停顿帧,贴图)` | 8个 | 创建平台。轴向: 0=上下 1=左右 |
-| `VM_SpawnPlant("卡名",列,行,外形,星级,技能)` | 6个 | 种植物。`-1`=整行/整列 |
-| `VM_SpawnEnemy("敌人类型",行,血量)` | 3个 | 刷敌人 |
+| `VM_SpawnPlant("卡名",列,行,外形,星级,技能)` | 6个 | 种植物。`-1`=整行/整列；卡名不在卡组时查 mod 卡注册表（本图卡 bin / 已装 mod 卡），命中就直接按 mod 卡种（mod 名编译只警告不报错） |
+| `VM_SpawnEnemy("敌人类型",行,血量)` | 3个 | 刷敌人。类型不在内置敌人表时查 mod 敌人注册表（本图敌人 bin / 已装 mod 敌人），命中就直接按 mod 敌人刷（mod 名编译只警告不报错） |
 | `VM_SpawnBoss("BOSS类型",行,血量)` | 3个 | 刷 BOSS |
 | `VM_SpawnObject("物件名",列,行)` | 3个 | 刷对象: `obstacle` `lava` `wind_tunnel` `mouse_hole` 等（含 boss 产物） |
 | `VM_SpawnBatMouse(列,行)` | 2个 | 在指定格子生成蝙蝠鼠（含降落标记），返回实例 ID |
@@ -495,9 +497,22 @@ _VM_BATTLE_START {
 
 写 mod 卡 / 武器 / 宝石 / 子弹 / 敌人插件时才用：按名字创建实例、销毁、判断存活、加速推进。
 
+六种 mod 单位各有一个通用对象，插件的 `.bin` 逻辑挂在它们上面（mod 不能定义全新对象类型，GM 对象是编译期固定的）：
+
+| 类型 | 通用对象 | 创建方式 |
+|---|---|---|
+| 卡 | `obj_card_mod` | `VM_SpawnPlant("卡名",列,行,外形,星级,技能)`；卡名不在卡组时查 mod 卡注册表兜底，mod 名编译只警告不报错 |
+| 敌人 | `obj_enemy_mod` | `VM_SpawnEnemy("敌名",行,血量)`；同上查 mod 敌人注册表兜底 |
+| 子弹 | `obj_bullet_mod` | `VM_CreateInstance("obj_bullet_mod",x,y)` 建完 `VM_SetProp(实例,"mod_type","子弹类型名")` 指定是哪个 mod 的逻辑 |
+| 特效 | `obj_effect_mod` | 同上：建完 `VM_SetProp(实例,"mod_type","特效类型名")` |
+| 武器 | `obj_weapon_mod` | 由装备放置逻辑创建（地图脚本一般不建）；身份 = 建前写 `global._mod_pending_weapon_id`，或建完赋 `parent_player` + `weapon_id` 属性再调一次它的 Step |
+| 宝石 | `obj_gem_mod` | 由装备放置逻辑创建；建前写 `global._mod_pending_gem_id` |
+
+lab 图自己的 bin 可以不属于以上任何类型：不带注册类型的 bin 也能 `__hookall__` 挂事件跑，等于一个"本图对象"。
+
 | 函数 | 参数 / 返回 | 说明 |
 |---|---|---|
-| `VM_CreateInstance("对象名",x,y)` | 3个 | 按像素坐标创建实例（子弹等） |
+| `VM_CreateInstance("对象名",x,y)` | 3个 | 按像素坐标创建实例（子弹等）；建 mod 子弹/特效对象后要用 `VM_SetProp` 赋 `mod_type` 指定逻辑（见本节开头总表） |
 | `VM_GetCurCard()` | int | 当前块所属的 mod 卡实例 id |
 | `VM_GetInstancesInRange("数组名",行1,行2,列1,列2,"enemy"或"card","筛选")` | int | 收集范围内实例 id 进指定 VM 命名数组（会先清空），返回数量。筛选：敌人按 target_type，卡片按 plant_id/plant_type，`""`或`"all"`=不限 |
 | `VM_IsDestroyed(实例ID)` | 1个 | 判断实例是否已被销毁，返回 1=已销毁 0=存在 |
@@ -615,6 +630,7 @@ _VM_BATTLE_START {
 | 组 | 名字 |
 |---|---|
 | 数学 | `abs` `min` `max` `clamp` `sign` `round` `sqrt` `pow` `lerp` `approach` `dist` `angle` `deg` `rad` |
+| 三角函数 | `sin` `cos` `tan` `asin` `acos` `atan` `atan2`（弧度版）；`dsin` `dcos` `dtan` `dasin` `dacos` `datan` `datan2`（度版，入参出参都是度；`asin`/`acos` 入参自动夹到 -1~1，`datan2` 返回 -180~180、`angle()` 是 0~360） |
 | 位运算 | `bit_and` `bit_or` `bit_xor` `bit_not` `shl` `shr` `bit_test` `bit_set` `bit_clear` `bit_toggle` |
 | 数值杂项 | `mod_pos` `wrap` `pingpong` `smooth` `clamp01` `is_even` `is_odd` `fmt` |
 | 字符串 | `str_len` `str_sub` `str_find` `str_upper` `str_lower` `str_replace` `str_replace_all` `str_repeat` `str_trim` |
@@ -636,6 +652,8 @@ _VM_BATTLE_START {
 | `VM_GetPreviewCard()` | 获取当前手牌 card_id，没有返回 -1 |
 | `VM_conveyor_belt_able(0或1)` | 传送带模式开关：开启后卡槽按传送带排列，卡组不自动生成卡槽，用 `VM_Slot_add` 手动加卡 |
 | `VM_Slot_add("卡名")` | 向传送带队列末尾添加一张卡（卡槽），游戏内注册的任意卡片均可，与玩家是否解锁无关；返回卡槽实例 ID |
+| `VM_RemoveCardSlot(i)` | 删掉第 i 个战斗卡槽（i 从 0 起，按当前战斗槽顺序），其余槽重新编号并重排位置；卡组数据不动，只影响本场战斗。成功返回 0，没有这个槽返回 -1 |
+| `VM_InsertCardSlot(i,"卡id")` | 在第 i 个位置插入一张卡的战斗卡槽（i 从 0 起，越界自动夹到首/尾；任意已注册卡 id，与玩家是否解锁无关），插入即冷却完成，其余槽重新编号并重排位置；卡组数据不动。成功返回 0，卡不存在返回 -1 |
 
 **可修改的卡槽属性：**
 
@@ -650,6 +668,20 @@ _VM_BATTLE_START {
 
 > `VM_CalcCardSlotProp` 仅对可修改的数值属性生效（cooldown / cooldown_timer / cost / vm_current_cost）。
 
+**卡槽动画参数**（用 `VM_SetProp(卡槽实例, "名字", 值)` 设置，obj 每帧自动驱动）：
+
+| 参数 | 默认 | 说明 |
+|---|---|---|
+| `destroy_timer` | -1 | 倒计时多少帧自动销毁；`-1`=永不销毁，`>0` 每帧减 1，到 0 销毁。**手里拿着这张卡（本槽被选中）时倒计时暂停，不会销毁**，松手后继续 |
+| `destroy_on_plant` | 0 | 种下卡后是否销毁自己：`1`=种卡即自毁（独立参数，与传送带无关） |
+| `blink_start` | 0 | 倒计时剩多少帧时开始闪烁（透明度满/低周期变化，每 6 帧一切）；`0`=不闪烁 |
+| `jump_on` | 0 | `1`=播放跳跃动画 |
+| `jump_start_x` `jump_start_y` | 0 | 跳跃起点 |
+| `jump_end_x` `jump_end_y` | 0 | 跳跃目标点（跳完落在这里，`jump_on` 自动归 0） |
+| `jump_apex_x` `jump_apex_y` | 0 | 最高点（二次贝塞尔控制点） |
+| `jump_frames` | 0 | 跳跃总帧数（`>0` 才跳；没设时 `jump_on=1` 会直接落到目标点） |
+| `jump_counter` | 0 | 当前跳跃帧计数（只读，插件可查询进度） |
+
 ### 自定义绘制
 
 在 mod 对象里画 HUD / 额外贴图（`_OBJECT_DRAW` 里调用）。
@@ -661,6 +693,10 @@ _VM_BATTLE_START {
 | `VM_SetDrawSlotEx(槽位,"贴图名",x,y,alpha,角度,xscale,yscale)` | 同上，可设置角度/缩放（-1 用默认值） |
 | `VM_SetDrawSlotEx_front(槽位,"贴图名",x,y,alpha,角度,xscale,yscale)` | 同上，前景槽 |
 | `VM_DrawSpriteExt("贴图名",子图,x,y,xscale,yscale,角度,alpha)` | 直接画一张贴图（等价 `draw_sprite_ext`，颜色固定白色）。**只能在 `_OBJECT_DRAW` 块里调用**，在 Step 里调画不出来。贴图名走 `get_load_sprite`，`VM_LoadSpritePerm_Ex` 加载的也能直接用 |
+| `VM_DrawSpritePartExt("贴图名",子图,left,top,宽,高,x,y,xscale,yscale,颜色,alpha)` | 画贴图的指定矩形区域（等价 `draw_sprite_part_ext` 全参数：颜色 0xRRGGBB，**-1 = 白色不染色**），区域越界的部分不画。**只能在 `_OBJECT_DRAW` 块里调用**，贴图名走 `get_load_sprite` |
+| `VM_DrawText(x,y,"文字")` | 画一行文字（字体固定 `font_yuan`）：字号看 `VM_DrawSetFontSize`，颜色看 `VM_DrawSetColour`，不设 = 默认字号 + 白色。**只能在 `_OBJECT_DRAW` 块里调用** |
+| `VM_DrawSetFontSize(字号)` | 设置之后 `VM_DrawText` 的字号（像素高，0/-1 = 恢复默认），设一次一直生效直到再设置 |
+| `VM_DrawSetColour(r,g,b)` | 设置之后 `VM_DrawText` 的颜色（通道 0~255，任一 -1 = 恢复白色），设一次一直生效直到再设置 |
 
 ### mod 音效加载
 

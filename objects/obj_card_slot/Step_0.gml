@@ -324,6 +324,11 @@ if (is_selected) {
             }
             selected_preview = noone;
             global.selected_slot = noone;
+
+            // destroy_on_plant：种下卡后销毁自己
+            if destroy_on_plant{
+                instance_destroy();
+            }
         }
     }
 }
@@ -331,4 +336,44 @@ if (is_selected) {
 depth = -1 * slot_index - 1000
 if info_got == false{
 	event_user(0)
+}
+
+// ── 卡槽动画（Create 里那组参数由插件 VM_SetProp 设置）──
+// 倒计时销毁：-1 不动；>0 每帧-1，到 0 销毁（销毁前按 blink_start 闪烁；手里拿着卡时暂停倒计时）
+if (destroy_timer > 0) {
+    if (!is_selected) {
+        destroy_timer--;
+        if (blink_start > 0 && destroy_timer <= blink_start) {
+            blink_phase++;
+            image_alpha = ((blink_phase div 6) mod 2 == 0) ? 1 : 0.25;   // 满/低周期切换
+        } else if (blink_phase > 0) {
+            blink_phase = 0;
+            image_alpha = 1;   // 闪烁条件解除（插件把倒计时改回去了）恢复不透明
+        }
+        if (destroy_timer == 0) {
+            instance_destroy();
+            exit;
+        }
+    }
+}
+
+// 跳跃动画：二次贝塞尔 起点 → 最高点 → 目标点（t = jump_counter / jump_frames）
+if (jump_on) {
+    if (jump_frames > 0 && jump_counter < jump_frames) {
+        var _t = jump_counter / jump_frames;
+        var _u = 1 - _t;
+        x = _u * _u * jump_start_x + 2 * _u * _t * jump_apex_x + _t * _t * jump_end_x;
+        y = _u * _u * jump_start_y + 2 * _u * _t * jump_apex_y + _t * _t * jump_end_y;
+        jump_counter++;
+        if (jump_counter >= jump_frames) {
+            x = jump_end_x;
+            y = jump_end_y;
+            jump_on = 0;   // 跳完收尾，落点=目标点
+        }
+    } else {
+        // 没设帧数（或已计满）：直接落到目标点并关掉
+        x = jump_end_x;
+        y = jump_end_y;
+        jump_on = 0;
+    }
 }

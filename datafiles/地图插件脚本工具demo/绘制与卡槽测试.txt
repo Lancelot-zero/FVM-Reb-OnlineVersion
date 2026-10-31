@@ -1,0 +1,26 @@
+// ================================================================
+// 多 bin 测试：主地图脚本（编译成 <图名>.bin）
+// 同目录把下面两个文件一起编译：
+//   绘制与卡槽测试.card.画字卡.txt  ->  <图名>.card.画字卡.bin
+//   绘制与卡槽测试.enemy.画字鼠.txt ->  <图名>.enemy.画字鼠.bin
+// 进图时三个 bin（map + card + enemy）全部自动装载
+// ================================================================
+
+_VM_ROOM_READY_ENTRY {
+    VM_ShowNotice("多bin+绘制+卡槽测试")
+}
+
+_VM_BATTLE_START {
+    VM_ClearPlants(-1, -1)
+    VM_SetFlame(3000)
+
+    // 种一张 mod 卡（本图 card bin 注册在 mod_card_vms，直接按名字种）
+    VM_ShellPrint("[T] map: SpawnPlant(画字卡)        = ", VM_SpawnPlant("画字卡", 2, 1, 0, -1, -1))
+
+    // 放一只 mod 鼠（本图 enemy bin 注册在 mod_enemy_vms，直接按名字放）
+    VM_ShellPrint("[T] map: SpawnEnemy(画字鼠)        = ", VM_SpawnEnemy("画字鼠", 2, 0))
+
+    // 主图脚本也能测卡槽：插一张 small_fire 到第 0 位，再删掉第 3 个槽
+    VM_ShellPrint("[T] map: InsertCardSlot(0, small_fire) = ", VM_InsertCardSlot(0, "small_fire"))
+    VM_ShellPrint("[T] map: RemoveCardSlot(3)          = ", VM_RemoveCardSlot(3))
+}

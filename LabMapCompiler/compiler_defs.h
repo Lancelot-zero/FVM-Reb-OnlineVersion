@@ -361,6 +361,12 @@ static std::vector<FuncDef> FUNC_DEFS = {
     {"VM_MapObj",                 -1,  {}, PT_ANY}, // 147 — 变长：查格子上有没有地图物品（列, 行[, "名字"]），读 global.cell_terrain_flag 的位。名字 obstacle/mucus/lava/seawater/barrier/fog/cloud/wind_tunnel；"all"/""=任意一种；"list"=返回逗号分隔名字串；列或行传 -1 = 该方向不限；名字不认识返回 -1
     {"VM_GetInstanceCount",        1,  {PT_STRING}, PT_INT}, // 148 — 某个对象类的实例个数（类名就是 obj_xxxx，和游戏里 object 名一致）；名字不存在返回 -1
     {"VM_GetInstanceAt",           2,  {PT_STRING, PT_INT}, PT_INT}, // 149 — 某个对象类第 k 个实例的 id（k 从 0 起）；越界 / 名字不存在返回 -1
+    {"VM_DrawText",                3,  {PT_FLOAT, PT_FLOAT, PT_STRING}, PT_INT}, // 150 — 画一行文字（x,y,文字；字体 font_yuan；字号看 VM_DrawSetFontSize、颜色看 VM_DrawSetColour，不设=默认字号+白色），只能在 _OBJECT_DRAW 里用
+    {"VM_DrawSpritePartExt",       12, {PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY, PT_ANY}, PT_INT}, // 151 — 画贴图的指定矩形区域（贴图,子图,left,top,宽,高,x,y,xscale,yscale,颜色,alpha；颜色 -1=白色不染色），只能在 _OBJECT_DRAW 里用
+    {"VM_DrawSetFontSize",         1,  {PT_FLOAT}, PT_INT}, // 152 — 设置之后 VM_DrawText 的字号（像素高，0/-1=恢复默认），设一次一直生效直到再设置
+    {"VM_DrawSetColour",           3,  {PT_INT, PT_INT, PT_INT}, PT_INT}, // 153 — 设置之后 VM_DrawText 的颜色（r,g,b 通道 0~255，任一 -1=恢复白色），设一次一直生效直到再设置
+    {"VM_RemoveCardSlot",          1,  {PT_INT}, PT_INT}, // 154 — 删掉第 i 个战斗卡槽（i 从 0 起，按当前战斗槽顺序），其余槽重新编号并重排位置；卡组数据 selected_deck 不动，只影响本场战斗
+    {"VM_InsertCardSlot",          2,  {PT_INT, PT_STRING}, PT_INT}, // 155 — 在第 i 个位置插入一张卡的战斗卡槽（i 从 0 起，越界自动夹到首/尾；任意已注册卡 id，与玩家是否解锁无关），插入即冷却完成，其余槽重新编号并重排位置；卡组数据 selected_deck 不动
 };
 
 // ============================================================

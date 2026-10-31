@@ -22,6 +22,22 @@ vm_place_preview=-1
 vm_card_spr_addx = 0
 vm_card_spr_addy = 0
 
+// ── 卡槽动画参数（插件用 VM_SetProp 设置，obj 每帧自动驱动；见 help.md「卡槽操作」）──
+destroy_timer = -1   // 倒计时多少帧自动销毁；-1=永不销毁，>0 每帧-1，到 0 销毁（手里拿着卡时暂停）
+blink_start   = 0    // 倒计时剩多少帧时开始闪烁（透明度满/低周期变化）；0=不闪烁
+blink_phase   = 0    // 【内部】闪烁相位，插件不用碰
+jump_on       = 0    // 1=播放跳跃动画
+jump_start_x  = 0    // 起点 x
+jump_start_y  = 0    // 起点 y
+jump_end_x    = 0    // 目标 x（跳完落在这里）
+jump_end_y    = 0    // 目标 y
+jump_apex_x   = 0    // 最高点 x（贝塞尔控制点）
+jump_apex_y   = 0    // 最高点 y
+jump_frames   = 0    // 跳跃总帧数（>0 才跳）
+jump_counter  = 0    // 当前跳跃帧计数（只读；跳完自动 jump_on=0）
+
+destroy_on_plant = 0 // 种下卡后销毁自己
+
 
 
 is_ready = true           // 卡槽是否可用

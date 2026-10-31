@@ -56,6 +56,10 @@ export const FUNC_NAMES = [
   "VM_BulletScreenAdd_Ex",
   "VM_BulletScreenAdd_Exs",
   "VM_GetInfo", "VM_CatInRow", "VM_MapObj", "VM_GetInstanceCount", "VM_GetInstanceAt",
+  "VM_DrawText",
+  "VM_DrawSpritePartExt",
+  "VM_DrawSetFontSize", "VM_DrawSetColour",
+  "VM_RemoveCardSlot", "VM_InsertCardSlot",
 ];
 
 const eventSet = new Set(EVENT_BLOCKS);

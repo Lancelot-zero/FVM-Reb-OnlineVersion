@@ -132,8 +132,9 @@ def linter_table_entry(fs):
 
 
 def linter_desc_entry(fs):
-    """linter.go funcDescs 条目"""
-    return pad('"%s":' % fs["name"], 30) + '"%s",' % fs["desc"]
+    """linter.go funcDescs 条目（desc 里的引号要转义成 Go 字符串字面量）"""
+    desc = fs["desc"].replace("\\", "\\\\").replace('"', '\\"')
+    return pad('"%s":' % fs["name"], 30) + '"%s",' % desc
 
 
 def test_call_line(fs):

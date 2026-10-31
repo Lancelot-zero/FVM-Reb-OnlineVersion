@@ -297,6 +297,10 @@ private:
         if (!failed_) { failed_ = true; first_err_ = "Line " + to_string(line) + ": " + msg; }
         cerr << "Line " << line << ": " << msg << endl;
     }
+    // 警告：只提示，不置失败
+    void warning(int line, const string& msg) {
+        cerr << "Warning Line " << line << ": " << msg << endl;
+    }
 
     StringPool strings_;
     VarTable vars_;
@@ -636,8 +640,15 @@ private:
                     case 10: pset = &VALID_OBJECT_NAMES; break; // VM_SpawnObject
                 }
                 if (pset && !str_in_set(sval, *pset)) {
-                    error(line, string(def.name) + " arg " + to_string(i + 1) + " \"" + sval +
-                                "\" is not a valid value");
+                    // VM_SpawnPlant / VM_SpawnEnemy：mod 卡/敌人在运行时动态注册，
+                    // 编译期不可能知道全名单 → 不在内置名单里只警告（按 mod 注册表兜底）
+                    if (func_id == 6 || func_id == 7) {
+                        warning(line, string(def.name) + " arg " + to_string(i + 1) + " \"" + sval +
+                                    "\" is not a built-in id (will be looked up in mod registry at runtime)");
+                    } else {
+                        error(line, string(def.name) + " arg " + to_string(i + 1) + " \"" + sval +
+                                    "\" is not a valid value");
+                    }
                 }
             }
         }

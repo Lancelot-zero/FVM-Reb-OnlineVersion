@@ -2937,7 +2937,14 @@ function VM_SpawnPlant(card_id_addr, col_addr, row_addr, shape_addr, level_addr,
     if (is_undefined(level)) level = 0;
     if (is_undefined(skill)) skill = 0;
     var _card_data = deck_get_card_data(card_id, shape);
-    if (is_undefined(_card_data)) return -1;
+    if (is_undefined(_card_data)) {
+        // 卡组里没有（如本图 mod 卡 bin 只注册在 mod_card_vms）：注册表命中就直接按 mod 卡建
+        if (variable_global_exists("mod_card_vms") && ds_exists(global.mod_card_vms, ds_type_map)
+            && ds_map_exists(global.mod_card_vms, card_id)) {
+            _card_data = {};
+            _card_data[? "obj"] = obj_card_mod;
+        } else return -1;
+    }
     var _obj = _card_data[? "obj"];
     var _props = {};
 	if(level!=-1)_props[$ "current_level"] =level;
@@ -3001,7 +3008,14 @@ function VM_SpawnEnemy(type_addr, row_addr, hp_override_addr) {
     var _VM_id = ++global._VM_create_counter;
     if (global.network.mode == "client") return -_VM_id;
     var _info = global.enemy_map[? type];
-    if (is_undefined(_info)) return -1;
+    if (is_undefined(_info)) {
+        // 敌人表没有（如本图 mod 敌人 bin 只注册在 mod_enemy_vms）：注册表命中就直接按 mod 敌人建
+        if (variable_global_exists("mod_enemy_vms") && ds_exists(global.mod_enemy_vms, ds_type_map)
+            && ds_map_exists(global.mod_enemy_vms, type)) {
+            _info = {};
+            _info[? "_obj"] = obj_enemy_mod;
+        } else return -1;
+    }
     var _pos = get_world_position_from_grid(global.grid_cols, row);
     var _bak_log = global._evt_log_enabled;   // 记录日志开关
     global._evt_log_enabled = false;          // 创建不进帧尾日志（本函数手动广播）
@@ -4933,6 +4947,103 @@ function VM_Slot_add(card_id_addr) {
 	return real(inst.id);
 }
 
+/// @function battle_slots_relayout(order)
+/// @desc 战斗卡槽重排：按 order 顺序（缺省按 slot_index 排序）重新编号 slot_index=1..n 并重摆位置；传送带模式重建传送带数组
+/// @param order 可选，槽实例 id 数组（插入新槽时传入指定顺序）
+function battle_slots_relayout(order) {
+	var slots;
+	if (argument_count > 0 && is_array(order)) {
+		slots = order;
+	} else {
+		slots = [];
+		with (obj_card_slot) array_push(slots, id);
+		var n0 = array_length(slots);
+		for (var a = 0; a < n0 - 1; a++)
+			for (var b = a + 1; b < n0; b++)
+				if (slots[b].slot_index < slots[a].slot_index) {
+					var t = slots[a]; slots[a] = slots[b]; slots[b] = t;
+				}
+	}
+	var n = array_length(slots);
+	for (var k = 0; k < n; k++) {
+		var inst = slots[k];
+		if (!instance_exists(inst)) continue;
+		inst.slot_index = k + 1;
+		if (!global._VM_conveyor_belt) {
+			if (k <= 14) { inst.x = 535 + k * 90; inst.y = 90; }
+			else { inst.x = 535 + 14 * 90; inst.y = 90 + (k - 14) * 118; }
+		}
+	}
+	if (global._VM_conveyor_belt) {
+		var arr = [];
+		for (var k = 0; k < n; k++) if (instance_exists(slots[k])) array_push(arr, slots[k]);
+		global._VM_conveyor_belt_arr = arr;
+	}
+}
+
+/// @function VM_RemoveCardSlot(i_addr)
+/// @desc 删掉第 i 个战斗卡槽（i 从 0 起，按当前战斗槽顺序），其余槽重新编号并重排位置；卡组数据 selected_deck 不动
+/// @param i_addr 槽位下标地址
+/// @return 0=成功，-1=没有这个槽
+function VM_RemoveCardSlot(i_addr) {
+	var _i = vm_arg(i_addr);
+	if (!is_real(_i)) return -1;
+	var _target = noone;
+	with (obj_card_slot) {
+		if (slot_index == _i + 1) _target = id;
+	}
+	if (_target == noone) return -1;
+	// 被删的槽正在选中：先取消选中、销毁预览
+	if (global.selected_slot == _target) {
+		global.selected_slot.is_selected = false;
+		var _pre = global.selected_slot.selected_preview;
+		if (instance_exists(_pre)) instance_destroy(_pre);
+		global.selected_slot.selected_preview = noone;
+		global.selected_slot = noone;
+	}
+	instance_destroy(_target);
+	battle_slots_relayout();
+	return 0;
+}
+
+/// @function VM_InsertCardSlot(i_addr, card_addr)
+/// @desc 在第 i 个位置插入一张卡的战斗卡槽（i 从 0 起，越界自动夹到首/尾），插入即冷却完成，其余槽重新编号并重排位置；卡组数据 selected_deck 不动
+/// @param i_addr 插入位置下标地址
+/// @param card_addr 卡 id（字符串）地址，任意已注册卡，与玩家是否解锁无关
+/// @return 0=成功，-1=参数无效或卡不存在
+function VM_InsertCardSlot(i_addr, card_addr) {
+	var _i = vm_arg(i_addr);
+	var _cid = vm_arg(card_addr);
+	if (!is_real(_i) || is_undefined(_cid)) return -1;
+	var _card_data = deck_get_card_data(_cid, 0);
+	if (_card_data == noone) return -1;
+	// 当前槽位顺序（按 slot_index 排序）
+	var slots = [];
+	with (obj_card_slot) array_push(slots, id);
+	var n = array_length(slots);
+	for (var a = 0; a < n - 1; a++)
+		for (var b = a + 1; b < n; b++)
+			if (slots[b].slot_index < slots[a].slot_index) {
+				var t = slots[a]; slots[a] = slots[b]; slots[b] = t;
+			}
+	var _pos = clamp(_i, 0, n);
+	// 新槽（位置先随便放，重排会摆正）
+	var inst = instance_create_depth(535 + 15 * 90, 90, -5, obj_card_slot);
+	inst.cost = _card_data[? "cost"];
+	inst.cooldown = _card_data[? "cooldown"];
+	inst.card_obj = _card_data[? "obj"];
+	inst.card_spr = _card_data[? "sprite"];
+	inst.place_preview = _card_data[? "place_preview"];
+	inst.description = _card_data[? "description"];
+	inst.card_id = _cid;
+	inst.shape = _card_data[? "shape"];
+	inst.cooldown_timer = inst.cooldown; // 插入即冷却完成、立即可用
+	inst.depth = -2000;
+	array_insert(slots, _pos, inst);
+	battle_slots_relayout(slots);
+	return 0;
+}
+
 // ============================================================
 // 全局初始化和块管理
 // ============================================================
@@ -5563,6 +5674,95 @@ function VM_DrawSpriteExt(spr_addr, subimg_addr, x_addr, y_addr, xs_addr, ys_add
     return 0;
 }
 
+/// @function VM_DrawSpritePartExt(sprite, subimg, left, top, width, height, x, y, xscale, yscale, colour, alpha)
+/// @param sprite     贴图：sprite 索引，或资源名/文件名（字符串，走 get_load_sprite 的缓存链）
+/// @param subimg     子图索引（第几帧）
+/// @param left top   要画的矩形区域在贴图内的左上角
+/// @param width height  区域宽高（越界部分不画）
+/// @param x y        屏幕坐标
+/// @param xscale yscale  缩放
+/// @param colour     颜色混合 0xRRGGBB（-1 = 白色不染色）
+/// @param alpha      透明度 0~1
+/// @return 0=画了；-1=贴图不存在（什么都不画）
+/// @desc 等价 draw_sprite_part_ext(...)：画一张贴图的指定矩形区域。
+///       只能在 _OBJECT_DRAW 块里调用——GML 的绘制函数在 Step 事件里调用是画不出东西的。
+///       贴图名解析交给 get_load_sprite()，mod 贴图直接传文件名就能用。
+function VM_DrawSpritePartExt(spr_addr, subimg_addr, left_addr, top_addr, width_addr, height_addr, x_addr, y_addr, xs_addr, ys_addr, colour_addr, alpha_addr) {
+    var _raw = vm_arg(spr_addr);
+    var _spr = is_string(_raw) ? get_load_sprite(_raw) : _raw;
+    if (!sprite_exists(_spr)) return -1;
+    var _sub = vm_arg(subimg_addr);
+    var _l = vm_arg(left_addr);
+    var _t = vm_arg(top_addr);
+    var _w = vm_arg(width_addr);
+    var _h = vm_arg(height_addr);
+    var _xs = vm_arg(xs_addr);
+    var _ys = vm_arg(ys_addr);
+    var _col = vm_arg(colour_addr);
+    var _alp = vm_arg(alpha_addr);
+    if (is_undefined(_sub)) _sub = 0;
+    if (is_undefined(_l)) _l = 0;
+    if (is_undefined(_t)) _t = 0;
+    if (is_undefined(_w)) _w = sprite_get_width(_spr);
+    if (is_undefined(_h)) _h = sprite_get_height(_spr);
+    if (is_undefined(_xs) || _xs == 0) _xs = 1;
+    if (is_undefined(_ys) || _ys == 0) _ys = 1;
+    if (is_undefined(_col)) _col = -1;   // -1 = c_white：不染色
+    if (is_undefined(_alp)) _alp = 1;
+    draw_sprite_part_ext(_spr, _sub, _l, _t, _w, _h, vm_arg(x_addr), vm_arg(y_addr), _xs, _ys, _col, _alp);
+    return 0;
+}
+
+/// @function VM_DrawText(x, y, text)
+/// @param x y    屏幕坐标
+/// @param text   要画的文字（数字也可以，内部会转字符串）
+/// @return 0=画了；-1=文字为空
+/// @desc 在当前字号/颜色设置下画一行文字（字体固定 font_yuan，战斗界面同款）。
+///       字号用 VM_DrawSetFontSize 设置（不设 = 默认字号），颜色用 VM_DrawSetColour 设置（不设 = 白色）。
+///       只能在 _OBJECT_DRAW 块里调用——GML 的绘制函数在 Step 事件里调用是画不出东西的。
+function VM_DrawText(x_addr, y_addr, text_addr) {
+    var _txt = vm_arg(text_addr);
+    if (is_undefined(_txt)) return -1;
+    draw_set_font(font_yuan);
+    var _col = variable_global_exists("_VM_draw_colour") ? global._VM_draw_colour : -1;
+    draw_set_colour((is_real(_col) && _col >= 0) ? _col : c_white);
+    var _sz = variable_global_exists("_VM_draw_font_size") ? global._VM_draw_font_size : 0;
+    if (is_real(_sz) && _sz > 0) {
+        var _base = font_get_size(font_yuan);
+        var _sc = (_base > 0) ? _sz / _base : 1;
+        draw_text_transformed(vm_arg(x_addr), vm_arg(y_addr), string(_txt), _sc, _sc, 0);
+    } else {
+        draw_text(vm_arg(x_addr), vm_arg(y_addr), string(_txt));
+    }
+    return 0;
+}
+
+/// @function VM_DrawSetFontSize(size)
+/// @param size  字号 = 像素高度；0 或 -1 = 恢复默认字号
+/// @desc 设置之后 VM_DrawText 用的字号。设一次一直生效，直到再设置。
+///       原版 draw_set_font 的对应物（这里固定 font_yuan，只调大小）。
+function VM_DrawSetFontSize(size_addr) {
+    var _sz = vm_arg(size_addr);
+    global._VM_draw_font_size = (is_real(_sz) && _sz > 0) ? _sz : 0;
+    return 0;
+}
+
+/// @function VM_DrawSetColour(r, g, b)
+/// @param r g b  颜色通道 0~255；任一 -1 = 恢复白色
+/// @desc 设置之后 VM_DrawText 用的颜色。设一次一直生效，直到再设置。
+///       原版 draw_set_colour 的对应物（只作用于 VM_DrawText，不影响 VM_DrawSpriteExt 系）。
+function VM_DrawSetColour(r_addr, g_addr, b_addr) {
+    var _r = vm_arg(r_addr);
+    var _g = vm_arg(g_addr);
+    var _b = vm_arg(b_addr);
+    if (is_real(_r) && is_real(_g) && is_real(_b) && _r >= 0 && _g >= 0 && _b >= 0) {
+        global._VM_draw_colour = make_color_rgb(clamp(_r, 0, 255), clamp(_g, 0, 255), clamp(_b, 0, 255));
+    } else {
+        global._VM_draw_colour = -1;   // -1 = c_white
+    }
+    return 0;
+}
+
 // 命中位掩码：等价 can_target_on，但判定变成一次位与（省掉每帧每弹每敌的字符串比较）
 // 敌人按自己的 target_type 占一位（obj_battle 每帧写进 tbit），子弹按"能打哪些类型"或起来（创建时写进 ttype）
 #macro HIT_NORMAL      1
@@ -6096,6 +6296,12 @@ VM_RegisterFunction(global.__vm, VM_CatInRow);             // 146 — 该行第�
 VM_RegisterFunction(global.__vm, VM_MapObj);               // 147 — 变长：格子上有没有地图物品（列, 行[, 名字/"list"]）
 VM_RegisterFunction(global.__vm, VM_GetInstanceCount);     // 148 — obj_xxxx 的实例个数
 VM_RegisterFunction(global.__vm, VM_GetInstanceAt);        // 149 — obj_xxxx 的第 k 个实例 id
+VM_RegisterFunction(global.__vm, VM_DrawText);             // 150 — 画一行文字（x,y,文字；字号/颜色看 VM_DrawSetFontSize/VM_DrawSetColour），只能在 _OBJECT_DRAW 里用
+VM_RegisterFunction(global.__vm, VM_DrawSpritePartExt);    // 151 — 画贴图指定矩形区域（draw_sprite_part_ext 全参），只能在 _OBJECT_DRAW 里用
+VM_RegisterFunction(global.__vm, VM_DrawSetFontSize);      // 152 — 设置 VM_DrawText 的字号（像素高，0/-1=默认），设一次一直生效
+VM_RegisterFunction(global.__vm, VM_DrawSetColour);        // 153 — 设置 VM_DrawText 的颜色（r,g,b，任一 -1=白色），设一次一直生效
+VM_RegisterFunction(global.__vm, VM_RemoveCardSlot);       // 154 — 删掉第 i 个战斗卡槽（i 从 0 起），其余槽重新编号重排；卡组数据不动
+VM_RegisterFunction(global.__vm, VM_InsertCardSlot);       // 155 — 在第 i 个位置插入一张卡的战斗卡槽（i 从 0 起，越界夹到首/尾），插入即冷却完成；卡组数据不动
 ds_map_add(global._VM_remote_funcs, "VM_SwapPlants", VM_SwapPlants);
 ds_map_add(global._VM_remote_funcs, "VM_SwapPlantRects", VM_SwapPlantRects);
 ds_map_add(global._VM_remote_funcs, "VM_CompactColumn", VM_CompactColumn);

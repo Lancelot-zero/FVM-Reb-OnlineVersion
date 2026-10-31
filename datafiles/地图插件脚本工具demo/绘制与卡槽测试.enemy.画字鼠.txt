@@ -1,0 +1,18 @@
+// ================================================================
+// 多 bin 测试：敌人 bin（编译成 <图名>.enemy.<名称>.bin）
+// 和卡 bin 一起进图自动装载——绿色字和红字同时出现 = 多个 bin 都在跑
+// ================================================================
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+    VM_ShellPrint("[T] 敌人 bin 已装载")
+}
+
+_OBJECT_DRAW {
+    self = VM_GetCurCard()
+
+    // 绿色小字：画在敌人上方，和卡 bin 的红字同时出现
+    VM_DrawSetColour(0, 255, 0)
+    VM_DrawSetFontSize(20)
+    VM_DrawText(VM_GetProp(self, "x"), VM_GetProp(self, "y") - 50, "鼠bin OK")
+}

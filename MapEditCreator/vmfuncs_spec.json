@@ -38,6 +38,53 @@
       "desc": "直接 draw_sprite_ext（贴图,子图,x,y,xscale,yscale,rot,alpha；固定 c_white），只能在 _OBJECT_DRAW 里用"
     },
     {
+      "name": "VM_DrawSpritePartExt",
+      "args": [
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any",
+        "any"
+      ],
+      "ret": "int",
+      "desc": "画贴图的指定矩形区域（贴图,子图,left,top,宽,高,x,y,xscale,yscale,颜色,alpha；颜色 -1=白色不染色），只能在 _OBJECT_DRAW 里用"
+    },
+    {
+      "name": "VM_DrawText",
+      "args": [
+        "float",
+        "float",
+        "string"
+      ],
+      "ret": "int",
+      "desc": "画一行文字（x,y,文字；字体 font_yuan；字号看 VM_DrawSetFontSize、颜色看 VM_DrawSetColour，不设=默认字号+白色），只能在 _OBJECT_DRAW 里用"
+    },
+    {
+      "name": "VM_DrawSetFontSize",
+      "args": [
+        "float"
+      ],
+      "ret": "int",
+      "desc": "设置之后 VM_DrawText 的字号（像素高，0/-1=恢复默认），设一次一直生效直到再设置"
+    },
+    {
+      "name": "VM_DrawSetColour",
+      "args": [
+        "int",
+        "int",
+        "int"
+      ],
+      "ret": "int",
+      "desc": "设置之后 VM_DrawText 的颜色（r,g,b 通道 0~255，任一 -1=恢复白色），设一次一直生效直到再设置"
+    },
+    {
       "name": "VM_RunStep",
       "args": [
         "int",
@@ -427,6 +474,25 @@
       "ret": "int",
       "testCall": "VM_GetInstanceAt(\"obj_cat\", 0)",
       "desc": "某个对象类第 k 个实例的 id（k 从 0 起）；越界 / 名字不存在 → -1"
+    },
+    {
+      "name": "VM_RemoveCardSlot",
+      "args": [
+        "int"
+      ],
+      "ret": "int",
+      "testCall": "VM_RemoveCardSlot(1)",
+      "desc": "删掉第 i 个战斗卡槽（i 从 0 起，按当前战斗槽顺序），其余槽重新编号并重排位置；卡组数据 selected_deck 不动，只影响本场战斗"
+    },
+    {
+      "name": "VM_InsertCardSlot",
+      "args": [
+        "int",
+        "string"
+      ],
+      "ret": "int",
+      "testCall": "VM_InsertCardSlot(1, \"s\")",
+      "desc": "在第 i 个位置插入一张卡的战斗卡槽（i 从 0 起，越界自动夹到首/尾；任意已注册卡 id，与玩家是否解锁无关），插入即冷却完成，其余槽重新编号并重排位置；卡组数据 selected_deck 不动"
     }
   ]
 }

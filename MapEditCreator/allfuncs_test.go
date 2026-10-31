@@ -151,6 +151,12 @@ _VM_BATTLE_START {
     VM_MapObj(1, 1, "lava")
     VM_GetInstanceCount("obj_cat")
     VM_GetInstanceAt("obj_cat", 0)
+    VM_DrawText(0.5, 0.5, "s")
+    VM_DrawSpritePartExt(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+    VM_DrawSetFontSize(0.5)
+    VM_DrawSetColour(1, 1, 1)
+    VM_RemoveCardSlot(1)
+    VM_InsertCardSlot(1, "s")
 }
 `
 	for _, d := range lintScript(code) {

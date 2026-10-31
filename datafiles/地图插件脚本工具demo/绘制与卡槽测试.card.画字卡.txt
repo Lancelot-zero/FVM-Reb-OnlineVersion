@@ -1,0 +1,27 @@
+// ================================================================
+// 多 bin 测试：卡 bin（编译成 <图名>.card.<名称>.bin）
+// 名字和 mod 目录里已注册的 mod 卡同名 = 本图覆盖那张卡的逻辑，离图还原
+// ================================================================
+
+_OBJECT_CREATE {
+    self = VM_GetCurCard()
+    VM_ShellPrint("[T] 卡 bin 已装载，本卡 id = ", VM_GetProp(self, "plant_id"))
+
+    // 卡槽增删：插一张 small_fire 到第 0 位，再删掉第 3 个槽
+    VM_ShellPrint("[T] card: InsertCardSlot(0, small_fire) = ", VM_InsertCardSlot(0, "small_fire"))
+    VM_ShellPrint("[T] card: RemoveCardSlot(3)          = ", VM_RemoveCardSlot(3))
+}
+
+_OBJECT_DRAW {
+    self = VM_GetCurCard()
+    cx = VM_GetProp(self, "x")
+    cy = VM_GetProp(self, "y")
+
+    // 红色大字：画在卡上方
+    VM_DrawSetColour(255, 0, 0)
+    VM_DrawSetFontSize(32)
+    VM_DrawText(cx, cy - 60, "卡bin绘制 T1")
+
+    // 贴图区域：spr_sun_god_3 左上 64x64 区域画在卡头上（颜色 -1 = 不染色）
+    VM_DrawSpritePartExt("spr_sun_god_3", 0, 0, 0, 64, 64, cx, cy - 110, 1, 1, -1, 1)
+}

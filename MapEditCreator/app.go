@@ -68,158 +68,35 @@ func (a *App) LogJsError(msg string) {
 	println("[JS-ERROR]", msg)
 }
 
-// updateLog 启动弹窗展示的本次更新内容（累计更新，尚未发布；按类别整理，不按追加顺序）
-const updateLog = `【本次更新】
+// updateLog 启动弹窗展示的本次更新内容（v3.0）
+const updateLog = `# v3.0 更新
 
-## 一、新增函数 · 关卡规则
+## 一、新增函数 · 卡槽与绘制
 
-- **VM_BanAllCard()**：禁用全部卡片（遍历全游戏卡片注册表）
-- **VM_CannelBanCard("卡名")**：解除指定卡片的禁用
-- **VM_BanWeapon() / VM_BanSuperWeapon() / VM_BanShield()**：禁止角色使用武器 / 超级武器 / 盾牌
-- **VM_SetCardShapeCap(等级) / VM_SetCardSkillCap(等级)**：转职 / 技能等级上限，-1=不限制
-- **VM_SetWaveAuto(0或1)**：波次自动推进开关，0=关闭后不自动出怪，由脚本 VM_SetWave 控制
-- **VM_SetWave(波次,子波次)**：设置当前波次/子波次（只改计数，不出怪）
-- **VM_SetShovelFlameRate(系数)**：铲子铲卡返还火苗系数，-1=原逻辑，0~1=直接用该系数
-- **VM_GetTimeLimit() / VM_SetTimeLimit(帧数)**：获取 / 设置关卡倒计时（单位帧，60 帧=1s），
-  无倒计时返回 undefined；设置时联机自动同步客户端
+- **VM_RemoveCardSlot(i)**：删掉第 i 个战斗卡槽（i 从 0 起），其余槽重新编号并重排位置。
+  只动本场战斗槽，卡组数据 selected_deck 不动
+- **VM_InsertCardSlot(i, "卡id")**：在第 i 个位置插入一张卡的战斗卡槽（i 越界自动夹到首/尾；
+  任意已注册卡 id，与玩家是否解锁无关），插入即冷却完成，其余槽重排
+- **VM_DrawText(x, y, "文字")**：在 _OBJECT_DRAW 里画一行文字（font_yuan）；
+  字号用 VM_DrawSetFontSize、颜色用 VM_DrawSetColour，不设 = 默认字号 + 白色
+- **VM_DrawSetFontSize(字号)** / **VM_DrawSetColour(r, g, b)**：设置后续 VM_DrawText 的字号 /
+  颜色（r,g,b 各 0~255，任一 -1=恢复白色），设一次一直生效
+- **VM_DrawSpritePartExt(贴图,子图,left,top,宽,高,x,y,xscale,yscale,颜色,alpha)**：
+  画贴图的指定矩形区域（颜色 -1=白色不染色），只能在 _OBJECT_DRAW 里用
+- **卡槽动画参数（VM_SetProp 设置，自动驱动）**：destroy_timer 倒计时自动销毁
+  （手里拿着这张卡时倒计时暂停）、destroy_on_plant 种卡后自毁、blink_start 销毁前闪烁、
+  jump_on / jump_* 跳跃动画
 
-## 二、新增函数 · 地图与查询
+## 二、mod 直接生成与多 bin 地图
 
-- **VM_EnemyInRange(行1,行2,列1,列2,"类型")**：矩形范围是否存在敌人（前缀和），
-  类型 normal/obstacle/diver/air/dance/underground/all
-- **VM_GetInstancesInRange("数组名",行1,行2,列1,列2,"enemy"或"card","筛选")**：
-  收集范围内实例 id 进指定 VM 命名数组，返回数量（卡片可按 plant_id / plant_type 筛）
-- **VM_GetHomingTarget("类型")**：最左且血量最高的敌人 id（追踪索敌），每帧全场只扫一次
-- **VM_CanPlace("卡名", 列, 行)**：按游戏正规种植规则判断该格能不能种这张卡——地形、障碍、
-  水域/莲叶、护盾层、底座卡、替换开关全都算进去（就是玩家手牌点下去时走的那套规则），1=能 0=不能
-- **VM_GetCardProp("卡名","属性名")**：按属性名读一张卡的单值。存档类 shape/level/skill/max_level/max_shape，
-  卡池类 plant_type/feature_type/target_card/cost/cooldown；读不到返回 undefined（配合 VM_IsUndefined）
-- **VM_GetInfo(类别, id, 字段1[, 字段2, ...])**（变长）：按注册表逐级查一个对象的信息。
-  类别只有 card / enemy / weapon / gem；字符串参数=取字段，数字参数=取下标
-  （数字段落在 ds_map 上会自动当字符串键，注册表里 shapes/upgrades 的键就是 "0"/"3"）；
-  查到数组 / 结构体本身返回 undefined，要求继续往下写。
-  例：VM_GetInfo("card","small_fire","shapes",0,"upgrades",3,"atk")。
-  card 读的是 global.plant_registry（大池子，不是存档那份）
-- **VM_CatInRow(行号)**：该行第一只猫（obj_cat，海底图的螃蟹同对象）的实例 id，没有返回 -1
-- **VM_MapObj(列, 行[, "名字"])**（变长）：格子上有没有地图物品（读 global.cell_terrain_flag 的位）。
-  名字 obstacle / mucus / lava / seawater / barrier / fog / cloud / wind_tunnel；
-  "all" 或 ""=任意一种，"list"=返回逗号分隔名字串；列或行传 -1 = 该方向不限；名字不认识返回 -1
-- **VM_GetInstanceCount("obj_xxxx")**：某个对象类的实例个数（类名就是游戏里的 object 名，要写全）
-- **VM_GetInstanceAt("obj_xxxx", k)**：某个对象类第 k 个实例的 id（k 从 0 起）；越界返回 -1
-
-## 三、新增函数 · 创建与实例
-
-- **VM_SpawnBatMouse(列,行)**：在指定格子生成蝙蝠鼠（含降落标记），返回实例 ID
-- **VM_CreateInstance("对象名",x,y)**：按像素坐标创建实例（子弹等）
-- **VM_DestroyInstance(实例ID)**：直接销毁实例，会触发它的 Destroy 事件
-- **VM_RunStep(实例, 轮数)**：让该实例额外跑 N 轮 Step（一轮 = Begin Step + Step + End Step），
-  用来做加速；同一个实例被重跑期间再调会被忽略，防无限递归，轮数夹在 1~60
-- **VM_IsDestroyed(实例ID)**：判断实例是否已被销毁，1=已销毁 0=存在
-- **VM_GetCurCard()**：当前块所属的 mod 卡实例 id
-
-## 四、新增函数 · 弹幕与伤害
-
-- **VM_BulletScreenAdd(贴图,总帧数,打击范围,缩放,动画速度,x,y,vx,vy,伤害,伤害计数,存活帧数,子弹类型,销毁对象,mod名字)**：
-  往屏幕弹幕管理器塞一颗子弹。管理器由 obj_battle 开局创建，全场只此一个实例，所有弹幕统一迭代与绘制、不占实例。
-  打击范围=格子半径，0=只算本格；伤害计数=最多命中几个，-1=不限次数；存活帧数=倒计时，小于等于 0=不自动消失；
-  销毁对象非空则在该子弹消失处创建
-- **VM_HomingBulletAdd(贴图,缩放,x,y,速度,伤害,可命中类型,销毁对象,mod名字,销毁贴图,模式)**：
-  往追踪弹管理器塞一颗会拐弯的子弹。每帧重新索敌（可以来回换目标），按 point_direction 转向并重写 vx/vy；
-  模式 0=只追全场最左的可命中敌人，1=优先本行正前方 150 像素内血最多的敌人，找不到再退回全场最左。
-  命中只判定它锁定的那个目标，像素距离 90x85 以内就结算并消失（不扫网格、不穿透），
-  走敌人自己的受击事件所以护盾/闪白/音效都对，销毁对象生成在命中点。固定项：动画速度 1、每帧自转 6 度
-- **VM_DamageEnemy(敌人ID, 伤害, 伤害类型)**：给敌人造成伤害。走敌人自己的受击事件，所以闪白、受击音效、
-  护盾判定全都对（含自己重写了受击事件的 4 个敌人），比直接改 hp 正确。
-  伤害类型：normal=有盾只打盾，pierce=盾血一起掉，其它=无视护盾
-- **VM_DamageEnemyAsh(敌人ID, 伤害, 伤害类型)**：灰烬伤害。伤害接得下就正常结算，
-  接不下就一击必杀、原地换成 obj_mouse_ash_death（不看护盾，同原版大力神）
-
-## 五、新增函数 · 数组与表格
-
-- **VM_ArrayExists("表名")**：这张全局表存不存在（存在且是数组），1=有 0=没有
-- **VM_CellCount("表名", 列, 行)**：这一格里有几个元素
-- **VM_CellItem("表名", 列, 行, 第几个)**：这一格里第 k 个元素（k 从 0 起）
-- **VM_CellContains("表名", 列, 行, 值)**：这一格有没有这个值，1=有 0=没有
-- **VM_ArrayContains("表名", 值)**：整张表里有没有这个值，1=有 0=没有
-  表不存在 / 不是数组 / 列行越界一律返回 -1，所以先 n = VM_CellCount(...) 再 while 遍历是安全的
-- **VM_InstArrayExists / Size / Item / Set / Add / Del / Clear / Contains(实例ID, "变量名", ...)**：
-  读写挂在实例身上的一维数组（给每张卡自己存状态用）；失败或不存在返回 -1
-
-## 六、新增函数 · 贴图与绘制
-
-- **VM_LoadSpritePerm_Ex("文件名",帧数,原点X,原点Y)**：永久缓存贴图并指定原点，
-  不被 bin 重载清理，可用 VM_FreeSpritePerm 释放
-- **VM_SpriteExists("贴图名")**：这张贴图现在真的可用吗。按解析链查：项目资源 → VM 临时缓存 →
-  VM 永久缓存 → 全局贴图缓存。注意 get_load_sprite 找不到时会塞一张空白占位图且永不失败，
-  所以不能用"有没有返回"来判断；本函数会排除占位图，返回 1=可用 0=不可用
-- **VM_AliasSpritePerm("新名","已有名")**：把新名永久指向已有名（写永久缓存，进房间不会被清）。
-  已有名必须已在永久缓存里（VM_LoadSpritePerm / _Ex 加载过）。存的是精灵 id，所以 get_load_sprite
-  直接返回真 id，可以喂给 sprite_index。[reloadmod] 时会自动释放所有这类别名（底下的真图不动），
-  让重新加载的 bin 再挂一次。配合 VM_SpriteExists 就是「内置有就用内置（性能好）、内置没有才用外置覆盖」
-- **VM_DrawSpriteExt("贴图名",子图,x,y,xscale,yscale,角度,alpha)**：直接 draw_sprite_ext
-  （颜色固定白色），只能在 _OBJECT_DRAW 块里调用
-- **VM_SetDrawSlotEx / VM_SetDrawSlotEx_front(槽位,贴图,x,y,alpha,角度,xscale,yscale)**：
-  设置绘制槽位（含旋转缩放），角度/缩放传 -1 或 undefined 用默认值(0/1/1)
-
-## 七、新增函数 · 工具与调试
-
-- **VM_Floor(值) / VM_Ceil(值)**：对数字向下 / 向上取整，非数字返回 undefined
-- **VM_IsUndefined(值)**：判断值是否为 undefined（返回 1=是 0=不是）
-- **VM_GetKilledProp("属性名")**：读当前销毁事件对象的属性快照，
-  仅 _VM_CARD_DESTROYED / _VM_ENEMY_KILLED 期间有效（mouse_id 空串时按对象名兜底）
-- **VM_LoadSound("路径")**：加载本地音频文件（只支持 wav），返回音频ID（失败 -1），
-  可用 VM_PlaySound 播放（暂时不能使用，等待修复）
-- **VM_CallFunc("函数名", 参数1, 参数2, ...)**：按名字调用一张独立字典
-  （global._VM_call_dict，在 scr_command_VM.gml 末尾维护）里的函数，返回它的返回值。
-  名字对编译器只是字符串、不校验，所以往字典里加函数不用改编译器、不用重编编译器、不用跑 sync_vmfuncs.py。
-  第一个参数是函数名，后面是实参（最多 15 个）；配套 **VM_FuncExists** 先判断存在、**VM_FuncDesc** 看说明。
-  字典里预置了 **44 个和游戏内部无关的通用工具函数**（数学 / 位运算 / 字符串 / 数值杂项 / 随机），
-  清单在 scripts/scr_command_VM_callFunction，见 help.md →「按名字调用函数」。
-  ⚠️ 走字典的动态调用**比较慢**（查字典 + 参数地址转值 + 动态调用），只适合低频场景，
-  别写进 _VM_FRAME / _OBJECT_STEP 这种每帧每实例跑的地方
-
-## 八、语言语法与编辑器
-
-- **自定义块 _DEFINE_BLOCK_xxx**：写成 _DEFINE_BLOCK_xxx { ... } 定义在最外层，_DEFINE_BLOCK_xxx() 调用。
-  没有参数和返回值，变量和调用方共用；编译时把被调块的代码拷到调用块末尾，调用处跳过去、块尾 / exit 跳回来
-  （同一个块调 N 次就拷 N 份）。只有事件块能调自定义块，自定义块里不能再调块；块内 exit = 返回调用处，
-  事件块内 exit = 结束整个块
-- **支持 && / || 逻辑运算**：优先级 || < && < 比较，短路求值（左边能定结果就不算右边），结果是 1 或 0。
-  例：if (a == 1 || b == 1) { ... }
-- **代码折叠**：以 { 结尾的花括号块（含 } else {、嵌套块）和连续的 // 注释段都能收起。
-  行号右边有折叠槽，快捷键 Ctrl+Shift+[ 折叠 / Ctrl+Shift+] 展开 / Ctrl+Alt+[ 全部折叠 / Ctrl+Alt+] 全部展开
-- **函数悬停提示**：鼠标移到函数名上，标题行直接显示**函数原型**（例如
-  VM_HomingBulletAdd(贴图, 缩放, x, y, 速度, 伤害, 可命中类型, 销毁对象, mod名字, 销毁贴图, 模式)），
-  下面一行灰色小字是参数个数，再下面是说明；原型从 help.md 的函数表自动提取，
-  help.md 里没写成函数表行的函数退回显示「函数名（N 个参数）」
-- **帮助文档重排**：分成「常用命令」和「mod 专属命令」两大块（后者不是私有命令，只是 mod 用得多），
-  函数按功能归类，加了「自定义块」章节
-
-## 九、帮助文档修正
-
-- VM_EnemyInRange 参数应为 (行1,行2,列1,列2,"类型")，此前误写成 (左,上,右,下,"类型")
-- VM_GetInstancesInRange 参数应为 ("数组名",行1,行2,列1,列2,"enemy"或"card","筛选")，
-  此前误写成 ("类型",左,上,右,下,"筛选","筛选2")
-- 属性表修正（x/y 世界坐标、grid_col/grid_row 格子坐标）
-- 卡槽属性可修改项修正（cooldown / cooldown_timer / cost / vm_current_cost）
-- VM_SetProp 增加 "object_name" 特殊属性说明
-- 移除 VM_ApplyPlantLevel 相关描述
-- 原 VM_GetCardSaveInfo 已由 VM_GetCardProp 取代
-
-## 十、配套编译器与数据
-
-- 编译器函数表 89~142（89~95 / 109~115 / 116~125 / 127~142 分批加入）
-- 块名补全：_OBJECT_CFG / _OBJECT_CREATE / _OBJECT_STEP / _OBJECT_DRAW / _OBJECT_DESTROY
-- 敌人 ID 109 → 134 个（新增海底世界等 25 个敌人）
-- 卡片 ID 70 → 79 个（新增 9 张卡片）
-- 事件块补全：_VM_BOSS_STATE_CHANGE
-- VM_CannelBanCard 纳入卡片名强制校验
-
-## 十一、mod 对象鼠标块
-
-- 块名补全：_OBJECT_MOUSE_ENTER / _OBJECT_MOUSE_LEAVE / _OBJECT_CLICK
-- 对应 6 个 mod 对象（卡 / 武器 / 宝石 / 敌人 / 子弹 / 特效）的鼠标移入 / 移出 / 左键点击
-- 语法检查、高亮补全、悬停提示、帮助文档已同步
+- **VM_SpawnPlant / VM_SpawnEnemy 直接支持 mod 名**：卡名 / 敌名不在内置名单时，编译只警告
+  不报错；运行时自动查 mod 注册表（本图卡 bin / 已装 mod），命中就按 mod 卡 / mod 敌人创建。
+  不用再手动写 pending 全局 + VM_CreateInstance 那套握手
+- **多 bin 实验室地图**：图目录下放 <图名>.<类型>.<名称>.bin（类型 card / enemy / weapon /
+  gem / bullet / effect），进图自动扫描装载、同名覆盖旧条目、离图还原；联机时各 bin 自动拼在
+  地图 bin 后下发，客机按清单切段
+- 编辑器帮助补全：六种 mod 对象总表（各对象怎么创建、身份怎么给）、VM_CreateInstance 的
+  mod_type 用法、卡槽操作说明、多 bin 部署说明
 `
 
 // GetUpdateLog 返回本次更新内容（前端启动时以网页弹窗展示）
