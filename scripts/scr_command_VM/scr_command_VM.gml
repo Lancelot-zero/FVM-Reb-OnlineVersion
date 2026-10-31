@@ -1884,12 +1884,12 @@ function VM_SetCardSlotProp(name_addr, prop_addr, value_addr) {
 	var prop = vm_read_mem(global.__vm, prop_addr);
 	var value = vm_read_mem(global.__vm, value_addr);
 	if (name == "all" || name == -1) {
-		with (obj_card_slot) { if (vm_inst_write_ok(id)) { variable_instance_set(id, prop, value); vm_inst_broadcast_prop(id, prop, value); } }
+		with (obj_card_slot) { if (slot_grouped && vm_inst_write_ok(id)) { variable_instance_set(id, prop, value); vm_inst_broadcast_prop(id, prop, value); } }
 	} else if (is_real(name)) {
-		with (obj_card_slot) { if (slot_index == name && vm_inst_write_ok(id)) { variable_instance_set(id, prop, value); vm_inst_broadcast_prop(id, prop, value); } }
+		with (obj_card_slot) { if (slot_grouped && slot_index == name && vm_inst_write_ok(id)) { variable_instance_set(id, prop, value); vm_inst_broadcast_prop(id, prop, value); } }
 	} else {
-		with (obj_card_slot) { 
-			if (card_id == name) 
+		with (obj_card_slot) {
+			if (slot_grouped && card_id == name)
 				if (vm_inst_write_ok(id)) { variable_instance_set(id, prop, value); vm_inst_broadcast_prop(id, prop, value); }
 		}
 	}
@@ -1906,11 +1906,11 @@ function VM_CalcCardSlotProp(name_addr, prop_addr, op_addr, val_addr) {
 	var op = vm_read_mem(global.__vm, op_addr);
 	var val = vm_read_mem(global.__vm, val_addr);
 	if (name == "all" || name == -1) {
-		with (obj_card_slot) _calc_op(id, prop, op, val);
+		with (obj_card_slot) { if (slot_grouped) _calc_op(id, prop, op, val); }
 	} else if (is_real(name)) {
-		with (obj_card_slot) { if (slot_index == name) _calc_op(id, prop, op, val); }
+		with (obj_card_slot) { if (slot_grouped && slot_index == name) _calc_op(id, prop, op, val); }
 	} else {
-		with (obj_card_slot) { if (card_id == name) _calc_op(id, prop, op, val); }
+		with (obj_card_slot) { if (slot_grouped && card_id == name) _calc_op(id, prop, op, val); }
 	}
 }
 
@@ -2937,15 +2937,16 @@ function VM_SpawnPlant(card_id_addr, col_addr, row_addr, shape_addr, level_addr,
     if (is_undefined(level)) level = 0;
     if (is_undefined(skill)) skill = 0;
     var _card_data = deck_get_card_data(card_id, shape);
-    if (is_undefined(_card_data)) {
+    var _obj = undefined;
+    if (is_undefined(_card_data) || _card_data == noone) {
         // 卡组里没有（如本图 mod 卡 bin 只注册在 mod_card_vms）：注册表命中就直接按 mod 卡建
         if (variable_global_exists("mod_card_vms") && ds_exists(global.mod_card_vms, ds_type_map)
             && ds_map_exists(global.mod_card_vms, card_id)) {
-            _card_data = {};
-            _card_data[? "obj"] = obj_card_mod;
+            _obj = obj_card_mod;
         } else return -1;
+    } else {
+        _obj = _card_data[? "obj"];
     }
-    var _obj = _card_data[? "obj"];
     var _props = {};
 	if(level!=-1)_props[$ "current_level"] =level;
 	if(skill!=-1)_props[$ "skill"] =skill;
@@ -3013,7 +3014,7 @@ function VM_SpawnEnemy(type_addr, row_addr, hp_override_addr) {
         if (variable_global_exists("mod_enemy_vms") && ds_exists(global.mod_enemy_vms, ds_type_map)
             && ds_map_exists(global.mod_enemy_vms, type)) {
             _info = {};
-            _info[? "_obj"] = obj_enemy_mod;
+            _info[$ "_obj"] = obj_enemy_mod;
         } else return -1;
     }
     var _pos = get_world_position_from_grid(global.grid_cols, row);
@@ -4956,7 +4957,7 @@ function battle_slots_relayout(order) {
 		slots = order;
 	} else {
 		slots = [];
-		with (obj_card_slot) array_push(slots, id);
+		with (obj_card_slot) { if (slot_grouped) array_push(slots, id); }   // 只收卡槽组内的槽，游离槽不参与重排
 		var n0 = array_length(slots);
 		for (var a = 0; a < n0 - 1; a++)
 			for (var b = a + 1; b < n0; b++)
@@ -4990,7 +4991,7 @@ function VM_RemoveCardSlot(i_addr) {
 	if (!is_real(_i)) return -1;
 	var _target = noone;
 	with (obj_card_slot) {
-		if (slot_index == _i + 1) _target = id;
+		if (slot_grouped && slot_index == _i + 1) _target = id;
 	}
 	if (_target == noone) return -1;
 	// 被删的槽正在选中：先取消选中、销毁预览
@@ -5008,9 +5009,10 @@ function VM_RemoveCardSlot(i_addr) {
 
 /// @function VM_InsertCardSlot(i_addr, card_addr)
 /// @desc 在第 i 个位置插入一张卡的战斗卡槽（i 从 0 起，越界自动夹到首/尾），插入即冷却完成，其余槽重新编号并重排位置；卡组数据 selected_deck 不动
+///       超出上限（21 个槽）时先淘汰末尾的槽再插入，总槽数不超过 21
 /// @param i_addr 插入位置下标地址
 /// @param card_addr 卡 id（字符串）地址，任意已注册卡，与玩家是否解锁无关
-/// @return 0=成功，-1=参数无效或卡不存在
+/// @return 插入卡槽的实例 id；-1=参数无效或卡不存在
 function VM_InsertCardSlot(i_addr, card_addr) {
 	var _i = vm_arg(i_addr);
 	var _cid = vm_arg(card_addr);
@@ -5019,13 +5021,27 @@ function VM_InsertCardSlot(i_addr, card_addr) {
 	if (_card_data == noone) return -1;
 	// 当前槽位顺序（按 slot_index 排序）
 	var slots = [];
-	with (obj_card_slot) array_push(slots, id);
+	with (obj_card_slot) { if (slot_grouped) array_push(slots, id); }   // 只数卡槽组内的槽（游离槽不算 21 上限）
 	var n = array_length(slots);
 	for (var a = 0; a < n - 1; a++)
 		for (var b = a + 1; b < n; b++)
 			if (slots[b].slot_index < slots[a].slot_index) {
 				var t = slots[a]; slots[a] = slots[b]; slots[b] = t;
 			}
+	// 超出上限（21）：先淘汰末尾的槽（被淘汰的槽若正被选中，先取消选中、销毁预览）
+	if (n >= 21) {
+		var _last = slots[n - 1];
+		if (global.selected_slot == _last) {
+			global.selected_slot.is_selected = false;
+			var _pre = global.selected_slot.selected_preview;
+			if (instance_exists(_pre)) instance_destroy(_pre);
+			global.selected_slot.selected_preview = noone;
+			global.selected_slot = noone;
+		}
+		instance_destroy(_last);
+		array_delete(slots, n - 1, 1);
+		n -= 1;
+	}
 	var _pos = clamp(_i, 0, n);
 	// 新槽（位置先随便放，重排会摆正）
 	var inst = instance_create_depth(535 + 15 * 90, 90, -5, obj_card_slot);
@@ -5041,7 +5057,33 @@ function VM_InsertCardSlot(i_addr, card_addr) {
 	inst.depth = -2000;
 	array_insert(slots, _pos, inst);
 	battle_slots_relayout(slots);
-	return 0;
+	return VM_ClientWrapId(real(inst));
+}
+
+/// @function VM_SpawnCardSlot(card_addr, x_addr, y_addr)
+/// @desc 创建一个游离卡槽（不属于卡槽组）：不进重排/插槽/删槽/21 上限，没有组内快捷键（鼠标点选可用），位置停在参数指定坐标
+/// @param card_addr 卡 id（字符串）地址，任意已注册卡，与玩家是否解锁无关
+/// @param x_addr y_addr 槽坐标（像素）
+/// @return 卡槽实例 id；-1=参数无效或卡不存在
+function VM_SpawnCardSlot(card_addr, x_addr, y_addr) {
+	var _cid = vm_arg(card_addr);
+	var _x = vm_arg(x_addr);
+	var _y = vm_arg(y_addr);
+	if (is_undefined(_cid) || !is_real(_x) || !is_real(_y)) return -1;
+	var _card_data = deck_get_card_data(_cid, 0);
+	if (_card_data == noone) return -1;
+	var inst = instance_create_depth(_x, _y, -2000, obj_card_slot);
+	inst.cost = _card_data[? "cost"];
+	inst.cooldown = _card_data[? "cooldown"];
+	inst.card_obj = _card_data[? "obj"];
+	inst.card_spr = _card_data[? "sprite"];
+	inst.place_preview = _card_data[? "place_preview"];
+	inst.description = _card_data[? "description"];
+	inst.card_id = _cid;
+	inst.shape = _card_data[? "shape"];
+	inst.cooldown_timer = inst.cooldown; // 插入即冷却完成、立即可用
+	inst.slot_grouped = false;           // 游离槽：不属于卡槽组
+	return VM_ClientWrapId(real(inst));
 }
 
 // ============================================================
@@ -6302,6 +6344,7 @@ VM_RegisterFunction(global.__vm, VM_DrawSetFontSize);      // 152 — 设置 VM_
 VM_RegisterFunction(global.__vm, VM_DrawSetColour);        // 153 — 设置 VM_DrawText 的颜色（r,g,b，任一 -1=白色），设一次一直生效
 VM_RegisterFunction(global.__vm, VM_RemoveCardSlot);       // 154 — 删掉第 i 个战斗卡槽（i 从 0 起），其余槽重新编号重排；卡组数据不动
 VM_RegisterFunction(global.__vm, VM_InsertCardSlot);       // 155 — 在第 i 个位置插入一张卡的战斗卡槽（i 从 0 起，越界夹到首/尾），插入即冷却完成；卡组数据不动
+VM_RegisterFunction(global.__vm, VM_SpawnCardSlot);        // 156 — 创建一个游离卡槽（卡id,x,y 像素坐标）：不进卡槽组/重排/21 上限，没有组内快捷键，返回实例 id
 ds_map_add(global._VM_remote_funcs, "VM_SwapPlants", VM_SwapPlants);
 ds_map_add(global._VM_remote_funcs, "VM_SwapPlantRects", VM_SwapPlantRects);
 ds_map_add(global._VM_remote_funcs, "VM_CompactColumn", VM_CompactColumn);

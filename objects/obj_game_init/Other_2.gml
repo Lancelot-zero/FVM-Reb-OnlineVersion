@@ -33,6 +33,13 @@ randomise()
 // 全局植物注册表
 global.plant_registry = ds_map_create();
 cards_init()
+// mod 注册表：游戏开启就建（本图 mod bin 装载直接往里插，不再依赖扫描 mod 时才创建）
+if (!variable_global_exists("mod_card_vms"))   { global.mod_card_vms   = ds_map_create(); }
+if (!variable_global_exists("mod_enemy_vms"))  { global.mod_enemy_vms  = ds_map_create(); }
+if (!variable_global_exists("mod_weapon_vms")) { global.mod_weapon_vms = ds_map_create(); }
+if (!variable_global_exists("mod_gem_vms"))    { global.mod_gem_vms    = ds_map_create(); }
+if (!variable_global_exists("mod_bullet_vms")) { global.mod_bullet_vms = ds_map_create(); }
+if (!variable_global_exists("mod_effect_vms")) { global.mod_effect_vms = ds_map_create(); }
 // mod 卡片注册（global.mod_enabled 开启时扫描 mod/cards/，注册 卡池/植物数据/技能/商店/图鉴）
 if (global.mod_enabled) {
 	src_mod_init()

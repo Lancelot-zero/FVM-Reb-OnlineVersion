@@ -151,6 +151,13 @@ global._vm_opt_run_funcs[18 + 146] = run_VM_CatInRow;            // 146
 global._vm_opt_run_funcs[18 + 147] = run_VM_MapObj;              // 147
 global._vm_opt_run_funcs[18 + 148] = run_VM_GetInstanceCount;    // 148
 global._vm_opt_run_funcs[18 + 149] = run_VM_GetInstanceAt;       // 149
+global._vm_opt_run_funcs[18 + 150] = run_VM_DrawText;            // 150
+global._vm_opt_run_funcs[18 + 151] = run_VM_DrawSpritePartExt;   // 151
+global._vm_opt_run_funcs[18 + 152] = run_VM_DrawSetFontSize;     // 152
+global._vm_opt_run_funcs[18 + 153] = run_VM_DrawSetColour;       // 153
+global._vm_opt_run_funcs[18 + 154] = run_VM_RemoveCardSlot;      // 154
+global._vm_opt_run_funcs[18 + 155] = run_VM_InsertCardSlot;      // 155
+global._vm_opt_run_funcs[18 + 156] = run_VM_SpawnCardSlot;       // 156
 
 // ══════════════════════════════════════════════════════════════════════════
 // VM_GetProp 的"内置变量专用版"（函数 id 200~208，见 VM_FID_GETPROPX）
@@ -525,12 +532,20 @@ function run_VM_SpawnPlant(vm, code, _ip) {
     if (is_undefined(level)) level = 0;
     if (is_undefined(skill)) skill = 0;
     var _card_data = deck_get_card_data(card_id, shape);
-    if (is_undefined(_card_data)) {
-        var _result = -1;
-        if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
-        return _ip;
+    var _obj = undefined;
+    if (is_undefined(_card_data) || _card_data == noone) {
+        // 卡组里没有（如本图 mod 卡 bin 只注册在 mod_card_vms）：注册表命中就直接按 mod 卡建
+        if (variable_global_exists("mod_card_vms") && ds_exists(global.mod_card_vms, ds_type_map)
+            && ds_map_exists(global.mod_card_vms, card_id)) {
+            _obj = obj_card_mod;
+        } else {
+            var _result = -1;
+            if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+            return _ip;
+        }
+    } else {
+        _obj = _card_data[? "obj"];
     }
-    var _obj = _card_data[? "obj"];
     var _props = {};
 	if(level!=-1)_props[$ "current_level"] =level;
 	if(skill!=-1)_props[$ "skill"] =skill;
@@ -618,9 +633,16 @@ function run_VM_SpawnEnemy(vm, code, _ip) {
     }
     var _info = global.enemy_map[? type];
     if (is_undefined(_info)) {
-        var _result = -1;
-        if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
-        return _ip;
+        // 敌人表没有（如本图 mod 敌人 bin 只注册在 mod_enemy_vms）：注册表命中就直接按 mod 敌人建
+        if (variable_global_exists("mod_enemy_vms") && ds_exists(global.mod_enemy_vms, ds_type_map)
+            && ds_map_exists(global.mod_enemy_vms, type)) {
+            _info = {};
+            _info[$ "_obj"] = obj_enemy_mod;
+        } else {
+            var _result = -1;
+            if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+            return _ip;
+        }
     }
     var _pos = get_world_position_from_grid(global.grid_cols, row);
     var _bak_log = global._evt_log_enabled;   
@@ -5617,6 +5639,259 @@ function run_VM_GetInstanceAt(vm, code, _ip) {
             _k = floor(_k);
             if (_k >= 0 && _k < instance_number(_obj)) {
                 _result = VM_ClientWrapId(instance_find(_obj, _k));
+            }
+        }
+    }
+    if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+    return _ip;
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// 150 VM_DrawText / 151 VM_DrawSpritePartExt
+// 152 VM_DrawSetFontSize / 153 VM_DrawSetColour
+// 154 VM_RemoveCardSlot / 155 VM_InsertCardSlot
+// 解释器实现都在 scr_command_VM.gml，这里按同套逻辑用值重写（opt 层不经过 vm_arg）
+// ══════════════════════════════════════════════════════════════════════════
+
+function run_VM_DrawText(vm, code, _ip) {
+    var opt_number = code[_ip]; _ip += 1;
+    var _mt = vm.mem_type;
+    var _mv = vm.mem_val;
+    var _dst = code[_ip]; _ip += 1;
+    var _base = _ip;
+    _ip += opt_number;
+
+    var _result = -1;
+    if (opt_number >= 3) {
+        var _txt = run_vm_read_mem(vm, code[_base + 2]);
+        if (!is_undefined(_txt)) {
+            var _x = run_vm_read_mem(vm, code[_base]);
+            var _y = run_vm_read_mem(vm, code[_base + 1]);
+            draw_set_font(font_yuan);
+            var _col = variable_global_exists("_VM_draw_colour") ? global._VM_draw_colour : -1;
+            draw_set_colour((is_real(_col) && _col >= 0) ? _col : c_white);
+            var _sz = variable_global_exists("_VM_draw_font_size") ? global._VM_draw_font_size : 0;
+            if (is_real(_sz) && _sz > 0) {
+                var _base_sz = font_get_size(font_yuan);
+                var _sc = (_base_sz > 0) ? _sz / _base_sz : 1;
+                draw_text_transformed(_x, _y, string(_txt), _sc, _sc, 0);
+            } else {
+                draw_text(_x, _y, string(_txt));
+            }
+            _result = 0;
+        }
+    }
+    if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+    return _ip;
+}
+
+function run_VM_DrawSpritePartExt(vm, code, _ip) {
+    var opt_number = code[_ip]; _ip += 1;
+    var _mt = vm.mem_type;
+    var _mv = vm.mem_val;
+    var _dst = code[_ip]; _ip += 1;
+    var _base = _ip;
+    _ip += opt_number;
+
+    var _result = -1;
+    if (opt_number >= 1) {
+        var _raw = run_vm_read_mem(vm, code[_base]);
+        var _spr = is_string(_raw) ? get_load_sprite(_raw) : _raw;
+        if (sprite_exists(_spr)) {
+            var _sub = (opt_number >= 2)  ? run_vm_read_mem(vm, code[_base + 1])  : undefined;
+            var _l   = (opt_number >= 3)  ? run_vm_read_mem(vm, code[_base + 2])  : undefined;
+            var _t   = (opt_number >= 4)  ? run_vm_read_mem(vm, code[_base + 3])  : undefined;
+            var _w   = (opt_number >= 5)  ? run_vm_read_mem(vm, code[_base + 4])  : undefined;
+            var _h   = (opt_number >= 6)  ? run_vm_read_mem(vm, code[_base + 5])  : undefined;
+            var _x   = (opt_number >= 7)  ? run_vm_read_mem(vm, code[_base + 6])  : undefined;
+            var _y   = (opt_number >= 8)  ? run_vm_read_mem(vm, code[_base + 7])  : undefined;
+            var _xs  = (opt_number >= 9)  ? run_vm_read_mem(vm, code[_base + 8])  : undefined;
+            var _ys  = (opt_number >= 10) ? run_vm_read_mem(vm, code[_base + 9])  : undefined;
+            var _col = (opt_number >= 11) ? run_vm_read_mem(vm, code[_base + 10]) : undefined;
+            var _alp = (opt_number >= 12) ? run_vm_read_mem(vm, code[_base + 11]) : undefined;
+            if (is_undefined(_sub)) _sub = 0;
+            if (is_undefined(_l)) _l = 0;
+            if (is_undefined(_t)) _t = 0;
+            if (is_undefined(_w)) _w = sprite_get_width(_spr);
+            if (is_undefined(_h)) _h = sprite_get_height(_spr);
+            if (is_undefined(_xs) || _xs == 0) _xs = 1;
+            if (is_undefined(_ys) || _ys == 0) _ys = 1;
+            if (is_undefined(_col)) _col = -1;   // -1 = c_white：不染色
+            if (is_undefined(_alp)) _alp = 1;
+            draw_sprite_part_ext(_spr, _sub, _l, _t, _w, _h, _x, _y, _xs, _ys, _col, _alp);
+            _result = 0;
+        }
+    }
+    if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+    return _ip;
+}
+
+function run_VM_DrawSetFontSize(vm, code, _ip) {
+    var opt_number = code[_ip]; _ip += 1;
+    var _mt = vm.mem_type;
+    var _mv = vm.mem_val;
+    var _dst = code[_ip]; _ip += 1;
+    var _base = _ip;
+    _ip += opt_number;
+
+    var _result = 0;
+    if (opt_number >= 1) {
+        var _sz = run_vm_read_mem(vm, code[_base]);
+        global._VM_draw_font_size = (is_real(_sz) && _sz > 0) ? _sz : 0;
+    }
+    if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+    return _ip;
+}
+
+function run_VM_DrawSetColour(vm, code, _ip) {
+    var opt_number = code[_ip]; _ip += 1;
+    var _mt = vm.mem_type;
+    var _mv = vm.mem_val;
+    var _dst = code[_ip]; _ip += 1;
+    var _base = _ip;
+    _ip += opt_number;
+
+    if (opt_number >= 3) {
+        var _r = run_vm_read_mem(vm, code[_base]);
+        var _g = run_vm_read_mem(vm, code[_base + 1]);
+        var _b = run_vm_read_mem(vm, code[_base + 2]);
+        if (is_real(_r) && is_real(_g) && is_real(_b) && _r >= 0 && _g >= 0 && _b >= 0) {
+            global._VM_draw_colour = make_color_rgb(clamp(_r, 0, 255), clamp(_g, 0, 255), clamp(_b, 0, 255));
+        } else {
+            global._VM_draw_colour = -1;   // -1 = c_white
+        }
+    } else {
+        global._VM_draw_colour = -1;
+    }
+    if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, 0);
+    return _ip;
+}
+
+function run_VM_RemoveCardSlot(vm, code, _ip) {
+    var opt_number = code[_ip]; _ip += 1;
+    var _mt = vm.mem_type;
+    var _mv = vm.mem_val;
+    var _dst = code[_ip]; _ip += 1;
+    var _base = _ip;
+    _ip += opt_number;
+
+    var _result = -1;
+    if (opt_number >= 1) {
+        var _i = run_vm_read_mem(vm, code[_base]);
+        if (is_real(_i)) {
+            var _target = noone;
+            with (obj_card_slot) {
+                if (slot_grouped && slot_index == _i + 1) _target = id;
+            }
+            if (_target != noone) {
+                // 被删的槽正在选中：先取消选中、销毁预览
+                if (global.selected_slot == _target) {
+                    global.selected_slot.is_selected = false;
+                    var _pre = global.selected_slot.selected_preview;
+                    if (instance_exists(_pre)) instance_destroy(_pre);
+                    global.selected_slot.selected_preview = noone;
+                    global.selected_slot = noone;
+                }
+                instance_destroy(_target);
+                battle_slots_relayout();
+                _result = 0;
+            }
+        }
+    }
+    if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+    return _ip;
+}
+
+function run_VM_InsertCardSlot(vm, code, _ip) {
+    var opt_number = code[_ip]; _ip += 1;
+    var _mt = vm.mem_type;
+    var _mv = vm.mem_val;
+    var _dst = code[_ip]; _ip += 1;
+    var _base = _ip;
+    _ip += opt_number;
+
+    var _result = -1;
+    if (opt_number >= 2) {
+        var _i = run_vm_read_mem(vm, code[_base]);
+        var _cid = run_vm_read_mem(vm, code[_base + 1]);
+        if (is_real(_i) && !is_undefined(_cid)) {
+            var _card_data = deck_get_card_data(_cid, 0);
+            if (_card_data != noone) {
+                // 当前槽位顺序（按 slot_index 排序）
+                var slots = [];
+                with (obj_card_slot) { if (slot_grouped) array_push(slots, id); }   // 只数卡槽组内的槽（游离槽不算 21 上限）
+                var n = array_length(slots);
+                for (var a = 0; a < n - 1; a++)
+                    for (var b = a + 1; b < n; b++)
+                        if (slots[b].slot_index < slots[a].slot_index) {
+                            var t = slots[a]; slots[a] = slots[b]; slots[b] = t;
+                        }
+                // 超出上限（21）：先淘汰末尾的槽（被淘汰的槽若正被选中，先取消选中、销毁预览）
+                if (n >= 21) {
+                    var _last = slots[n - 1];
+                    if (global.selected_slot == _last) {
+                        global.selected_slot.is_selected = false;
+                        var _pre = global.selected_slot.selected_preview;
+                        if (instance_exists(_pre)) instance_destroy(_pre);
+                        global.selected_slot.selected_preview = noone;
+                        global.selected_slot = noone;
+                    }
+                    instance_destroy(_last);
+                    array_delete(slots, n - 1, 1);
+                    n -= 1;
+                }
+                var _pos = clamp(_i, 0, n);
+                // 新槽（位置先随便放，重排会摆正）
+                var inst = instance_create_depth(535 + 15 * 90, 90, -5, obj_card_slot);
+                inst.cost = _card_data[? "cost"];
+                inst.cooldown = _card_data[? "cooldown"];
+                inst.card_obj = _card_data[? "obj"];
+                inst.card_spr = _card_data[? "sprite"];
+                inst.place_preview = _card_data[? "place_preview"];
+                inst.description = _card_data[? "description"];
+                inst.card_id = _cid;
+                inst.shape = _card_data[? "shape"];
+                inst.cooldown_timer = inst.cooldown; // 插入即冷却完成、立即可用
+                inst.depth = -2000;
+                array_insert(slots, _pos, inst);
+                battle_slots_relayout(slots);
+                _result = VM_ClientWrapId(inst);
+            }
+        }
+    }
+    if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+    return _ip;
+}
+
+// 156 VM_SpawnCardSlot：创建一个游离卡槽（不属于卡槽组），位置停在参数指定坐标
+function run_VM_SpawnCardSlot(vm, code, _ip) {
+    var opt_number = code[_ip]; _ip += 1;
+    var _mt = vm.mem_type;
+    var _mv = vm.mem_val;
+    var _dst = code[_ip]; _ip += 1;
+    var _base = _ip;
+    _ip += opt_number;
+
+    var _result = -1;
+    if (opt_number >= 3) {
+        var _cid = run_vm_read_mem(vm, code[_base]);
+        var _x = run_vm_read_mem(vm, code[_base + 1]);
+        var _y = run_vm_read_mem(vm, code[_base + 2]);
+        if (!is_undefined(_cid) && is_real(_x) && is_real(_y)) {
+            var _card_data = deck_get_card_data(_cid, 0);
+            if (_card_data != noone) {
+                var inst = instance_create_depth(_x, _y, -2000, obj_card_slot);
+                inst.cost = _card_data[? "cost"];
+                inst.cooldown = _card_data[? "cooldown"];
+                inst.card_obj = _card_data[? "obj"];
+                inst.card_spr = _card_data[? "sprite"];
+                inst.place_preview = _card_data[? "place_preview"];
+                inst.description = _card_data[? "description"];
+                inst.card_id = _cid;
+                inst.shape = _card_data[? "shape"];
+                inst.cooldown_timer = inst.cooldown; // 插入即冷却完成、立即可用
+                inst.slot_grouped = false;           // 游离槽：不属于卡槽组
+                _result = VM_ClientWrapId(inst);
             }
         }
     }
