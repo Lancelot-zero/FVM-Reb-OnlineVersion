@@ -571,6 +571,19 @@ if (!variable_global_exists("enemy_array_left") || array_length(global.enemy_arr
 		global.enemy_array_left[_e] = [];
 	}
 }
+// 友化敌人单独统计：不进 enemy_array / has_enemy_*（卡片、子弹、VM 索敌都打不到它们），互攻时两边各读对方的容器
+if (!variable_global_exists("enemy_array_friend") || array_length(global.enemy_array_friend) != size) {
+	global.enemy_array_friend = array_create(size);
+	for(var _e = 0; _e < size; _e++){
+		global.enemy_array_friend[_e] = [];
+	}
+}
+if (!variable_global_exists("enemy_array_left_friend") || array_length(global.enemy_array_left_friend) != global.grid_rows) {
+	global.enemy_array_left_friend = array_create(global.grid_rows);
+	for(var _e = 0; _e < global.grid_rows; _e++){
+		global.enemy_array_left_friend[_e] = [];
+	}
+}
 
 for(var i = 0; i < size; i++){
 	global.has_enemy_normal[i]      = 0;
@@ -580,41 +593,55 @@ for(var i = 0; i < size; i++){
 	global.has_enemy_dance[i]       = 0;
 	global.has_enemy_underground[i] = 0;
 	array_resize(global.enemy_array[i], 0);
+	array_resize(global.enemy_array_friend[i], 0);
 }
 for(var _e = 0; _e < global.grid_rows; _e++){
 	array_resize(global.enemy_array_left[_e], 0);
+	array_resize(global.enemy_array_left_friend[_e], 0);
 }
 var stride = global.grid_cols + 2;
 
 with obj_enemy_parent{
+	// 命中位掩码 tbit / ice_ok 已改由 obj_enemy_parent 自己维护（Create + Step_2 每帧刷新），
+	// 这里不再写 —— 原来在这个遍历里写，刚生成的敌人和排在它之前执行的管理器会读到"未定义"
+	var _friend = (variable_instance_exists(id, "is_friend")) ? is_friend : 0;
 	if(grid_row >= 0 && grid_row < global.grid_rows && grid_col >= 0 && grid_col < stride)
 	{
 		var idx = grid_row * stride + grid_col;
-		switch(target_type)
-		{
-			case "normal":
-				global.has_enemy_normal[idx] += 1;
-				break;
-			case "obstacle":
-				global.has_enemy_obstacle[idx] += 1;
-				break;
-			case "diver":
-				global.has_enemy_diver[idx] += 1;
-				break;
-			case "air":
-				global.has_enemy_air[idx] += 1;
-				break;
-			case "dance":
-				global.has_enemy_dance[idx] += 1;
-				break;
-			case "underground":
-				global.has_enemy_underground[idx] += 1;
-				break;
+		if (_friend) {
+			// 友化敌人：只进友化容器，不进 has_enemy_*（卡片/子弹索敌看不到它）
+			array_push(global.enemy_array_friend[idx], id)
+		} else {
+			switch(target_type)
+			{
+				case "normal":
+					global.has_enemy_normal[idx] += 1;
+					break;
+				case "obstacle":
+					global.has_enemy_obstacle[idx] += 1;
+					break;
+				case "diver":
+					global.has_enemy_diver[idx] += 1;
+					break;
+				case "air":
+					global.has_enemy_air[idx] += 1;
+					break;
+				case "dance":
+					global.has_enemy_dance[idx] += 1;
+					break;
+				case "underground":
+					global.has_enemy_underground[idx] += 1;
+					break;
+			}
+			array_push(global.enemy_array[idx],id)
 		}
-		array_push(global.enemy_array[idx],id)
 	}
 	if(grid_row >= 0 && grid_row < global.grid_rows && grid_col < 0 ){
-		array_push(global.enemy_array_left[grid_row],id)
+		if (_friend) {
+			array_push(global.enemy_array_left_friend[grid_row], id)
+		} else {
+			array_push(global.enemy_array_left[grid_row],id)
+		}
 	}
 
 	

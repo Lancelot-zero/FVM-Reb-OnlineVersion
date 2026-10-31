@@ -1210,9 +1210,13 @@ function _vm_key_name_to_code(_name) {
 }
 
 /// @function VM_GetEnemyCount()
-/// @return 场上敌人数量
+/// @return 场上敌人数量（友化敌人不算）
 function VM_GetEnemyCount() {
-	return instance_number(obj_enemy_parent);
+	var _n = 0;
+	with (obj_enemy_parent) {
+		if (!(variable_instance_exists(id, "is_friend") && is_friend)) _n++;
+	}
+	return _n;
 }
 
 /// @function VM_GetPlantCount()
@@ -2201,11 +2205,12 @@ function VM_GetHomingTarget(type_addr) {
 /// @function VM_GetInstancesInRange(arr, r1, r2, c1, c2, kind, type)
 /// @param arr  VM 命名数组：先清空，再存入结果
 /// @param r1 r2 行范围（闭区间，可反序，自动夹取到场内）
-/// @param c1 c2 列范围（闭区间，可反序）
+/// @param c1 c2 列范围（闭区间，可反序；敌人 c1 < 0 时额外收集负列 enemy_array_left）
 /// @param kind "enemy"=敌人 / "card"=我方卡片
 /// @param type 筛选：敌人按 target_type；卡片按 plant_id / plant_type(底座)；"" 或 "all"=不限
 /// @return 存入数量
-/// @desc 范围影响类卡常用：收集范围内实例 id 进数组，配合 VM_ArraySize/VM_ArrayGet 遍历
+/// @desc 范围影响类卡常用：收集范围内实例 id 进数组，配合 VM_ArraySize/VM_ArrayGet 遍历。
+///   结果列优先：按列递增（负列 c = -1 排最前），列内按行递增
 function VM_GetInstancesInRange(arr_addr, r1_addr, r2_addr, c1_addr, c2_addr, kind_addr, type_addr) {
     var _name = vm_arg(arr_addr);
     var _r1 = vm_arg(r1_addr);
@@ -2226,13 +2231,30 @@ function VM_GetInstancesInRange(arr_addr, r1_addr, r2_addr, c1_addr, c2_addr, ki
     var _count = 0;
     if (_kind == "enemy") {
         if (!variable_global_exists("enemy_array")) return 0;
+        var _want_left = _c1 < 0;                             // 查询范围含负列
         _c1 = clamp(_c1, 0, global.grid_cols + 1);
         _c2 = clamp(_c2, 0, global.grid_cols + 1);
         var _stride = global.grid_cols + 2;
-        for (var _r = _r1; _r <= _r2; _r++) {
-            var _base = _r * _stride;
-            for (var _c = _c1; _c <= _c2; _c++) {
-                var _cell = global.enemy_array[_base + _c];
+        if (_want_left) {
+            // 负列（grid_col < 0，场外待入场）只进 global.enemy_array_left（按行存），
+            // 当作 c = -1 先放（排最前），再放正常列
+            if (variable_global_exists("enemy_array_left")) {
+                for (var _r = _r1; _r <= _r2; _r++) {
+                    var _cell = global.enemy_array_left[_r];
+                    for (var _i = 0; _i < array_length(_cell); _i++) {
+                        var _e = _cell[_i];
+                        if (!instance_exists(_e) || _e.hp <= 0) continue;
+                        if (_type != "" && _e.target_type != _type) continue;
+                        array_push(_arr, VM_ClientWrapId(_e));
+                        _count++;
+                    }
+                }
+            }
+        }
+        // 列优先：外层列 _c1.._c2，列内按行 _r1.._r2
+        for (var _c = _c1; _c <= _c2; _c++) {
+            for (var _r = _r1; _r <= _r2; _r++) {
+                var _cell = global.enemy_array[_r * _stride + _c];
                 for (var _i = 0; _i < array_length(_cell); _i++) {
                     var _e = _cell[_i];
                     if (!instance_exists(_e) || _e.hp <= 0) continue;
@@ -2245,8 +2267,8 @@ function VM_GetInstancesInRange(arr_addr, r1_addr, r2_addr, c1_addr, c2_addr, ki
     } else if (_kind == "card") {
         _c1 = clamp(_c1, 0, global.grid_cols - 1);
         _c2 = clamp(_c2, 0, global.grid_cols - 1);
-        for (var _r = _r1; _r <= _r2; _r++) {
-            for (var _c = _c1; _c <= _c2; _c++) {
+        for (var _c = _c1; _c <= _c2; _c++) {
+            for (var _r = _r1; _r <= _r2; _r++) {
                 var _list = ds_grid_get(global.grid_plants, _c, _r);
                 for (var _i = 0; _i < ds_list_size(_list); _i++) {
                     var _p = ds_list_find_value(_list, _i);
@@ -2259,6 +2281,96 @@ function VM_GetInstancesInRange(arr_addr, r1_addr, r2_addr, c1_addr, c2_addr, ki
                     }
                     array_push(_arr, VM_ClientWrapId(_p));
                     _count++;
+                }
+            }
+        }
+    }
+    return _count;
+}
+
+/// @function VM_GetInstancesInRangeN(arr, r1, r2, c1, c2, kind, type, n)
+/// @param arr  VM 命名数组：先清空，再存入结果
+/// @param r1 r2 行范围（闭区间，可反序，自动夹取到场内）
+/// @param c1 c2 列范围（闭区间，可反序；敌人 c1 < 0 时额外收集负列 enemy_array_left）
+/// @param kind "enemy"=敌人 / "card"=我方卡片
+/// @param type 筛选：敌人按 target_type；卡片按 plant_id / plant_type(底座)；"" 或 "all"=不限
+/// @param n    数量上限：最多收集 n 个；n <= 0 = 不限
+/// @return 存入数量
+/// @desc VM_GetInstancesInRange 限量版：列优先收集（负列 c = -1 最前），满 n 个提前停
+function VM_GetInstancesInRangeN(arr_addr, r1_addr, r2_addr, c1_addr, c2_addr, kind_addr, type_addr, n_addr) {
+    var _name = vm_arg(arr_addr);
+    var _r1 = vm_arg(r1_addr);
+    var _r2 = vm_arg(r2_addr);
+    var _c1 = vm_arg(c1_addr);
+    var _c2 = vm_arg(c2_addr);
+    var _kind = vm_arg(kind_addr);
+    var _type = vm_arg(type_addr);
+    var _n = vm_arg(n_addr);
+    if (_type == "all") _type = "";
+    if (_r1 > _r2) { var _t = _r1; _r1 = _r2; _r2 = _t; }
+    if (_c1 > _c2) { var _t = _c1; _c1 = _c2; _c2 = _t; }
+    _r1 = clamp(_r1, 0, global.grid_rows - 1);
+    _r2 = clamp(_r2, 0, global.grid_rows - 1);
+    var _vm = global.__vm;
+    if (!ds_map_exists(_vm.arrays, _name)) ds_map_add(_vm.arrays, _name, []);
+    var _arr = _vm.arrays[? _name];
+    array_resize(_arr, 0);
+    var _count = 0;
+    if (_kind == "enemy") {
+        if (!variable_global_exists("enemy_array")) return 0;
+        var _want_left = _c1 < 0;                             // 查询范围含负列
+        _c1 = clamp(_c1, 0, global.grid_cols + 1);
+        _c2 = clamp(_c2, 0, global.grid_cols + 1);
+        var _stride = global.grid_cols + 2;
+        if (_want_left) {
+            // 负列（grid_col < 0，场外待入场）只进 global.enemy_array_left（按行存），
+            // 当作 c = -1 先放（排最前），再放正常列
+            if (variable_global_exists("enemy_array_left")) {
+                for (var _r = _r1; _r <= _r2; _r++) {
+                    var _cell = global.enemy_array_left[_r];
+                    for (var _i = 0; _i < array_length(_cell); _i++) {
+                        var _e = _cell[_i];
+                        if (!instance_exists(_e) || _e.hp <= 0) continue;
+                        if (_type != "" && _e.target_type != _type) continue;
+                        array_push(_arr, VM_ClientWrapId(_e));
+                        _count++;
+                        if (_n > 0 && _count >= _n) return _count;
+                    }
+                }
+            }
+        }
+        // 列优先：外层列 _c1.._c2，列内按行 _r1.._r2
+        for (var _c = _c1; _c <= _c2; _c++) {
+            for (var _r = _r1; _r <= _r2; _r++) {
+                var _cell = global.enemy_array[_r * _stride + _c];
+                for (var _i = 0; _i < array_length(_cell); _i++) {
+                    var _e = _cell[_i];
+                    if (!instance_exists(_e) || _e.hp <= 0) continue;
+                    if (_type != "" && _e.target_type != _type) continue;
+                    array_push(_arr, VM_ClientWrapId(_e));
+                    _count++;
+                    if (_n > 0 && _count >= _n) return _count;
+                }
+            }
+        }
+    } else if (_kind == "card") {
+        _c1 = clamp(_c1, 0, global.grid_cols - 1);
+        _c2 = clamp(_c2, 0, global.grid_cols - 1);
+        for (var _c = _c1; _c <= _c2; _c++) {
+            for (var _r = _r1; _r <= _r2; _r++) {
+                var _list = ds_grid_get(global.grid_plants, _c, _r);
+                for (var _i = 0; _i < ds_list_size(_list); _i++) {
+                    var _p = ds_list_find_value(_list, _i);
+                    if (!instance_exists(_p)) continue;
+                    if (_p.plant_id == "player") continue;   // 与 VM_SetCardProp 一致，跳过角色
+                    if (_type != "") {
+                        // 匹配卡 id / 底座类型
+                        var _pt = variable_instance_exists(_p, "plant_type") ? _p.plant_type : "";
+                        if (_p.plant_id != _type && _pt != _type) continue;
+                    }
+                    array_push(_arr, VM_ClientWrapId(_p));
+                    _count++;
+                    if (_n > 0 && _count >= _n) return _count;
                 }
             }
         }
@@ -5975,7 +6087,7 @@ function bullet_merge_into(mgr, idx, dmg, hits) {
 /// @desc 往 obj_Bullet_Screen_Management 的数组里塞一颗子弹（该实例由 obj_battle 开局创建）
 function bullet_screen_add(spr, frames, range, scale, anim_speed, x, y, vx, vy, dmg, hits, life,
                            type = "all", death_obj = "", death_mod = "",
-                           damage_type = "normal", flag = 0, angle = 0, ty = -1, lk = 0.15, death_spr = "") {
+                           damage_type = "normal", flag = 0, angle = undefined, ty = -1, lk = 0.15, death_spr = "") {
     var _mgr = instance_find(obj_Bullet_Screen_Management, 0);
     if (!instance_exists(_mgr)) {
         show_debug_message("[bullet_screen_add] 找不到 obj_Bullet_Screen_Management（由 obj_battle 开局创建）");
@@ -5990,7 +6102,10 @@ function bullet_screen_add(spr, frames, range, scale, anim_speed, x, y, vx, vy, 
     if (is_undefined(anim_speed)) anim_speed = 1;
     if (is_undefined(damage_type) || damage_type == "") damage_type = "normal";
     if (is_undefined(flag)) flag = 0;
-    if (is_undefined(angle)) angle = 0;
+    if (is_undefined(angle)) {
+        // 没传角度：按出生移动方向初始化（贴图跟着飞行方向转）；速度为 0 时保持 0
+        angle = (vx == 0 && vy == 0) ? 0 : point_direction(0, 0, vx, vy);
+    }
     if (is_undefined(ty)) ty = -1;
     if (is_undefined(lk)) lk = 0.15;
 
@@ -6027,7 +6142,7 @@ function bullet_screen_add(spr, frames, range, scale, anim_speed, x, y, vx, vy, 
     _b.frames      = _frames;
     _b.cell_range  = range;
     _b.scale       = scale;
-    _b.angle       = angle;    // 出生角度（度）：后向子弹传 180，和原版 image_angle = 180 一致
+    _b.angle       = angle;    // 出生角度（度）：不传 = 按移动方向初始化（速度为 0 → 0）；显式传用传的值（后向子弹传 180）
     _b.anim_speed  = anim_speed;
     _b.frame       = 0;
     _b.x           = x;
@@ -6076,7 +6191,7 @@ function VM_BulletScreenAdd(spr_addr, frames_addr, range_addr, scale_addr, anim_
 /// @return 子弹在管理器数组里的下标；管理器或贴图不存在时返回 -1
 function bullet_screen_add_Ex(spr, frames, range, scale, anim_speed, x, y, vx, vy, dmg, hits, life,
                               type = "all", death_obj = "", death_mod = "",
-                              damage_type = "normal", flag = 0, angle = 0, ty = -1, lk = 0.15, death_spr = "") {
+                              damage_type = "normal", flag = 0, angle = undefined, ty = -1, lk = 0.15, death_spr = "") {
     // 全部参数一次传下去（合并判定要能看全这些字段，所以不再"先加进去再改写"）
     return bullet_screen_add(spr, frames, range, scale, anim_speed, x, y, vx, vy,
                              dmg, hits, life, type, death_obj, death_mod,
@@ -6108,7 +6223,7 @@ function VM_BulletScreenAdd_Ex(spr_addr, frames_addr, range_addr, scale_addr, an
 /// @return 子弹在管理器数组里的下标；管理器或贴图不存在、表满返回 -1
 function bullet_screen_add_Exs(spr, frames, range, scale, anim_speed, x, y, vx, vy, dmg, hits, life,
                                type = "all", death_obj = "", death_mod = "",
-                               damage_type = "normal", flag = 0, angle = 0, ty = -1, lk = 0.15, death_spr = "") {
+                               damage_type = "normal", flag = 0, angle = undefined, ty = -1, lk = 0.15, death_spr = "") {
     return bullet_screen_add_Ex(spr, frames, range, scale, anim_speed, x, y, vx, vy,
                                 dmg, hits, life, type, death_obj, death_mod,
                                 damage_type, flag, angle, ty, lk, death_spr);
@@ -6232,6 +6347,118 @@ function VM_HomingBulletAdd(spr_addr, scale_addr, x_addr, y_addr, spd_addr, dmg_
                              vm_arg(dmg_addr), vm_arg(type_addr),
                              vm_arg(death_obj_addr), vm_arg(death_mod_addr),
                              vm_arg(death_spr_addr), vm_arg(mode_addr));
+}
+
+/// @function bullet_fixed_add(spr, x, y, dmg, radius, target_id, type, damage_type, freeze, frozen, death_obj, death_mod, death_spr, frames, scale, anim_speed, angle, spawn_x, spawn_y, spd)
+/// @param spr        贴图：sprite 索引，或资源名/文件名（字符串，走 get_load_sprite 的缓存链，
+///                   所以 VM_LoadSpritePerm_Ex / VM_LoadSprite 加载的 mod 贴图直接传文件名就能用）
+/// @param x, y       伤害定点（像素）：最后一帧在这结算伤害/生成销毁对象；动画贴图不一定在这画
+/// @param dmg        伤害（最后一帧结算；<=0 = 纯表现不结算伤害）
+/// @param radius     结算范围半径（像素，圆形距离）：只在范围攻击（没指定 target_id）时用
+/// @param target_id  独立攻击：指定敌人实例 id（noone = 不指定）。指定后**只**对这个敌人结算伤害
+///                   （先判断存活且 hp>0，不看半径、不看命中掩码）；不指定才按 radius 扫范围打全体
+/// @param type       子弹类型：决定能命中哪些敌人（can_hit 的 card_target_type 那一套）
+/// @param damage_type 伤害类型：normal = 有盾只打盾 / pierce = 盾血一起掉 / 其它（explosion 等）= 无视护盾
+/// @param freeze     冷冻减速帧数：>0 时写给命中敌人的 ice_timer（只加不减；受 ice_ok 限制）
+/// @param frozen     冷冻冻住帧数：>0 时写给命中敌人的 frozen_timer（只加不减；受 ice_ok 限制）
+///                   减速（is_slowdown）和冻住（is_frozen）是两套独立计时器，分开传
+/// @param death_obj  销毁对象：非空时在这颗子弹销毁的位置创建该对象（字符串资产名；
+///                   mod 对象配合 death_mod 填 mod 名，原生对象留空）
+/// @param death_spr  销毁对象的贴图覆盖：非空时把创建出来的销毁对象贴图换成它
+/// @param frames     总帧数；<=0 或超过贴图实际帧数时取贴图自身帧数
+/// @param scale      缩放（横竖同值）
+/// @param anim_speed 动画速度：每帧 frame 自增多少，可以是小数；1=每帧走一帧
+/// @param angle      绘制角度（度）：贴图朝向，默认 0
+/// @param spawn_x    出身位置 x（像素）：贴图动画的绘制起点，动画从这里出发按 spd 飞向伤害点；
+///                   undefined = 用 x（原地播放）。不影响伤害结算点
+/// @param spawn_y    出身位置 y（像素）：同上
+/// @param spd        移动速度：贴图每帧向伤害定点 (x, y) 移动的像素；0 = 原地播（经典定点弹）
+/// @return 子弹在管理器数组里的下标；贴图不存在、或管理器已到上限返回 -1
+/// @desc 往 obj_Fixed_Bullet_Management 的数组里塞一颗定点弹；管理器不在时会自动创建。
+///       伤害**定点**结算：贴图动画在固定位置播放，播完最后一帧在伤害点结算并移除。
+///       贴图本身可选动：设出身位置 + 移动速度后，动画会从出生点飞向伤害点（纯视觉，不影响结算点）。
+///       指定 target_id 就只打那一个敌人，否则按 radius 扫范围打全体。
+///       **数量上限** = 管理器的 bullet_max（200）：到顶后这一发直接丢弃。
+function bullet_fixed_add(spr, x, y, dmg, radius = 0, target_id = noone, type = "all",
+                          damage_type = "normal", freeze = 0, frozen = 0, death_obj = "", death_mod = "", death_spr = "",
+                          frames = 0, scale = 1, anim_speed = 1, angle = 0, spawn_x = undefined, spawn_y = undefined, spd = 0) {
+    var _mgr = instance_find(obj_Fixed_Bullet_Management, 0);
+    if (!instance_exists(_mgr)) {
+        _mgr = instance_create_depth(0, 0, -700, obj_Fixed_Bullet_Management);
+    }
+    var _spr = is_string(spr) ? get_load_sprite(spr) : spr;
+    if (!sprite_exists(_spr)) return -1;
+    var _frames = frames;
+    var _spr_frames = sprite_get_number(_spr);
+    if (is_undefined(_frames) || _frames <= 0 || _frames > _spr_frames) _frames = _spr_frames;
+    if (is_undefined(radius)) radius = 0;
+    if (is_undefined(target_id)) target_id = noone;
+    if (is_undefined(type) || type == "") type = "all";
+    if (is_undefined(damage_type) || damage_type == "") damage_type = "normal";
+    if (is_undefined(freeze)) freeze = 0;
+    if (is_undefined(frozen)) frozen = 0;
+    if (is_undefined(death_obj)) death_obj = "";
+    if (is_undefined(death_mod)) death_mod = "";
+    if (is_undefined(death_spr)) death_spr = "";
+    if (is_undefined(scale) || scale == 0) scale = 1;
+    if (is_undefined(anim_speed)) anim_speed = 1;
+    if (is_undefined(angle)) angle = 0;
+    if (is_undefined(spawn_x)) spawn_x = x;      // 出身位置没传 = 原地播放（画在伤害点）
+    if (is_undefined(spawn_y)) spawn_y = y;
+    if (is_undefined(spd)) spd = 0;
+
+    var _mn = _mgr.count;
+    if (_mn >= _mgr.bullet_max) return -1;     // 满了：丢弃
+
+    // 原地填 list[count] 那个现成的"空子弹"结构体（不新建，省掉每颗一次的分配）
+    var _b = _mgr.list[_mn];
+    _b.spr         = _spr;
+    _b.frames      = _frames;
+    _b.frame       = 0;
+    _b.anim_speed  = anim_speed;
+    _b.scale       = scale;
+    _b.angle       = angle;       // 贴图朝向，默认 0
+    _b.x           = x;           // 伤害定点：最后一帧在这结算（动画贴图不一定在这画）
+    _b.y           = y;
+    _b.dmg         = dmg;
+    _b.radius      = radius;
+    _b.target_id   = target_id;   // 独立攻击：指定敌人 id（noone = 范围攻击）
+    _b.target_type = type;
+    _b.ttype       = bullet_type_mask(type);   // 命中掩码：判定只做一次位与
+    _b.damage_type = damage_type;              // 命中走 damage_enemy
+    _b.freeze      = freeze;                   // 冷冻减速帧数：命中时写给敌人的 ice_timer（只加不减）
+    _b.frozen      = frozen;                   // 冷冻冻住帧数：命中时写给敌人的 frozen_timer（只加不减）
+    _b.death_obj   = death_obj;
+    _b.death_mod   = death_mod;
+    _b.death_spr   = death_spr;
+    _b.spawn_x     = spawn_x;     // 出身位置：动画从这里出发按 spd 飞向伤害点（纯视觉）
+    _b.spawn_y     = spawn_y;
+    _b.draw_x      = spawn_x;     // 当前绘制位置（每帧按 spd 向伤害点推进）
+    _b.draw_y      = spawn_y;
+    _b.spd         = spd;         // 移动速度：每帧向伤害点移动的像素；0 = 原地播
+
+    _mgr.count = _mn + 1;
+    return _mgr.count - 1;
+}
+
+/// @function VM_FixedBulletAdd(spr, x, y, dmg, radius, target_id, type, damage_type, freeze, frozen, death_obj, death_mod, death_spr, anim_speed, spawn_x, spawn_y, spd)
+/// @desc VM 侧接口，参数和返回值和 bullet_fixed_add 一致
+///       固定口径（都不是参数）：帧数取贴图自身、缩放 1、角度 0
+///       target_id 是 VM 侧实例 id：包装 id（负数）自动转回真实 id，0 表示范围攻击
+///       出身位置（spawn_x/spawn_y）没传 = 用 x/y 原地播放；spd = 贴图每帧飞向伤害点的像素
+function VM_FixedBulletAdd(spr_addr, x_addr, y_addr, dmg_addr, radius_addr, target_addr, type_addr, damage_type_addr, freeze_addr, frozen_addr, death_obj_addr, death_mod_addr, death_spr_addr, anim_speed_addr, spawn_x_addr, spawn_y_addr, spd_addr) {
+    var _target = vm_arg(target_addr);
+    if (_target == 0) {
+        _target = noone;                       // 0 = 没指定，走范围攻击
+    } else if (_target < 0) {
+        var _real = ds_map_find_value(global._VM_id_to_real, -_target);
+        _target = is_undefined(_real) ? noone : _real;
+    }
+    return bullet_fixed_add(vm_arg(spr_addr), vm_arg(x_addr), vm_arg(y_addr), vm_arg(dmg_addr),
+                            vm_arg(radius_addr), _target, vm_arg(type_addr),
+                            vm_arg(damage_type_addr), vm_arg(freeze_addr), vm_arg(frozen_addr),
+                            vm_arg(death_obj_addr), vm_arg(death_mod_addr), vm_arg(death_spr_addr),
+                            vm_arg(anim_speed_addr), vm_arg(spawn_x_addr), vm_arg(spawn_y_addr), vm_arg(spd_addr));
 }
 
 global.__vm = VM_Create();
@@ -6393,6 +6620,8 @@ VM_RegisterFunction(global.__vm, VM_DrawSetColour);        // 153 — 设置 VM_
 VM_RegisterFunction(global.__vm, VM_RemoveCardSlot);       // 154 — 删掉第 i 个战斗卡槽（i 从 0 起），其余槽重新编号重排；卡组数据不动
 VM_RegisterFunction(global.__vm, VM_InsertCardSlot);       // 155 — 在第 i 个位置插入一张卡的战斗卡槽（i 从 0 起，越界夹到首/尾），插入即冷却完成；卡组数据不动
 VM_RegisterFunction(global.__vm, VM_SpawnCardSlot);        // 156 — 创建一个游离卡槽（卡id,x,y 像素坐标）：不进卡槽组/重排/21 上限，没有组内快捷键，返回实例 id
+VM_RegisterFunction(global.__vm, VM_GetInstancesInRangeN); // 157 — VM_GetInstancesInRange 限量版：最多收 n 个（n<=0 不限），列优先满 n 提前停
+VM_RegisterFunction(global.__vm, VM_FixedBulletAdd);       // 158 — 定点弹：固定位置播贴图动画，最后一帧结算（指定敌人/范围攻击，普通/爆炸伤害，可减速/冻住，销毁可生成对象）
 ds_map_add(global._VM_remote_funcs, "VM_SwapPlants", VM_SwapPlants);
 ds_map_add(global._VM_remote_funcs, "VM_SwapPlantRects", VM_SwapPlantRects);
 ds_map_add(global._VM_remote_funcs, "VM_CompactColumn", VM_CompactColumn);

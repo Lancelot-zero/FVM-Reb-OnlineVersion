@@ -17,6 +17,8 @@ flash_value = 0 //受伤闪光计时器
 timer = 0
 attack_timer = 0
 target_plant = noone
+target_enemy = noone   // 友化互攻目标：友化敌人打正常敌人，正常敌人也打友化敌人
+is_friend = 0          // 友化：1 = 已友化（帮玩家打敌人、不啃植物、倒戈往右走），0 = 正常敌人
 attack_range = 90
 immune_to_ash = false
 ice_timer = 0

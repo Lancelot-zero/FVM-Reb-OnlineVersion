@@ -101,11 +101,15 @@ VM_SetProp(self, "mod_prestep_dx", 3)      // 每帧往右 3 像素
 
 ### 进 VM 的时机（`mod_step_enter_condition`）
 
-| 值 | 什么时候进 | 配合字段 |
-|---|---|---|
-| `""`（默认，写错也按这个兜底） | **每帧进** | — |
-| `"mod"` | `battle_time % 间隔 == 0`（全场共享） | `mod_step_enter_var` = 间隔帧数 |
-| `"wait"` | `mod_step_enter_var` 每帧自减，减到 0 进（进之前保持 0，需自己再设） | `mod_step_enter_var` = 剩余帧数 |
+**条件怎么设**：在 `_OBJECT_CREATE`（或 `_OBJECT_CFG`）里写一次
+`VM_SetProp(self, "mod_step_enter_condition", "模式名")`，模式要用的配合字段也一起 `VM_SetProp` 设好。
+没被条件放行的帧**完全不进** `_OBJECT_STEP`。
+
+| 值 | 什么时候进 | 配合字段 | 简单例子 |
+|---|---|---|---|
+| `""`（默认，写错也按这个兜底） | **每帧进** | — | 不设就是它；每帧的活儿直接写在 `_OBJECT_STEP` 里 |
+| `"mod"` | `battle_time % 间隔 == 0`（全场共享） | `mod_step_enter_var` = 间隔帧数 | `condition = "mod"` + `var = 30` → 每 30 帧进一次 |
+| `"wait"` | `mod_step_enter_var` 每帧自减，减到 0 进（进之前保持 0，需自己再设） | `mod_step_enter_var` = 剩余帧数 | `condition = "wait"` + `var = 20` → 20 帧后进一次（进去要重设 var，否则条件被清） |
 
 > 特效没有 `hp`、也没有格子坐标，所以 `hp_change` / `cell` / 索敌那几类条件这里都没有。
 
@@ -127,7 +131,6 @@ VM_ArrayAdd("mod_watch", "atk")
 - 同一帧多个属性变化 → **各进一次**（快照会全部更新，下帧不会重复报）；每轮之间会检查实例还在不在（插件把自己销毁了就中断）；
 - 也能当**对象之间 / 插件之间的信号**用：约定一个属性名（比如自己 `VM_SetProp` 加的 `mod_signal`），一边改它，另一边就会因为 `mod_watch` 变化被触发进入，读 `mod_changed_prop` 就知道是谁变了 —— 相当于互相传消息；
 - ⚠️ 声明 / 改列表那一帧只对齐快照、不触发；条件那一路和 watch 那一路**互不影响**（watch 每帧照常比对）。
-- ⚠️ 声明 / 改列表那一帧只对齐快照、不触发；同一帧多个属性变化只报第一个（快照仍会全部更新，下帧不会重复报）。
 
 ### 鼠标三个块
 

@@ -213,18 +213,22 @@ _OBJECT_CREATE {
 
 ### 进 VM 的时机（`mod_step_enter_condition`）
 
-| 值 | 什么时候进 | 配合字段 |
-|---|---|---|
-| `""`（默认，写错也按这个兜底） | **每帧进** | — |
-| `"mod"` | `battle_time % 间隔 == 0`（全场共享） | `mod_step_enter_var` = 间隔帧数 |
-| `"wait"` | `mod_step_enter_var` 每帧自减，减到 0 进（进之前保持 0，需自己再设） | `mod_step_enter_var` = 剩余帧数 |
-| `"cell"` | **跨格**那一帧进（`grid_col` 或 `grid_row` 相对上一帧变了） | — |
-| `"cell_row"` | **只跨行**那一帧进（`grid_row` 变了）；直线弹用不上，抛物弹有用 | — |
-| `"cell_target_row"` | **在目标所在行里**就进（在着就一直进） | 目标取 `bullet_target`（实例）；没实例就用 `bullet_target_x/y` 换算格子；都没设 = 永不进 |
-| `"cell_target_col"` | **在目标所在列里**就进 | 同上 |
-| `"attack"` | **场上还有敌人才进** | `mod_has_enemy`（只读） |
-| `"attack_cell"` | **子弹当前这一格有敌人才进**（查每帧重建的敌人表，比 `"attack"` 精确） | `mod_has_enemy`（只读） |
-| `"attack_collision"` | **撞到敌人了才进**（碰撞事件把撞到的敌人攒成数组；**一帧撞几个也只进一次**） | `mod_collision_enemies`（只读，数组）= 这一帧撞到的所有敌人；`mod_collision_enemy`（只读）= 最后一个；`mod_collision_hit` = 1/0 |
+**条件怎么设**：在 `_OBJECT_CREATE`（或 `_OBJECT_CFG`）里写一次
+`VM_SetProp(self, "mod_step_enter_condition", "模式名")`，模式要用的配合字段也一起 `VM_SetProp` 设好。
+没被条件放行的帧**完全不进** `_OBJECT_STEP`。
+
+| 值 | 什么时候进 | 配合字段 | 简单例子 |
+|---|---|---|---|
+| `""`（默认，写错也按这个兜底） | **每帧进** | — | 不设就是它（子弹多，最忌每帧进） |
+| `"mod"` | `battle_time % 间隔 == 0`（全场共享） | `mod_step_enter_var` = 间隔帧数 | `condition = "mod"` + `var = 60` → 每 60 帧进一次 |
+| `"wait"` | `mod_step_enter_var` 每帧自减，减到 0 进（进之前保持 0，需自己再设） | `mod_step_enter_var` = 剩余帧数 | `condition = "wait"` + `var = 30` → 出生 30 帧后进一次（进去要重设 var，否则条件被清） |
+| `"cell"` | **跨格**那一帧进（`grid_col` 或 `grid_row` 相对上一帧变了） | — | `condition = "cell"` → 每跨一格进一次 |
+| `"cell_row"` | **只跨行**那一帧进（`grid_row` 变了）；直线弹用不上，抛物弹有用 | — | `condition = "cell_row"` → 每进新一行进一次 |
+| `"cell_target_row"` | **在目标所在行里**就进（在着就一直进） | 目标取 `bullet_target`（实例）；没实例就用 `bullet_target_x/y` 换算格子；都没设 = 永不进 | 先设目标（`bullet_target` 或 `bullet_target_x/y`）+ `condition = "cell_target_row"` → 在目标行里每帧进 |
+| `"cell_target_col"` | **在目标所在列里**就进 | 同上 | 同上换成 `condition = "cell_target_col"` |
+| `"attack"` | **场上还有敌人才进** | `mod_has_enemy`（只读） | `condition = "attack"` → 场上还有敌人就每帧进 |
+| `"attack_cell"` | **子弹当前这一格有敌人才进**（查每帧重建的敌人表，比 `"attack"` 精确） | `mod_has_enemy`（只读） | `condition = "attack_cell"` → 脚下这格有敌人才进 |
+| `"attack_collision"` | **撞到敌人了才进**（碰撞事件把撞到的敌人攒成数组；**一帧撞几个也只进一次**） | `mod_collision_enemies`（只读，数组）= 这一帧撞到的所有敌人；`mod_collision_enemy`（只读）= 最后一个；`mod_collision_hit` = 1/0 | `condition = "attack_collision"` → 撞上那帧进一次，遍历 `mod_collision_enemies`（写法见下） |
 
 - **子弹最常用 `"cell"`**：只有跨格那一帧进 VM，正好对上"路径碰撞"的需求
 - ⚠️ **子弹是场上数量最多的东西，最忌每帧进 VM**（不设条件就是每帧）：九成情况 `"cell"` 就够；
@@ -292,7 +296,6 @@ VM_ArrayAdd("mod_watch", "atk")
 - 同一帧多个属性变化 → **各进一次**（快照会全部更新，下帧不会重复报）；每轮之间会检查实例还在不在（插件把自己销毁了就中断）；
 - 也能当**对象之间 / 插件之间的信号**用：约定一个属性名（比如自己 `VM_SetProp` 加的 `mod_signal`），一边改它，另一边就会因为 `mod_watch` 变化被触发进入，读 `mod_changed_prop` 就知道是谁变了 —— 相当于互相传消息；
 - ⚠️ 声明 / 改列表那一帧只对齐快照、不触发；条件那一路和 watch 那一路**互不影响**（watch 每帧照常比对）。
-- ⚠️ 声明 / 改列表那一帧只对齐快照、不触发；同一帧多个属性变化只报第一个（快照仍会全部更新，下帧不会重复报）。
 
 ### 鼠标三个块
 

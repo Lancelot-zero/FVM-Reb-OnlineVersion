@@ -158,6 +158,8 @@ global._vm_opt_run_funcs[18 + 153] = run_VM_DrawSetColour;       // 153
 global._vm_opt_run_funcs[18 + 154] = run_VM_RemoveCardSlot;      // 154
 global._vm_opt_run_funcs[18 + 155] = run_VM_InsertCardSlot;      // 155
 global._vm_opt_run_funcs[18 + 156] = run_VM_SpawnCardSlot;       // 156
+global._vm_opt_run_funcs[18 + 157] = run_VM_GetInstancesInRangeN; // 157
+global._vm_opt_run_funcs[18 + 158] = run_VM_FixedBulletAdd;       // 158
 
 // ══════════════════════════════════════════════════════════════════════════
 // VM_GetProp 的"内置变量专用版"（函数 id 200~208，见 VM_FID_GETPROPX）
@@ -1895,7 +1897,12 @@ function run_VM_GetEnemyCount(vm, code, _ip) {
     _ip += opt_number;
 
 	{
-        var _result = instance_number(obj_enemy_parent);
+        // 友化敌人不算敌人
+        var _n = 0;
+        with (obj_enemy_parent) {
+            if (!(variable_instance_exists(id, "is_friend") && is_friend)) _n++;
+        }
+        var _result = _n;
         if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
         return _ip;
     }
@@ -3923,13 +3930,30 @@ function run_VM_GetInstancesInRange(vm, code, _ip) {
         if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
         return _ip;
     }
+        var _want_left = _c1 < 0;                             // 查询范围含负列
         _c1 = clamp(_c1, 0, global.grid_cols + 1);
         _c2 = clamp(_c2, 0, global.grid_cols + 1);
         var _stride = global.grid_cols + 2;
-        for (var _r = _r1; _r <= _r2; _r++) {
-            var _base = _r * _stride;
-            for (var _c = _c1; _c <= _c2; _c++) {
-                var _cell = global.enemy_array[_base + _c];
+        if (_want_left) {
+            // 负列（grid_col < 0，场外待入场）只进 global.enemy_array_left（按行存），
+            // 当作 c = -1 先放（排最前），再放正常列
+            if (variable_global_exists("enemy_array_left")) {
+                for (var _r = _r1; _r <= _r2; _r++) {
+                    var _cell = global.enemy_array_left[_r];
+                    for (var _i = 0; _i < array_length(_cell); _i++) {
+                        var _e = _cell[_i];
+                        if (!instance_exists(_e) || _e.hp <= 0) continue;
+                        if (_type != "" && _e.target_type != _type) continue;
+                        array_push(_arr, VM_ClientWrapId(_e));
+                        _count++;
+                    }
+                }
+            }
+        }
+        // 列优先：外层列 _c1.._c2，列内按行 _r1.._r2
+        for (var _c = _c1; _c <= _c2; _c++) {
+            for (var _r = _r1; _r <= _r2; _r++) {
+                var _cell = global.enemy_array[_r * _stride + _c];
                 for (var _i = 0; _i < array_length(_cell); _i++) {
                     var _e = _cell[_i];
                     if (!instance_exists(_e) || _e.hp <= 0) continue;
@@ -3942,8 +3966,8 @@ function run_VM_GetInstancesInRange(vm, code, _ip) {
     } else if (_kind == "card") {
         _c1 = clamp(_c1, 0, global.grid_cols - 1);
         _c2 = clamp(_c2, 0, global.grid_cols - 1);
-        for (var _r = _r1; _r <= _r2; _r++) {
-            for (var _c = _c1; _c <= _c2; _c++) {
+        for (var _c = _c1; _c <= _c2; _c++) {
+            for (var _r = _r1; _r <= _r2; _r++) {
                 var _list = ds_grid_get(global.grid_plants, _c, _r);
                 for (var _i = 0; _i < ds_list_size(_list); _i++) {
                     var _p = ds_list_find_value(_list, _i);
@@ -3956,6 +3980,117 @@ function run_VM_GetInstancesInRange(vm, code, _ip) {
                     }
                     array_push(_arr, VM_ClientWrapId(_p));
                     _count++;
+                }
+            }
+        }
+    }
+    {
+        var _result = _count;
+        if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+        return _ip;
+    }
+
+    return _ip;
+}
+
+
+function run_VM_GetInstancesInRangeN(vm, code, _ip) {
+    var opt_number = code[_ip]; _ip += 1;
+    var _mt = vm.mem_type;
+    var _mv = vm.mem_val;
+    var _dst = code[_ip]; _ip += 1;
+    var _base = _ip;
+    _ip += opt_number;
+
+    var _name = run_vm_read_mem(vm, code[_base+0]);
+    var _r1 = run_vm_read_mem(vm, code[_base+1]);
+    var _r2 = run_vm_read_mem(vm, code[_base+2]);
+    var _c1 = run_vm_read_mem(vm, code[_base+3]);
+    var _c2 = run_vm_read_mem(vm, code[_base+4]);
+    var _kind = run_vm_read_mem(vm, code[_base+5]);
+    var _type = run_vm_read_mem(vm, code[_base+6]);
+    var _n = run_vm_read_mem(vm, code[_base+7]);
+    if (_type == "all") _type = "";
+    if (_r1 > _r2) { var _t = _r1; _r1 = _r2; _r2 = _t; }
+    if (_c1 > _c2) { var _t = _c1; _c1 = _c2; _c2 = _t; }
+    _r1 = clamp(_r1, 0, global.grid_rows - 1);
+    _r2 = clamp(_r2, 0, global.grid_rows - 1);
+    var _vm = vm;
+    if (!ds_map_exists(_vm.arrays, _name)) ds_map_add(_vm.arrays, _name, []);
+    var _arr = _vm.arrays[? _name];
+    array_resize(_arr, 0);
+    var _count = 0;
+    if (_kind == "enemy") {
+        if (!variable_global_exists("enemy_array")) {
+        var _result = 0;
+        if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+        return _ip;
+    }
+        var _want_left = _c1 < 0;                             // 查询范围含负列
+        _c1 = clamp(_c1, 0, global.grid_cols + 1);
+        _c2 = clamp(_c2, 0, global.grid_cols + 1);
+        var _stride = global.grid_cols + 2;
+        if (_want_left) {
+            // 负列（grid_col < 0，场外待入场）只进 global.enemy_array_left（按行存），
+            // 当作 c = -1 先放（排最前），再放正常列
+            if (variable_global_exists("enemy_array_left")) {
+                for (var _r = _r1; _r <= _r2; _r++) {
+                    var _cell = global.enemy_array_left[_r];
+                    for (var _i = 0; _i < array_length(_cell); _i++) {
+                        var _e = _cell[_i];
+                        if (!instance_exists(_e) || _e.hp <= 0) continue;
+                        if (_type != "" && _e.target_type != _type) continue;
+                        array_push(_arr, VM_ClientWrapId(_e));
+                        _count++;
+                        if (_n > 0 && _count >= _n) {
+                            var _result = _count;
+                            if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+                            return _ip;
+                        }
+                    }
+                }
+            }
+        }
+        // 列优先：外层列 _c1.._c2，列内按行 _r1.._r2
+        for (var _c = _c1; _c <= _c2; _c++) {
+            for (var _r = _r1; _r <= _r2; _r++) {
+                var _cell = global.enemy_array[_r * _stride + _c];
+                for (var _i = 0; _i < array_length(_cell); _i++) {
+                    var _e = _cell[_i];
+                    if (!instance_exists(_e) || _e.hp <= 0) continue;
+                    if (_type != "" && _e.target_type != _type) continue;
+                    array_push(_arr, VM_ClientWrapId(_e));
+                    _count++;
+                    if (_n > 0 && _count >= _n) {
+                        var _result = _count;
+                        if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+                        return _ip;
+                    }
+                }
+            }
+        }
+    } else if (_kind == "card") {
+        _c1 = clamp(_c1, 0, global.grid_cols - 1);
+        _c2 = clamp(_c2, 0, global.grid_cols - 1);
+        for (var _c = _c1; _c <= _c2; _c++) {
+            for (var _r = _r1; _r <= _r2; _r++) {
+                var _list = ds_grid_get(global.grid_plants, _c, _r);
+                for (var _i = 0; _i < ds_list_size(_list); _i++) {
+                    var _p = ds_list_find_value(_list, _i);
+                    if (!instance_exists(_p)) continue;
+                    if (_p.plant_id == "player") continue;
+                    if (_type != "") {
+
+                        var _pt = variable_instance_exists(_p, "plant_type") ? _p.plant_type : "";
+                        if (_p.plant_id != _type && _pt != _type) continue;
+                    }
+                    array_push(_arr, VM_ClientWrapId(_p));
+                    _count++;
+                    if (_n > 0 && _count >= _n) {
+                        var _result = _count;
+                        if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+                        return _ip;
+                    }
                 }
             }
         }
@@ -5334,6 +5469,38 @@ function run_VM_HomingBulletAdd(vm, code, _ip) {
                              run_vm_read_mem(vm, code[_base+5]), run_vm_read_mem(vm, code[_base+6]),
                              run_vm_read_mem(vm, code[_base+7]), run_vm_read_mem(vm, code[_base+8]),
                              run_vm_read_mem(vm, code[_base+9]), run_vm_read_mem(vm, code[_base+10]));
+        if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+        return _ip;
+    }
+
+    return _ip;
+}
+
+
+function run_VM_FixedBulletAdd(vm, code, _ip) {
+    var opt_number = code[_ip]; _ip += 1;
+    var _mt = vm.mem_type;
+    var _mv = vm.mem_val;
+    var _dst = code[_ip]; _ip += 1;
+    var _base = _ip;
+    _ip += opt_number;
+
+    {
+        var _target = run_vm_read_mem(vm, code[_base+5]);
+        if (_target == 0) {
+            _target = noone;                       // 0 = 没指定，走范围攻击
+        } else if (_target < 0) {
+            var _real = ds_map_find_value(global._VM_id_to_real, -_target);
+            _target = is_undefined(_real) ? noone : _real;
+        }
+        var _result = bullet_fixed_add(run_vm_read_mem(vm, code[_base+0]), run_vm_read_mem(vm, code[_base+1]),
+                             run_vm_read_mem(vm, code[_base+2]), run_vm_read_mem(vm, code[_base+3]), run_vm_read_mem(vm, code[_base+4]),
+                             _target, run_vm_read_mem(vm, code[_base+6]),
+                             run_vm_read_mem(vm, code[_base+7]), run_vm_read_mem(vm, code[_base+8]),
+                             run_vm_read_mem(vm, code[_base+9]), run_vm_read_mem(vm, code[_base+10]),
+                             run_vm_read_mem(vm, code[_base+11]), run_vm_read_mem(vm, code[_base+12]),
+                             run_vm_read_mem(vm, code[_base+13]), run_vm_read_mem(vm, code[_base+14]),
+                             run_vm_read_mem(vm, code[_base+15]), run_vm_read_mem(vm, code[_base+16]));
         if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
         return _ip;
     }

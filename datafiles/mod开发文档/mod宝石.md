@@ -101,16 +101,20 @@
 
 ### 进 VM 的时机（`mod_step_enter_condition`）
 
-| 值 | 什么时候进 | 配合字段 |
-|---|---|---|
-| `""`（默认，写错也按这个兜底） | **每帧进** | — |
-| `"mod"` | `battle_time % 间隔 == 0`（全场共享） | `mod_step_enter_var` = 间隔帧数 |
-| `"wait"` | `mod_step_enter_var` 每帧自减，减到 0 进（进之前保持 0，需自己再设） | `mod_step_enter_var` = 剩余帧数 |
-| `"cool"` | **冷却结束才进**（`cooldown_timer <= 0`） | — |
-| `"enemy_area"` | **索敌区域里有敌人**就进 | `mod_step_enemy_area`（区域）/ `mod_enemy_types`（类型筛选）；`mod_has_enemy`（只读） |
-| `"enemy_area_mod"` | 同上，但**进一次后要等冷却**再进 | 再加 `mod_step_enter_var` = 冷却帧数；`mod_tick_cool`（只读） |
-| `"card_area"` | **指定区域里有卡片**就进（玩家底座不算） | `mod_step_card_area`（区域）；`mod_has_card`（只读） |
-| `"card_area_mod"` | 同上，但**进一次后要等冷却**再进 | 再加 `mod_step_enter_var` = 冷却帧数；`mod_tick_cool`（只读） |
+**条件怎么设**：在 `_OBJECT_CREATE`（或 `_OBJECT_CFG`）里写一次
+`VM_SetProp(self, "mod_step_enter_condition", "模式名")`，模式要用的配合字段也一起 `VM_SetProp` 设好。
+没被条件放行的帧**完全不进** `_OBJECT_STEP`。
+
+| 值 | 什么时候进 | 配合字段 | 简单例子 |
+|---|---|---|---|
+| `""`（默认，写错也按这个兜底） | **每帧进** | — | 不设就是它；每帧的活儿直接写在 `_OBJECT_STEP` 里 |
+| `"mod"` | `battle_time % 间隔 == 0`（全场共享） | `mod_step_enter_var` = 间隔帧数 | `condition = "mod"` + `var = 60` → 每 60 帧进一次 |
+| `"wait"` | `mod_step_enter_var` 每帧自减，减到 0 进（进之前保持 0，需自己再设） | `mod_step_enter_var` = 剩余帧数 | `condition = "wait"` + `var = 300` → 300 帧后进一次（进去要重设 var，否则条件被清） |
+| `"cool"` | **冷却结束才进**（`cooldown_timer <= 0`） | — | `condition = "cool"` → 主动宝石点完、冷却结束才进 |
+| `"enemy_area"` | **索敌区域里有敌人**就进 | `mod_step_enemy_area`（区域）/ `mod_enemy_types`（类型筛选）；`mod_has_enemy`（只读） | `condition = "enemy_area"`（区域不设 = 默认 `[1,1,0,99]`）→ 区域进敌就每帧进 |
+| `"enemy_area_mod"` | 同上，但**进一次后要等冷却**再进 | 再加 `mod_step_enter_var` = 冷却帧数；`mod_tick_cool`（只读） | `condition = "enemy_area_mod"` + `var = 30` → 进一次后 30 帧冷却（区域写法见下方完整例子） |
+| `"card_area"` | **指定区域里有卡片**就进（玩家底座不算） | `mod_step_card_area`（区域）；`mod_has_card`（只读） | `condition = "card_area"` + 设 `mod_step_card_area` → 区域有卡就每帧进 |
+| `"card_area_mod"` | 同上，但**进一次后要等冷却**再进 | 再加 `mod_step_enter_var` = 冷却帧数；`mod_tick_cool`（只读） | `condition = "card_area_mod"` + `var = 30` → 进一次后 30 帧冷却 |
 
 **区域怎么写**（`mod_step_enemy_area` / `mod_step_card_area` 都是同一套）：**每 4 个值一组** `[上, 下, 左, 右]`，
 以"**锚点格**"为中心各扩几格；可以写多组，任一组命中就算命中。不设 / 凑不满 4 个 = 默认 `[1,1,0,99]`。
@@ -159,7 +163,6 @@ VM_ArrayAdd("mod_watch", "atk")
 - 同一帧多个属性变化 → **各进一次**（快照会全部更新，下帧不会重复报）；每轮之间会检查实例还在不在（插件把自己销毁了就中断）；
 - 也能当**对象之间 / 插件之间的信号**用：约定一个属性名（比如自己 `VM_SetProp` 加的 `mod_signal`），一边改它，另一边就会因为 `mod_watch` 变化被触发进入，读 `mod_changed_prop` 就知道是谁变了 —— 相当于互相传消息；
 - ⚠️ 声明 / 改列表那一帧只对齐快照、不触发；条件那一路和 watch 那一路**互不影响**（watch 每帧照常比对）。
-- ⚠️ 声明 / 改列表那一帧只对齐快照、不触发；同一帧多个属性变化只报第一个（快照仍会全部更新，下帧不会重复报）。
 
 ### 鼠标事件（核心挂的，插件不用写）
 

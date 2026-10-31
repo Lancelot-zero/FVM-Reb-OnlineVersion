@@ -145,7 +145,12 @@ if (_cond == "mod") {
 
 } else if (_cond == "attack") {
 	// 只看"场上还有没有敌人"：子弹多，不做卡那套区域前缀和
-	mod_has_enemy = (instance_number(obj_enemy_parent) > 0);
+	// 友化敌人不算敌人
+	var _ne = 0;
+	with (obj_enemy_parent) {
+		if (!(variable_instance_exists(id, "is_friend") && is_friend)) _ne++;
+	}
+	mod_has_enemy = (_ne > 0);
 	_enter = mod_has_enemy;
 
 } else if (_cond == "attack_collision") {

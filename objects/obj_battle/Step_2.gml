@@ -109,7 +109,8 @@ global._move_instance_pre_arr = [];
 
 current_wave_hp = 0
 with obj_enemy_parent{
-	if target_type != "obstacle"{
+	// 友化敌人不算敌人：不计入波次血量（否则永远清不了关）
+	if target_type != "obstacle" && !(variable_instance_exists(id, "is_friend") && is_friend){
 		other.current_wave_hp += hp
 	}
 }

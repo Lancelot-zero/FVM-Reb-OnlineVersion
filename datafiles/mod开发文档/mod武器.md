@@ -111,15 +111,19 @@
 | `mod_step_enter_arr` | 可写（数组） | 开火窗口表（`"norm"` / `"norm_attack"` 用）；**负数 = 从一轮末尾倒数** |
 | `mod_step_enter_index` | 只读 | 这帧命中的窗口下标（0 起）；不是窗口 = `-1` |
 
-**进 VM 的时机（`mod_step_enter_condition`）** —— 和卡片完全一样，只是没有 `hp_change` 那两个：
+**进 VM 的时机（`mod_step_enter_condition`）** —— 和卡片完全一样，只是没有 `hp_change` 那两个。
 
-| 值 | 什么时候进 | 配合字段 |
-|---|---|---|
-| `""`（默认，写错也按这个兜底） | **每帧进** | — |
-| `"mod"` | `battle_time % 间隔 == 0`（全场共享） | `mod_step_enter_var` = 间隔帧数 |
-| `"norm"` | `mod_tick_cycle` 命中窗口表（**不看敌人**） | `mod_step_enter_arr` 窗口表 |
-| `"norm_attack"` | **有敌人** 且命中窗口表；窗口表空 = 有敌人就每帧进 | `mod_step_enter_arr` + 索敌字段 |
-| `"wait"` | `mod_step_enter_var` 每帧自减，减到 0 进 | `mod_step_enter_var` = 剩余帧数 |
+**条件怎么设**：在 `_OBJECT_CREATE`（或 `_OBJECT_CFG`）里写一次
+`VM_SetProp(self, "mod_step_enter_condition", "模式名")`，模式要用的配合字段也一起 `VM_SetProp` 设好。
+没被条件放行的帧**完全不进** `_OBJECT_STEP`。
+
+| 值 | 什么时候进 | 配合字段 | 简单例子 |
+|---|---|---|---|
+| `""`（默认，写错也按这个兜底） | **每帧进** | — | 不设就是它；每帧的活儿直接写在 `_OBJECT_STEP` 里 |
+| `"mod"` | `battle_time % 间隔 == 0`（全场共享） | `mod_step_enter_var` = 间隔帧数 | `condition = "mod"` + `var = 60` → 每 60 帧进一次 |
+| `"norm"` | `mod_tick_cycle` 命中窗口表（**不看敌人**） | `mod_step_enter_arr` 窗口表 | `condition = "norm"` + `arr = [-30]` → 每轮末尾 30 帧进 |
+| `"norm_attack"` | **有敌人** 且命中窗口表；窗口表空 = 有敌人就每帧进 | `mod_step_enter_arr` + 索敌字段 | `condition = "norm_attack"` + `arr = [-30]` → 每轮开火帧、有敌人才进 |
+| `"wait"` | `mod_step_enter_var` 每帧自减，减到 0 进 | `mod_step_enter_var` = 剩余帧数 | `condition = "wait"` + `var = 600` → 600 帧后进一次（进去要重设 var，否则条件被清） |
 
 - 索敌区域是**以玩家那格为中心**算的（武器的 `grid_col` / `grid_row` 每帧从 `parent_player` 抄）
 - 命中开火窗口且确实有敌人时，会自动把 `state` 切成 `CARD_STATE.ATTACK`（同卡片）
@@ -146,7 +150,6 @@ VM_ArrayAdd("mod_watch", "atk")
 - 同一帧多个属性变化 → **各进一次**（快照会全部更新，下帧不会重复报）；每轮之间会检查实例还在不在（插件把自己销毁了就中断）；
 - 也能当**对象之间 / 插件之间的信号**用：约定一个属性名（比如自己 `VM_SetProp` 加的 `mod_signal`），一边改它，另一边就会因为 `mod_watch` 变化被触发进入，读 `mod_changed_prop` 就知道是谁变了 —— 相当于互相传消息；
 - ⚠️ 声明 / 改列表那一帧只对齐快照、不触发；条件那一路和 watch 那一路**互不影响**（watch 每帧照常比对）。
-- ⚠️ 声明 / 改列表那一帧只对齐快照、不触发；同一帧多个属性变化只报第一个（快照仍会全部更新，下帧不会重复报）。
 
 ---
 

@@ -11,6 +11,10 @@ if (hp <= 0 && state != ENEMY_STATE.DEAD) {
 	target_plant = noone;
 }
 
+// 友化相关字段兜底（个别子类 Create 没跑 event_inherited 时也不会读到"未定义"）
+if (!variable_instance_exists(id, "is_friend")) is_friend = 0;
+if (!variable_instance_exists(id, "target_enemy")) target_enemy = noone;
+
 // 保持网格位置更新（内联计算，避免每帧结构体分配触发GC）
 grid_col = floor((x - global.grid_offset_x) / global.grid_cell_size_x);
 grid_row = floor((y - global.grid_offset_y) / global.grid_cell_size_y);
@@ -106,7 +110,7 @@ timer++;
 //     弧线高度远小于一格(116px)，grid_row 不会变 → 不会被上面那行的卡片打到
 //   - 越过恢复 NORMAL 继续向左走，此时已在下一格，不会回头啃本格植物
 if (climb_stage == 0 && (state == ENEMY_STATE.NORMAL|| state ==ENEMY_STATE.ATTACK) && move_speed > 0 && can_use_ladder
-	&& target_type == "normal") {   // 只让普通行走型上梯：air / underground / diver / invisible / obstacle 一律不爬
+	&& target_type == "normal" && !is_friend) {   // 只让普通行走型上梯：air / underground / diver / invisible / obstacle 一律不爬；友化敌人倒戈，也不爬
 	if(grid_row>=0&&grid_row<global.grid_rows&&grid_col>=0&&grid_col<global.grid_cols){
 		var _list = ds_grid_get(global.grid_plants, grid_col, grid_row);
 		for(var _item = 0; _item < ds_list_size(_list); _item++)
@@ -201,6 +205,10 @@ if (climb_stage == 1) {
 if (instance_exists(target_plant) && target_plant.hp <= 0) {
     target_plant = noone;  // 目标已被消灭
 }
+// 互攻目标同理
+if (instance_exists(target_enemy) && target_enemy.hp <= 0) {
+    target_enemy = noone;  // 目标敌人已被消灭
+}
 
 // 状态机
 switch(state) {
@@ -211,7 +219,12 @@ switch(state) {
     
     case ENEMY_STATE.NORMAL: {
         // 移动和动画逻辑
-        x -= current_move_speed * move_speed_modify;
+        // 友化敌人倒戈往右走（回敌人出生侧），正常敌人照常往左
+        if (is_friend) {
+            x += current_move_speed * move_speed_modify;
+        } else {
+            x -= current_move_speed * move_speed_modify;
+        }
         if shield_max_hp > 0 && shield_hp > 0{
 			if shield_hp > hurt_rate * shield_max_hp{
 				if helmet_hp > 0 && hp > maxhp - helmet_hp{
@@ -262,13 +275,60 @@ switch(state) {
 		        }
 			}
 		}
-        
+
+        // ── 友化互攻索敌：友化敌人找正常敌人（前方=右），正常敌人找面前的友化敌人 ──
+        var enemy_in_range = noone;
+        if (variable_global_exists("enemy_array") && variable_global_exists("enemy_array_friend")
+            && grid_row >= 0 && grid_row < global.grid_rows) {
+            var _stride = global.grid_cols + 2;
+            var _start_c = max(grid_col - 2, 0);
+            var _end_c = min(grid_col + 2, _stride - 1);
+            var _elist = (is_friend) ? global.enemy_array : global.enemy_array_friend;
+            for(var _c = _start_c; _c <= _end_c; _c++)
+            {
+                var _el = _elist[grid_row * _stride + _c];
+                for(var _ei = 0; _ei < array_length(_el); _ei++)
+                {
+                    var _e = _el[_ei];
+                    if (!instance_exists(_e)) continue;
+                    // 互攻双方都只打和自己同类型的敌人（target_type 相同才算）
+                    var _et = (variable_instance_exists(_e, "target_type")) ? _e.target_type : "";
+                    if (_et != target_type) continue;
+                    var _edx = _e.x - x;
+                    var _efront = false;
+                    if (attack_range > 0) {
+                        // 友化往右打：目标在右前方；正常往左打：友化目标在左前方
+                        _efront = (is_friend) ? (_edx > 0 && _edx < attack_range)
+                                              : (_edx < 0 && _edx > -attack_range);
+                    } else {
+                        // attack_range <= 0 的特殊朝向，照植物那套镜像
+                        _efront = (is_friend) ? (_edx < 0 && _edx > attack_range)
+                                              : (_edx > 0 && _edx < -attack_range);
+                    }
+                    if (_efront) {
+                        enemy_in_range = _e;
+                        break;
+                    }
+                }
+                if (enemy_in_range != noone) break;
+            }
+        }
+        if (enemy_in_range != noone) {
+            state = ENEMY_STATE.ATTACK;
+            target_enemy = enemy_in_range;
+            target_plant = noone;
+            attack_timer = 0;  // 重置攻击计时器
+            timer = 0;         // 重置动画计时器
+            break;
+        }
+        if (is_friend) break;   // 友化敌人不啃植物，没有敌人可打就继续往右走
+
         // 检测前方植物
         var plant_in_range = noone;
-		
+
 		var plant_order_list = global._eat_scratch;
 		plant_order_list[0] = noone; plant_order_list[1] = noone; plant_order_list[2] = noone; plant_order_list[3] = noone;
-        
+
 			/*
         // 使用碰撞检测查找攻击范围内的植物
         with (obj_card_parent) {
@@ -418,7 +478,43 @@ switch(state) {
         // 攻击动画
         // 检测前方植物
         var plant_in_range = noone;
-        
+
+        // ── 友化互攻索敌（同 NORMAL 状态那套）：友化找正常敌人，正常找面前的友化敌人 ──
+        var enemy_in_range = noone;
+        if (variable_global_exists("enemy_array") && variable_global_exists("enemy_array_friend")
+            && grid_row >= 0 && grid_row < global.grid_rows) {
+            var _stride = global.grid_cols + 2;
+            var _start_c = max(grid_col - 2, 0);
+            var _end_c = min(grid_col + 2, _stride - 1);
+            var _elist = (is_friend) ? global.enemy_array : global.enemy_array_friend;
+            for(var _c = _start_c; _c <= _end_c; _c++)
+            {
+                var _el = _elist[grid_row * _stride + _c];
+                for(var _ei = 0; _ei < array_length(_el); _ei++)
+                {
+                    var _e = _el[_ei];
+                    if (!instance_exists(_e)) continue;
+                    // 互攻双方都只打和自己同类型的敌人（target_type 相同才算）
+                    var _et = (variable_instance_exists(_e, "target_type")) ? _e.target_type : "";
+                    if (_et != target_type) continue;
+                    var _edx = _e.x - x;
+                    var _efront = false;
+                    if (attack_range > 0) {
+                        _efront = (is_friend) ? (_edx > 0 && _edx < attack_range)
+                                              : (_edx < 0 && _edx > -attack_range);
+                    } else {
+                        _efront = (is_friend) ? (_edx < 0 && _edx > attack_range)
+                                              : (_edx > 0 && _edx < -attack_range);
+                    }
+                    if (_efront) {
+                        enemy_in_range = _e;
+                        break;
+                    }
+                }
+                if (enemy_in_range != noone) break;
+            }
+        }
+
 		var plant_order_list = global._eat_scratch;
 		plant_order_list[0] = noone; plant_order_list[1] = noone; plant_order_list[2] = noone; plant_order_list[3] = noone;
 		/*
@@ -451,8 +547,8 @@ switch(state) {
         }
 		*/
 		
-		if (variable_global_exists("grid_plants") && ds_exists(global.grid_plants, ds_type_grid)) {
-			
+		if (!is_friend && variable_global_exists("grid_plants") && ds_exists(global.grid_plants, ds_type_grid)) {
+
 			// 左右±2列范围
 			var start_c = max(grid_col - 2, -1);
 			var end_c = min(grid_col + 2, global.grid_cols - 1);
@@ -502,12 +598,25 @@ switch(state) {
 				break
 			}
 		}
-		if (plant_in_range != noone) {
+		if (enemy_in_range != noone) {
+            target_enemy = enemy_in_range;
+            target_plant = noone;
+        }
+		else if (is_friend) {
+			// 友化敌人互攻目标没了 → 回走路状态继续往右索敌
+			state = ENEMY_STATE.NORMAL;
+            target_enemy = noone;
+            attack_timer = 0;  // 重置攻击计时器
+            timer = 0;         // 重置动画计时器
+		}
+		else if (plant_in_range != noone) {
+            target_enemy = noone;   // 友化目标已出范围，改打植物
             target_plant = plant_in_range;
         }
 		else{
 			state = ENEMY_STATE.NORMAL;
-            target_plant = plant_in_range;
+            target_enemy = noone;
+            target_plant = noone;
             attack_timer = 0;  // 重置攻击计时器
             timer = 0;         // 重置动画计时器
 		}
@@ -515,21 +624,38 @@ switch(state) {
         // 攻击处理
         attack_timer++;
         if (attack_timer >= current_atk_cycle) {
-            // 对目标植物造成伤害
-            with (target_plant) {
-				if !invincible{
-					hp -= other.atk;
-				}
-                event_user(2)
-                // 播放受击效果
-                if (instance_exists(other)) {
-                    //instance_create_depth(x, y, depth - 1, obj_plant_hit);
+            if (target_enemy != noone && instance_exists(target_enemy)) {
+                // 友化 ↔ 正常敌人互攻：走敌人自己的受击流程（护盾 / 闪白都对）
+                with (target_enemy) {
+                    damage_amount = other.atk;
+                    damage_type = "normal";
+                    event_user(0);
                 }
+                //播放音效
+                var a = irandom_range(0,2)
+                global.audio.play(ds_list_find_value(obj_battle.chomp_sound_list,a),0,0)
+            } else if (target_plant != noone && instance_exists(target_plant)) {
+                // 对目标植物造成伤害
+                with (target_plant) {
+                    if !invincible{
+                        hp -= other.atk;
+                    }
+                    event_user(2)
+                    // 播放受击效果
+                    if (instance_exists(other)) {
+                        //instance_create_depth(x, y, depth - 1, obj_plant_hit);
+                    }
+                }
+                //播放音效
+                var a = irandom_range(0,2)
+                global.audio.play(ds_list_find_value(obj_battle.chomp_sound_list,a),0,0)
+            } else {
+                // 两个目标都没了：清掉，回走路状态
+                target_enemy = noone;
+                target_plant = noone;
+                state = ENEMY_STATE.NORMAL;
+                timer = 0;
             }
-			
-            //播放音效
-			var a = irandom_range(0,2)
-			global.audio.play(ds_list_find_value(obj_battle.chomp_sound_list,a),0,0)
             // 重置攻击计时器
             attack_timer = 0;
         }
@@ -588,7 +714,7 @@ if (image_alpha <= 0 && state == ENEMY_STATE.DEAD) {
 var base_depth = -10 - (grid_row * 45) - (9 * 5);
 depth = base_depth; // 僵尸比植物稍微靠后一点（在护罩外侧和咖啡豆之间）
 
-if x < global.grid_offset_x-150 && hp > 0 && not place_meeting(x,y,obj_cat) && array_get_index(block_mouse_id_list,mouse_id) == -1{
+if x < global.grid_offset_x-150 && hp > 0 && not place_meeting(x,y,obj_cat) && array_get_index(block_mouse_id_list,mouse_id) == -1 && is_friend == 0{
 	if global.network.mode == "server"{
 		var _clients = global.network.connected_clients;
 		for (var i = 0; i < array_length(_clients); i++) {
@@ -601,6 +727,13 @@ if x < global.grid_offset_x-150 && hp > 0 && not place_meeting(x,y,obj_cat) && a
 		instance_create_depth(room_width/2,room_height/2,-3001,obj_game_over)
 		global.audio.play(snd_lose,0,0)
 	}
+}
+
+// 友化敌人完全走出战场两端（出界线同子弹 x<0 / x>2200，右侧加 100 余量）→ 销毁：
+// 它不算敌人，不能一直留在场上；清关波次血量也已排除它，不会卡关。
+// 左侧同款：走到最左侧不判失败（上面 game over 已排除 is_friend），出屏后同样销毁
+if (is_friend && (x < 0 || x > 2300)) {
+	instance_destroy();
 }
 
 //破冰动画

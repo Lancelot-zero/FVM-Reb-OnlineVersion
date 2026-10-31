@@ -515,6 +515,8 @@ lab 图自己的 bin 可以不属于以上任何类型：不带注册类型的 b
 | `VM_CreateInstance("对象名",x,y)` | 3个 | 按像素坐标创建实例（子弹等）；建 mod 子弹/特效对象后要用 `VM_SetProp` 赋 `mod_type` 指定逻辑（见本节开头总表） |
 | `VM_GetCurCard()` | int | 当前块所属的 mod 卡实例 id |
 | `VM_GetInstancesInRange("数组名",行1,行2,列1,列2,"enemy"或"card","筛选")` | int | 收集范围内实例 id 进指定 VM 命名数组（会先清空），返回数量。筛选：敌人按 target_type，卡片按 plant_id/plant_type，`""`或`"all"`=不限 |
+| `VM_GetInstancesInRangeN("数组名",行1,行2,列1,列2,"enemy"或"card","筛选",上限n)` | int | `VM_GetInstancesInRange` 限量版：列优先收集，最多收 n 个（n<=0=不限），满 n 提前停；其余同 `VM_GetInstancesInRange` |
+| `VM_FixedBulletAdd("贴图",x,y,伤害,半径,敌人ID,"类型","伤害类型",减速帧,冻住帧,"销毁对象","mod名","销毁贴图",播放速度,出身x,出身y,移动速度)` | int | 定点弹：伤害在 (x,y) 定点结算。贴图动画从出身位置按移动速度飞向伤害点（出身没传=原地播、速度0=不动），播完最后一帧结算：敌人ID 指定就只打那一个（先判存活；0=范围攻击），否则半径内全打；销毁时在伤害点生成销毁对象（mod 对象配 mod 名、销毁贴图可换皮）。返回子弹下标，失败 -1 |
 | `VM_IsDestroyed(实例ID)` | 1个 | 判断实例是否已被销毁，返回 1=已销毁 0=存在 |
 | `VM_DestroyInstance(实例ID)` | 1个 | 直接销毁实例（会触发它的 Destroy 事件）。在 `_OBJECT_STEP` 里销毁自己时，本帧剩下的语句还会继续执行，要用 `VM_IsDestroyed` 兜底 |
 | `VM_RunStep(实例, 轮数)` | 2个 | 让该实例额外跑 N 轮 Step（一轮 = Begin Step + Step + End Step），用来做加速。同一个实例正在被重跑时再调会被忽略（防无限递归）。轮数夹在 1~60，返回实际跑了几轮 |
@@ -527,12 +529,81 @@ lab 图自己的 bin 可以不属于以上任何类型：不带注册类型的 b
 |---|---|
 | `_OBJECT_CFG` | 配置块：加载贴图等，`.bin` 载入时执行一次 |
 | `_OBJECT_CREATE` | 对象创建时执行一次 |
-| `_OBJECT_STEP` | 对象每帧执行（会被 `mod_step_enter_condition` 挡住，见各类别文档） |
+| `_OBJECT_STEP` | 对象每帧执行，**默认每帧都进**（`mod_step_enter_condition` 不设/为空 = 每帧）。设了条件就只在条件成立时进 —— **每个模式怎么设、各举了一个例子，见紧接在下面的「`_OBJECT_STEP` 怎么进」节**。**属性变化额外进**：`mod_watch` 数组里每有一个属性值变化就**额外**进一次（`mod_changed_prop` = 那个属性名，没变化 = `""`）；条件成立再加一次。一帧最多进 = 变化的属性个数 + 1 |
 | `_OBJECT_DRAW` | 对象绘制时执行（只有这里能画东西） |
 | `_OBJECT_DESTROY` | 对象销毁时执行 |
 | `_OBJECT_MOUSE_ENTER` | 鼠标移入该实例 |
 | `_OBJECT_MOUSE_LEAVE` | 鼠标移出该实例 |
 | `_OBJECT_CLICK` | 鼠标左键点击该实例（按实例判定，和全局的 `_VM_MOUSE_LEFT` 不同） |
+
+### `_OBJECT_STEP` 怎么进：进入模式（`mod_step_enter_condition`）
+
+`_OBJECT_STEP` **默认每帧都进**。想只在特定时机进，就在 `_OBJECT_CREATE`（或 `_OBJECT_CFG`）里设条件：
+
+```gml
+VM_SetProp(self, "mod_step_enter_condition", "模式名")   // 没被条件放行的帧完全不进 VM
+```
+
+配合字段：`mod_step_enter_var`（间隔 / 倒数 / 冷却帧数）、`mod_step_enter_arr`（卡/武器的开火窗口表）、
+`mod_step_enemy_area` / `mod_step_card_area`（宝石的区域）。**每个对象可选的值不一样**，全表如下（详细说明见各类别文档）：
+
+#### 所有对象都有
+
+| 值 | 什么时候进 | 简单例子 |
+|---|---|---|
+| `""`（默认，写错也按这个兜底） | **每帧都进** | 不设就是它；每帧的活儿直接写在 `_OBJECT_STEP` 里 |
+| `"mod"` | 全场帧号对齐：`battle_time % var == 0`（同间隔的对象同帧进） | `condition = "mod"` + `var = 60` → 每 60 帧进一次 |
+| `"wait"` | `var` 每帧自减，减到 ≤0 进一次；⚠️ **进去后必须马上把 var 设回正数**，否则引擎判非法、把条件清回 `""`（每帧进） | `condition = "wait"` + `var = 600` → 600 帧后进一次，块里第一句 `VM_SetProp(self, "mod_step_enter_var", 600)` 安排下一次 |
+
+#### 卡 / 武器（武器没有 `hp_change` 那两个）
+
+| 值 | 什么时候进 | 简单例子 |
+|---|---|---|
+| `"norm"` | 一轮动画里的**开火窗口**帧（`mod_tick_cycle` 命中 `mod_step_enter_arr`），**不看敌人**；负数 = 从一轮末尾倒数 | `condition = "norm"` + `arr = [-30]` → 每轮末尾 30 帧进（生产帧） |
+| `"norm_attack"` | **有敌人** 且命中开火窗口；窗口表**空** = 有敌人就每帧进；命中窗口且有敌人还会自动切攻击动画 | `condition = "norm_attack"` + `arr = [-30]` → 每轮开火帧、有敌人才进 |
+| `"hp_change"` | **血量相对上一帧变了**才进（掉血、回血都算） | `condition = "hp_change"` → 掉血那帧进，读 `VM_GetProp(self, "hp")` 反击 |
+| `"hp_change_mod"` | 同 `"hp_change"` + 触发一次后 `var` 帧冷却 | `condition = "hp_change_mod"` + `var = 30` → 反击一次后 30 帧内不再进 |
+
+#### 子弹
+
+| 值 | 什么时候进 | 简单例子 |
+|---|---|---|
+| `"cell"` | **跨格**那一帧进 | `condition = "cell"` → 每跨一格进一次 |
+| `"cell_row"` | **跨行**那一帧进 | `condition = "cell_row"` → 每进新一行进一次 |
+| `"cell_target_row"` / `"cell_target_col"` | 设了目标（`bullet_target` 实例或 `bullet_target_x/y`）后，**在目标行 / 列里**就每帧进；没设目标永不进 | 先设目标 + `condition = "cell_target_row"` → 在目标行里每帧进 |
+| `"attack"` | **场上还有敌人**就每帧进 | `condition = "attack"` |
+| `"attack_cell"` | **当前这一格有敌人**才进 | `condition = "attack_cell"` → 脚下这格有敌人才进 |
+| `"attack_collision"` | **撞到敌人那一帧**进一次；撞到的敌人攒在 `mod_collision_enemies`（进完引擎清空） | `condition = "attack_collision"` → 块里遍历 `mod_collision_enemies` 结算每个被撞的 |
+
+#### 敌人
+
+| 值 | 什么时候进 | 简单例子 |
+|---|---|---|
+| `"cell"` | **跨格**那一帧进 | `condition = "cell"` → 每跨一格进一次 |
+| `"hp_change"` | **血量变了**（上一帧末 `pre_hp` ≠ 当前 `hp`）才进 | `condition = "hp_change"` → 受伤那帧反击 |
+| `"hp_change_mod"` | 同 `"hp_change"` + `var` 帧冷却 | `condition = "hp_change_mod"` + `var = 60` |
+| `"card"` | **核心索敌有目标**（找到植物）就每帧进 | `condition = "card"` |
+| `"card_mod"` | 有目标 + `var` 帧冷却 | `condition = "card_mod"` + `var = 30` → 有目标时每 30 帧最多一次 |
+
+#### 宝石
+
+| 值 | 什么时候进 | 简单例子 |
+|---|---|---|
+| `"cool"` | **冷却结束**（`cooldown_timer <= 0`）才进；主动宝石用 | `condition = "cool"` |
+| `"enemy_area"` | **区域里有敌人**就每帧进；区域 = `mod_step_enemy_area` 每 4 个值一组 [上,下,左,右]（以放置者那格为中心），默认 [1,1,0,99] | `condition = "enemy_area"`（不设区域 = 默认区域） |
+| `"enemy_area_mod"` | 区域有敌人 + `var` 帧冷却 | `condition = "enemy_area_mod"` + `var = 30` |
+| `"card_area"` | **区域里有卡**就每帧进（区域写 `mod_step_card_area`，写法同上） | `condition = "card_area"` |
+| `"card_area_mod"` | 区域有卡 + `var` 帧冷却 | `condition = "card_area_mod"` + `var = 30` |
+
+#### 特效
+
+只有公共的 `""` / `"mod"` / `"wait"` 三个（见上）。
+
+公共备注：
+
+- 卡/武器命中窗口那帧 `mod_step_enter_index` = 窗口下标（0 起），否则 `-1`；窗口负数从一轮末尾倒数（一轮 1500 帧时 `-35` = 第 1465 帧）。⚠️ `cycle` 会被技能改短，窗口换算后必须落在 `0 ~ 一轮长度-1`，**别写绝对帧号**
+- 写错 / 认不出的值 → 兜底 `""`（每帧进）
+- **属性变化额外进**（`mod_watch`）：盯的属性值变了，这一帧**额外进一次**（`mod_changed_prop` = 那个属性名，条件那次 = `""`）。一帧最多进 = 变化的属性个数 +（条件成立 ? 1 : 0）
 
 ### 屏幕弹幕
 
