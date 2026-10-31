@@ -11,6 +11,9 @@ if skipped or hp <= 0{
 if global.is_paused{
 	exit
 }
+// 友化相关字段兜底（照父类）
+if (!variable_instance_exists(id, "is_friend")) is_friend = 0;
+if (!variable_instance_exists(id, "target_enemy")) target_enemy = noone;
 if ice_timer > 0{
 	ice_timer--
 	is_slowdown = true
@@ -70,6 +73,9 @@ timer++;
 if (instance_exists(target_plant) && target_plant.hp <= 0) {
     target_plant = noone;  // 目标已被消灭
 }
+if (instance_exists(target_enemy) && target_enemy.hp <= 0) {
+    target_enemy = noone;  // 目标敌人已被消灭
+}
 
 // 状态机
 switch(state) {
@@ -80,7 +86,12 @@ switch(state) {
     
     case ENEMY_STATE.NORMAL: {
         // 移动和动画逻辑
-        x -= current_move_speed;
+        // 友化倒戈往右走
+        if (is_friend) {
+            x += current_move_speed;
+        } else {
+            x -= current_move_speed;
+        }
         
 		if helmet_hp > 0 && hp > maxhp - helmet_hp{
 			if ((hp + helmet_hp - maxhp)/maxhp > hurt_rate) {
@@ -97,35 +108,94 @@ switch(state) {
 	        }
 		}
         
-        // 检测前方植物
-        var plant_in_range = noone;
-		
-		var plant_order_list = [noone,noone,noone,noone]
-        
-		
-        // 使用碰撞检测查找攻击范围内的植物
-        with (obj_card_parent) {
-			var dx = x - other.x;
-			var dy = y - other.y;
-			var is_in_front = false
-			is_in_front = (dx < 0 && dx > -other.attack_range);
-				
-            // 检查是否在攻击范围内
-            if (is_in_front && zombie_grid.row == grid_row && (feature_type!="dwarf" || (feature_type=="dwarf" && other.giant_type))) {
-                // 按铲除顺序优先选择
-                for (var i = 0; i < ds_list_size(global.eat_order); i++) {
-                    var target_type = ds_list_find_value(global.eat_order, i);
-                    
-                    if (plant_type == target_type) {
-                        plant_order_list[i] = id;
+        // ── 友化互攻索敌：友化找正常敌人（前方=右），正常找面前的友化敌人 ──
+        var enemy_in_range = noone;
+        if (variable_global_exists("enemy_array") && variable_global_exists("enemy_array_friend")
+            && zombie_grid.row >= 0 && zombie_grid.row < global.grid_rows) {
+            var _stride = global.grid_cols + 2;
+            var _start_c = max(zombie_grid.col - 2, 0);
+            var _end_c = min(zombie_grid.col + 2, _stride - 1);
+            var _elist = (is_friend) ? global.enemy_array : global.enemy_array_friend;
+            for(var _c = _start_c; _c <= _end_c; _c++)
+            {
+                var _el = _elist[zombie_grid.row * _stride + _c];
+                for(var _ei = 0; _ei < array_length(_el); _ei++)
+                {
+                    var _e = _el[_ei];
+                    if (!instance_exists(_e)) continue;
+                    var _et = (variable_instance_exists(_e, "target_type")) ? _e.target_type : "";
+                    if (_et != target_type) continue;
+                    var _edx = _e.x - x;
+                    var _efront = false;
+                    if (attack_range > 0) {
+                        _efront = (is_friend) ? (_edx > 0 && _edx < attack_range)
+                                              : (_edx < 0 && _edx > -attack_range);
+                    } else {
+                        _efront = (is_friend) ? (_edx < 0 && _edx > attack_range)
+                                              : (_edx > 0 && _edx < -attack_range);
+                    }
+                    if (_efront) {
+                        enemy_in_range = _e;
                         break;
                     }
                 }
-				
-                
-                if (plant_in_range != noone) break;
+                if (enemy_in_range != noone) break;
             }
         }
+        if (enemy_in_range != noone) {
+            state = ENEMY_STATE.ATTACK;
+            target_enemy = enemy_in_range;
+            target_plant = noone;
+            attack_timer = 0;  // 重置攻击计时器
+            timer = 0;         // 重置动画计时器
+            break;
+        }
+        if (is_friend) break;   // 友化不啃植物，没敌人可打就继续往右走
+
+        // 检测前方植物
+        var plant_in_range = noone;
+		
+		var plant_order_list = global._eat_scratch;
+		plant_order_list[0] = noone; plant_order_list[1] = noone; plant_order_list[2] = noone; plant_order_list[3] = noone;
+
+		if (variable_global_exists("grid_plants") && ds_exists(global.grid_plants, ds_type_grid)) {
+			var start_c = max(zombie_grid.col - 2, -1);
+			var end_c = min(zombie_grid.col + 2, global.grid_cols - 1);
+
+			for(var _c = start_c; _c <= end_c; _c++)
+			{
+				if(zombie_grid.row<0||zombie_grid.row>=global.grid_rows)continue;
+				var _list = ds_grid_get(global.grid_plants, (_c+global.grid_cols+64)%(global.grid_cols+64), zombie_grid.row);
+				for(var _item = 0; _item < ds_list_size(_list); _item++)
+				{
+					var plant_inst = ds_list_find_value(_list, _item);
+					if (!instance_exists(plant_inst)) continue;
+
+					var dx = plant_inst.x - x;
+					var dy = plant_inst.y - y;
+					var is_in_front = false;
+
+					if (attack_range > 0) {
+						is_in_front = (dx < 0 && dx > -attack_range);
+					} else {
+						is_in_front = (dx > 0 && dx < -attack_range);
+					}
+
+					if (is_in_front && plant_inst.grid_row == zombie_grid.row && (plant_inst.feature_type != "dwarf" || (plant_inst.feature_type == "dwarf" && giant_type)))
+					{
+						for (var i = 0; i < ds_list_size(global.eat_order); i++)
+						{
+							var tar_type = ds_list_find_value(global.eat_order, i);
+							if (plant_inst.plant_type == tar_type)
+							{
+								plant_order_list[i] = plant_inst;
+								break;
+							}
+						}
+					}
+				}
+			}
+		}
 		
 		for(var i = 0 ; i < 4 ; i++){
 			if plant_order_list[i] != noone{
@@ -138,6 +208,7 @@ switch(state) {
         if (plant_in_range != noone) {
             state = ENEMY_STATE.ATTACK;
             target_plant = plant_in_range;
+            target_enemy = noone;
             attack_timer = 0;  // 重置攻击计时器
             timer = 0;         // 重置动画计时器
         }
@@ -171,37 +242,104 @@ switch(state) {
 			if  ((hp/maxhp > hurt_rate) && image_index == move_anim * 2 + attack_anim-1) or ((hp/maxhp <= hurt_rate) && image_index == move_anim * 2 + attack_anim*2-1){
 				skipped = true
 			}
-			x -= current_move_speed;
+			if (is_friend) {
+				x += current_move_speed;
+			} else {
+				x -= current_move_speed;
+			}
 		}
 		
 		else{
-	        // 检测前方植物
-	        var plant_in_range = noone;
-        
-			var plant_order_list = [noone,noone,noone,noone]
-		
-	        // 使用碰撞检测查找攻击范围内的植物
-	        with (obj_card_parent) {
-				var dx = x - other.x;
-				var dy = y - other.y;
-				var is_in_front = false
-				is_in_front = (dx < 0 && dx > -other.attack_range);
-				
-	            // 检查是否在攻击范围内
-	            if (is_in_front && zombie_grid.row == grid_row && (feature_type!="dwarf" || (feature_type=="dwarf" && other.giant_type))) {
-	                // 按铲除顺序优先选择
-	                for (var i = 0; i < ds_list_size(global.eat_order); i++) {
-	                    var target_type = ds_list_find_value(global.eat_order, i);
-                    
-	                    if (plant_type == target_type) {
-	                        plant_order_list[i] = id;
+	        // ── 友化互攻索敌（同 NORMAL 那套）──
+	        var enemy_in_range = noone;
+	        if (variable_global_exists("enemy_array") && variable_global_exists("enemy_array_friend")
+	            && zombie_grid.row >= 0 && zombie_grid.row < global.grid_rows) {
+	            var _stride = global.grid_cols + 2;
+	            var _start_c = max(zombie_grid.col - 2, 0);
+	            var _end_c = min(zombie_grid.col + 2, _stride - 1);
+	            var _elist = (is_friend) ? global.enemy_array : global.enemy_array_friend;
+	            for(var _c = _start_c; _c <= _end_c; _c++)
+	            {
+	                var _el = _elist[zombie_grid.row * _stride + _c];
+	                for(var _ei = 0; _ei < array_length(_el); _ei++)
+	                {
+	                    var _e = _el[_ei];
+	                    if (!instance_exists(_e)) continue;
+	                    var _et = (variable_instance_exists(_e, "target_type")) ? _e.target_type : "";
+	                    if (_et != target_type) continue;
+	                    var _edx = _e.x - x;
+	                    var _efront = false;
+	                    if (attack_range > 0) {
+	                        _efront = (is_friend) ? (_edx > 0 && _edx < attack_range)
+	                                              : (_edx < 0 && _edx > -attack_range);
+	                    } else {
+	                        _efront = (is_friend) ? (_edx < 0 && _edx > attack_range)
+	                                              : (_edx > 0 && _edx < -attack_range);
+	                    }
+	                    if (_efront) {
+	                        enemy_in_range = _e;
 	                        break;
 	                    }
 	                }
-                
-	                if (plant_in_range != noone) break;
+	                if (enemy_in_range != noone) break;
 	            }
 	        }
+	        if (enemy_in_range != noone) {
+	            target_enemy = enemy_in_range;
+	            target_plant = noone;
+	        }
+	        else if (is_friend) {
+	            // 友化互攻目标没了 → 回走路状态继续往右索敌
+	            state = ENEMY_STATE.NORMAL;
+	            target_enemy = noone;
+	            attack_timer = 0;  // 重置攻击计时器
+	            timer = 0;         // 重置动画计时器
+	        }
+	        else{
+	        // 检测前方植物
+	        var plant_in_range = noone;
+        
+		var plant_order_list = global._eat_scratch;
+		plant_order_list[0] = noone; plant_order_list[1] = noone; plant_order_list[2] = noone; plant_order_list[3] = noone;
+
+		if (variable_global_exists("grid_plants") && ds_exists(global.grid_plants, ds_type_grid)) {
+			var start_c = max(zombie_grid.col - 2, -1);
+			var end_c = min(zombie_grid.col + 2, global.grid_cols - 1);
+
+			for(var _c = start_c; _c <= end_c; _c++)
+			{
+				if(zombie_grid.row<0||zombie_grid.row>=global.grid_rows)continue;
+				var _list = ds_grid_get(global.grid_plants, (_c+global.grid_cols+64)%(global.grid_cols+64), zombie_grid.row);
+				for(var _item = 0; _item < ds_list_size(_list); _item++)
+				{
+					var plant_inst = ds_list_find_value(_list, _item);
+					if (!instance_exists(plant_inst)) continue;
+
+					var dx = plant_inst.x - x;
+					var dy = plant_inst.y - y;
+					var is_in_front = false;
+
+					if (attack_range > 0) {
+						is_in_front = (dx < 0 && dx > -attack_range);
+					} else {
+						is_in_front = (dx > 0 && dx < -attack_range);
+					}
+
+					if (is_in_front && plant_inst.grid_row == zombie_grid.row && (plant_inst.feature_type != "dwarf" || (plant_inst.feature_type == "dwarf" && giant_type)))
+					{
+						for (var i = 0; i < ds_list_size(global.eat_order); i++)
+						{
+							var tar_type = ds_list_find_value(global.eat_order, i);
+							if (plant_inst.plant_type == tar_type)
+							{
+								plant_order_list[i] = plant_inst;
+								break;
+							}
+						}
+					}
+				}
+			}
+		}
 			for(var i = 0 ; i < 4 ; i++){
 				if plant_order_list[i] != noone{
 					plant_in_range = plant_order_list[i]
@@ -210,17 +348,32 @@ switch(state) {
 			}
 			if (plant_in_range != noone) {
 	            target_plant = plant_in_range;
+	            target_enemy = noone;
 	        }
 			else{
 				state = ENEMY_STATE.NORMAL;
 	            target_plant = plant_in_range;
+	            target_enemy = noone;
 	            attack_timer = 0;  // 重置攻击计时器
 	            timer = 0;         // 重置动画计时器
 			}
+        }
         
 	        // 攻击处理
 	        attack_timer++;
 	        if (attack_timer >= current_atk_cycle) {
+	            if (target_enemy != noone && instance_exists(target_enemy)) {
+	                // 友化 ↔ 正常互攻：走敌人受击流程
+	                with (target_enemy) {
+	                    damage_amount = other.atk;
+	                    damage_type = "normal";
+	                    event_user(0);
+	                }
+	                //播放音效
+	                var a = irandom_range(0,2)
+	                global.audio.play(ds_list_find_value(obj_battle.chomp_sound_list,a),0,0)
+	            }
+	            else if (target_plant != noone && instance_exists(target_plant)) {
 	            // 对目标植物造成伤害
 	            with (target_plant) {
 					if !invincible{
@@ -237,6 +390,14 @@ switch(state) {
 	            //播放音效
 				var a = irandom_range(0,2)
 				global.audio.play(ds_list_find_value(obj_battle.chomp_sound_list,a),0,0)
+	            }
+	            else {
+	                // 两个目标都没了：清掉，回走路状态
+	                target_enemy = noone;
+	                target_plant = noone;
+	                state = ENEMY_STATE.NORMAL;
+	                timer = 0;
+	            }
 	            // 重置攻击计时器
 	            attack_timer = 0;
 	        }
@@ -281,7 +442,7 @@ depth = base_depth - 4.5; // 僵尸比植物稍微靠后一点（在护罩外侧
 grid_col = zombie_grid.col;
 grid_row = zombie_grid.row;
 
-if x < global.grid_offset_x-150 && hp > 0 && not place_meeting(x,y,obj_cat){
+if x < global.grid_offset_x-150 && hp > 0 && not place_meeting(x,y,obj_cat) && is_friend == 0{
 	if (global.network.mode == "server") {
 		var _clients = global.network.connected_clients;
 		for (var i = 0; i < array_length(_clients); i++) {
@@ -294,6 +455,11 @@ if x < global.grid_offset_x-150 && hp > 0 && not place_meeting(x,y,obj_cat){
 		instance_create_depth(room_width/2,room_height/2,-3001,obj_game_over)
 		global.audio.play(snd_lose,0,0)
 	}
+}
+
+// 友化敌人完全走出战场两端 → 销毁（不算敌人，不能一直留在场上）
+if (is_friend && (x < 0 || x > 2300)) {
+	instance_destroy();
 }
 
 

@@ -1,4 +1,6 @@
-﻿// 友化敌人不算敌人：跳过，不结算碰撞
+
+
+// 友化敌人不算敌人：跳过，不结算碰撞
 if (variable_instance_exists(other, "is_friend") && other.is_friend) exit
 
 if other.hp > 0 and can_hit(target_type,other.target_type) and (b_type == 0 ||(b_type == 1 && row == other.grid_row)){
