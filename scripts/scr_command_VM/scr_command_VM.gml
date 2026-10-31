@@ -3023,6 +3023,11 @@ function vm_attach_plant_to_platform(plant, col, row) {
     if (_sx != 0 || _sy != 0) {
         plant.x += _sx;
         plant.y += _sy;
+        // 绑定的星级星星（banding_star_obj）出生在修正前的逻辑格位置，跟着一起挪到视觉位
+        if (variable_instance_exists(plant, "banding_star_obj") && instance_exists(plant.banding_star_obj)) {
+            plant.banding_star_obj.x += _sx;
+            plant.banding_star_obj.y += _sy;
+        }
     }
     if (_moving) plant.platform_grid_lock = true;
     return true;
