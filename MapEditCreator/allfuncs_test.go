@@ -157,6 +157,7 @@ _VM_BATTLE_START {
     VM_DrawSetColour(1, 1, 1)
     VM_RemoveCardSlot(1)
     VM_InsertCardSlot(1, "s")
+    VM_SpawnCardSlot("s", 535, 90)
 }
 `
 	for _, d := range lintScript(code) {

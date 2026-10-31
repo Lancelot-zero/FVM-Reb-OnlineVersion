@@ -263,8 +263,8 @@ var funcTable = map[string]fnSpec{
 	"VM_GetTerrain":    {2, 2, []paramType{ptInt, ptInt}, nil},
 	// 创建
 	"VM_CreatePlatform": {8, 8, []paramType{ptInt, ptInt, ptInt, ptInt, ptInt, ptInt, ptInt, ptString}, nil},
-	"VM_SpawnPlant":     {6, 6, []paramType{ptString, ptInt, ptInt, ptInt, ptInt, ptInt}, map[int]enumSpec{0: {"卡片ID", cardIDs, false, "error"}}},
-	"VM_SpawnEnemy":     {3, 3, []paramType{ptString, ptInt, ptInt}, map[int]enumSpec{0: {"敌人ID", enemyIDs, false, "error"}}},
+	"VM_SpawnPlant":     {6, 6, []paramType{ptString, ptInt, ptInt, ptInt, ptInt, ptInt}, map[int]enumSpec{0: {"卡片ID", cardIDs, false, "warning"}}},
+	"VM_SpawnEnemy":     {3, 3, []paramType{ptString, ptInt, ptInt}, map[int]enumSpec{0: {"敌人ID", enemyIDs, false, "warning"}}},
 	"VM_SpawnBoss":      {3, 3, []paramType{ptString, ptInt, ptInt}, map[int]enumSpec{0: {"敌人ID", enemyIDs, false, "error"}}},
 	"VM_SpawnObject":    {3, 3, []paramType{ptString, ptInt, ptInt}, map[int]enumSpec{0: {"物件名", objectNames, false, "error"}}},
 	"VM_SpawnPlantsRandom": {16, 16, []paramType{
@@ -427,6 +427,7 @@ var funcTable = map[string]fnSpec{
 	"VM_DrawSetColour":       {3, 3, []paramType{ptInt, ptInt, ptInt}, nil},
 	"VM_RemoveCardSlot":      {1, 1, []paramType{ptInt}, nil},
 	"VM_InsertCardSlot":      {2, 2, []paramType{ptInt, ptString}, nil},
+	"VM_SpawnCardSlot":       {3, 3, []paramType{ptString, ptFloat, ptFloat}, nil},
 }
 
 // funcDescs 函数中文描述（悬停提示 / 补全说明，来自 help.md 函数表）
@@ -586,7 +587,8 @@ var funcDescs = map[string]string{
 	"VM_DrawSetFontSize":         "设置之后 VM_DrawText 的字号（像素高，0/-1=恢复默认），设一次一直生效直到再设置",
 	"VM_DrawSetColour":           "设置之后 VM_DrawText 的颜色（r,g,b 通道 0~255，任一 -1=恢复白色），设一次一直生效直到再设置",
 	"VM_RemoveCardSlot":          "删掉第 i 个战斗卡槽（i 从 0 起，按当前战斗槽顺序），其余槽重新编号并重排位置；卡组数据 selected_deck 不动，只影响本场战斗",
-	"VM_InsertCardSlot":          "在第 i 个位置插入一张卡的战斗卡槽（i 从 0 起，越界自动夹到首/尾；任意已注册卡 id，与玩家是否解锁无关），插入即冷却完成，其余槽重新编号并重排位置；卡组数据 selected_deck 不动",
+	"VM_InsertCardSlot":          "在第 i 个位置插入一张卡的战斗卡槽（i 从 0 起，越界自动夹到首/尾；超出 21 个槽先淘汰末尾的槽；任意已注册卡 id，与玩家是否解锁无关），插入即冷却完成，其余槽重新编号并重排位置；卡组数据不动。成功返回插入槽的实例 id，卡不存在返回 -1",
+	"VM_SpawnCardSlot":           "创建一个游离卡槽（卡id, x, y；像素坐标）：不属于卡槽组，不进重排/插槽/删槽/21 上限，没有组内快捷键（鼠标点选可用），位置停在指定坐标，返回实例 id；-1=参数无效或卡不存在",
 }
 
 // funcSigs 函数原型（由 sync_vmfuncs.py 从 help.md 函数表自动提取）
@@ -735,6 +737,7 @@ var funcSigs = map[string]string{
 	"VM_Slot_add": "VM_Slot_add(\"卡名\")",
 	"VM_SpawnBatMouse": "VM_SpawnBatMouse(列,行)",
 	"VM_SpawnBoss": "VM_SpawnBoss(\"BOSS类型\",行,血量)",
+	"VM_SpawnCardSlot": "VM_SpawnCardSlot(\"卡id\", x, y)",
 	"VM_SpawnCats": "VM_SpawnCats(0或1)",
 	"VM_SpawnEnemy": "VM_SpawnEnemy(\"敌人类型\",行,血量)",
 	"VM_SpawnObject": "VM_SpawnObject(\"物件名\",列,行)",

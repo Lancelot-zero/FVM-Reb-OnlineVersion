@@ -77,6 +77,8 @@ const updateLog = `# v3.0 更新
   只动本场战斗槽，卡组数据 selected_deck 不动
 - **VM_InsertCardSlot(i, "卡id")**：在第 i 个位置插入一张卡的战斗卡槽（i 越界自动夹到首/尾；
   任意已注册卡 id，与玩家是否解锁无关），插入即冷却完成，其余槽重排
+- **VM_SpawnCardSlot("卡id", x, y)**：创建一个游离卡槽（不属于卡槽组）：不进重排/插槽/删槽/21 上限，
+  没有组内快捷键（鼠标点选可用），位置停在指定像素坐标，返回实例 id
 - **VM_DrawText(x, y, "文字")**：在 _OBJECT_DRAW 里画一行文字（font_yuan）；
   字号用 VM_DrawSetFontSize、颜色用 VM_DrawSetColour，不设 = 默认字号 + 白色
 - **VM_DrawSetFontSize(字号)** / **VM_DrawSetColour(r, g, b)**：设置后续 VM_DrawText 的字号 /

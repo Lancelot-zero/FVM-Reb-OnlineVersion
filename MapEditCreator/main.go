@@ -19,7 +19,7 @@ func main() {
 	app := NewApp()
 
 	err := wails.Run(&options.App{
-		Title:     "美食大战老鼠重生-实验室地图插件编辑工具V2.4.9",
+		Title:     "美食大战老鼠重生-实验室地图插件编辑工具V3.0.0",
 		Width:     1200,
 		Height:    800,
 		MinWidth:  820,

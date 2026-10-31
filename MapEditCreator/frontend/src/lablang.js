@@ -60,6 +60,7 @@ export const FUNC_NAMES = [
   "VM_DrawSpritePartExt",
   "VM_DrawSetFontSize", "VM_DrawSetColour",
   "VM_RemoveCardSlot", "VM_InsertCardSlot",
+  "VM_SpawnCardSlot",
 ];
 
 const eventSet = new Set(EVENT_BLOCKS);

@@ -365,7 +365,8 @@ static std::vector<FuncDef> FUNC_DEFS = {
     {"VM_DrawSetFontSize",        1,    {PT_FLOAT},                           PT_INT,},      // 152 — 设置之后 VM_DrawText 的字号（像素高，0/-1=恢复默认），设一次一直生效直到再设置
     {"VM_DrawSetColour",          3,    {PT_INT, PT_INT, PT_INT},             PT_INT,},      // 153 — 设置之后 VM_DrawText 的颜色（r,g,b 通道 0~255，任一 -1=恢复白色），设一次一直生效直到再设置
     {"VM_RemoveCardSlot",         1,    {PT_INT},                             PT_INT,},      // 154 — 删掉第 i 个战斗卡槽（i 从 0 起，按当前战斗槽顺序），其余槽重新编号并重排位置；卡组数据 selected_deck 不动，只影响本场战斗
-    {"VM_InsertCardSlot",         2,    {PT_INT, PT_STRING},                  PT_INT,},      // 155 — 在第 i 个位置插入一张卡的战斗卡槽（i 从 0 起，越界自动夹到首/尾；任意已注册卡 id，与玩家是否解锁无关），插入即冷却完成，其余槽重新编号并重排位置；卡组数据 selected_deck 不动
+    {"VM_InsertCardSlot",         2,    {PT_INT, PT_STRING},                  PT_INT,},      // 155 — 在第 i 个位置插入一张卡的战斗卡槽（i 从 0 起，越界自动夹到首/尾；超出 21 个槽先淘汰末尾的槽；任意已注册卡 id，与玩家是否解锁无关），插入即冷却完成，其余槽重新编号并重排位置；卡组数据不动。成功返回插入槽的实例 id，卡不存在返回 -1
+    {"VM_SpawnCardSlot",          3,    {PT_STRING, PT_FLOAT, PT_FLOAT},      PT_INT,},      // 156 — 创建一个游离卡槽（卡id, x, y；像素坐标）：不属于卡槽组，不进重排/插槽/删槽/21 上限，没有组内快捷键（鼠标点选可用），位置停在指定坐标，返回实例 id；-1=参数无效或卡不存在
 };
 
 // ============================================================

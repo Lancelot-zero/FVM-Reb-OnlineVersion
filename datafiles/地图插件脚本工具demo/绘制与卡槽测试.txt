@@ -23,4 +23,29 @@ _VM_BATTLE_START {
     // 主图脚本也能测卡槽：插一张 small_fire 到第 0 位，再删掉第 3 个槽
     VM_ShellPrint("[T] map: InsertCardSlot(0, small_fire) = ", VM_InsertCardSlot(0, "small_fire"))
     VM_ShellPrint("[T] map: RemoveCardSlot(3)          = ", VM_RemoveCardSlot(3))
+
+    // ── 卡槽动画参数测试（VM_SetCardSlotProp 按卡名设置，参数见 help.md「卡槽操作」）──
+
+    // 1) 倒计时销毁 + 闪烁：small_fire 槽 600 帧后销毁，最后 300 帧闪烁
+    //    （手里拿着这张卡时倒计时暂停，松手继续）
+    VM_SetCardSlotProp("small_fire", "destroy_timer", 600)
+    VM_SetCardSlotProp("small_fire", "blink_start", 300)
+    VM_ShellPrint("[T] map: small_fire 槽 600 帧后销毁（最后 300 帧闪烁）")
+
+    // 2) 种卡自毁：插一张 ice_cream，把这张卡种下去槽就销毁自己
+    VM_InsertCardSlot(1, "ice_cream")
+    VM_SetCardSlotProp("ice_cream", "destroy_on_plant", 1)
+    VM_ShellPrint("[T] map: ice_cream 槽种卡即自毁")
+
+    // 3) 跳跃动画：cola 槽 起点(535,90) → 最高点(600,30) → 落点(700,300)，120 帧
+    VM_InsertCardSlot(2, "cola")
+    VM_SetCardSlotProp("cola", "jump_start_x", 535)
+    VM_SetCardSlotProp("cola", "jump_start_y", 90)
+    VM_SetCardSlotProp("cola", "jump_apex_x", 600)
+    VM_SetCardSlotProp("cola", "jump_apex_y", 30)
+    VM_SetCardSlotProp("cola", "jump_end_x", 700)
+    VM_SetCardSlotProp("cola", "jump_end_y", 300)
+    VM_SetCardSlotProp("cola", "jump_frames", 120)
+    VM_SetCardSlotProp("cola", "jump_on", 1)
+    VM_ShellPrint("[T] map: cola 槽跳跃动画 120 帧")
 }
