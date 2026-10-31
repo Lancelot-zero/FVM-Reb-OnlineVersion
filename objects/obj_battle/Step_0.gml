@@ -478,9 +478,12 @@ if (global.network.mode == "server" && battle_time mod 20 == 0) {
 		if (hp > 0 && state != ENEMY_STATE.DEAD) {
 			var _net_id = (ds_map_exists(global.network.map_instance_id_net_id, id)) ? global.network.map_instance_id_net_id[? id] : -1;
 			if (_net_id != -1) {
+				// 友化标志跟着一起每 20 步校准：和位置一样无条件发，客户端万一走岔了也能被纠回
+				var _fj = json_stringify({ is_friend: (variable_instance_exists(id, "is_friend")) ? is_friend : 0 });
 				for (var _i = 0; _i < _size; _i++) {
 					send_message(_list[_i], MSG_ENEMY_HP, _net_id, hp, maxhp);
 					send_message(_list[_i], MSG_ENEMY_CALIBRATE, _net_id, x, y);
+					send_message(_list[_i], MSG_MODIFY_PROP, _net_id, _fj);
 				}
 			}
 		}

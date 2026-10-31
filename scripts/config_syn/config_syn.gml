@@ -49,6 +49,7 @@ global._sync_keys = [
 	// 状态机
 	"hp_modified",
 	"state",
+	"is_friend",   // 友化（帮玩家打敌人的友军老鼠）
 	"skill_timer",
 	"jump_times",
 	"skill_choose",
