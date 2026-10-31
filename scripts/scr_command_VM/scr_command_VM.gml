@@ -6130,6 +6130,9 @@ global._sync_vm_bin_buf = undefined;
 
 /// @function VM_InitRoomEntry(buf)
 function VM_InitRoomEntry(buf) {
+    // 上一张实验室地图带进来的 mod bin 在这里按清单卸掉（进新图即清，
+    // 本图的重新装载由 StageDetail 扫描 / 房主 vm_bins 下发完成）
+    lab_mod_unload_all();
 				
     ds_map_clear(global.banned_cards_online);
     global.banned_gems_online = [];

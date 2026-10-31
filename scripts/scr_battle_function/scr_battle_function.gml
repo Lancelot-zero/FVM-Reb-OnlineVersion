@@ -1025,15 +1025,39 @@ function parse_network_message(buf, _sock) {
 				global.__vm.rng_state = 0x9E3779B9;   // 无种子时重置为默认，避免残留上一局的旧状态
 			}
 
-			// 读 .bin 数据：JSON 后剩余的全部内容
-			var _remain = buffer_get_size(buf) - buffer_tell(buf);
-			if (_remain > 0) {
-			    var _bin_buf = buffer_create(_remain, buffer_fixed, 1);
-			    buffer_copy(buf, buffer_tell(buf), _remain, _bin_buf, 0);
-			    buffer_seek(_bin_buf, buffer_seek_start, 0);
-			    VM_InitRoomEntry(_bin_buf);
+			// 读 .bin 数据：新协议 json 带 vm_bins 清单（[{type,name,size}]，type:"map"
+			//   那段是地图 bin，各 bin 按清单顺序拼在 JSON 后面）→ 按 size 切段加载；
+			//   没有清单字段 = 老协议，JSON 后剩余的全部内容就是地图 bin
+			var _vm_bins = variable_struct_get(json_data, "vm_bins");
+			if (!is_undefined(_vm_bins) && is_array(_vm_bins) && array_length(_vm_bins) > 0) {
+			    var _have_map = false;
+			    for (var _vb = 0; _vb < array_length(_vm_bins); _vb++) {
+			        var _e = _vm_bins[_vb];
+			        var _sz = is_struct(_e) ? real(variable_struct_get(_e, "size") ?? 0) : 0;
+			        if (_sz <= 0) continue;
+			        var _seg = buffer_create(_sz, buffer_fixed, 1);
+			        buffer_copy(buf, buffer_tell(buf), _sz, _seg, 0);
+			        buffer_seek(_seg, buffer_seek_start, 0);
+			        if (is_struct(_e) && string(variable_struct_get(_e, "type") ?? "") == "map") {
+			            VM_InitRoomEntry(_seg);
+			            _have_map = true;
+			        } else {
+			            lab_mod_load_bin(_seg,
+			                is_struct(_e) ? string(variable_struct_get(_e, "type") ?? "") : "",
+			                is_struct(_e) ? string(variable_struct_get(_e, "name") ?? "") : "");
+			        }
+			    }
+			    if (!_have_map) VM_InitRoomEntry(undefined);   // 只有 mod bin 的图：光清理不载地图 bin
 			} else {
-			    VM_InitRoomEntry(undefined);
+			    var _remain = buffer_get_size(buf) - buffer_tell(buf);
+			    if (_remain > 0) {
+			        var _bin_buf = buffer_create(_remain, buffer_fixed, 1);
+			        buffer_copy(buf, buffer_tell(buf), _remain, _bin_buf, 0);
+			        buffer_seek(_bin_buf, buffer_seek_start, 0);
+			        VM_InitRoomEntry(_bin_buf);
+			    } else {
+			        VM_InitRoomEntry(undefined);
+			    }
 			}
 
 			// 存到全局，供 file_cache 内部使用

@@ -67,6 +67,11 @@ switch (_type) {
 				if (!is_undefined(global._file_cache_json_path)) {
 					_sync[$ "json_path"] = global._file_cache_json_path;
 				}
+				// 实验室地图的本图 mod bin 清单（vm_bins）：和 StageDetail 初建时同一份，
+				// 后进房的客机按它切段加载；没这个字段 = 老协议单 bin
+				if (variable_global_exists("_sync_vm_bins") && !is_undefined(global._sync_vm_bins)) {
+					_sync[$ "vm_bins"] = global._sync_vm_bins;
+				}
 				send_message(_sock, MSG_ENTER_ROOM_READY, json_stringify(_sync), global._sync_vm_bin_buf);
 			}
         }

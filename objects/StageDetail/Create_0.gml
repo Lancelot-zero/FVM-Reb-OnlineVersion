@@ -100,6 +100,15 @@ function on_create_room() {
         VM_InitRoomEntry(undefined);
     }
 
+    // 本图 mod bin：<同名>.<类型>.<名称>.bin，扫出来逐个装载（单机/房主都走这里；
+    // 卸载在进下一张图时 VM_InitRoomEntry 开头按清单自动做）
+    var _lab_mods = lab_mod_scan(_json_dir);
+    for (var _lm = 0; _lm < array_length(_lab_mods); _lm++) {
+        if (file_exists(_lab_mods[_lm].path)) {
+            lab_mod_load_bin(buffer_load(_lab_mods[_lm].path), _lab_mods[_lm].type, _lab_mods[_lm].name);
+        }
+    }
+
     if (global.network.mode == "server") {
         var _json_struct = {
             target_level_id: global.level_id,
@@ -161,7 +170,46 @@ function on_create_room() {
         global._sync_map_sprite_name = _sprite_rel;
         global._sync_custom_music_names = _custom_music_names;
         global._sync_resource_fingerprints = _resource_fingerprints;
-        global._sync_vm_bin_buf = _bin_buf;
+
+        // 本图 mod bin 清单 + 拼包：地图 bin 在前、各 mod bin 按清单顺序跟后，
+        // 新客户端按 vm_bins 的 size 切段；没有 mod bin 时 _send_buf 就是地图 bin 本身、
+        // json 不带 vm_bins → 老客户端照旧把整段当一个 bin 读
+        var _send_buf = _bin_buf;
+        var _vm_bins = [];
+        var _lab_lst = lab_mod_vm_list();
+        var _pack_n = 0;
+        for (var _lp0 = 0; _lp0 < array_length(_lab_lst); _lp0++) {
+            if (buffer_exists(_lab_lst[_lp0].buf)) _pack_n++;
+        }
+        if (_pack_n > 0) {
+            var _map_size = buffer_exists(_bin_buf) ? buffer_get_size(_bin_buf) : 0;
+            var _total = _map_size;
+            for (var _lp2 = 0; _lp2 < array_length(_lab_lst); _lp2++) {
+                if (buffer_exists(_lab_lst[_lp2].buf)) _total += buffer_get_size(_lab_lst[_lp2].buf);
+            }
+            _send_buf = buffer_create(_total, buffer_fixed, 1);
+            var _off = 0;
+            if (_map_size > 0) {
+                buffer_copy(_bin_buf, 0, _map_size, _send_buf, 0);
+                _off = _map_size;
+                _vm_bins[array_length(_vm_bins)] = { type: "map", name: "", size: _map_size };
+            }
+            for (var _lp3 = 0; _lp3 < array_length(_lab_lst); _lp3++) {
+                var _b3 = _lab_lst[_lp3].buf;
+                if (!buffer_exists(_b3)) continue;
+                var _sz3 = buffer_get_size(_b3);
+                buffer_seek(_b3, buffer_seek_start, 0);
+                buffer_copy(_b3, 0, _sz3, _send_buf, _off);
+                _off += _sz3;
+                _vm_bins[array_length(_vm_bins)] = { type: _lab_lst[_lp3].type, name: _lab_lst[_lp3].name, size: _sz3 };
+            }
+            _json_struct[$ "vm_bins"] = _vm_bins;
+            // 地图 bin 已拼进 _send_buf，原 buffer 不再被引用；不删就漏一个
+            //（_send_buf 那份由下一间房 VM_InitRoomEntry 开头删）
+            if (buffer_exists(_bin_buf)) buffer_delete(_bin_buf);
+        }
+        global._sync_vm_bins = (array_length(_vm_bins) > 0) ? _vm_bins : undefined;
+        global._sync_vm_bin_buf = _send_buf;
 
         // level_data 中的音频 ID 和精灵索引转为字符串名，兼容懒加载
         {
@@ -188,7 +236,7 @@ function on_create_room() {
 		
         var _list = global.network.connected_clients;
         for (var _i = 0; _i < array_length(_list); _i++) {
-            send_message(_list[_i], MSG_ENTER_ROOM_READY, _json, _bin_buf);
+            send_message(_list[_i], MSG_ENTER_ROOM_READY, _json, _send_buf);
         }
     }
     global.gui_stack.to(room_ready)

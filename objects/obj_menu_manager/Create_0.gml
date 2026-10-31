@@ -9,6 +9,18 @@ if surface_exists(application_surface){
 	surface_reset_target();
 }
 
+// 断开服务器后回到主界面：在这里完成注册表清空 + 重新注册
+//   （断开那一刻不在主界面时，refresh 只发起了切房，真正的重建放在这里）
+//   放在建入口列表之前：重建完 mod_maps 已清空，入口列表不会再生成 mod 地图按钮
+if (variable_global_exists("mod_unload_pending") && global.mod_unload_pending
+    && !wv_net_connected()) {   // 连接期间 mod_unload_pending 一直是 true，别把在线 mod 卸了
+	if (game_registries_refresh()) global.mod_unload_pending = false;
+}
+
+// 回主界面：上一张实验室地图带进来的 mod bin 按清单卸掉（单机/断线都走这里；
+// 进新图那条路在 VM_InitRoomEntry 开头）。清单为空时是空操作
+lab_mod_unload_all();
+
 instance_create_depth(1355,820,-2,obj_startgame_button)
 instance_create_depth(100,0,-2,obj_player_info_ui)
 
@@ -158,7 +170,7 @@ function on_draw() {
 	draw_set_valign(fa_middle)
 	draw_set_halign(fa_center)
 	draw_set_colour(c_yellow)
-	draw_text(_x1+self.total_progress_bar_width/2, _y1 - 80, "本游戏为免费开源游戏，任何付费获取方式均为诈骗\n游戏作者B站名称：Spring曙光");
+	draw_text(_x1+self.total_progress_bar_width/2, _y1 - 80, "本游戏为免费开源游戏，任何付费获取方式均为诈骗\n游戏作者B站名称：Spring曙光\n联机版作者：萌新&超级飞侠");//当前版本为 萌新\\(//∇//)\\) 修改的扩展版本");
 	draw_set_alpha(1)
-
 }
+

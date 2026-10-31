@@ -830,6 +830,159 @@ function src_mod_register_card(_id, _c) {
 	return true;
 }
 
+// ══════════════════════════════════════════════════════════════════
+//  实验室地图自带的 mod bin（<图名>.<类型>.<名称>.bin）
+//    扫描 = 房主/单机在 StageDetail 建房间时扫地图 json 所在目录（lab_mod_scan）
+//    加载 = src_mod_card_vm_load 建 VM（复用 mod 单位那套：_VM_CONST_INIT/_OBJECT_CFG
+//           立即执行 + 挂载点注册），按类型插进 mod_*_vms，同名覆盖（旧条目存清单）
+//    卸载 = 进新房间（VM_InitRoomEntry 开头）/ 回主菜单时按清单逐个摘挂载、放内存、
+//           把被覆盖的旧条目还回去（lab_mod_unload_all）
+//    联机 = 房主把清单 [{type,name,size}] 写进 MSG_ENTER_ROOM_READY 的 json（vm_bins），
+//           各 bin 按清单顺序拼在地图 bin 后面一起发；客机按 size 切段加载。
+//           没有 vm_bins 字段 = 老协议，json 后面整个就是地图 bin。
+// ══════════════════════════════════════════════════════════════════
+
+/// @function lab_mod_vm_list()
+/// @desc 本图 mod bin 装载清单（数组）；空表自动建
+function lab_mod_vm_list() {
+    if (!variable_global_exists("_lab_mod_vms") || !is_array(global._lab_mod_vms)) {
+        global._lab_mod_vms = [];
+    }
+    return global._lab_mod_vms;
+}
+
+/// @function lab_mod_type_map(_type)
+/// @desc 类型 → 对应 mod VM 注册表（ds_map）；不认识的类型返回 -1（只建 VM 不进注册表，
+///       bin 自带 __hookall__ 时照样能挂事件跑，等于一个"本图对象"）
+function lab_mod_type_map(_type) {
+    var _t = string_lower(string(_type));
+    if (_t == "card"   && variable_global_exists("mod_card_vms")   && ds_exists(global.mod_card_vms,   ds_type_map)) return global.mod_card_vms;
+    if (_t == "enemy"  && variable_global_exists("mod_enemy_vms")  && ds_exists(global.mod_enemy_vms,  ds_type_map)) return global.mod_enemy_vms;
+    if (_t == "weapon" && variable_global_exists("mod_weapon_vms") && ds_exists(global.mod_weapon_vms, ds_type_map)) return global.mod_weapon_vms;
+    if (_t == "gem"    && variable_global_exists("mod_gem_vms")    && ds_exists(global.mod_gem_vms,    ds_type_map)) return global.mod_gem_vms;
+    if (_t == "bullet" && variable_global_exists("mod_bullet_vms") && ds_exists(global.mod_bullet_vms, ds_type_map)) return global.mod_bullet_vms;
+    if (_t == "effect" && variable_global_exists("mod_effect_vms") && ds_exists(global.mod_effect_vms, ds_type_map)) return global.mod_effect_vms;
+    return -1;
+}
+
+/// @function lab_mod_load_bin(_buf, _type, _name)
+/// @desc 装载一个本图 mod bin：建 VM（复用 mod 单位 VM 装载器）→ 按类型插进 mod_*_vms
+///       （同名覆盖，被盖掉的旧条目存清单，卸载时还回去）→ 记入本图清单。
+///       _buf 归清单持有，卸载时删。
+function lab_mod_load_bin(_buf, _type, _name) {
+    if (!buffer_exists(_buf) || !is_string(_name) || _name == "") return false;
+    var _vm = src_mod_card_vm_load(_buf, "", _name);
+    if (is_undefined(_vm)) return false;
+
+    var _map = lab_mod_type_map(_type);
+    var _old_vm = undefined;
+    var _had_old = false;
+    if (ds_exists(_map, ds_type_map)) {
+        if (ds_map_exists(_map, _name)) {
+            _old_vm = _map[? _name];
+            _had_old = true;
+        }
+        _map[? _name] = _vm;   // 本图这份覆盖；离图还原，见 lab_mod_unload_all
+    }
+
+    var _lst = lab_mod_vm_list();
+    _lst[array_length(_lst)] = {
+        type: _type, name: _name, vm: _vm,
+        old_vm: _old_vm, had_old: _had_old, buf: _buf
+    };
+    global._lab_mod_vms = _lst;
+    show_debug_message("[labmod] load " + string(_type) + "/" + _name + " (" + string(buffer_get_size(_buf)) + " bytes)");
+    return true;
+}
+
+/// @function lab_mod_unload_all()
+/// @desc 按清单逐个卸载本图 mod bin：摘挂载 → 放掉 VM 占的内存（块 buffer/instances/
+///       str_map/arrays/line_tab）→ 类型注册表里还回被覆盖的旧条目 → 删原 bin buffer。
+///       注册表已被 game_registries_refresh 重建过的话，表里不是本图这份 → 不动表
+///       （旧表那代内容已经没了，别把旧 VM 塞回新表）。
+function lab_mod_unload_all() {
+    if (!variable_global_exists("_lab_mod_vms") || !is_array(global._lab_mod_vms)) return false;
+    var _lst = global._lab_mod_vms;
+    var _any = array_length(_lst) > 0;
+    for (var _i = array_length(_lst) - 1; _i >= 0; _i--) {
+        var _o = _lst[_i];
+        if (is_undefined(_o)) continue;
+        var _vm = _o.vm;
+        if (!is_undefined(_vm)) {
+            vm_hook_unregister(_vm);
+            if (variable_struct_exists(_vm, "blocks") && ds_exists(_vm.blocks, ds_type_map)) {
+                var _bn = ds_map_keys_to_array(_vm.blocks);
+                for (var _b = 0; _b < array_length(_bn); _b++) {
+                    var _bb = _vm.blocks[? _bn[_b]];
+                    if (buffer_exists(_bb)) buffer_delete(_bb);
+                }
+                ds_map_destroy(_vm.blocks);
+            }
+            if (variable_struct_exists(_vm, "instances") && ds_exists(_vm.instances, ds_type_list)) ds_list_destroy(_vm.instances);
+            if (variable_struct_exists(_vm, "str_map") && ds_exists(_vm.str_map, ds_type_map)) ds_map_destroy(_vm.str_map);
+            if (variable_struct_exists(_vm, "arrays") && ds_exists(_vm.arrays, ds_type_map)) ds_map_destroy(_vm.arrays);
+            if (variable_struct_exists(_vm, "line_tab") && ds_exists(_vm.line_tab, ds_type_map)) {
+                var _lk = ds_map_keys_to_array(_vm.line_tab);
+                for (var _t = 0; _t < array_length(_lk); _t++) {
+                    var _l = _vm.line_tab[? _lk[_t]];
+                    if (ds_exists(_l, ds_type_list)) ds_list_destroy(_l);
+                }
+                ds_map_destroy(_vm.line_tab);
+            }
+        }
+        var _map = lab_mod_type_map(_o.type);
+        if (ds_exists(_map, ds_type_map)
+            && ds_map_exists(_map, _o.name) && _map[? _o.name] == _vm) {
+            if (_o.had_old) {
+                _map[? _o.name] = _o.old_vm;   // 覆盖过的还回去
+            } else {
+                ds_map_delete(_map, _o.name);
+            }
+        }
+        if (buffer_exists(_o.buf)) buffer_delete(_o.buf);
+    }
+    global._lab_mod_vms = [];
+    if (_any) show_debug_message("[labmod] unload all");
+    return _any;
+}
+
+/// @function lab_mod_scan(_json_path)
+/// @desc 扫地图 json 所在目录，按 <同名>.<类型>.<名称>.bin 收集本图 mod bin
+///       （<同名>.bin 本身是地图 bin，跳过；名称部分可以自己带点）
+/// @return [{path, type, name}]；没有返回空数组
+function lab_mod_scan(_json_path) {
+    var _out = [];
+    if (!is_string(_json_path) || _json_path == "") return _out;
+    var _fname = filename_name(_json_path);              // xxx.json
+    var _stem = "";
+    if (string_ends_with(_fname, ".json")) _stem = string_copy(_fname, 1, string_length(_fname) - 5);
+    if (_stem == "") return _out;
+    var _dir = string_copy(_json_path, 1, string_length(_json_path) - string_length(_fname));
+
+    var _file = file_find_first(_dir + "*.bin", 0);
+    while (_file != "") {
+        // 只收 <stem>.<类型>.<名称>.bin；<stem>.bin 是地图 bin，跳过
+        if (_file != _stem + ".bin" && string_starts_with(_file, _stem + ".")) {
+            // 去掉 "<stem>." 前缀和 ".bin" 后缀，剩 "<类型>.<名称...>"
+            var _mid = string_copy(_file, string_length(_stem) + 2,
+                string_length(_file) - string_length(_stem) - 1 - 4);
+            var _parts = string_split(_mid, ".");
+            if (array_length(_parts) >= 2 && string(_parts[0]) != "" && string(_parts[1]) != "") {
+                var _tname = string(_parts[0]);
+                var _bname = "";
+                for (var _p = 1; _p < array_length(_parts); _p++) {
+                    if (_p > 1) _bname += ".";
+                    _bname += string(_parts[_p]);
+                }
+                _out[array_length(_out)] = { path: _dir + _file, type: _tname, name: _bname };
+            }
+        }
+        _file = file_find_next();
+    }
+    file_find_close();
+    return _out;
+}
+
 /// @function src_mod_card_vm_load(_buf, _dir, _id)
 /// @desc 创建一张 mod 卡自己的虚拟机：函数表沿用全局 VM 注册表，
 ///       bin 的字符串池读入 vm，各块的字节码存进字典 vm.blocks（块名 → buffer）
