@@ -28,7 +28,7 @@ if card_equipped_attire_id(card_id) != -1{
 
 if(vm_card_spr!=-1)card_spr =get_load_sprite(vm_card_spr);
 if(vm_place_preview!=-1)place_preview=get_load_sprite(vm_place_preview);
-draw_sprite_ext(card_spr, 0, x+ vm_card_spr_addx, y+18+ vm_card_spr_addy,0.9,0.9,0,c_white,1);
+draw_sprite_ext(card_spr, 0, x+ vm_card_spr_addx, y+18+ vm_card_spr_addy,0.9,0.9,0,c_white,image_alpha);   // 卡贴图跟着卡槽闪烁透明度走
 //绘制星级
 
 if clevel > 0{
@@ -99,7 +99,8 @@ if (cooldown_timer < cooldown) {
     draw_set_halign(fa_left);
     draw_set_valign(fa_top);
 }
-//快捷键提示
+//快捷键提示（游离槽没有组内编号，不画）
+if slot_grouped{
 var slot_key = global.keybind_map[? "卡槽" + string(slot_index)]
 draw_set_color(c_black);
 draw_set_font(font_song);
@@ -109,6 +110,7 @@ draw_sprite_ext(spr_hotkey_prompt,0,x+33,y-46,1,1,0,c_white,1)
 draw_text(x+33,y-48,keyboard_get_string(slot_key))
 draw_set_halign(fa_left);
 draw_set_valign(fa_top);
+}
 
 
 

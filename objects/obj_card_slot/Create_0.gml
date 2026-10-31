@@ -11,6 +11,7 @@ night = false
 cooldown_timer = 30000
 description = "小火炉:生产火苗"
 slot_index = 0
+slot_grouped = true // 是否属于战斗卡槽组：false = 游离槽（不进重排/插槽/删槽/21 上限，没有组内快捷键）
 clevel = 0
 cshape = 0
 cskill = 0

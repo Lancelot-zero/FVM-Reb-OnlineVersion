@@ -94,6 +94,8 @@ if (is_ready && mouse_check_button_pressed(mb_left)) {
     }
 }
 
+// 游离槽没有组内编号（slot_index=0，键位表只有卡槽1~21），跳过快捷键
+if slot_grouped{
 var slot_key = global.keybind_map[? "卡槽" + string(slot_index)];
 
 if keyboard_check_pressed(slot_key) && is_ready{
@@ -129,6 +131,7 @@ if keyboard_check_pressed(slot_key) && is_ready{
 	        global.selected_slot = noone;
 		}
     }
+}
 
 // 如果当前卡槽被选中，处理放置逻辑
 if (is_selected) {
