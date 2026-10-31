@@ -150,6 +150,7 @@ if(global.network.mode!="offline"&&!ds_map_exists(global.network.map_instance_id
 }
 
 
+hp_delta_frame = (pre_hp >= 0) ? (hp - pre_hp) : 0;   // 本帧血量净变化（首帧 pre_hp=-1 给 0）；要在 pre_hp 覆盖前算好
 if (pre_hp>hp) {
 	global._VM_last_damaged_card = id;
 	if (buffer_exists(global._VM_CARD_DAMAGED)) {

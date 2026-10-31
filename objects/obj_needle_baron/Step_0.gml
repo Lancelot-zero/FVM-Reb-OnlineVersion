@@ -142,8 +142,12 @@ switch state{
 						instance_destroy()
 					}
 					else{
+						var _dmg = max(hp - 10, 0)
 						hp = 10
-						last_attack_enemy_id = -1
+						array_push(last_attack_ids, other.id)
+						array_push(last_attack_classes, object_get_name(other.object_index))
+						array_push(last_attack_types, "enemy")
+						array_push(last_attack_damages, _dmg)
 						event_user(2)
 					}
 					infected = true

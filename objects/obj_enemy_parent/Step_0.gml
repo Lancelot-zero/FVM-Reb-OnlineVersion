@@ -640,7 +640,10 @@ switch(state) {
                     if !invincible{
                         hp -= other.atk;
                     }
-                    last_attack_enemy_id = other.id
+                    array_push(last_attack_ids, other.id)
+                    array_push(last_attack_classes, object_get_name(other.object_index))
+                    array_push(last_attack_types, "enemy")
+                    array_push(last_attack_damages, other.atk)
                     event_user(2)
                     // 播放受击效果
                     if (instance_exists(other)) {

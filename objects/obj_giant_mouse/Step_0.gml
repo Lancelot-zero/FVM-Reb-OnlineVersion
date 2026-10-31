@@ -33,7 +33,10 @@ if state == ENEMY_STATE.ACTING{
 			with target_plant{
 				if !invincible{
 					hp -= 900
-					last_attack_enemy_id = -1
+					array_push(last_attack_ids, other.id)
+					array_push(last_attack_classes, object_get_name(other.object_index))
+					array_push(last_attack_types, "enemy")
+					array_push(last_attack_damages, 900)
 					event_user(2)
 				}
 			}

@@ -58,7 +58,10 @@ if hp > 0 && state != ENEMY_STATE.DEAD{
 				}
 				else{
 					hp -= 300
-					last_attack_enemy_id = other.id
+					array_push(last_attack_ids, other.id)
+					array_push(last_attack_classes, object_get_name(other.object_index))
+					array_push(last_attack_types, "enemy")
+					array_push(last_attack_damages, 300)
 					event_user(2)
 					other.timer = 0
 					other.state = ENEMY_STATE.DIG

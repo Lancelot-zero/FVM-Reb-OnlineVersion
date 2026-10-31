@@ -33,7 +33,10 @@ if dash && (state == ENEMY_STATE.ATTACK or timer > 4.5*60){
 			if !invincible{
 				hp -= 10;
 			}
-	        last_attack_enemy_id = other.id
+	        array_push(last_attack_ids, other.id)
+        array_push(last_attack_classes, object_get_name(other.object_index))
+        array_push(last_attack_types, "enemy")
+        array_push(last_attack_damages, 10)
 	        event_user(2)
 	        // 播放受击效果
 

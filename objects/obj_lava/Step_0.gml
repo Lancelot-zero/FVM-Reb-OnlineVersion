@@ -123,7 +123,10 @@ if timer mod 60 == 0{
 			with plant_order_list[i]{
 				if (plant_type != "coffee" && !invincible && plant_id != "cotton_candy" && !(plant_id == "player" && hp <= 10)){
 					hp -= 10
-					last_attack_enemy_id = -1
+					array_push(last_attack_ids, -1)
+					array_push(last_attack_classes, object_get_name(other.object_index))
+					array_push(last_attack_types, "map_obj")
+					array_push(last_attack_damages, 10)
 					event_user(2)
 				}
 			}

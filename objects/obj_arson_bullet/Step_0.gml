@@ -33,12 +33,18 @@ if x >= target_x - 10 && x <= target_x + 10{
             if !invincible && plant_type != "coffee"{
 				if plant_id != "player"{
 					hp -= 900
-					last_attack_enemy_id = -1
+					array_push(last_attack_ids, -1)
+					array_push(last_attack_classes, object_get_name(other.object_index))
+					array_push(last_attack_types, "map_obj")
+					array_push(last_attack_damages, 900)
 					event_user(2)
 				}
 				else{
 					hp -= 300
-					last_attack_enemy_id = -1
+					array_push(last_attack_ids, -1)
+					array_push(last_attack_classes, object_get_name(other.object_index))
+					array_push(last_attack_types, "map_obj")
+					array_push(last_attack_damages, 300)
 					event_user(2)
 				}
 			}

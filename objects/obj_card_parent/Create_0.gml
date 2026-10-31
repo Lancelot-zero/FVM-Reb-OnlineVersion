@@ -65,9 +65,13 @@ plant_id = ""  // 植物唯一标识符
 current_level = 0  // 当前等级
 
 pre_hp=-1
+hp_delta_frame = 0  // 本帧血量净变化：父类 Step_0 更新 pre_hp 前写入；mod 卡片 step 阶段读（正=回血 负=掉血）
 
-// ========= 最后攻击者 ========
-last_attack_enemy_id = -1  // 最近一次攻击本卡的敌人实例 id（-1 = 无）
+// ========= 本帧伤害记录（并行数组；插件在 step 阶段读，Draw_0 开头清空）=========
+last_attack_ids = []
+last_attack_classes = []
+last_attack_types = []
+last_attack_damages = []
 
 // ========= 是否有梯子 ========
 have_loder = false

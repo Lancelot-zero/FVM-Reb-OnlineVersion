@@ -34,7 +34,10 @@ if shape < 1{
 		}
 		if !has_bubble && !has_seawater{
 			hp -= 0.05*max_hp
-			last_attack_enemy_id = -1
+			array_push(last_attack_ids, -1)
+			array_push(last_attack_classes, object_get_name(object_index))
+			array_push(last_attack_types, "self")
+			array_push(last_attack_damages, 0.05*max_hp)
 			event_user(2)
 		}
 	}

@@ -1,5 +1,13 @@
 
 
+// 伤害记录数组：绘制前清空（插件在 step 阶段读；本帧伤害全在 step 阶段写入）
+if (variable_instance_exists(id, "last_attack_ids")) {
+	array_resize(last_attack_ids, 0);
+	array_resize(last_attack_classes, 0);
+	array_resize(last_attack_types, 0);
+	array_resize(last_attack_damages, 0);
+}
+
 if flash_value >0{
 	
     draw_self()

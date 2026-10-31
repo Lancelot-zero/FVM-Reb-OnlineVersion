@@ -30,7 +30,10 @@ with obj_card_parent{
 			other.non_undersea_card = true
 			if !other.has_bubble && other.timer mod 60 == 0{
 				hp -= 0.05*max_hp
-				last_attack_enemy_id = -1
+				array_push(last_attack_ids, -1)
+				array_push(last_attack_classes, object_get_name(other.object_index))
+				array_push(last_attack_types, "map_obj")
+				array_push(last_attack_damages, 0.05*max_hp)
 				event_user(2)
 			}
 		}
@@ -59,7 +62,10 @@ if(ds_exists(card_list,ds_type_list)){
 					other.non_undersea_card = true
 					if !other.has_bubble && other.timer mod 60 == 0{
 						hp -= 0.05*max_hp
-						last_attack_enemy_id = -1
+						array_push(last_attack_ids, -1)
+						array_push(last_attack_classes, object_get_name(other.object_index))
+						array_push(last_attack_types, "map_obj")
+						array_push(last_attack_damages, 0.05*max_hp)
 						event_user(2)
 					}
 				}

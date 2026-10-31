@@ -48,7 +48,10 @@ if x >= target_x - 10 && x <= target_x + 10{
 		if plant_order_list[i] != noone && instance_exists(plant_order_list[i]){
 			with plant_order_list[i]{
 				hp -= other.damage
-				last_attack_enemy_id = -1
+				array_push(last_attack_ids, -1)
+				array_push(last_attack_classes, object_get_name(other.object_index))
+				array_push(last_attack_types, "map_obj")
+				array_push(last_attack_damages, other.damage)
 				event_user(2)
 			}
 			break
