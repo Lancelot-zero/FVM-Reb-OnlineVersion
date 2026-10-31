@@ -971,6 +971,61 @@ function meta_modallreload() {
     };
 }
 
+/// @description 命令行：重扫并重载当前地图相关的 bin（地图 bin + 本图 mod bin），只能单机
+function sh_mapbinreload(args) {
+    // 联机禁掉：客机自己重载会和服务端 VM 状态脱节，房主重载也不会同步给客机
+    if (variable_global_exists("network") && is_struct(global.network) && global.network.mode != "offline") {
+        return "[mapbinreload] 只能单机使用（当前 mode = " + string(global.network.mode) + "）";
+    }
+    // 只在备战房间能用：战斗中重载会把 VM 全局/波次状态重置，房没进时没有"当前地图"
+    if (!variable_global_exists("gui_stack") || gui_stack_get_top(global.gui_stack) != room_ready) {
+        return "[mapbinreload] 只能在备战房间使用（先进入一张图的备战房）";
+    }
+    if (!variable_global_exists("_file_cache_json_path") || !is_string(global._file_cache_json_path) || global._file_cache_json_path == "") {
+        return "[mapbinreload] 没有当前地图的 json 路径（先进入一张图再试）";
+    }
+    var _json_path = global._file_cache_json_path;
+
+    // 地图 bin：和建房间同一套 —— VM_InitRoomEntry 开头会按清单卸掉上一批 mod bin、
+    // 清掉旧块再装新地图 bin（顺带把 _VM_ROOM_READY_ENTRY 重跑一遍）；
+    // 单机这份 buffer 读完即弃（和 StageDetail 建房的释放一致）
+    var _bin_path = string_replace(_json_path, ".json", ".bin");
+    var _map_ok = false;
+    if (file_exists(_bin_path)) {
+        var _bin_buf = buffer_load(_bin_path);
+        VM_InitRoomEntry(_bin_buf);
+        buffer_delete(_bin_buf);
+        _map_ok = true;
+    } else {
+        VM_InitRoomEntry(undefined);
+    }
+
+    // 本图 mod bin：重扫同目录逐个重载（新文件名会进清单，删掉的文件旧条目已被上面卸掉）
+    var _lab_mods = lab_mod_scan(_json_path);
+    var _mod_n = 0;
+    for (var _lm = 0; _lm < array_length(_lab_mods); _lm++) {
+        if (!file_exists(_lab_mods[_lm].path)) continue;
+        var _b = buffer_load(_lab_mods[_lm].path);
+        if (lab_mod_load_bin(_b, _lab_mods[_lm].type, _lab_mods[_lm].name)) {
+            _mod_n++;
+        } else {
+            buffer_delete(_b);   // 装载失败清单没接这份 buffer，就地删，别漏
+        }
+    }
+    return "[mapbinreload] " + (_map_ok ? "地图 bin 已重载" : "本图没有地图 bin")
+        + "；本图 mod bin 重载 " + string(_mod_n) + " 个";
+}
+
+function meta_mapbinreload() {
+    return {
+        description: "重扫并重载当前地图相关的 bin：同名地图 bin + 同目录 <图名>.<类型>.<名称>.bin 的 mod bin（只能单机、只能在备战房间，改完 bin 不用重进图）",
+        arguments: [],
+        suggestions: [],
+        hidden: false,
+        deferred: false
+    };
+}
+
 /// @description 命令行：VM 严格模式开关（on=VM 出错直接抛到 GM 层，能看到调用栈）
 function sh_vmstrict(args) {
     var _cur = (variable_global_exists("_VM_strict") && global._VM_strict);
