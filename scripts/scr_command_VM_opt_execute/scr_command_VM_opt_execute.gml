@@ -328,6 +328,8 @@ global._vm_opt_run_funcs[18 + 165] = run_VM_PlayMusic;            // 165 — 循
 global._vm_opt_run_funcs[18 + 166] = run_VM_StopMusic;            // 166 — 停音乐轨
 global._vm_opt_run_funcs[18 + 167] = run_VM_PauseBGM;             // 167 — 暂停原版 BGM
 global._vm_opt_run_funcs[18 + 168] = run_VM_ResumeBGM;            // 168 — 恢复原版 BGM
+global._vm_opt_run_funcs[18 + 169] = run_VM_GetSoundPlayPercent;   // 169 — 播放实例进度 0~1
+global._vm_opt_run_funcs[18 + 170] = run_VM_SetSoundPitch;         // 170 — 播放实例倍率（1=原速，必须 >0）
 
 function run_vm_read_mem(vm, addr) {
     var _type = vm.mem_type[addr];
@@ -2022,6 +2024,7 @@ function run_VM_PlaySound(vm, code, _ip) {
 				global._VM_sound_instances = ds_list_create();
 			}
 			ds_list_add(global._VM_sound_instances, _result);
+			vm_audio_note_len(_result, _snd);
 		}
 	}
 	if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
@@ -2074,6 +2077,7 @@ function run_VM_PlayMusic(vm, code, _ip) {
 				}
 				ds_list_add(global._VM_music_instances, _result);
 				global._VM_music_gain[? _result] = 1;
+				vm_audio_note_len(_result, _snd);
 				audio_sound_gain(_result, global.music_volume);
 			}
 		}
@@ -2100,11 +2104,46 @@ function run_VM_StopMusic(vm, code, _ip) {
 		if (_p != -1) {
 			ds_list_delete(global._VM_music_instances, _p);
 			if (ds_map_exists(global._VM_music_gain, _id)) ds_map_delete(global._VM_music_gain, _id);
+			if (variable_global_exists("_VM_sound_len") && ds_map_exists(global._VM_sound_len, _id)) ds_map_delete(global._VM_sound_len, _id);
 			audio_stop_sound(_id);
 			_result = 0;
 		}
 	}
 	if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+
+    return _ip;
+}
+
+
+function run_VM_GetSoundPlayPercent(vm, code, _ip) {
+    var opt_number = code[_ip]; _ip += 1;
+    var _mt = vm.mem_type;
+    var _mv = vm.mem_val;
+    var _dst = code[_ip]; _ip += 1;
+    var _base = _ip;
+    _ip += opt_number;
+
+	var _id = run_vm_read_mem(vm, code[_base+0]);
+	var _result = vm_audio_play_percent(_id);
+    if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+
+    return _ip;
+}
+
+
+function run_VM_SetSoundPitch(vm, code, _ip) {
+    var opt_number = code[_ip]; _ip += 1;
+    var _mt = vm.mem_type;
+    var _mv = vm.mem_val;
+    var _dst = code[_ip]; _ip += 1;
+    var _base = _ip;
+    _ip += opt_number;
+
+	var _id = run_vm_read_mem(vm, code[_base+0]);
+	var _pitch = run_vm_read_mem(vm, code[_base+1]);
+	if (is_real(_id) && _id != -1 && is_real(_pitch) && _pitch > 0) {
+		audio_sound_pitch(_id, _pitch);
+	}
 
     return _ip;
 }
@@ -3622,6 +3661,24 @@ function vm_audio_wav_to_sound(_raw) {
     return _snd;
 }
 
+// 播放实例 → 音频总长（秒）：VM_GetSoundPlayPercent 算百分比用
+function vm_audio_note_len(_inst, _snd) {
+    if (!variable_global_exists("_VM_sound_len")) {
+        global._VM_sound_len = ds_map_create();
+    }
+    global._VM_sound_len[? _inst] = audio_sound_length(_snd);
+}
+
+// 播放实例进度 0~1：id 无效/没登记返回 -1，已播完（不在播也不在暂停）返回 1
+function vm_audio_play_percent(_id) {
+    if (!is_real(_id) || _id == -1) return -1;
+    if (!variable_global_exists("_VM_sound_len") || !ds_map_exists(global._VM_sound_len, _id)) return -1;
+    if (!audio_is_playing(_id) && !audio_is_paused(_id)) return 1;
+    var _len = global._VM_sound_len[? _id];
+    if (_len <= 0) return -1;
+    return clamp(audio_sound_get_track_position(_id) / _len, 0, 1);
+}
+
 // 只停播放实例，不动已加载资产与缓存：进战斗时把备战房期间播放中的 VM 音效/音乐轨全部掐掉
 function vm_audio_stop_playing() {
     if (variable_global_exists("_VM_music_instances")) {
@@ -3638,6 +3695,9 @@ function vm_audio_stop_playing() {
             if (audio_is_playing(_inst) or audio_is_paused(_inst)) audio_stop_sound(_inst);
         }
         ds_list_clear(global._VM_sound_instances);
+    }
+    if (variable_global_exists("_VM_sound_len")) {
+        ds_map_clear(global._VM_sound_len);
     }
 }
 
@@ -3668,6 +3728,10 @@ function vm_audio_unload_all() {
     // 音效播放实例列表同理（实例都随资产释放没了）
     if (variable_global_exists("_VM_sound_instances")) {
         ds_list_clear(global._VM_sound_instances);
+    }
+    // 时长登记表同理
+    if (variable_global_exists("_VM_sound_len")) {
+        ds_map_clear(global._VM_sound_len);
     }
     // 插件卸载：恢复原版 BGM 启用状态（撤销 VM_PauseBGM 置的 music_enabled=false），
     // 防止控制器实例跨房间存活时原版 BGM 永久失声；游戏暂停中不抢着恢复

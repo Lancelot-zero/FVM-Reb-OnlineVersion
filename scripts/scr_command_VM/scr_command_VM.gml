@@ -2016,6 +2016,7 @@ function VM_PlaySound(name_addr) {
 				global._VM_sound_instances = ds_list_create();
 			}
 			ds_list_add(global._VM_sound_instances, _inst);
+			vm_audio_note_len(_inst, _snd);
 		}
 		return _inst;
 	}
@@ -2035,6 +2036,24 @@ function VM_SetSoundVolume(id_addr, volume_addr) {
 		return;
 	}
 	audio_sound_gain(_id, _vol, 0);
+}
+
+/// @function VM_GetSoundPlayPercent(id)
+/// @param id VM_PlaySound / VM_PlayMusic 返回的播放实例 ID
+/// @return 播放进度 0~1（已播完返回 1；循环音乐轨按单圈进度）；id 无效或没登记过返回 -1
+function VM_GetSoundPlayPercent(id_addr) {
+	var _id = vm_arg(id_addr);
+	return vm_audio_play_percent(_id);
+}
+
+/// @function VM_SetSoundPitch(id, pitch)
+/// @param id VM_PlaySound / VM_PlayMusic 返回的播放实例 ID
+/// @param pitch 播放倍率（1=原速，0.5=半速，2=双倍速；必须 >0，调的是音调变速）
+function VM_SetSoundPitch(id_addr, pitch_addr) {
+	var _id = vm_arg(id_addr);
+	var _pitch = vm_arg(pitch_addr);
+	if (!is_real(_id) || _id == -1 || !is_real(_pitch) || _pitch <= 0) return;
+	audio_sound_pitch(_id, _pitch);
 }
 
 /// @function VM_LoadSound(path)
@@ -2062,6 +2081,7 @@ function VM_PlayMusic(path_addr) {
 	}
 	ds_list_add(global._VM_music_instances, _inst);
 	global._VM_music_gain[? _inst] = 1;
+	vm_audio_note_len(_inst, _snd);
 	audio_sound_gain(_inst, global.music_volume);
 	return _inst;
 }
@@ -2078,6 +2098,7 @@ function VM_StopMusic(handle_addr) {
 	var _p = ds_list_find_index(global._VM_music_instances, _id);
 	if (_p != -1) ds_list_delete(global._VM_music_instances, _p);
 	if (ds_map_exists(global._VM_music_gain, _id)) ds_map_delete(global._VM_music_gain, _id);
+	if (variable_global_exists("_VM_sound_len") && ds_map_exists(global._VM_sound_len, _id)) ds_map_delete(global._VM_sound_len, _id);
 	return 0;
 }
 
@@ -6834,6 +6855,8 @@ VM_RegisterFunction(global.__vm, VM_PlayMusic);            // 165 — 起一条�
 VM_RegisterFunction(global.__vm, VM_StopMusic);            // 166 — 停掉 VM_PlayMusic 的音乐轨
 VM_RegisterFunction(global.__vm, VM_PauseBGM);             // 167 — 暂停原版 BGM（保留进度）
 VM_RegisterFunction(global.__vm, VM_ResumeBGM);            // 168 — 恢复原版 BGM
+VM_RegisterFunction(global.__vm, VM_GetSoundPlayPercent);  // 169 — 播放实例进度 0~1（VM_PlaySound / VM_PlayMusic 的返回 id；已播完=1，无效=-1）
+VM_RegisterFunction(global.__vm, VM_SetSoundPitch);          // 170 — 播放实例倍率（1=原速，0.5=半速，2=双倍速；必须 >0）
 ds_map_add(global._VM_remote_funcs, "VM_SwapPlants", VM_SwapPlants);
 ds_map_add(global._VM_remote_funcs, "VM_SwapPlantRects", VM_SwapPlantRects);
 ds_map_add(global._VM_remote_funcs, "VM_CompactColumn", VM_CompactColumn);
