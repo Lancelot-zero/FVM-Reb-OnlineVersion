@@ -2056,6 +2056,64 @@ function VM_SetSoundPitch(id_addr, pitch_addr) {
 	audio_sound_pitch(_id, _pitch);
 }
 
+/// @function vm_string_is_number(_s)
+/// @desc 判断字符串整体是不是一个数字：可选前导 -/+，最多一个小数点，至少一位数字。
+///       不依赖 real()——real 对非数字返回 0，区分不了 "0" 和 "abc"
+function vm_string_is_number(_s) {
+	if (!is_string(_s)) return false;
+	var _len = string_length(_s);
+	if (_len <= 0) return false;
+	var _digits = 0;
+	var _dot = 0;
+	for (var _i = 1; _i <= _len; _i++) {
+		var _o = ord(string_char_at(_s, _i));
+		if (_o == 45 || _o == 43) {            // '-' / '+'
+			if (_i != 1) return false;         // 符号只能在第一位
+		} else if (_o == 46) {                 // '.'
+			_dot++;
+			if (_dot > 1) return false;        // 最多一个小数点
+		} else if (_o >= 48 && _o <= 57) {     // '0'~'9'
+			_digits++;
+		} else {
+			return false;
+		}
+	}
+	return _digits > 0;
+}
+
+/// @function VM_ShellArgCount()
+/// @return 最新一次 shell 输入缓存的参数个数（参数 0 = 命令本身）；还没输入过返回 0
+function VM_ShellArgCount() {
+	if (!variable_global_exists("_VM_shell_args")) return 0;
+	return array_length(global._VM_shell_args);
+}
+
+/// @function VM_ShellArgEquals(i, s)
+/// @param i 参数下标（0 = 命令本身，1 起是参数）
+/// @param s 要比较的字符串（脚本里的字面量，来自字符串池）
+/// @return 第 i 个参数与 s 完全相等返回 1，否则 0（越界/没缓存返回 0）
+///         比较不把 shell 输入写进字符串池：池只增不减，玩家任意输入是脏数据
+function VM_ShellArgEquals(i_addr, s_addr) {
+	var _i = vm_arg(i_addr);
+	var _s = vm_arg(s_addr);
+	if (!variable_global_exists("_VM_shell_args")) return 0;
+	if (!is_real(_i) || _i < 0 || _i >= array_length(global._VM_shell_args)) return 0;
+	return (global._VM_shell_args[_i] == _s) ? 1 : 0;
+}
+
+/// @function VM_ShellArgNum(i)
+/// @param i 参数下标（0 = 命令本身，1 起是参数）
+/// @return 第 i 个参数转成数值（"5"→5、"3.5"→3.5、支持前导符号）；
+///         参数不是数字/越界/没缓存返回 undefined。刻意不返回字符串：输入缓存的字符串不进池
+function VM_ShellArgNum(i_addr) {
+	var _i = vm_arg(i_addr);
+	if (!variable_global_exists("_VM_shell_args")) return undefined;
+	if (!is_real(_i) || _i < 0 || _i >= array_length(global._VM_shell_args)) return undefined;
+	var _v = global._VM_shell_args[_i];
+	if (!vm_string_is_number(_v)) return undefined;
+	return real(_v);
+}
+
 /// @function VM_LoadSound(path)
 /// @param path 本地音频文件路径，支持 ogg（流式）和 wav（PCM 8/16 位，缓冲音）；相对地图 json 所在目录，如 "xxx.wav"
 /// @return 音频 ID，加载失败返回 -1；离开房间时自动卸载（VM_PlaySound / VM_PlayMusic 播同一路径直接命中缓存）
@@ -5392,6 +5450,7 @@ global._VM_KEY_PRESSED       = undefined;
 global._VM_BUTTON_CLICKED    = undefined;
 global._VM_CARD_PREVIEW_PICKED = undefined;
 global._VM_BOSS_STATE_CHANGE = undefined;
+global._VM_SHELL_INPUT      = undefined;
 global._VM_last_clicked_button = -1;
 global._VM_FRAME             = undefined;
 global._VM_TIMER_5f          = undefined;
@@ -6857,6 +6916,9 @@ VM_RegisterFunction(global.__vm, VM_PauseBGM);             // 167 — 暂停原�
 VM_RegisterFunction(global.__vm, VM_ResumeBGM);            // 168 — 恢复原版 BGM
 VM_RegisterFunction(global.__vm, VM_GetSoundPlayPercent);  // 169 — 播放实例进度 0~1（VM_PlaySound / VM_PlayMusic 的返回 id；已播完=1，无效=-1）
 VM_RegisterFunction(global.__vm, VM_SetSoundPitch);          // 170 — 播放实例倍率（1=原速，0.5=半速，2=双倍速；必须 >0）
+VM_RegisterFunction(global.__vm, VM_ShellArgCount);        // 171 — 最新一次 shell 输入缓存的参数个数（参数 0=命令本身）；还没输入过返回 0
+VM_RegisterFunction(global.__vm, VM_ShellArgEquals);       // 172 — 第 i 个参数是否等于字符串 s（1/0；越界/没缓存返回 0），比较不把 shell 输入写进字符串池
+VM_RegisterFunction(global.__vm, VM_ShellArgNum);          // 173 — 第 i 个参数的数值（支持小数/前导符号）；参数不是数字/越界/没缓存返回 undefined，不返回字符串
 ds_map_add(global._VM_remote_funcs, "VM_SwapPlants", VM_SwapPlants);
 ds_map_add(global._VM_remote_funcs, "VM_SwapPlantRects", VM_SwapPlantRects);
 ds_map_add(global._VM_remote_funcs, "VM_CompactColumn", VM_CompactColumn);
@@ -6924,6 +6986,7 @@ function VM_InitRoomEntry(buf) {
 	global._VM_BUTTON_CLICKED    = undefined;
 	global._VM_CARD_PREVIEW_PICKED = undefined;
 	global._VM_BOSS_STATE_CHANGE = undefined;
+	global._VM_SHELL_INPUT      = undefined;
 	global._VM_last_clicked_button = -1;
     global._VM_TIMER_5f          = undefined;
     global._VM_TIMER_10f         = undefined;
@@ -7162,6 +7225,9 @@ function VM_InitRoomEntry(buf) {
                 break;
             case "_VM_BOSS_STATE_CHANGE":
                 global._VM_BOSS_STATE_CHANGE = _bc_buf;
+                break;
+            case "_VM_SHELL_INPUT":
+                global._VM_SHELL_INPUT = _bc_buf;
                 break;
             default:
                 buffer_delete(_bc_buf);

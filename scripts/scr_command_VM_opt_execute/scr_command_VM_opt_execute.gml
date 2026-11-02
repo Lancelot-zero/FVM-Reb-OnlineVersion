@@ -330,6 +330,9 @@ global._vm_opt_run_funcs[18 + 167] = run_VM_PauseBGM;             // 167 — 暂
 global._vm_opt_run_funcs[18 + 168] = run_VM_ResumeBGM;            // 168 — 恢复原版 BGM
 global._vm_opt_run_funcs[18 + 169] = run_VM_GetSoundPlayPercent;   // 169 — 播放实例进度 0~1
 global._vm_opt_run_funcs[18 + 170] = run_VM_SetSoundPitch;         // 170 — 播放实例倍率（1=原速，必须 >0）
+global._vm_opt_run_funcs[18 + 171] = run_VM_ShellArgCount;         // 171 — 最新 shell 输入参数个数（参数 0=命令本身）
+global._vm_opt_run_funcs[18 + 172] = run_VM_ShellArgEquals;        // 172 — 第 i 个参数是否等于字符串（不把 shell 输入写进池）
+global._vm_opt_run_funcs[18 + 173] = run_VM_ShellArgNum;           // 173 — 第 i 个参数的数值，非数字返回 undefined
 
 function run_vm_read_mem(vm, addr) {
     var _type = vm.mem_type[addr];
@@ -2144,6 +2147,64 @@ function run_VM_SetSoundPitch(vm, code, _ip) {
 	if (is_real(_id) && _id != -1 && is_real(_pitch) && _pitch > 0) {
 		audio_sound_pitch(_id, _pitch);
 	}
+
+    return _ip;
+}
+
+
+function run_VM_ShellArgCount(vm, code, _ip) {
+    var opt_number = code[_ip]; _ip += 1;
+    var _mt = vm.mem_type;
+    var _mv = vm.mem_val;
+    var _dst = code[_ip]; _ip += 1;
+    _ip += opt_number;
+
+    var _result = 0;
+    if (variable_global_exists("_VM_shell_args")) _result = array_length(global._VM_shell_args);
+    if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+
+    return _ip;
+}
+
+
+function run_VM_ShellArgEquals(vm, code, _ip) {
+    var opt_number = code[_ip]; _ip += 1;
+    var _mt = vm.mem_type;
+    var _mv = vm.mem_val;
+    var _dst = code[_ip]; _ip += 1;
+    var _base = _ip;
+    _ip += opt_number;
+
+    var _result = 0;
+    var _i = run_vm_read_mem(vm, code[_base+0]);
+    var _s = run_vm_read_mem(vm, code[_base+1]);
+    if (variable_global_exists("_VM_shell_args")
+        && is_real(_i) && _i >= 0 && _i < array_length(global._VM_shell_args)
+        && global._VM_shell_args[_i] == _s) {
+        _result = 1;
+    }
+    if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
+
+    return _ip;
+}
+
+
+function run_VM_ShellArgNum(vm, code, _ip) {
+    var opt_number = code[_ip]; _ip += 1;
+    var _mt = vm.mem_type;
+    var _mv = vm.mem_val;
+    var _dst = code[_ip]; _ip += 1;
+    var _base = _ip;
+    _ip += opt_number;
+
+    var _result = undefined;
+    var _i = run_vm_read_mem(vm, code[_base+0]);
+    if (variable_global_exists("_VM_shell_args")
+        && is_real(_i) && _i >= 0 && _i < array_length(global._VM_shell_args)) {
+        var _v = global._VM_shell_args[_i];
+        if (vm_string_is_number(_v)) _result = real(_v);
+    }
+    if (_dst != VM_DST_VOID) vm_store_result(vm, _mt, _mv, _dst, _result);
 
     return _ip;
 }

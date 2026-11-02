@@ -368,6 +368,16 @@ function _confirm_current_mouse_argument_data() {
 }
 
 function _execute_script(args, deferred = false) {
+	// VM shell 输入：缓存最新一次输入（参数 0 = 命令本身，_input_string_split 已按空格+引号切好），
+	// 然后触发 _VM_SHELL_INPUT 块（地图 VM 直跑 + vm_hook_run 跑挂了块的 mod VM，照 _VM_BATTLE_START 双跑范式）。
+	// 缓存的数组只是被引用（split 每次新开数组），下次输入前读到的都是本次输入
+	global._VM_shell_args = args;
+	if (variable_global_exists("_VM_SHELL_INPUT") && buffer_exists(global._VM_SHELL_INPUT)
+	    && variable_global_exists("__vm")) {
+		VM_Execute(global.__vm, global._VM_SHELL_INPUT, "_VM_SHELL_INPUT");
+	}
+	vm_hook_run("_VM_SHELL_INPUT");
+
 	var script = variable_global_get("sh_" + args[0]);
 	if (is_undefined(script)) {
 		script = variable_global_get("sh_say");
