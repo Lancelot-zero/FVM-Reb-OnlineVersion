@@ -1,3 +1,5 @@
+// music_enabled=false（VM_PauseBGM）时整段跳过：内置 BGM 的续播/暂停管理全停，
+// 否则 VM_PauseBGM 按下后下一帧就被这里 resume/重播，一次调用压不住
 if music_enabled{
 	if audio_is_paused(battle_music) and not global.is_paused{
 		audio_resume_sound(battle_music)
@@ -17,7 +19,8 @@ if music_enabled{
 }
 
 // VM 音乐轨（VM_PlayMusic 的句柄）：实际增益 = 本轨音量 × 设置背景音乐音量，每帧同步；
-// 游戏暂停跟着挂起/恢复，播完自动清出注册表
+// 游戏暂停跟着挂起/恢复；播完自动清出注册表。
+// 放 music_enabled 门外面：VM 音乐轨由 VM_StopMusic 管，不受 VM_PauseBGM 的原版 BGM 让路影响
 if variable_global_exists("_VM_music_instances"){
 	var _mvol = global.music_volume
 	var _i = 0
@@ -37,6 +40,7 @@ if variable_global_exists("_VM_music_instances"){
 		else{
 			ds_list_delete(global._VM_music_instances, _i)
 			if ds_map_exists(global._VM_music_gain, _inst){ ds_map_delete(global._VM_music_gain, _inst) }
+			if variable_global_exists("_VM_sound_len") && ds_map_exists(global._VM_sound_len, _inst){ ds_map_delete(global._VM_sound_len, _inst) }
 		}
 	}
 }
